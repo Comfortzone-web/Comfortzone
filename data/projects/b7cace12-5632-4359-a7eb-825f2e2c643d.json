@@ -1,15 +1,15 @@
 {
-  "id": "b0f112fe-ad05-4121-b34d-21c319c5da0b",
+  "id": "b7cace12-5632-4359-a7eb-825f2e2c643d",
   "title": "Untitled Project",
-  "createdAt": "2026-06-27T06:18:14.495Z",
-  "updatedAt": "2026-06-27T06:46:58.685Z",
+  "createdAt": "2026-07-03T06:59:08.279Z",
+  "updatedAt": "2026-07-03T06:59:32.605Z",
   "details": {
     "customer": "",
     "contactPerson": "",
     "telNo": "",
     "email": "",
     "project": "",
-    "date": "2026-06-27",
+    "date": "2026-07-03",
     "location": "",
     "model": "Daikin",
     "validity": "Valid for 7 days",
@@ -17,11 +17,11 @@
     "preparedBy": ""
   },
   "quotation": {
-    "quotationNo": "QCZ-A/26/1004",
+    "quotationNo": "QCZ-A/26/1022",
     "generatedDocId": "",
     "generatedPdfId": ""
   },
-  "layoutVersion": "screenshot-v3",
+  "layoutVersion": "screenshot-v5",
   "nodes": [
     {
       "id": "details",
@@ -36,19 +36,17 @@
       "id": "thermal-upload",
       "type": "thermalUpload",
       "title": "Thermal Sheet",
-      "x": 145,
-      "y": 250,
+      "x": 180,
+      "y": 255,
       "locked": false,
-      "data": {
-        "uploadId": "d6f54d6f-6648-4013-a9fb-651434194c6e"
-      }
+      "data": {}
     },
     {
       "id": "vrv-upload",
       "type": "vrvUpload",
       "title": "VRV Selection Report",
-      "x": 860,
-      "y": 6,
+      "x": 640,
+      "y": 250,
       "locked": false,
       "data": {}
     },
@@ -56,41 +54,41 @@
       "id": "thermal-table",
       "type": "thermalTable",
       "title": "Export File",
-      "x": 10,
-      "y": 470,
+      "x": 55,
+      "y": 520,
       "locked": false,
-      "width": 620,
-      "height": 984,
+      "width": 518,
+      "height": 203,
       "data": {}
     },
     {
       "id": "costing-table",
       "type": "costingTable",
       "title": "Costing Sheet",
-      "x": 725,
-      "y": 300,
+      "x": 980,
+      "y": 130,
       "locked": false,
-      "width": 790,
-      "height": 284,
+      "width": 616,
+      "height": 216,
       "data": {}
     },
     {
       "id": "boq-table",
       "type": "boqTable",
       "title": "BOQ / Price",
-      "x": 725,
-      "y": 606,
+      "x": 970,
+      "y": 430,
       "locked": false,
-      "width": 790,
-      "height": 238,
+      "width": 616,
+      "height": 186,
       "data": {}
     },
     {
       "id": "quotation",
       "type": "quotation",
       "title": "Quotation",
-      "x": 1605,
-      "y": 614,
+      "x": 1680,
+      "y": 340,
       "locked": false,
       "data": {}
     },
@@ -98,44 +96,35 @@
       "id": "vrv-schedule",
       "type": "vrvSchedule",
       "title": "VRV Schedule",
-      "x": 20,
-      "y": 1519,
+      "x": 170,
+      "y": 770,
       "locked": false,
-      "width": 1880,
-      "height": 260,
+      "width": 1548,
+      "height": 228,
       "data": {}
+    },
+    {
+      "id": "file-1783061962388",
+      "type": "file",
+      "title": "File 1",
+      "x": 2042.5931386319917,
+      "y": 425.74934085903425,
+      "locked": false,
+      "data": {
+        "uploadId": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5"
+      }
     }
   ],
   "uploads": [
     {
-      "id": "6478fae3-0720-4c59-82e8-2f55ea0dd5f9",
-      "projectId": "b0f112fe-ad05-4121-b34d-21c319c5da0b",
-      "nodeId": "thermal-upload",
-      "originalName": "Screenshot 2026-06-27 101946.png",
-      "storedName": "6478fae3-0720-4c59-82e8-2f55ea0dd5f9-Screenshot 2026-06-27 101946.png",
-      "mimeType": "image/png",
-      "size": 858552,
-      "createdAt": "2026-06-27T06:20:08.257Z"
-    },
-    {
-      "id": "d6f54d6f-6648-4013-a9fb-651434194c6e",
-      "projectId": "b0f112fe-ad05-4121-b34d-21c319c5da0b",
-      "nodeId": "thermal-upload",
-      "originalName": "Screenshot 2026-06-27 095840.png",
-      "storedName": "d6f54d6f-6648-4013-a9fb-651434194c6e-Screenshot 2026-06-27 095840.png",
-      "mimeType": "image/png",
-      "size": 954716,
-      "createdAt": "2026-06-27T06:23:10.699Z"
-    },
-    {
-      "id": "55a7a733-4e8a-4840-ac75-8e0d9b4283d3",
-      "projectId": "b0f112fe-ad05-4121-b34d-21c319c5da0b",
-      "nodeId": "thermal-screenshot",
-      "originalName": "Screenshot 2026-06-27 095840.png",
-      "storedName": "55a7a733-4e8a-4840-ac75-8e0d9b4283d3-Screenshot 2026-06-27 095840.png",
-      "mimeType": "image/png",
-      "size": 954716,
-      "createdAt": "2026-06-27T06:23:18.530Z"
+      "id": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5",
+      "projectId": "b7cace12-5632-4359-a7eb-825f2e2c643d",
+      "nodeId": "file-1783061962388",
+      "originalName": "DN1791.pdf",
+      "storedName": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5-DN1791.pdf",
+      "mimeType": "application/pdf",
+      "size": 142758,
+      "createdAt": "2026-07-03T06:59:32.605Z"
     }
   ],
   "tables": {
@@ -153,385 +142,7 @@
         "Heat Cap",
         "Air Flow Rate"
       ],
-      "rows": [
-        {
-          "Indoor": "FCU-BF-01",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "5.60",
-          "Sens Cool Cap": "4.10",
-          "Heat Cap": "",
-          "Air Flow Rate": "253.00"
-        },
-        {
-          "Indoor": "FCU-BF-02",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "7.10",
-          "Sens Cool Cap": "5.20",
-          "Heat Cap": "",
-          "Air Flow Rate": "350.00"
-        },
-        {
-          "Indoor": "FCU-BF-03",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-BF-04",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-05",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "7.10",
-          "Sens Cool Cap": "5.20",
-          "Heat Cap": "",
-          "Air Flow Rate": "350.00"
-        },
-        {
-          "Indoor": "FCU-BF-06",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-07",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-08",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-09",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "5.60",
-          "Sens Cool Cap": "4.10",
-          "Heat Cap": "",
-          "Air Flow Rate": "253.00"
-        },
-        {
-          "Indoor": "FCU-BF-10",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-11",
-          "Room": "Basement Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-12",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-BF-13",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-GF-01",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-GF-02",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "5.60",
-          "Sens Cool Cap": "4.10",
-          "Heat Cap": "",
-          "Air Flow Rate": "253.00"
-        },
-        {
-          "Indoor": "FCU-GF-03",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "7.10",
-          "Sens Cool Cap": "5.20",
-          "Heat Cap": "",
-          "Air Flow Rate": "350.00"
-        },
-        {
-          "Indoor": "FCU-GF-04",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-GF-05",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.90",
-          "Heat Cap": "",
-          "Air Flow Rate": "130.00"
-        },
-        {
-          "Indoor": "FCU-GF-06",
-          "Room": "Ground Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "7.10",
-          "Sens Cool Cap": "5.30",
-          "Heat Cap": "",
-          "Air Flow Rate": "317.00"
-        },
-        {
-          "Indoor": "FCU-FF-01",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-FF-02",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FCU-FF-03",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "5.60",
-          "Sens Cool Cap": "4.10",
-          "Heat Cap": "",
-          "Air Flow Rate": "253.00"
-        },
-        {
-          "Indoor": "FCU-FF-04",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-FF-05",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-FF-06",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-FF-07",
-          "Room": "First Floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "5.60",
-          "Sens Cool Cap": "4.10",
-          "Heat Cap": "",
-          "Air Flow Rate": "253.00"
-        },
-        {
-          "Indoor": "FCU-RF-01",
-          "Room": "Roof floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "9.00",
-          "Sens Cool Cap": "6.50",
-          "Heat Cap": "",
-          "Air Flow Rate": "812.00"
-        },
-        {
-          "Indoor": "FCU-RF-02",
-          "Room": "Roof floor",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "2.20",
-          "Sens Cool Cap": "1.60",
-          "Heat Cap": "",
-          "Air Flow Rate": "318.00"
-        },
-        {
-          "Indoor": "FAHU 1",
-          "Room": "Mezzanine",
-          "Mode": "A",
-          "Family or Model": "FXMQ",
-          "Cooling DBT": "24.4",
-          "Cooling WBT": "17.2",
-          "Heating T": "20",
-          "Tot Cool Cap": "24.29",
-          "Sens Cool Cap": "10.20",
-          "Heat Cap": "",
-          "Air Flow Rate": "945.00"
-        }
-      ]
+      "rows": []
     },
     "costing": {
       "columns": [
@@ -3221,100 +2832,5 @@
         "nominalIndex": 400
       }
     ]
-  },
-  "thermalChatSelection": {
-    "mode": "regular",
-    "capacitySource": "First Selection",
-    "familyModel": "FXMQ",
-    "customInstruction": "",
-    "requested": true,
-    "appendResults": false
-  },
-  "thermalChatMessages": [
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Upload the thermal sheet PDF or a zoomed screenshot here."
-    },
-    {
-      "kind": "text",
-      "role": "user",
-      "text": "vrv export, First selection Model FXMQ"
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Ok, I will use the regular VRV template with First Selection, model FXMQ. Reading the file now."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Selected First Selection, model FXMQ."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Extracting values into the Export File table..."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Detected source options: Calculated AC Load, First Selection. Reply with the one you want to use."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Extraction completed with high confidence; no unclear fields detected."
-    },
-    {
-      "kind": "file",
-      "name": "Screenshot 2026-06-27 095840.png",
-      "size": 954716
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Screenshot/file added. Should I verify the table again using these screenshot(s)? Reply: verify again."
-    },
-    {
-      "kind": "text",
-      "role": "user",
-      "text": "verify"
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Ok, I will verify/regenerate using First Selection, model FXMQ."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Selected First Selection, model FXMQ."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Extracting values into the Export File table..."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Detected source options: Calculated AC Load, First Selection. Reply with the one you want to use."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Extracted data from the sheet with selected capacity source 'First Selection' and family/model 'FXMQ'. Rows with '#DIV/0!' or unclear numeric values are listed in unclearFields."
-    },
-    {
-      "kind": "text",
-      "role": "assistant",
-      "text": "Unable to read clearly: VRV-FAHU 1 Calculated AC Load Total kW, VRV-FAHU 1 Calculated AC Load Sensible kW, VRV-FAHU 1 Calculated AC Load Flow Rate L/s, VRV-FAHU 1 Check Figures kW/m2, VRV-FAHU 1 Check Figures L/s.m2, VRV-FAHU 1 First Selection Quantity No., VRV-FAHU 1 First Selection Total kW, VRV-FAHU 1 First Selection Sensible kW, VRV-BF Calculated AC Load Total kW, VRV-BF Calculated AC Load Sensible kW, VRV-BF Calculated AC Load Flow Rate L/s, VRV-BF Check Figures kW/m2, VRV-BF Check Figures L/s.m2, VRV-BF First Selection Quantity No., VRV-BF First Selection Total kW, VRV-BF First Selection Sensible kW, VRV-GF Calculated AC Load Total kW, VRV-GF Calculated AC Load Sensible kW, VRV-GF Calculated AC Load Flow Rate L/s, VRV-GF Check Figures kW/m2, VRV-GF Check Figures L/s.m2, VRV-GF First Selection Quantity No., VRV-GF First Selection Total kW, VRV-GF First Selection Sensible kW, VRV-FF/RF Calculated AC Load Total kW, VRV-FF/RF Calculated AC Load Sensible kW, VRV-FF/RF Calculated AC Load Flow Rate L/s, VRV-FF/RF Check Figures kW/m2, VRV-FF/RF Check Figures L/s.m2, VRV-FF/RF First Selection Quantity No., VRV-FF/RF First Selection Total kW, VRV-FF/RF First Selection Sensible kW. Upload a higher-resolution or zoomed screenshot."
-    }
-  ],
-  "visible": true,
-  "thermalChatUploadIds": [
-    "55a7a733-4e8a-4840-ac75-8e0d9b4283d3"
-  ],
-  "thermalPendingUploadIds": []
+  }
 }

@@ -16,6 +16,7 @@ try {
 loadLocalEnv();
 
 const PORT = process.env.PORT || 4173;
+const HOST = process.env.HOST || "0.0.0.0";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, "public");
@@ -25,6 +26,7 @@ const UPLOADS = path.join(DATA, "uploads");
 const MASTER_LOOKUPS = path.join(DATA, "master-lookups.json");
 const MASTER_PRICE_LIST = path.join(DATA, "master-price-list.json");
 const QUOTATION_TEMPLATE = path.join(DATA, "quotation-template.docx");
+const VRV_SCHEDULE_TEMPLATE = path.join(DATA, "vrv-schedule-template.xlsx");
 const INVENTORY_FILE = path.join(DATA, "inventory.json");
 const DELIVERY_NOTE_PDF_SCRIPT = path.join(ROOT, "scripts", "delivery_note_pdf.py");
 const PURCHASE_ORDERS_FILE = path.join(DATA, "purchase-orders.json");
@@ -416,6 +418,7 @@ function defaultSalesCrm() {
       { id: id(), no: "CZ-QTN-2026-0412", revision: "Fresh Quote", date: "19 May 2026", validity: "30 Days", salesperson: "Arjun Singh", customer: "GreenLeaf Apartments", project: "Ducted AC Supply", location: "Kondapur", paymentTerms: "30 Days Credit", deliveryTime: "To be discussed", warranty: "", notes: "", items: [{ description: "Ducted AC Unit", qty: 1, unit: "Set", unitPrice: 80190.48 }], discount: 0, amount: 84200, status: "Sent" },
       { id: id(), no: "CZ-QTN-2026-0413", revision: "Fresh Quote", date: "20 May 2026", validity: "30 Days", salesperson: "Arjun Singh", customer: "TechNova Solutions", project: "Office Maintenance", location: "JLT, Dubai", paymentTerms: "30 Days Credit", deliveryTime: "To be discussed", warranty: "", notes: "", items: [{ description: "Office Maintenance Contract", qty: 1, unit: "Nos", unitPrice: 59047.62 }], discount: 0, amount: 62000, status: "Approved" }
     ],
+    orderBook: [],
     followUps: [
       { id: id(), avatar: "RJ", customer: "Robert Jenkins", phone: "+1 555-0123", project: "HVAC Unit Replacement", quotation: "#QUO-8821", date: "Oct 20, 2026", due: "3 Days Overdue", type: "Call", status: "Overdue" },
       { id: id(), avatar: "SL", customer: "Sarah Lopez", phone: "+1 555-0987", project: "Ductless Mini-Split Install", quotation: "#QUO-8854", date: "Oct 23, 2026", due: "Today @ 2:00 PM", type: "Message", status: "Today" },
@@ -426,14 +429,18 @@ function defaultSalesCrm() {
 
 function normalizeSalesCrm(parsed = {}) {
   const fallback = defaultSalesCrm();
-  return {
-    settings: { ...fallback.settings, ...(parsed.settings || {}) },
+  const settings = { ...fallback.settings, ...(parsed.settings || {}) };
+  const store = {
+    settings,
     leads: Array.isArray(parsed.leads) ? parsed.leads : fallback.leads,
     customers: Array.isArray(parsed.customers) ? parsed.customers : fallback.customers,
     projects: Array.isArray(parsed.projects) ? parsed.projects : fallback.projects,
     quotations: Array.isArray(parsed.quotations) ? parsed.quotations : fallback.quotations,
+    orderBook: Array.isArray(parsed.orderBook) ? parsed.orderBook : fallback.orderBook,
     followUps: Array.isArray(parsed.followUps) ? parsed.followUps : fallback.followUps
   };
+  store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo || fallback.settings.nextQuotationNo, store.quotations);
+  return store;
 }
 
 async function readSalesCrm() {
@@ -812,19 +819,54 @@ function normalizeSalesItem(collection, input, store) {
   base.id = base.id || id();
   if (collection === "leads") {
     const customer = cleanCell(base.customer || "");
+    const projectDescription = cleanCell(base.projectDescription || base.requirement || "");
+    const contactNumber = cleanCell(base.contactNumber || base.phone || "");
+    const status = cleanCell(base.status || "New Enquiry");
     return {
       id: base.id,
       enquiryNo: cleanCell(base.enquiryNo || store.settings.nextEnquiryNo || `ENQ-${new Date().getFullYear()}-0001`),
       avatar: initials(customer),
+      salesPerson: cleanCell(base.salesPerson || ""),
+      sNo: cleanCell(base.sNo || base.serialNo || ""),
       customer,
-      phone: cleanCell(base.phone || ""),
-      requirement: cleanCell(base.requirement || ""),
-      projectType: cleanCell(base.projectType || ""),
+      contractor: cleanCell(base.contractor || customer),
+      phone: contactNumber,
+      contactName: cleanCell(base.contactName || base.contact || ""),
+      contactNumber,
+      requirement: projectDescription,
+      projectDescription,
+      projectType: cleanCell(base.projectType || base.scope || base.productType || ""),
+      productType: cleanCell(base.productType || ""),
+      scope: cleanCell(base.scope || base.scopeNotes || ""),
       location: cleanCell(base.location || ""),
+      plotNo: cleanCell(base.plotNo || ""),
+      client: cleanCell(base.client || ""),
+      mainContractor: cleanCell(base.mainContractor || ""),
+      consultant: cleanCell(base.consultant || ""),
+      acContractor: cleanCell(base.acContractor || ""),
       source: cleanCell(base.source || "WhatsApp"),
-      status: cleanCell(base.status || "New Lead"),
-      followUp: cleanCell(base.followUp || ""),
-      priority: cleanCell(base.priority || "Planned")
+      status,
+      quoteNo: cleanCell(base.quoteNo || base.quotationNo || ""),
+      quotedDate: cleanCell(base.quotedDate || base.dateEnquiryQuoted || ""),
+      receivedDate: cleanCell(base.receivedDate || base.dateEnquiryReceived || ""),
+      preparedBy: cleanCell(base.preparedBy || base.selectionPreparedBy || ""),
+      estimatedValue: Number(String(base.estimatedValue ?? base.value ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      daikinPurchaseValue: Number(String(base.daikinPurchaseValue ?? base.daikinPurchase ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      finalizingMonth: cleanCell(base.finalizingMonth || base.tentativeFinalizingMonth || ""),
+      competitors: cleanCell(base.competitors || ""),
+      followUp: cleanCell(base.followUp || base.nextFollowUpDate || ""),
+      nextFollowUpDate: cleanCell(base.nextFollowUpDate || base.followUp || ""),
+      followUpType: cleanCell(base.followUpType || ""),
+      followUpNote: cleanCell(base.followUpNote || ""),
+      followUps: Array.isArray(base.followUps) ? base.followUps.map(item => ({
+        date: cleanCell(item.date || ""),
+        type: cleanCell(item.type || ""),
+        note: cleanCell(item.note || ""),
+        updatedBy: cleanCell(item.updatedBy || "")
+      })) : [],
+      priority: cleanCell(base.priority || "Planned"),
+      lastUpdated: cleanCell(base.lastUpdated || ""),
+      updatedBy: cleanCell(base.updatedBy || "")
     };
   }
   if (collection === "customers") {
@@ -873,10 +915,16 @@ function normalizeSalesItem(collection, input, store) {
     };
   }
   if (collection === "quotations") {
+    const quoteNo = cleanCell(base.no || base.quotationNo || store.settings.nextQuotationNo || `CZ-QTN-${new Date().getFullYear()}-0001`);
+    const revisionMatch = quoteNo.match(/-R(\d+)$/i);
+    const revisionNo = Number(base.revisionNo || (revisionMatch ? revisionMatch[1] : 0)) || 0;
+    const baseQuotationNo = cleanCell(base.baseQuotationNo || quoteNo.replace(/-R\d+$/i, ""));
     const quote = {
       id: base.id,
-      no: cleanCell(base.no || base.quotationNo || store.settings.nextQuotationNo || `CZ-QTN-${new Date().getFullYear()}-0001`),
-      revision: cleanCell(base.revision || "Fresh Quote"),
+      no: quoteNo,
+      baseQuotationNo,
+      revisionNo,
+      revision: cleanCell(base.revision || (revisionNo ? `Revision R${revisionNo}` : "Fresh Quote")),
       date: cleanCell(base.date || base.quotationDate || todayDisplayDate()),
       validity: cleanCell(base.validity || "7 Days"),
       salesperson: cleanCell(base.salesperson || ""),
@@ -897,7 +945,57 @@ function normalizeSalesItem(collection, input, store) {
     quote.amount = salesQuotationTotal(quote);
     return quote;
   }
+  if (collection === "orderBook") {
+    const invoices = Array.isArray(base.invoices) ? base.invoices.map(invoice => ({ ...invoice, id: invoice.id || id() })) : [];
+    const payments = Array.isArray(base.payments) ? base.payments.map(payment => ({ ...payment, id: payment.id || id() })) : [];
+    const timeline = Array.isArray(base.timeline) ? base.timeline.map(item => ({ ...item, id: item.id || id() })) : [];
+    const invoiceAmount = invoices.reduce((sum, invoice) => sum + (Number(String(invoice.totalAmount ?? invoice.amount ?? 0).replace(/[^\d.-]/g, "")) || 0), 0);
+    const paymentReceived = invoices.length
+      ? invoiceAmount
+      : (Number(String(base.paymentReceived ?? 0).replace(/[^\d.-]/g, "")) || 0);
+    const valueWithoutVat = Number(String(base.valueWithoutVat ?? 0).replace(/[^\d.-]/g, "")) || 0;
+    const vatAmount = Number(String(base.vatAmount ?? 0).replace(/[^\d.-]/g, "")) || 0;
+    const orderValue = Number(String(base.orderValue ?? base.valueIncludingVat ?? 0).replace(/[^\d.-]/g, "")) || 0;
+    return {
+      id: base.id,
+      orderNo: cleanCell(base.orderNo || `CZ${String(new Date().getFullYear()).slice(-2)}-${String(Date.now()).slice(-4)}`),
+      date: cleanCell(base.date || todayDisplayDate()),
+      customer: cleanCell(base.customer || ""),
+      jobDescription: cleanCell(base.jobDescription || base.project || ""),
+      location: cleanCell(base.location || ""),
+      contactPerson: cleanCell(base.contactPerson || ""),
+      contactNumber: cleanCell(base.contactNumber || ""),
+      salesPerson: cleanCell(base.salesPerson || ""),
+      division: cleanCell(base.division || "Project/Inst"),
+      brand: cleanCell(base.brand || "Daikin"),
+      status: orderBookStatusFromPayment(orderValue, paymentReceived),
+      deliveryStatus: cleanCell(base.deliveryStatus || "Pending Delivery"),
+      remarks: cleanMultilineCell(base.remarks || ""),
+      valueWithoutVat,
+      vatAmount,
+      orderValue,
+      installationValue: Number(String(base.installationValue ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      equipmentValue: Number(String(base.equipmentValue ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      equipmentCost: Number(String(base.equipmentCost ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      equipmentProfit: Number(String(base.equipmentProfit ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      grossMargin: Number(String(base.grossMargin ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      paymentReceived,
+      invoiceAmount: invoiceAmount || (Number(String(base.invoiceAmount ?? 0).replace(/[^\d.-]/g, "")) || 0),
+      po: base.po && typeof base.po === "object" ? base.po : {},
+      invoices,
+      payments,
+      timeline
+    };
+  }
   return base;
+}
+
+function orderBookStatusFromPayment(orderValue, paymentReceived) {
+  const value = Number(String(orderValue ?? 0).replace(/[^\d.-]/g, "")) || 0;
+  const received = Number(String(paymentReceived ?? 0).replace(/[^\d.-]/g, "")) || 0;
+  if (received <= 0) return "Payment Pending";
+  if (value > 0 && received >= value - 0.01) return "Completed";
+  return "Partially Paid";
 }
 
 function normalizeSalesQuoteItem(item) {
@@ -919,10 +1017,30 @@ function salesQuotationTotal(quote) {
 }
 
 function nextSalesQuotationNoFrom(current) {
-  const text = String(current || "");
+  const text = cleanSalesQuotationBaseNo(current);
   const match = text.match(/^(.*?)(\d+)$/);
   if (!match) return `CZ-QTN-${new Date().getFullYear()}-0001`;
   return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function cleanSalesQuotationBaseNo(value) {
+  return String(value || "").replace(/-R\d+$/i, "");
+}
+
+function quotationNoSequenceValue(value) {
+  const match = cleanSalesQuotationBaseNo(value).match(/(\d+)$/);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function nextAvailableSalesQuotationNo(current, quotations = []) {
+  let next = cleanSalesQuotationBaseNo(current || `CZ-QTN-${new Date().getFullYear()}-0001`);
+  for (const quote of quotations || []) {
+    const quoteNo = cleanSalesQuotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
+    if (!quoteNo) continue;
+    const candidate = nextSalesQuotationNoFrom(quoteNo);
+    if (quotationNoSequenceValue(candidate) > quotationNoSequenceValue(next)) next = candidate;
+  }
+  return next;
 }
 
 function nextSalesEnquiryNoFrom(current) {
@@ -1155,7 +1273,39 @@ async function handleApi(req, res) {
     return res.end(pdf);
   }
 
-  if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps)$/)) {
+  if (req.method === "POST" && [
+    "/api/sales-crm/order-book/extract-po",
+    "/api/sales-crm/orderBook/extract-po",
+    "/api/order-book/extract-po"
+  ].includes(url.pathname)) {
+    const buffer = await collect(req);
+    const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+    const filePart = multipart.find(part => part.filename);
+    if (!filePart) return send(res, 400, { error: "No PO uploaded" });
+    const extracted = await extractOrderBookPoWithOpenAI(filePart).catch(error => ({ message: error.message }));
+    return send(res, 200, {
+      order: normalizeOrderBookPoExtraction(extracted),
+      message: extracted.message || "PO scanned. Review and save the order."
+    });
+  }
+
+  if (req.method === "POST" && [
+    "/api/sales-crm/order-book/extract-invoice",
+    "/api/sales-crm/orderBook/extract-invoice",
+    "/api/order-book/extract-invoice"
+  ].includes(url.pathname)) {
+    const buffer = await collect(req);
+    const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+    const filePart = multipart.find(part => part.filename);
+    if (!filePart) return send(res, 400, { error: "No invoice uploaded" });
+    const extracted = await extractOrderBookInvoiceWithOpenAI(filePart).catch(error => ({ message: error.message }));
+    return send(res, 200, {
+      invoice: normalizeOrderBookInvoiceExtraction(extracted),
+      message: extracted.message || "Invoice scanned. Review payment amount."
+    });
+  }
+
+  if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
     const store = await readSalesCrm();
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
@@ -1171,7 +1321,7 @@ async function handleApi(req, res) {
     else store[collection].unshift(item);
     if (collection === "customers") store.customers = mergeDuplicateSalesCustomers(store.customers);
     if (collection === "quotations") {
-      store.settings.nextQuotationNo = nextSalesQuotationNoFrom(item.no || store.settings.nextQuotationNo);
+      store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
     }
     if (collection === "leads" && item.enquiryNo) {
       store.settings.nextEnquiryNo = nextSalesEnquiryNoFrom(item.enquiryNo);
@@ -1181,12 +1331,17 @@ async function handleApi(req, res) {
     return send(res, 200, await salesCrmView(store));
   }
 
-  if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps)\/[^/]+$/)) {
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)\/[^/]+$/)) {
     const store = await readSalesCrm();
     const parts = url.pathname.split("/");
     const collection = parts[3];
     const itemId = decodeURIComponent(parts[4]);
     const deletedItem = (store[collection] || []).find(item => item.id === itemId);
+    if (collection === "customers") {
+      const customerName = deletedItem?.name || "";
+      const hasQuotation = customerName && (store.quotations || []).some(quote => inventoryNorm(quote.customer) === inventoryNorm(customerName));
+      if (hasQuotation) return send(res, 409, { error: "Customer cannot be deleted because a quotation exists for this customer." });
+    }
     store[collection] = (store[collection] || []).filter(item => item.id !== itemId);
     await writeSalesCrm(store);
     if (collection === "customers" && deletedItem) {
@@ -1357,6 +1512,11 @@ async function handleApi(req, res) {
     const inventory = await readInventory();
     const customerId = decodeURIComponent(url.pathname.split("/").pop());
     const deletedCustomer = (inventory.customers || []).find(customer => customer.id === customerId);
+    if (deletedCustomer?.customerName) {
+      const store = await readSalesCrm();
+      const hasQuotation = (store.quotations || []).some(quote => inventoryNorm(quote.customer) === inventoryNorm(deletedCustomer.customerName));
+      if (hasQuotation) return send(res, 409, { error: "Customer cannot be deleted because a quotation exists for this customer." });
+    }
     inventory.customers = (inventory.customers || []).filter(customer => customer.id !== customerId);
     await writeInventory(inventory);
     if (deletedCustomer) {
@@ -1593,6 +1753,16 @@ async function handleApi(req, res) {
     }
   }
 
+  if (req.method === "POST" && url.pathname === "/api/export/costing-sheet") {
+    const payload = await readJson(req);
+    const workbook = generateCostingWorkbook(payload);
+    res.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${(payload.filename || "costing.xlsx").replace(/"/g, "")}"`
+    });
+    return res.end(workbook);
+  }
+
   if (req.method === "POST" && url.pathname === "/api/export/table") {
     const { filename = "table.xls", title = "Table", columns = [], rows = [], summaryRows = [] } = await readJson(req);
     const html = tableWorkbookHtml(title, columns, rows, summaryRows);
@@ -1601,6 +1771,16 @@ async function handleApi(req, res) {
       "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`
     });
     return res.end(html);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/export/vrv-schedule") {
+    const payload = await readJson(req);
+    const workbook = generateVrvScheduleWorkbook(payload);
+    res.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${(payload.filename || "vrvSchedule.xlsx").replace(/"/g, "")}"`
+    });
+    return res.end(workbook);
   }
 
   if (req.method === "POST" && url.pathname === "/api/export/quotation") {
@@ -1642,72 +1822,17 @@ async function extractThermalWithOpenAI(project, options) {
     return { status: "no_files", rows: [], unclearFields: [], message: "Upload the thermal sheet PDF or screenshots first." };
   }
 
-  const content = [
-    {
-      type: "input_text",
-      text: thermalPrompt(options)
-    }
-  ];
-
-  for (const upload of uploads) {
-    const bytes = await readUpload(`projects/${project.id}`, upload.storedName);
-    if (!bytes) continue;
-    const base64 = bytes.toString("base64");
-    const mime = upload.mimeType || mimeTypes[path.extname(upload.originalName).toLowerCase()] || "application/octet-stream";
-    if (mime.includes("pdf")) {
-      content.push({
-        type: "input_file",
-        filename: upload.originalName,
-        file_data: `data:${mime};base64,${base64}`
-      });
-    } else if (mime.startsWith("image/")) {
-      content.push({
-        type: "input_image",
-        image_url: `data:${mime};base64,${base64}`
-      });
-    }
-  }
-
-  const payload = {
-    model: OPENAI_MODEL,
-    input: [{ role: "user", content }],
-    temperature: 0,
-    text: {
-      format: {
-        type: "json_schema",
-        name: "thermal_sheet_extraction",
-        strict: true,
-        schema: thermalJsonSchema()
-      }
-    }
-  };
-
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const json = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    return {
-      status: "openai_error",
-      rows: [],
-      unclearFields: [],
-      message: json.error ? json.error.message : `OpenAI request failed with status ${response.status}`
-    };
-  }
-
-  const text = extractResponseText(json);
   let parsed;
   try {
-    parsed = JSON.parse(text);
-  } catch {
-    return { status: "parse_error", rows: [], unclearFields: [], message: "OpenAI returned an unreadable extraction response." };
+    parsed = await callOpenAIJson(
+      "thermal_sheet_extraction",
+      thermalJsonSchema(),
+      await thermalOpenAIContent(project, uploads, thermalPrompt(options))
+    );
+  } catch (error) {
+    return openAIExtractionError(error);
   }
+  if (!Array.isArray(parsed.unclearFields)) parsed.unclearFields = [];
 
   const customColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns.map(safeExtract).filter(Boolean) : [];
   const customRows = Array.isArray(parsed.customRows)
@@ -1726,9 +1851,29 @@ async function extractThermalWithOpenAI(project, options) {
     "Heat Cap": "",
     "Air Flow Rate": safeExtract(row.airFlowRate)
   }));
+  const reviewCells = {};
+  let verifiedRows = [];
+  let numericMismatchCount = 0;
+
+  if (!options.customExtraction && rows.length) {
+    try {
+      const numericVerification = await callOpenAIJson(
+        "thermal_numeric_verification",
+        thermalNumericVerificationJsonSchema(),
+        await thermalOpenAIContent(project, uploads, thermalNumericVerificationPrompt(options))
+      );
+      verifiedRows = Array.isArray(numericVerification.rows) ? numericVerification.rows : [];
+      numericMismatchCount = applyThermalNumericVerification(rows, verifiedRows, reviewCells);
+      for (const field of numericVerification.unclearFields || []) {
+        if (!parsed.unclearFields.includes(field)) parsed.unclearFields.push(field);
+      }
+    } catch (error) {
+      parsed.unclearFields.push("Numeric verification pass failed");
+    }
+  }
 
   return {
-    status: parsed.unclearFields && parsed.unclearFields.length ? "needs_verification" : "ok",
+    status: (parsed.unclearFields && parsed.unclearFields.length) || numericMismatchCount ? "needs_verification" : "ok",
     capacitySources: parsed.capacitySources || [],
     selectedCapacitySource: options.capacitySource || parsed.selectedCapacitySource || "",
     familyModel: options.familyModel || parsed.familyModel || "",
@@ -1736,8 +1881,123 @@ async function extractThermalWithOpenAI(project, options) {
     customColumns,
     customRows,
     unclearFields: parsed.unclearFields || [],
-    message: parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : rows.length ? "Thermal values extracted into the Export File table." : "No rows were detected.")
+    reviewCells,
+    numericVerificationRows: verifiedRows,
+    message: numericMismatchCount
+      ? `${numericMismatchCount} numeric cell(s) were unclear or did not match the second reading. They were left blank and highlighted for review.`
+      : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : rows.length ? "Thermal values extracted into the Export File table." : "No rows were detected.")
   };
+}
+
+async function thermalOpenAIContent(project, uploads, prompt) {
+  const content = [{ type: "input_text", text: prompt }];
+  for (const upload of uploads) {
+    const bytes = await readUpload(`projects/${project.id}`, upload.storedName);
+    if (!bytes) continue;
+    const base64 = bytes.toString("base64");
+    const mime = upload.mimeType || mimeTypes[path.extname(upload.originalName).toLowerCase()] || "application/octet-stream";
+    if (mime.includes("pdf")) {
+      content.push({
+        type: "input_file",
+        filename: upload.originalName,
+        file_data: `data:${mime};base64,${base64}`
+      });
+    } else if (mime.startsWith("image/")) {
+      content.push({
+        type: "input_image",
+        image_url: `data:${mime};base64,${base64}`
+      });
+    }
+  }
+  return content;
+}
+
+async function callOpenAIJson(name, schema, content) {
+  const payload = {
+    model: OPENAI_MODEL,
+    input: [{ role: "user", content }],
+    temperature: 0,
+    text: {
+      format: {
+        type: "json_schema",
+        name,
+        strict: true,
+        schema
+      }
+    }
+  };
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = json.error ? json.error.message : `OpenAI request failed with status ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
+  }
+  const text = extractResponseText(json);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error("OpenAI returned an unreadable extraction response.");
+  }
+}
+
+function openAIExtractionError(error) {
+  return {
+    status: "openai_error",
+    rows: [],
+    unclearFields: [],
+    message: error?.message || "OpenAI request failed."
+  };
+}
+
+function applyThermalNumericVerification(rows, verifiedRows, reviewCells) {
+  const numericColumns = [
+    ["Tot Cool Cap", "totCoolCap"],
+    ["Sens Cool Cap", "sensCoolCap"],
+    ["Air Flow Rate", "airFlowRate"]
+  ];
+  let mismatchCount = 0;
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const verify = verifiedRows[index] || {};
+    for (const [column, key] of numericColumns) {
+      const first = safeExtract(row[column]);
+      const second = safeExtract(verify[key]);
+      const rowLabel = safeExtract(row.Indoor || verify.indoor || `Row ${index + 1}`);
+      if (!first && !second) continue;
+      if (!second || first !== second) {
+        row[column] = "";
+        const review = {
+          row: index,
+          column,
+          first,
+          second,
+          reason: second ? "Numeric verification mismatch" : "Numeric verification unclear",
+          rowLabel
+        };
+        reviewCells[`${index}:${column}`] = review;
+        row.__reviewCells = {
+          ...(row.__reviewCells || {}),
+          [column]: {
+            reason: review.reason,
+            first,
+            second
+          }
+        };
+        mismatchCount += 1;
+      }
+    }
+  }
+  return mismatchCount;
 }
 
 function thermalPrompt(options) {
@@ -1754,7 +2014,10 @@ Rules:
 - If the user asks for specific columns, return only those columns in customColumns, in the requested order.
 - If the user asks for a particular table but not exact columns, return the visible table columns.
 - Preserve row order exactly.
-- Preserve values exactly as shown; do not round, correct, merge, or deduplicate.
+- Transcribe values exactly as visible.
+- Do not calculate, infer, auto-correct, or guess.
+- For decimal values, read digit by digit and preserve exact decimal places. Return "1.0" as "1.0", not "1" or "1.1".
+- Preserve values as strings exactly as shown; do not round, correct, merge, or deduplicate.
 - If OCR confidence is uncertain, leave that cell as an empty string and list it in unclearFields.
 - Never guess, infer, or hallucinate unclear values.
 - Leave the regular rows array empty for custom extraction.
@@ -1790,15 +2053,50 @@ Generate rows for this final table mapping:
 - airFlowRate = Air Flow Rate.
 
 Numeric accuracy rules:
-- Preserve numeric values exactly as shown.
+- Use OCR text and visual inspection together. If they disagree, leave the value blank.
+- Transcribe values exactly as visible.
+- For decimal values, read digit by digit.
+- Preserve numeric values exactly as shown, including decimal places and trailing zeros.
+- Return "1.0" as "1.0", not "1" or "1.1".
 - Never round.
 - Never truncate trailing zeros.
 - Never remove decimal points.
+- Do not calculate or derive any value from another column.
 - Do not infer missing digits.
 - If OCR confidence is uncertain, leave that cell as an empty string and list it in unclearFields.
 - Never guess, infer, or hallucinate unclear values.
 
 If screenshots are uploaded with the PDF, use screenshots to clarify unreadable values.
+Return JSON only.`;
+}
+
+function thermalNumericVerificationPrompt(options) {
+  return `
+You are doing a second independent verification pass for a scanned HVAC Thermal Load Sheet.
+
+Important:
+- Do not use or infer from any previous extraction.
+- Read directly from the uploaded PDF/image again.
+- Verify numeric values only.
+- Use OCR text and visual inspection together. If they disagree or a digit is unclear, return an empty string.
+
+Selected capacity source: ${options.capacitySource || "auto if only one exists"}.
+
+For each visible schedule row, return:
+- indoor = Unit Reference No. exactly as visible.
+- totCoolCap = selected source Total kW exactly as visible.
+- sensCoolCap = selected source Sensible kW exactly as visible.
+- airFlowRate = Air Flow Rate exactly as visible.
+
+Rules:
+- Do not calculate.
+- Do not guess.
+- Do not auto-correct.
+- Read decimal values digit by digit.
+- Preserve exact decimal places. Return "1.0" as "1.0", not "1" or "1.1".
+- Preserve row order exactly.
+- If any numeric cell is not clearly readable, return "" for that cell and list it in unclearFields.
+
 Return JSON only.`;
 }
 
@@ -1841,6 +2139,32 @@ function thermalJsonSchema() {
       message: { type: "string" }
     },
     required: ["capacitySources", "selectedCapacitySource", "familyModel", "rows", "customColumns", "customRows", "unclearFields", "message"]
+  };
+}
+
+function thermalNumericVerificationJsonSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      rows: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            indoor: { type: "string" },
+            totCoolCap: { type: "string" },
+            sensCoolCap: { type: "string" },
+            airFlowRate: { type: "string" }
+          },
+          required: ["indoor", "totCoolCap", "sensCoolCap", "airFlowRate"]
+        }
+      },
+      unclearFields: { type: "array", items: { type: "string" } },
+      message: { type: "string" }
+    },
+    required: ["rows", "unclearFields", "message"]
   };
 }
 
@@ -2323,6 +2647,174 @@ async function extractPurchaseQuotationWithOpenAI(filePart) {
   } catch {
     return { message: "Quotation OCR response could not be parsed.", items: [] };
   }
+}
+
+async function extractOrderBookPoWithOpenAI(filePart) {
+  if (!process.env.OPENAI_API_KEY) {
+    return { message: "OpenAI API key is missing. Fill the order manually or configure OPENAI_API_KEY." };
+  }
+  const mime = filePart.mimeType || "application/octet-stream";
+  const base64 = filePart.body.toString("base64");
+  const content = [{
+    type: "input_text",
+    text: "Extract confirmed purchase order details for an HVAC order book. Return blank strings for missing text values and 0 for missing numeric values. Never invent values. Extract poNo, poDate/order date, customer/company name, project name or job description, delivery/site location, contact person, contact number, value without VAT/subtotal, VAT amount, and value including VAT/grand total. The customer is the company issuing the PO / buyer / purchaser / client. Do not use our company as customer: COMFORT ZONE A C. DEVICES TR. LLC, COMFORT ZONE AC DEVICES TR LLC, Comfort Zone A/C Devices Tr. LLC, or similar Comfort Zone names are supplier/seller/internal names and must be ignored as customer. For jobDescription, prefer Project Name, Project, Subject, Job Name, Site Name, Work Description, Scope, Remarks, or meaningful project/order details if present. If the PO mentions AC units, air conditioning units, VRV, DX, indoor units, outdoor units, or HVAC equipment supply, set division to Trading. Otherwise leave division blank unless a clear division is written. Return JSON only."
+  }];
+  if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+  else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+  const payload = {
+    model: OPENAI_MODEL,
+    input: [{ role: "user", content }],
+    temperature: 0,
+    text: { format: { type: "json_schema", name: "order_book_po_extract", strict: true, schema: orderBookPoSchema() } }
+  };
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) return { message: json.error?.message || "PO extraction failed." };
+  try {
+    return JSON.parse(extractResponseText(json));
+  } catch {
+    return { message: "PO OCR response could not be parsed." };
+  }
+}
+
+function normalizeOrderBookPoExtraction(input = {}) {
+  const valueWithoutVat = parseLooseNumber(input.valueWithoutVat || input.subtotal);
+  const vatAmount = parseLooseNumber(input.vatAmount);
+  const orderValue = parseLooseNumber(input.orderValue || input.valueIncludingVat || input.grandTotal) || (valueWithoutVat ? valueWithoutVat + vatAmount : 0);
+  const customerCandidates = [
+    input.customer,
+    input.customerName,
+    input.companyName,
+    input.client,
+    input.clientName,
+    input.buyer,
+    input.buyerName,
+    input.purchaser,
+    input.purchaserName
+  ].map(cleanCell).filter(Boolean);
+  const customer = customerCandidates.find(value => !isComfortZoneCompanyName(value)) || "";
+  const combinedText = [
+    input.division,
+    input.jobDescription,
+    input.projectName,
+    input.project,
+    input.description
+  ].map(value => String(value || "").toLowerCase()).join(" ");
+  const detectedTrading = /\b(ac|air\s*conditioning|hvac|vrv|dx|indoor|outdoor)\b/.test(combinedText) && /\b(unit|units|equipment|supply)\b/.test(combinedText);
+  return {
+    poNo: cleanCell(input.poNo),
+    poDate: parseServerDate(input.poDate || input.orderDate),
+    customer,
+    jobDescription: cleanCell(input.jobDescription || input.projectName || input.project || input.description),
+    location: cleanCell(input.location || input.deliveryLocation || input.siteLocation),
+    contactPerson: cleanCell(input.contactPerson),
+    contactNumber: cleanCell(input.contactNumber || input.phone || input.tel),
+    division: cleanCell(input.division) || (detectedTrading ? "Trading" : ""),
+    valueWithoutVat,
+    vatAmount,
+    orderValue
+  };
+}
+
+async function extractOrderBookInvoiceWithOpenAI(filePart) {
+  if (!process.env.OPENAI_API_KEY) {
+    return { message: "OpenAI API key is missing. Invoice amount can be entered manually." };
+  }
+  const mime = filePart.mimeType || "application/octet-stream";
+  const base64 = filePart.body.toString("base64");
+  const content = [{
+    type: "input_text",
+    text: "Extract invoice payment details for an HVAC order book. Return blank strings for missing text values and 0 for missing numeric values. Never invent values. Extract invoiceNo, invoiceDate, totalAmount including VAT/grand total/net invoice total/amount payable, and remarks. If total amount is unclear or multiple totals conflict, set totalAmount to 0 and explain in message. Return JSON only."
+  }];
+  if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+  else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+  const payload = {
+    model: OPENAI_MODEL,
+    input: [{ role: "user", content }],
+    temperature: 0,
+    text: { format: { type: "json_schema", name: "order_book_invoice_extract", strict: true, schema: orderBookInvoiceSchema() } }
+  };
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) return { message: json.error?.message || "Invoice extraction failed." };
+  try {
+    return JSON.parse(extractResponseText(json));
+  } catch {
+    return { message: "Invoice OCR response could not be parsed." };
+  }
+}
+
+function normalizeOrderBookInvoiceExtraction(input = {}) {
+  return {
+    invoiceNo: cleanCell(input.invoiceNo),
+    invoiceDate: parseServerDate(input.invoiceDate || input.date),
+    totalAmount: parseLooseNumber(input.totalAmount || input.grandTotal || input.amountPayable || input.netTotal),
+    remarks: cleanCell(input.remarks || input.message || ""),
+    message: cleanCell(input.message || "")
+  };
+}
+
+function isComfortZoneCompanyName(value) {
+  const normalized = cleanCell(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return normalized.includes("comfort zone") && (
+    normalized.includes("device") ||
+    normalized.includes("devices") ||
+    normalized.includes("a c") ||
+    normalized.includes("ac ") ||
+    normalized.includes("air conditioning")
+  );
+}
+
+function parseLooseNumber(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value == null ? "" : value).replace(/,/g, "").replace(/[^\d.-]/g, "");
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function orderBookPoSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      poNo: { type: "string" },
+      poDate: { type: "string" },
+      customer: { type: "string" },
+      jobDescription: { type: "string" },
+      location: { type: "string" },
+      contactPerson: { type: "string" },
+      contactNumber: { type: "string" },
+      division: { type: "string" },
+      valueWithoutVat: { type: "number" },
+      vatAmount: { type: "number" },
+      orderValue: { type: "number" },
+      message: { type: "string" }
+    },
+    required: ["poNo", "poDate", "customer", "jobDescription", "location", "contactPerson", "contactNumber", "division", "valueWithoutVat", "vatAmount", "orderValue", "message"]
+  };
+}
+
+function orderBookInvoiceSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      invoiceNo: { type: "string" },
+      invoiceDate: { type: "string" },
+      totalAmount: { type: "number" },
+      remarks: { type: "string" },
+      message: { type: "string" }
+    },
+    required: ["invoiceNo", "invoiceDate", "totalAmount", "remarks", "message"]
+  };
 }
 
 function purchaseQuotationSchema() {
@@ -2905,55 +3397,211 @@ function extractMaterialRows(xml) {
     .filter(row => row.model && String(row.model).toLowerCase() !== "model");
 }
 
+function outdoorModelFromCell(value) {
+  const match = cleanCell(value).match(/(?:RXYTQ|RXQ)[A-Z0-9]+/i);
+  return match ? match[0].toUpperCase() : "";
+}
+
+function normalizeVrvSystemName(value) {
+  const raw = cleanCell(value).toUpperCase().replace(/[.。]+$/g, "");
+  const match = raw.match(/^VRV-[A-Z0-9-]+/i);
+  return match ? match[0].toUpperCase() : raw;
+}
+
+function fcuNameFromCells(cells) {
+  for (const cell of cells) {
+    const match = cleanCell(cell).match(/\bFCU-[A-Z0-9-]+\b/i);
+    if (match) return match[0].toUpperCase();
+  }
+  return "";
+}
+
+function indoorModelFromCells(cells) {
+  for (const cell of cells) {
+    const match = cleanCell(cell).match(/\bFX[A-Z0-9-]{2,}\b/i);
+    if (match) return match[0].toUpperCase();
+  }
+  return "";
+}
+
+function systemFromName(name, systemByPrefix, fallbackSystem = "") {
+  const prefix = (cleanCell(name).match(/^FCU-([A-Z0-9]+)/i) || [])[1] || "";
+  if (prefix) {
+    const normalizedPrefix = prefix.toUpperCase();
+    return systemByPrefix[normalizedPrefix] || fallbackSystem || `VRV-${normalizedPrefix}`;
+  }
+  const floorPrefix = (cleanCell(name).match(/\b(BF|GF|FF|RF|B[0-9]+|G[0-9]+|F[0-9]+|R[0-9]+)\b/i) || [])[1] || "";
+  if (floorPrefix && systemByPrefix[floorPrefix.toUpperCase()]) return systemByPrefix[floorPrefix.toUpperCase()];
+  return fallbackSystem || "";
+}
+
+function extractOutdoorDetailRefs(tables) {
+  const refsBySystem = {};
+  for (const table of tables) {
+    const headRows = table.slice(0, 3).flat().map(cleanCell).join("|").toLowerCase();
+    const header = (table[0] || []).map(cleanCell).join("|").toLowerCase();
+    if (!header.includes("name") || !header.includes("model")) continue;
+    const hasOutdoorColumns = headRows.includes("mca") || headRows.includes("wxhxd") || headRows.includes("weight") || headRows.includes("ps");
+    const hasOutdoorRows = table.some(row => /^VRV-/i.test(cleanCell(row[0])) && outdoorModelFromCell(row[1]));
+    if (!hasOutdoorColumns || !hasOutdoorRows) continue;
+
+    let currentSystem = "";
+    for (const row of table.slice(2)) {
+      const outdoorName = normalizeVrvSystemName(row[0]);
+      const outdoorModel = outdoorModelFromCell(row[1]);
+      if (!outdoorName || !outdoorModel) continue;
+      if (/^VRV-[A-Z0-9-]+$/i.test(outdoorName)) {
+        currentSystem = outdoorName;
+        refsBySystem[currentSystem] = refsBySystem[currentSystem] || [];
+        refsBySystem[currentSystem].push({
+          outdoorName: currentSystem,
+          outdoorModel,
+          outdoorComponents: []
+        });
+      } else if (/^[A-Z]$/i.test(outdoorName) && currentSystem) {
+        refsBySystem[currentSystem] = refsBySystem[currentSystem] || [];
+        refsBySystem[currentSystem].push({
+          outdoorName,
+          outdoorModel,
+          outdoorComponents: []
+        });
+      }
+    }
+  }
+
+  for (const refs of Object.values(refsBySystem)) {
+    const parent = refs.find(ref => /^VRV-/i.test(ref.outdoorName));
+    if (parent) {
+      parent.outdoorComponents = refs
+        .filter(ref => !/^VRV-/i.test(ref.outdoorName))
+        .map(ref => ref.outdoorModel)
+        .filter(Boolean);
+    }
+  }
+  return refsBySystem;
+}
+
+function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
+  const rows = [];
+  const systemsInReport = Object.keys(outdoorRefsBySystem);
+  const seenGroups = new Set();
+  let systemIndex = 0;
+
+  for (const table of tables) {
+    const header = (table[0] || []).map(cleanCell);
+    const headerText = table.slice(0, 3).flat().map(cleanCell).join("|").toLowerCase();
+    const nameIndex = header.findIndex(cell => /^name$/i.test(cell));
+    const fcuIndex = header.findIndex(cell => /^fcu$/i.test(cell) || /^model$/i.test(cell));
+    const isIndoorCoolingTable = nameIndex >= 0 && fcuIndex >= 0 && (
+      headerText.includes("rq tc") ||
+      headerText.includes("max tc") ||
+      headerText.includes("<r:tableofabbreviationscooling>") ||
+      header.some(cell => /cooling/i.test(cell))
+    );
+    if (!isIndoorCoolingTable) continue;
+
+    const dataRows = [];
+    for (const row of table.slice(1)) {
+      const cells = row.map(cleanCell);
+      const name = cells[nameIndex] || fcuNameFromCells(cells);
+      const fcu = indoorModelFromCells([cells[fcuIndex]]) || indoorModelFromCells(cells);
+      if (!name || !fcu) continue;
+      dataRows.push({ name, fcu });
+    }
+    if (!dataRows.length) continue;
+
+    const signature = dataRows.map(row => `${row.name}|${row.fcu}`).join(";");
+    if (seenGroups.has(signature)) continue;
+    seenGroups.add(signature);
+
+    const firstNamedSystem = systemFromName(dataRows[0].name, systemByPrefix, "");
+    const fallbackSystem = firstNamedSystem || systemsInReport[systemIndex] || "";
+    for (const row of dataRows) {
+      rows.push({
+        system: systemFromName(row.name, systemByPrefix, fallbackSystem),
+        name: row.name,
+        fcu: row.fcu,
+        outdoorName: "",
+        outdoorModel: ""
+      });
+    }
+    systemIndex += 1;
+  }
+
+  return rows;
+}
+
 function extractVrvRows(xml, text) {
   const systemByPrefix = {};
   const outdoorBySystem = {};
+  const tables = extractTables(xml);
+  const outdoorRefsBySystem = extractOutdoorDetailRefs(tables);
+  for (const system of Object.keys(outdoorRefsBySystem)) {
+    systemByPrefix[system.replace(/^VRV-/i, "").toUpperCase()] = system;
+  }
   const systemLines = text.split("\n").filter(line => /^VRV-[A-Z0-9]+/i.test(line.trim()));
   for (const line of systemLines) {
     const system = (line.match(/^(VRV-[A-Z0-9]+)/i) || [])[1];
     if (system) {
       const normalizedSystem = system.toUpperCase();
       systemByPrefix[system.replace(/^VRV-/i, "").toUpperCase()] = normalizedSystem;
-      const main = (line.match(/-\s*([A-Z0-9]+)\s*=/i) || [])[1];
+      const main = (line.match(/-\s*(RXYTQ[A-Z0-9]+)\s*=/i) || [])[1];
       const componentsPart = line.includes("=") ? line.split("=").slice(1).join("=") : "";
-      const components = componentsPart.split("+").map(part => cleanCell(part)).filter(Boolean);
-      outdoorBySystem[normalizedSystem] = { main, components };
+      const components = (componentsPart.match(/RXYTQ[A-Z0-9]+/gi) || []).map(part => cleanCell(part).toUpperCase());
+      if (main || components.length) {
+        outdoorBySystem[normalizedSystem] = { main, components };
+      }
     }
   }
-  const tables = extractTables(xml);
-  const rows = [];
-  for (const table of tables) {
-    const header = (table[0] || []).join("|").toLowerCase();
-    const second = (table[1] || []).join("|").toLowerCase();
-    if (!(header.includes("name") && header.includes("fcu")) && !(second.includes("name") && second.includes("fcu"))) continue;
-    for (const row of table.slice(2)) {
-      const name = cleanCell(row[0]);
-      const fcu = cleanCell(row[1]);
-      if (!/^FCU-/i.test(name) || !fcu) continue;
-      const prefix = (name.match(/^FCU-([A-Z0-9]+)/i) || [])[1] || "";
-      rows.push({ system: systemByPrefix[prefix.toUpperCase()] || `VRV-${prefix.toUpperCase()}`, name, fcu, outdoorName: "", outdoorModel: "" });
+  const rows = extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem);
+  if (!rows.length) {
+    for (const line of text.split("\n")) {
+      const cells = line.split(/\s{2,}|\t|\|/);
+      const name = fcuNameFromCells(cells);
+      const fcu = indoorModelFromCells(cells);
+      if (!name || !fcu) continue;
+      rows.push({ system: systemFromName(name, systemByPrefix), name, fcu, outdoorName: "", outdoorModel: "" });
     }
   }
-  const seen = new Set();
-  const uniqueRows = rows.filter(row => {
-    const key = `${row.system}|${row.name}|${row.fcu}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  const systemCounts = {};
+  const uniqueRows = rows;
+  const rowsBySystem = {};
   for (const row of uniqueRows) {
-    const info = outdoorBySystem[row.system];
-    if (!info) continue;
-    const index = systemCounts[row.system] || 0;
-    if (index === 0 && info.main) {
-      row.outdoorName = row.system;
-      row.outdoorModel = info.main;
-    } else if (info.components[index - 1]) {
-      row.outdoorName = String.fromCharCode(64 + index);
-      row.outdoorModel = info.components[index - 1];
+    rowsBySystem[row.system] = rowsBySystem[row.system] || [];
+    rowsBySystem[row.system].push(row);
+  }
+  for (const [system, systemRows] of Object.entries(rowsBySystem)) {
+    const info = outdoorBySystem[system];
+    let assignments = outdoorRefsBySystem[system] || [];
+    if (!assignments.length && info) {
+      assignments = [];
+      if (info.main) {
+        assignments.push({
+          outdoorName: system,
+          outdoorModel: info.main.toUpperCase(),
+          outdoorComponents: info.components
+        });
+      }
+      info.components.forEach((model, index) => {
+        assignments.push({
+          outdoorName: String.fromCharCode(65 + index),
+          outdoorModel: model.toUpperCase(),
+          outdoorComponents: []
+        });
+      });
     }
-    systemCounts[row.system] = index + 1;
+    if (!assignments.length) continue;
+    if (systemRows[0]) systemRows[0].outdoorRefs = assignments;
+    const startIndex = systemRows.length <= 5 ? 1 : 2;
+    assignments.forEach((assignment, index) => {
+      const target = systemRows[startIndex + index];
+      if (!target) return;
+      target.outdoorName = assignment.outdoorName;
+      target.outdoorModel = assignment.outdoorModel;
+      target.outdoorComponents = assignment.outdoorComponents || [];
+    });
+    if (systemRows[startIndex] && assignments[0]?.outdoorComponents?.length) {
+      systemRows[startIndex].outdoorComponents = assignments[0].outdoorComponents;
+    }
   }
   return uniqueRows;
 }
@@ -2986,6 +3634,438 @@ function tableWorkbookHtml(title, columns, rows, summaryRows) {
   const summaryPad = Math.max(columns.length - 2, 0);
   const summary = summaryRows.map(row => `<tr>${Array.from({ length: summaryPad }, () => "<td></td>").join("")}<td><b>${esc(row.label)}</b></td><td><b>${esc(row.value)}</b></td></tr>`).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="ProgId" content="Excel.Sheet"><style>table{border-collapse:collapse}td{border:1px solid #d9d9d9;padding:2px 4px;vertical-align:top}</style></head><body><table><tbody><tr>${head}</tr>${body}${summary}</tbody></table></body></html>`;
+}
+
+const COSTING_EXPORT_COLUMNS = [
+  "S.No",
+  "Model",
+  "Qty",
+  "TR",
+  "List Price",
+  "Multiplier",
+  "Cost",
+  "Amount",
+  "Selling Price / Unit"
+];
+
+function generateCostingWorkbook(payload = {}) {
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const summary = payload.summary || {};
+  const sheetRows = [];
+  const headerRowNumber = 2;
+  const firstDataRow = headerRowNumber + 1;
+
+  sheetRows.push(costingRowXml(headerRowNumber, COSTING_EXPORT_COLUMNS.map((column, index) => ({
+    column: index + 1,
+    value: column === "Selling Price / Unit" ? "Selling Price\n/ Unit" : column,
+    style: 1
+  })), 30));
+
+  rows.forEach((row, index) => {
+    const rowNumber = firstDataRow + index;
+    sheetRows.push(costingRowXml(rowNumber, [
+      { column: 1, value: numberOrText(row["S.No"] || index + 1), style: 3 },
+      { column: 2, value: row.Model || "", style: 2 },
+      { column: 3, value: numberOrText(row.Qty), style: 3 },
+      { column: 4, value: numberOrText(row.TR), style: 12 },
+      { column: 5, value: numberOrText(row["List Price"]), style: 4 },
+      { column: 6, value: numberOrText(row.Multiplier), style: 11 },
+      { column: 7, value: numberOrText(row.Cost), style: 4 },
+      { column: 8, value: numberOrText(row.Amount), style: 4 },
+      { column: 9, value: numberOrText(row["Selling Price / Unit"]), style: 4 }
+    ]));
+  });
+
+  const summaryStart = firstDataRow + rows.length;
+  const summaryRows = [
+    { label: "Total Cost", value: numberOrText(summary.totalCost), labelStyle: 6, valueStyle: 7, tr: numberOrText(summary.totalTR) },
+    { label: "Margin", value: Number(summary.margin || 0), labelStyle: 6, valueStyle: 10 },
+    { label: "Selling Price", value: numberOrText(summary.sellingPrice), labelStyle: 6, valueStyle: 7 },
+    { label: "Profit", value: numberOrText(summary.profit), labelStyle: 8, valueStyle: 9 },
+    { label: "Price / Ton", value: numberOrText(summary.pricePerTon), labelStyle: 6, valueStyle: 7 }
+  ];
+
+  summaryRows.forEach((item, index) => {
+    const rowNumber = summaryStart + index;
+    const cells = [
+      { column: 7, value: item.label, style: item.labelStyle },
+      { column: 8, value: item.value, style: item.valueStyle }
+    ];
+    if (index === 0) cells.push({ column: 4, value: item.tr, style: 13 });
+    sheetRows.push(costingRowXml(rowNumber, cells));
+  });
+
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  <cols>
+    <col min="1" max="1" width="8" customWidth="1"/>
+    <col min="2" max="2" width="34" customWidth="1"/>
+    <col min="3" max="4" width="9" customWidth="1"/>
+    <col min="5" max="5" width="13" customWidth="1"/>
+    <col min="6" max="6" width="12" customWidth="1"/>
+    <col min="7" max="8" width="14" customWidth="1"/>
+    <col min="9" max="9" width="15" customWidth="1"/>
+  </cols>
+  <sheetData>${sheetRows.join("")}</sheetData>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
+
+  return zipEntries({
+    "[Content_Types].xml": { data: Buffer.from(costingContentTypesXml(), "utf8") },
+    "_rels/.rels": { data: Buffer.from(costingRootRelsXml(), "utf8") },
+    "docProps/app.xml": { data: Buffer.from(costingAppXml(), "utf8") },
+    "docProps/core.xml": { data: Buffer.from(costingCoreXml(), "utf8") },
+    "xl/workbook.xml": { data: Buffer.from(costingWorkbookXml(), "utf8") },
+    "xl/_rels/workbook.xml.rels": { data: Buffer.from(costingWorkbookRelsXml(), "utf8") },
+    "xl/styles.xml": { data: Buffer.from(costingStylesXml(), "utf8") },
+    "xl/worksheets/sheet1.xml": { data: Buffer.from(sheetXml, "utf8") }
+  });
+}
+
+function costingRowXml(rowNumber, cells, height = "") {
+  const attrs = height ? ` ht="${height}" customHeight="1"` : "";
+  return `<row r="${rowNumber}"${attrs}>${cells.map(cell => costingCellXml(rowNumber, cell)).join("")}</row>`;
+}
+
+function costingCellXml(rowNumber, cell) {
+  const ref = `${xlsxColumnName(cell.column)}${rowNumber}`;
+  const style = cell.style !== undefined && cell.style !== "" ? ` s="${cell.style}"` : "";
+  if (cell.value === undefined || cell.value === null || cell.value === "") return `<c r="${ref}"${style}/>`;
+  if (typeof cell.value === "number" && Number.isFinite(cell.value)) return `<c r="${ref}"${style}><v>${cell.value}</v></c>`;
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${escapeXml(cell.value)}</t></is></c>`;
+}
+
+function xlsxColumnName(index) {
+  let value = Number(index);
+  let name = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
+  }
+  return name || "A";
+}
+
+function numberOrText(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const normalized = String(value).replace(/,/g, "").trim();
+  return /^-?\d+(\.\d+)?$/.test(normalized) ? Number(normalized) : value;
+}
+
+function costingContentTypesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+}
+
+function costingRootRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+}
+
+function costingWorkbookXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Costing Sheet" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+}
+
+function costingWorkbookRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+}
+
+function costingAppXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Comfort Zone</Application>
+</Properties>`;
+}
+
+function costingCoreXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:creator>Comfort Zone</dc:creator>
+  <cp:lastModifiedBy>Comfort Zone</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:modified>
+</cp:coreProperties>`;
+}
+
+function costingStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <numFmts count="1"><numFmt numFmtId="164" formatCode="0.##"/></numFmts>
+  <fonts count="2">
+    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="4">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFE2F0D9"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FF000000"/></left><right style="thin"><color rgb="FF000000"/></right><top style="thin"><color rgb="FF000000"/></top><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="14">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="4" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="4" fontId="1" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="9" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+    <xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+    <xf numFmtId="2" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+}
+
+const VRV_SCHEDULE_XLSX_COLUMNS = [
+  { col: "B", keys: ["System"] },
+  { col: "C", keys: ["Name"] },
+  { col: "D", keys: ["Location"] },
+  { col: "E", keys: ["Rq TC"] },
+  { col: "F", keys: ["Rq SC"] },
+  { col: "G", keys: ["Air Flow Rate"] },
+  { col: "H", keys: ["FCU"] },
+  { col: "I", keys: ["Nominal Index"] },
+  { col: "J", keys: ["Country of Origin"] },
+  { col: "K", keys: ["Type"] },
+  { col: "L", keys: ["Ambient - On Coil Temperature", "Ambient - On  Coil Temperature"] },
+  { col: "M", keys: ["Max TC"] },
+  { col: "N", keys: ["Max SC"] },
+  { col: "O", keys: ["Proposed Air Flow Rate"] },
+  { col: "P", keys: ["PIC"] },
+  { col: "Q", keys: ["Sound"] },
+  { col: "R", keys: ["PS"] },
+  { col: "S", keys: ["MCA"] },
+  { col: "T", keys: ["WxHxD"] },
+  { col: "U", keys: ["Weight"] },
+  { col: "V", keys: ["Outdoor Name"] },
+  { col: "W", keys: ["Outdoor Model"] },
+  { col: "X", keys: ["Outdoor Nominal Index"] },
+  { col: "Y", keys: ["Ambient Temp"] },
+  { col: "Z", keys: ["CC"] },
+  { col: "AA", keys: ["CR"] },
+  { col: "AB", keys: ["PI ESMA"] },
+  { col: "AC", keys: ["Outdoor PS"] },
+  { col: "AD", keys: ["Outdoor MCA"] },
+  { col: "AE", keys: ["MOP"] },
+  { col: "AF", keys: ["RLA"] },
+  { col: "AG", keys: ["Outdoor WxHxD"] },
+  { col: "AH", keys: ["Outdoor Weight"] }
+];
+
+function generateVrvScheduleWorkbook(payload = {}) {
+  if (!fs.existsSync(VRV_SCHEDULE_TEMPLATE)) {
+    throw new Error("VRV Schedule template file is missing.");
+  }
+  const entries = unzipEntriesBuffer(fs.readFileSync(VRV_SCHEDULE_TEMPLATE));
+  const sheetPath = findWorkbookSheetPath(entries, "VRV Schedule") || "xl/worksheets/sheet1.xml";
+  if (!entries[sheetPath]) throw new Error("VRV Schedule worksheet was not found in the template.");
+  let xml = entries[sheetPath].data.toString("utf8");
+  xml = fillVrvScheduleSheetXml(xml, payload);
+  entries[sheetPath].data = Buffer.from(xml, "utf8");
+  return zipEntries(entries);
+}
+
+function findWorkbookSheetPath(entries, sheetName) {
+  const workbook = entries["xl/workbook.xml"]?.data?.toString("utf8") || "";
+  const rels = entries["xl/_rels/workbook.xml.rels"]?.data?.toString("utf8") || "";
+  const sheetMatch = workbook.match(new RegExp(`<sheet[^>]*name="${escapeRegExp(sheetName)}"[^>]*r:id="([^"]+)"`, "i"));
+  if (!sheetMatch) return "";
+  const relMatch = rels.match(new RegExp(`<Relationship[^>]*Id="${escapeRegExp(sheetMatch[1])}"[^>]*Target="([^"]+)"`, "i"));
+  if (!relMatch) return "";
+  const target = relMatch[1].replace(/^\/+/, "");
+  return target.startsWith("xl/") ? target : `xl/${target}`;
+}
+
+function fillVrvScheduleSheetXml(xml, payload) {
+  const originalRows = xlsxRowsByNumber(xml);
+  const normalFirstStyles = xlsxRowStyleMap(originalRows[11] || "");
+  const normalNextStyles = xlsxRowStyleMap(originalRows[12] || originalRows[11] || "");
+  const totalStyles = xlsxRowStyleMap(originalRows[26] || originalRows[11] || "");
+  const separatorStyles = xlsxRowStyleMap(originalRows[27] || originalRows[11] || "");
+  const headerRows = [];
+  for (let rowNumber = 1; rowNumber <= 10; rowNumber += 1) {
+    let rowXml = originalRows[rowNumber] || `<row r="${rowNumber}"/>`;
+    if (rowNumber === 4) rowXml = xlsxUpsertCell(rowXml, "C4", payload.projectName || "", xlsxCellStyle(rowXml, "C4"));
+    if (rowNumber === 5) rowXml = xlsxUpsertCell(rowXml, "C5", payload.customerName || "", xlsxCellStyle(rowXml, "C5"));
+    headerRows.push(rowXml);
+  }
+
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const dataRows = [];
+  const groupMerges = [];
+  let rowNumber = 11;
+  let groupStart = 0;
+  let groupSystem = "";
+  let groupDataCount = 0;
+
+  function closeGroup() {
+    if (groupStart && groupDataCount > 1) {
+      groupMerges.push(`B${groupStart}:B${groupStart + groupDataCount - 1}`);
+    }
+    groupStart = 0;
+    groupSystem = "";
+    groupDataCount = 0;
+  }
+
+  for (const sourceRow of rows) {
+    const rowType = sourceRow.__rowType || "";
+    if (rowType === "separator") {
+      closeGroup();
+      dataRows.push(xlsxScheduleRowXml(rowNumber, {}, separatorStyles));
+      rowNumber += 1;
+      continue;
+    }
+    if (rowType === "total") {
+      closeGroup();
+      dataRows.push(xlsxScheduleRowXml(rowNumber, xlsxScheduleValues(sourceRow), totalStyles));
+      rowNumber += 1;
+      continue;
+    }
+
+    const rowSystem = cleanCell(sourceRow.System || "");
+    if (rowSystem && rowSystem !== groupSystem) {
+      closeGroup();
+      groupStart = rowNumber;
+      groupSystem = rowSystem;
+      groupDataCount = 0;
+    }
+    const values = xlsxScheduleValues(sourceRow);
+    if (groupDataCount > 0 && groupSystem) values.B = "";
+    dataRows.push(xlsxScheduleRowXml(rowNumber, values, groupDataCount > 0 ? normalNextStyles : normalFirstStyles));
+    groupDataCount += 1;
+    rowNumber += 1;
+  }
+  closeGroup();
+
+  const sheetData = `<sheetData>${headerRows.join("")}${dataRows.join("")}</sheetData>`;
+  let next = xml.replace(/<sheetData>[\s\S]*?<\/sheetData>/, sheetData);
+  const lastRow = Math.max(rowNumber - 1, 10);
+  next = next.replace(/<dimension\s+ref="[^"]+"\s*\/>/, `<dimension ref="A1:AH${lastRow}"/>`);
+  next = xlsxReplaceMergeCells(next, [
+    ...xlsxMergeRefs(xml).filter(ref => xlsxMergeMaxRow(ref) <= 10),
+    ...groupMerges
+  ]);
+  return next;
+}
+
+function xlsxScheduleValues(row) {
+  const values = {};
+  for (const column of VRV_SCHEDULE_XLSX_COLUMNS) {
+    values[column.col] = firstFilled(row, column.keys);
+  }
+  return values;
+}
+
+function firstFilled(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]) !== "") return row[key];
+  }
+  return "";
+}
+
+function xlsxScheduleRowXml(rowNumber, values, styleMap) {
+  const cells = VRV_SCHEDULE_XLSX_COLUMNS
+    .map(column => xlsxCell(column.col, rowNumber, values[column.col], styleMap[column.col]))
+    .join("");
+  return `<row r="${rowNumber}" spans="2:34">${cells}</row>`;
+}
+
+function xlsxRowsByNumber(xml) {
+  const rows = {};
+  const rowRegex = /<row\b[^>]*\br="(\d+)"[^>]*>[\s\S]*?<\/row>/g;
+  let match;
+  while ((match = rowRegex.exec(xml))) rows[Number(match[1])] = match[0];
+  return rows;
+}
+
+function xlsxRowStyleMap(rowXml) {
+  const styles = {};
+  const cellRegex = /<c\b[^>]*\br="([A-Z]+)\d+"[^>]*>/g;
+  let match;
+  while ((match = cellRegex.exec(rowXml))) {
+    const styleMatch = match[0].match(/\bs="([^"]+)"/);
+    if (styleMatch) styles[match[1]] = styleMatch[1];
+  }
+  return styles;
+}
+
+function xlsxCellStyle(rowXml, ref) {
+  const match = rowXml.match(new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*>`, "i"));
+  return match?.[0]?.match(/\bs="([^"]+)"/)?.[1] || "";
+}
+
+function xlsxUpsertCell(rowXml, ref, value, styleId = "") {
+  const col = ref.match(/^[A-Z]+/)?.[0] || "";
+  const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
+  const cell = xlsxCell(col, rowNumber, value, styleId);
+  const cellRegex = new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*>[\\s\\S]*?<\\/c>`, "i");
+  if (cellRegex.test(rowXml)) return rowXml.replace(cellRegex, cell);
+  return rowXml.replace(/<\/row>$/, `${cell}</row>`);
+}
+
+function xlsxCell(col, rowNumber, value, styleId = "") {
+  const ref = `${col}${rowNumber}`;
+  const style = styleId !== "" && styleId !== undefined ? ` s="${styleId}"` : "";
+  if (value === undefined || value === null || value === "") return `<c r="${ref}"${style}/>`;
+  const normalized = typeof value === "string" ? value.replace(/,/g, "").trim() : value;
+  if (typeof normalized === "number" || (/^-?\d+(\.\d+)?$/.test(String(normalized)) && String(value).trim() !== "")) {
+    return `<c r="${ref}"${style}><v>${Number(normalized)}</v></c>`;
+  }
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${escapeXml(value)}</t></is></c>`;
+}
+
+function xlsxMergeRefs(xml) {
+  return [...xml.matchAll(/<mergeCell\s+ref="([^"]+)"\s*\/>/g)].map(match => match[1]);
+}
+
+function xlsxMergeMaxRow(ref) {
+  return Math.max(...(ref.match(/\d+/g) || ["0"]).map(Number));
+}
+
+function xlsxReplaceMergeCells(xml, refs) {
+  const uniqueRefs = [...new Set(refs)];
+  const block = uniqueRefs.length
+    ? `<mergeCells count="${uniqueRefs.length}">${uniqueRefs.map(ref => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>`
+    : "";
+  if (/<mergeCells\b[\s\S]*?<\/mergeCells>/.test(xml)) {
+    return xml.replace(/<mergeCells\b[\s\S]*?<\/mergeCells>/, block);
+  }
+  return xml.replace(/<\/sheetData>/, `</sheetData>${block}`);
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function quotationHtml(payload) {
@@ -3193,6 +4273,6 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log(`HVAC Workflow App running at http://127.0.0.1:${PORT}`);
 });

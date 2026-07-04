@@ -1,6 +1,6 @@
 {
   "settings": {
-    "nextDeliveryNo": "DN-2064"
+    "nextDeliveryNo": "DN-2066"
   },
   "models": [],
   "customers": [
@@ -14,22 +14,13 @@
       "defaultDeliveryLocation": "Villa AC Replacement - Jumeirah"
     },
     {
-      "id": "b904372b-df4b-4f73-a23c-5ec4f44f7f31",
-      "customerName": "ABCD Engineering Consultant",
-      "contactPerson": "Mr. ABDC",
-      "phone": "98765432222d",
-      "email": "dcba@gmail.com",
-      "address": "",
-      "defaultDeliveryLocation": "Muweilah, Sharjah"
-    },
-    {
       "id": "cbac0873-a407-4ec9-80eb-f298c06544b4",
       "customerName": "XYZ company",
       "contactPerson": "Person",
       "phone": "332331333221",
       "email": "ss@gmail.com",
       "address": "RAK",
-      "defaultDeliveryLocation": ""
+      "defaultDeliveryLocation": "RAK"
     },
     {
       "id": "58dadb82-11c1-41a4-9972-bb48c47e7ea1",
@@ -39,6 +30,24 @@
       "email": "",
       "address": "Al Ain",
       "defaultDeliveryLocation": "AC Units"
+    },
+    {
+      "id": "c5c09e1c-eb6e-4ee2-9f91-1cd65d2fa6f1",
+      "customerName": "AL Mahira Tech Service",
+      "contactPerson": "acbdefg",
+      "phone": "34567890",
+      "email": "",
+      "address": "",
+      "defaultDeliveryLocation": "INSTALLATION OF DAIKIN UNITS"
+    },
+    {
+      "id": "5cb80dd4-deb4-4ca8-b0c6-8423f2baa541",
+      "customerName": "TechNova Solutions",
+      "contactPerson": "Priya Nair",
+      "phone": "+971 55 612 9911",
+      "email": "admin@technova.ae",
+      "address": "JLT, Dubai",
+      "defaultDeliveryLocation": "Cluster X"
     }
   ],
   "supplierDns": [],
@@ -75,6 +84,22 @@
       "mimeType": "application/pdf",
       "size": 549679,
       "createdAt": "2026-06-27T07:31:33.285Z"
+    },
+    {
+      "id": "d3d765d3-5ed8-463a-8907-c93441b2ebc5",
+      "originalName": "Delivery note daikin.pdf",
+      "storedName": "d3d765d3-5ed8-463a-8907-c93441b2ebc5-Delivery note daikin.pdf",
+      "mimeType": "application/pdf",
+      "size": 549679,
+      "createdAt": "2026-06-27T08:42:48.621Z"
+    },
+    {
+      "id": "a9191081-fdc1-4ab8-aa5e-939b09c2cb2d",
+      "originalName": "Delivery note daikin.pdf",
+      "storedName": "a9191081-fdc1-4ab8-aa5e-939b09c2cb2d-Delivery note daikin.pdf",
+      "mimeType": "application/pdf",
+      "size": 549679,
+      "createdAt": "2026-06-27T09:12:48.580Z"
     }
   ]
 }
