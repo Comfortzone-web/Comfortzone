@@ -606,10 +606,22 @@ function notFound(res) {
   send(res, 404, { error: "Not found" });
 }
 
+function bufferFromBody(body) {
+  if (!body) return Buffer.alloc(0);
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  if (body instanceof ArrayBuffer) return Buffer.from(body);
+  if (typeof body === "string") return Buffer.from(body, "utf8");
+  if (typeof body === "object") return Buffer.from(JSON.stringify(body), "utf8");
+  return Buffer.alloc(0);
+}
+
 function collect(req) {
+  if (req.body !== undefined) return Promise.resolve(bufferFromBody(req.body));
+  if (req.rawBody !== undefined) return Promise.resolve(bufferFromBody(req.rawBody));
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", chunk => chunks.push(chunk));
+    req.on("data", chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
     req.on("end", () => resolve(Buffer.concat(chunks)));
     req.on("error", reject);
   });
@@ -786,8 +798,10 @@ function parseMultipart(buffer, contentType) {
   if (!boundaryMatch) return [];
   const boundary = Buffer.from(`--${boundaryMatch[1] || boundaryMatch[2]}`);
   const parts = [];
-  let start = buffer.indexOf(boundary) + boundary.length + 2;
-  while (start > boundary.length) {
+  const firstBoundary = buffer.indexOf(boundary);
+  if (firstBoundary < 0) return [];
+  let start = firstBoundary + boundary.length + 2;
+  while (start > boundary.length && start < buffer.length) {
     const next = buffer.indexOf(boundary, start);
     if (next < 0) break;
     const part = buffer.subarray(start, next - 2);
@@ -1686,31 +1700,35 @@ async function handleApi(req, res) {
     }
 
     if (req.method === "POST" && parts[3] === "uploads") {
-      const buffer = await collect(req);
-      const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
-      const filePart = multipart.find(part => part.filename);
-      const nodePart = multipart.find(part => part.name === "nodeId");
-      if (!filePart) return send(res, 400, { error: "No file uploaded" });
-      const uploadId = id();
-      const nodeId = nodePart ? nodePart.body.toString("utf8") : "file";
-      const storedName = `${uploadId}-${safeName(filePart.filename)}`;
-      await saveUpload(`projects/${projectId}`, storedName, filePart.body, filePart.mimeType);
-      const upload = {
-        id: uploadId,
-        projectId,
-        nodeId,
-        originalName: filePart.filename,
-        storedName,
-        mimeType: filePart.mimeType,
-        size: filePart.body.length,
-        createdAt: new Date().toISOString()
-      };
-      project.uploads.push(upload);
-      const node = project.nodes.find(n => n.id === nodeId);
-      if (node) node.data.uploadId = uploadId;
-      if (nodeId === "thermal-upload" || nodeId === "vrv-upload") project.visible = true;
-      await writeProject(project);
-      return send(res, 201, upload);
+      try {
+        const buffer = await collect(req);
+        const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+        const filePart = multipart.find(part => part.filename);
+        const nodePart = multipart.find(part => part.name === "nodeId");
+        if (!filePart) return send(res, 400, { error: "No file uploaded" });
+        const uploadId = id();
+        const nodeId = nodePart ? nodePart.body.toString("utf8") : "file";
+        const storedName = `${uploadId}-${safeName(filePart.filename)}`;
+        await saveUpload(`projects/${projectId}`, storedName, filePart.body, filePart.mimeType);
+        const upload = {
+          id: uploadId,
+          projectId,
+          nodeId,
+          originalName: filePart.filename,
+          storedName,
+          mimeType: filePart.mimeType,
+          size: filePart.body.length,
+          createdAt: new Date().toISOString()
+        };
+        project.uploads.push(upload);
+        const node = project.nodes.find(n => n.id === nodeId);
+        if (node) node.data.uploadId = uploadId;
+        if (nodeId === "thermal-upload" || nodeId === "vrv-upload") project.visible = true;
+        await writeProject(project);
+        return send(res, 201, upload);
+      } catch (error) {
+        return send(res, 500, { error: error.message || "Upload failed" });
+      }
     }
 
     if (req.method === "GET" && parts[3] === "uploads" && parts[4]) {
@@ -4273,6 +4291,10 @@ const server = http.createServer((req, res) => {
   }
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`HVAC Workflow App running at http://127.0.0.1:${PORT}`);
-});
+if (process.env.VERCEL) {
+  module.exports = (req, res) => server.emit("request", req, res);
+} else {
+  server.listen(PORT, HOST, () => {
+    console.log(`HVAC Workflow App running at http://127.0.0.1:${PORT}`);
+  });
+}

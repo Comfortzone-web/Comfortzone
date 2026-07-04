@@ -6291,34 +6291,39 @@ async function uploadThermalFromChat() {
   const input = $("#thermalFileInput");
   const files = Array.from(input.files || []);
   if (!files.length) return;
-  await ensureProjectSaved({ hidden: true });
-  const uploaded = [];
-  for (const file of files) {
-    const form = new FormData();
-    const isFirst = !thermalUploadIds().length && !uploaded.length;
-    form.append("nodeId", isFirst ? "thermal-upload" : "thermal-screenshot");
-    form.append("file", file);
-    const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
-    uploaded.push(upload);
-  }
-  const project = await api(`/api/projects/${state.id}`);
-  state.uploads = project.uploads;
-  state.nodes = project.nodes;
-  state.thermalChatUploadIds = [...new Set([...(state.thermalChatUploadIds || []), ...uploaded.map(upload => upload.id)])];
-  state.thermalPendingUploadIds = uploaded.map(upload => upload.id);
-  uploaded.forEach(addChatFile);
-  if (thermalChatSelection.requested) {
-    if (thermalChatSelection.appendResults) {
-      addChat(`${uploaded.length > 1 ? "Files added" : "Screenshot/file added"}. Should I extract these new screenshot(s) and add the rows below? Reply: continue.`);
-    } else {
-      addChat(`${uploaded.length > 1 ? "Files added" : "Screenshot/file added"}. Should I verify the table again using these screenshot(s)? Reply: verify again.`);
+  try {
+    await ensureProjectSaved({ hidden: true });
+    const uploaded = [];
+    for (const file of files) {
+      const form = new FormData();
+      const isFirst = !thermalUploadIds().length && !uploaded.length;
+      form.append("nodeId", isFirst ? "thermal-upload" : "thermal-screenshot");
+      form.append("file", file);
+      const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
+      uploaded.push(upload);
     }
-  } else {
-    askThermalExtractionChoice();
+    const project = await api(`/api/projects/${state.id}`);
+    state.uploads = project.uploads;
+    state.nodes = project.nodes;
+    state.thermalChatUploadIds = [...new Set([...(state.thermalChatUploadIds || []), ...uploaded.map(upload => upload.id)])];
+    state.thermalPendingUploadIds = uploaded.map(upload => upload.id);
+    uploaded.forEach(addChatFile);
+    if (thermalChatSelection.requested) {
+      if (thermalChatSelection.appendResults) {
+        addChat(`${uploaded.length > 1 ? "Files added" : "Screenshot/file added"}. Should I extract these new screenshot(s) and add the rows below? Reply: continue.`);
+      } else {
+        addChat(`${uploaded.length > 1 ? "Files added" : "Screenshot/file added"}. Should I verify the table again using these screenshot(s)? Reply: verify again.`);
+      }
+    } else {
+      askThermalExtractionChoice();
+    }
+    input.value = "";
+    render();
+    saveProject();
+  } catch (error) {
+    addChat(error.message || "File upload failed. Please try again.");
+    toast(error.message || "File upload failed");
   }
-  input.value = "";
-  render();
-  saveProject();
 }
 
 function askThermalExtractionChoice() {
@@ -6437,23 +6442,28 @@ async function chooseUpload(nodeId) {
   input.accept = ".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg";
   input.addEventListener("change", async () => {
     if (!input.files[0]) return;
-    await ensureProjectSaved({ hidden: true });
-    const form = new FormData();
-    form.append("nodeId", nodeId);
-    form.append("file", input.files[0]);
-    const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
-    const project = await api(`/api/projects/${state.id}`);
-    state.uploads = project.uploads;
-    state.nodes = project.nodes;
-    if (nodeId === "vrv-upload" && !state.details.project) {
-      state.details.project = projectNameFromFile(upload.originalName);
-      state.title = state.details.project;
+    try {
+      await ensureProjectSaved({ hidden: true });
+      const form = new FormData();
+      form.append("nodeId", nodeId);
+      form.append("file", input.files[0]);
+      const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
+      const project = await api(`/api/projects/${state.id}`);
+      state.uploads = project.uploads;
+      state.nodes = project.nodes;
+      if (nodeId === "vrv-upload" && !state.details.project) {
+        state.details.project = projectNameFromFile(upload.originalName);
+        state.title = state.details.project;
+      }
+      if (nodeId === "vrv-upload") {
+        await extractVrvUpload(upload.id);
+      }
+      render();
+      saveProject();
+      toast("File uploaded");
+    } catch (error) {
+      toast(error.message || "File upload failed");
     }
-    if (nodeId === "vrv-upload") {
-      await extractVrvUpload(upload.id);
-    }
-    render();
-    saveProject();
   });
   input.value = "";
   input.click();
