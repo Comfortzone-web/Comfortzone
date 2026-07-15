@@ -138,23 +138,35 @@ async function writeSupabaseValue(key, value) {
 
 async function readStore(key, file, fallbackFactory, normalize = value => value) {
   if (USE_SUPABASE) {
-    const value = await readSupabaseValue(key);
-    if (value === null || value === undefined) {
-      const seed = normalize(fallbackFactory());
-      await writeSupabaseValue(key, seed);
-      return seed;
+    try {
+      const value = await readSupabaseValue(key);
+      if (value === null || value === undefined) {
+        const seed = normalize(fallbackFactory());
+        await writeSupabaseValue(key, seed);
+        return seed;
+      }
+      return normalize(value);
+    } catch (error) {
+      console.error(error.message || error);
     }
-    return normalize(value);
   }
   return localReadJson(file, fallbackFactory, normalize);
 }
 
 async function writeStore(key, file, value) {
   if (USE_SUPABASE) {
-    await writeSupabaseValue(key, value);
-    return;
+    try {
+      await writeSupabaseValue(key, value);
+      return;
+    } catch (error) {
+      console.error(error.message || error);
+    }
   }
-  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+  try {
+    fs.writeFileSync(file, JSON.stringify(value, null, 2));
+  } catch (error) {
+    if (!USE_SUPABASE) throw error;
+  }
 }
 
 function storagePath(scope, storedName) {
