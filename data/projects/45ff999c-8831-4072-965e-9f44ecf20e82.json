@@ -1,15 +1,15 @@
 {
-  "id": "f8352193-57d0-435a-ab44-b61a1ec1f035",
-  "title": "VRVSelectionReport-Project VRV Units (R0 Turkey)",
-  "createdAt": "2026-06-29T08:40:00.133Z",
-  "updatedAt": "2026-07-03T07:06:02.727Z",
+  "id": "45ff999c-8831-4072-965e-9f44ecf20e82",
+  "title": "Untitled Project",
+  "createdAt": "2026-07-13T08:14:41.744Z",
+  "updatedAt": "2026-07-13T10:01:29.361Z",
   "details": {
-    "customer": "XYZ company",
-    "contactPerson": "Person",
-    "telNo": "332331333221",
-    "email": "ss@gmail.com",
-    "project": "VRVSelectionReport-Project VRV Units (R0 Turkey)",
-    "date": "2026-06-29",
+    "customer": "",
+    "contactPerson": "",
+    "telNo": "",
+    "email": "",
+    "project": "",
+    "date": "2026-07-13",
     "location": "",
     "model": "Daikin",
     "validity": "Valid for 7 days",
@@ -17,7 +17,7 @@
     "preparedBy": ""
   },
   "quotation": {
-    "quotationNo": "QCZ-A/26/1008",
+    "quotationNo": "QCZ-A/26/1004",
     "generatedDocId": "",
     "generatedPdfId": ""
   },
@@ -39,7 +39,9 @@
       "x": 180,
       "y": 255,
       "locked": false,
-      "data": {}
+      "data": {
+        "uploadId": "95d8b774-47eb-4b1e-b48d-691265a32c41"
+      }
     },
     {
       "id": "vrv-upload",
@@ -48,9 +50,7 @@
       "x": 640,
       "y": 250,
       "locked": false,
-      "data": {
-        "uploadId": "2d34fb78-4cb0-453a-b89d-58f81e1cfae5"
-      }
+      "data": {}
     },
     {
       "id": "thermal-table",
@@ -60,7 +60,7 @@
       "y": 520,
       "locked": false,
       "width": 520,
-      "height": 205,
+      "height": 2986,
       "data": {}
     },
     {
@@ -70,19 +70,19 @@
       "x": 980,
       "y": 130,
       "locked": false,
-      "width": 633,
-      "height": 526,
+      "width": 616,
+      "height": 216,
       "data": {}
     },
     {
       "id": "boq-table",
       "type": "boqTable",
       "title": "BOQ / Price",
-      "x": 970,
-      "y": 690,
+      "x": 1010.9832729790345,
+      "y": 382,
       "locked": false,
-      "width": 650,
-      "height": 486,
+      "width": 616,
+      "height": 186,
       "data": {}
     },
     {
@@ -90,7 +90,7 @@
       "type": "quotation",
       "title": "Quotation",
       "x": 1680,
-      "y": 590,
+      "y": 340,
       "locked": false,
       "data": {}
     },
@@ -99,7 +99,7 @@
       "type": "vrvSchedule",
       "title": "VRV Schedule",
       "x": 170,
-      "y": 1241,
+      "y": 3571,
       "locked": false,
       "width": 1550,
       "height": 230,
@@ -108,32 +108,784 @@
   ],
   "uploads": [
     {
-      "id": "2d34fb78-4cb0-453a-b89d-58f81e1cfae5",
-      "projectId": "f8352193-57d0-435a-ab44-b61a1ec1f035",
-      "nodeId": "vrv-upload",
-      "originalName": "VRVSelectionReport-Project VRV Units (R0 Turkey).docx",
-      "storedName": "2d34fb78-4cb0-453a-b89d-58f81e1cfae5-VRVSelectionReport-Project VRV Units _R0 Turkey_.docx",
-      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "size": 1152885,
-      "createdAt": "2026-06-29T08:40:05.695Z"
+      "id": "95d8b774-47eb-4b1e-b48d-691265a32c41",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-upload",
+      "originalName": "Screenshot 2026-07-13 121235.png",
+      "storedName": "95d8b774-47eb-4b1e-b48d-691265a32c41-Screenshot 2026-07-13 121235.png",
+      "mimeType": "image/png",
+      "size": 311413,
+      "createdAt": "2026-07-13T08:15:34.192Z"
+    },
+    {
+      "id": "c6cb2570-0729-423e-8d7e-35dfef52eac4",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-13 121255.png",
+      "storedName": "c6cb2570-0729-423e-8d7e-35dfef52eac4-Screenshot 2026-07-13 121255.png",
+      "mimeType": "image/png",
+      "size": 233035,
+      "createdAt": "2026-07-13T08:15:34.240Z"
+    },
+    {
+      "id": "6f59b560-269c-44e8-b919-0974a9ea3057",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-13 121320.png",
+      "storedName": "6f59b560-269c-44e8-b919-0974a9ea3057-Screenshot 2026-07-13 121320.png",
+      "mimeType": "image/png",
+      "size": 381101,
+      "createdAt": "2026-07-13T08:15:34.290Z"
+    },
+    {
+      "id": "ff9b69e6-bd76-4f06-a6f2-9d08c813cb79",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-13 121336.png",
+      "storedName": "ff9b69e6-bd76-4f06-a6f2-9d08c813cb79-Screenshot 2026-07-13 121336.png",
+      "mimeType": "image/png",
+      "size": 437059,
+      "createdAt": "2026-07-13T08:15:34.331Z"
+    },
+    {
+      "id": "da68ca70-081c-44e9-99ce-2eb0bffaa70f",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-13 121358.png",
+      "storedName": "da68ca70-081c-44e9-99ce-2eb0bffaa70f-Screenshot 2026-07-13 121358.png",
+      "mimeType": "image/png",
+      "size": 506991,
+      "createdAt": "2026-07-13T08:15:34.370Z"
+    },
+    {
+      "id": "b3191936-d5f6-434a-8927-707d71d00331",
+      "projectId": "45ff999c-8831-4072-965e-9f44ecf20e82",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-13 121430.png",
+      "storedName": "b3191936-d5f6-434a-8927-707d71d00331-Screenshot 2026-07-13 121430.png",
+      "mimeType": "image/png",
+      "size": 465365,
+      "createdAt": "2026-07-13T08:15:34.409Z"
     }
   ],
   "tables": {
     "thermal": {
       "columns": [
-        "Indoor",
-        "Room",
-        "Mode",
-        "Family or Model",
-        "Cooling DBT",
-        "Cooling WBT",
-        "Heating T",
-        "Tot Cool Cap",
-        "Sens Cool Cap",
-        "Heat Cap",
-        "Air Flow Rate"
+        "Units/Reference No",
+        "Location",
+        "Total KW",
+        "Sensible KW",
+        "Flow Rate L/S"
       ],
-      "rows": []
+      "rows": [
+        {
+          "Units/Reference No": "FCU-UG-PR",
+          "Location": "PUMP ROOM",
+          "Total KW": "6.20",
+          "Sensible KW": "4.70",
+          "Flow Rate L/S": "315.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-01A",
+          "Location": "LABORATORY",
+          "Total KW": "8.00",
+          "Sensible KW": "6.75",
+          "Flow Rate L/S": "468.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-01B",
+          "Location": "LABORATORY",
+          "Total KW": "8.00",
+          "Sensible KW": "6.75",
+          "Flow Rate L/S": "468.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-02A",
+          "Location": "RECEPTION AND RECIEVING SAMPLES",
+          "Total KW": "7.50",
+          "Sensible KW": "6.35",
+          "Flow Rate L/S": "442.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-02B",
+          "Location": "RECEPTION AND RECIEVING SAMPLES",
+          "Total KW": "7.50",
+          "Sensible KW": "6.35",
+          "Flow Rate L/S": "442.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-L01",
+          "Location": "BREAKOUT AREA/TEL.RM/WASH",
+          "Total KW": "11.50",
+          "Sensible KW": "10.08",
+          "Flow Rate L/S": "683.75"
+        },
+        {
+          "Units/Reference No": "FCU-G-L02",
+          "Location": "BREAKOUT AREA/TEL.RM/WASH",
+          "Total KW": "11.50",
+          "Sensible KW": "10.08",
+          "Flow Rate L/S": "683.75"
+        },
+        {
+          "Units/Reference No": "FCU-G-L03",
+          "Location": "BREAKOUT AREA/TEL.RM/WASH",
+          "Total KW": "11.50",
+          "Sensible KW": "10.08",
+          "Flow Rate L/S": "683.75"
+        },
+        {
+          "Units/Reference No": "FCU-G-L04",
+          "Location": "BREAKOUT AREA/TEL.RM/WASH",
+          "Total KW": "11.50",
+          "Sensible KW": "10.08",
+          "Flow Rate L/S": "683.75"
+        },
+        {
+          "Units/Reference No": "FCU-G-LV01",
+          "Location": "LV ROOM",
+          "Total KW": "7.65",
+          "Sensible KW": "7.45",
+          "Flow Rate L/S": "506.50"
+        },
+        {
+          "Units/Reference No": "FCU-G-LV01",
+          "Location": "LV ROOM",
+          "Total KW": "7.65",
+          "Sensible KW": "7.45",
+          "Flow Rate L/S": "506.50"
+        },
+        {
+          "Units/Reference No": "FCU-G-GAS",
+          "Location": "GAS ROOM",
+          "Total KW": "3.30",
+          "Sensible KW": "2.80",
+          "Flow Rate L/S": "195.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-ST1",
+          "Location": "GENERAL STORE",
+          "Total KW": "4.70",
+          "Sensible KW": "3.90",
+          "Flow Rate L/S": "264.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-ST2*",
+          "Location": "Radiation Room",
+          "Total KW": "7.80",
+          "Sensible KW": "7.10",
+          "Flow Rate L/S": "485.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-ST3*",
+          "Location": "Gamma",
+          "Total KW": "3.50",
+          "Sensible KW": "3.40",
+          "Flow Rate L/S": "229.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-TR",
+          "Location": "TEL.RM",
+          "Total KW": "6.60",
+          "Sensible KW": "6.40",
+          "Flow Rate L/S": "434.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-PR",
+          "Location": "PRAYER ROOM",
+          "Total KW": "11.90",
+          "Sensible KW": "7.80",
+          "Flow Rate L/S": "535.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-KT",
+          "Location": "PANTRY",
+          "Total KW": "9.70",
+          "Sensible KW": "6.40",
+          "Flow Rate L/S": "433.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-IDF-DX",
+          "Location": "IDF ROOM",
+          "Total KW": "9.50",
+          "Sensible KW": "8.00",
+          "Flow Rate L/S": "350.00"
+        },
+        {
+          "Units/Reference No": "FCU-G-TE-DX",
+          "Location": "TEL ROOM",
+          "Total KW": "9.50",
+          "Sensible KW": "8.00",
+          "Flow Rate L/S": "350.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-01A",
+          "Location": "OFFICES ( 18 STAFF )",
+          "Total KW": "4.85",
+          "Sensible KW": "4.05",
+          "Flow Rate L/S": "273.50"
+        },
+        {
+          "Units/Reference No": "FCU-1F-01B",
+          "Location": "OFFICES ( 18 STAFF )",
+          "Total KW": "4.85",
+          "Sensible KW": "4.05",
+          "Flow Rate L/S": "273.50"
+        },
+        {
+          "Units/Reference No": "FCU-1F-02A",
+          "Location": "LABORATORY AREA",
+          "Total KW": "8.33",
+          "Sensible KW": "7.47",
+          "Flow Rate L/S": "565.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-02B",
+          "Location": "LABORATORY AREA",
+          "Total KW": "8.33",
+          "Sensible KW": "7.47",
+          "Flow Rate L/S": "565.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-02C",
+          "Location": "LABORATORY AREA",
+          "Total KW": "8.33",
+          "Sensible KW": "7.47",
+          "Flow Rate L/S": "565.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-03",
+          "Location": "RADIATION INSTRUMENT",
+          "Total KW": "6.40",
+          "Sensible KW": "5.50",
+          "Flow Rate L/S": "419.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-04*",
+          "Location": "Future Lab",
+          "Total KW": "10.20",
+          "Sensible KW": "9.30",
+          "Flow Rate L/S": "716.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-05",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "7.70",
+          "Sensible KW": "6.70",
+          "Flow Rate L/S": "515.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-06",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "11.50",
+          "Sensible KW": "10.50",
+          "Flow Rate L/S": "808.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-07A",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "6.95",
+          "Sensible KW": "6.25",
+          "Flow Rate L/S": "480.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-07B",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "6.95",
+          "Sensible KW": "6.25",
+          "Flow Rate L/S": "480.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-08A",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "6.95",
+          "Sensible KW": "6.25",
+          "Flow Rate L/S": "480.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-08B",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "6.95",
+          "Sensible KW": "6.25",
+          "Flow Rate L/S": "480.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-09A",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "8.90",
+          "Sensible KW": "8.20",
+          "Flow Rate L/S": "635.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-09B",
+          "Location": "SAMPLE PREPARATION",
+          "Total KW": "8.90",
+          "Sensible KW": "8.20",
+          "Flow Rate L/S": "635.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-10",
+          "Location": "FUTURE LAB",
+          "Total KW": "8.00",
+          "Sensible KW": "7.30",
+          "Flow Rate L/S": "562.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-11A",
+          "Location": "ENVIRONMENTAL LAB-1",
+          "Total KW": "11.05",
+          "Sensible KW": "10.55",
+          "Flow Rate L/S": "804.50"
+        },
+        {
+          "Units/Reference No": "FCU-1F-11B",
+          "Location": "ENVIRONMENTAL LAB-1",
+          "Total KW": "11.05",
+          "Sensible KW": "10.55",
+          "Flow Rate L/S": "804.50"
+        },
+        {
+          "Units/Reference No": "FCU-1F-12A",
+          "Location": "ENVIRONMENTAL LAB-2",
+          "Total KW": "12.00",
+          "Sensible KW": "10.50",
+          "Flow Rate L/S": "650.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-12B",
+          "Location": "ENVIRONMENTAL LAB-2",
+          "Total KW": "12.00",
+          "Sensible KW": "10.50",
+          "Flow Rate L/S": "650.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-DR",
+          "Location": "DINNING",
+          "Total KW": "7.90",
+          "Sensible KW": "5.80",
+          "Flow Rate L/S": "390.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-LR",
+          "Location": "LOCKERS",
+          "Total KW": "2.40",
+          "Sensible KW": "2.00",
+          "Flow Rate L/S": "136.00"
+        },
+        {
+          "Units/Reference No": "FCU-1F-L1",
+          "Location": "BREAK OUT AREA/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-1F-L2",
+          "Location": "BREAK OUT AREA/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-1F-L3",
+          "Location": "BREAK OUT AREA/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-1F-L4",
+          "Location": "BREAK OUT AREA/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-1F-L5",
+          "Location": "BREAK OUT AREA/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-01A",
+          "Location": "OFFICES ( 18 STAFF )",
+          "Total KW": "4.70",
+          "Sensible KW": "3.90",
+          "Flow Rate L/S": "265.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-01B",
+          "Location": "OFFICES ( 18 STAFF )",
+          "Total KW": "4.70",
+          "Sensible KW": "3.90",
+          "Flow Rate L/S": "265.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-02A",
+          "Location": "LABORATORY-01-A",
+          "Total KW": "5.60",
+          "Sensible KW": "4.65",
+          "Flow Rate L/S": "315.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-02B",
+          "Location": "LABORATORY-01-A",
+          "Total KW": "5.60",
+          "Sensible KW": "4.65",
+          "Flow Rate L/S": "315.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-03A",
+          "Location": "LABORATORY-01-A",
+          "Total KW": "10.47",
+          "Sensible KW": "9.57",
+          "Flow Rate L/S": "650.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-03B",
+          "Location": "LABORATORY-01-A",
+          "Total KW": "10.47",
+          "Sensible KW": "9.57",
+          "Flow Rate L/S": "650.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-03C",
+          "Location": "LABORATORY-01-A",
+          "Total KW": "10.47",
+          "Sensible KW": "9.57",
+          "Flow Rate L/S": "650.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-04A",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "9.73",
+          "Sensible KW": "9.10",
+          "Flow Rate L/S": "619.67"
+        },
+        {
+          "Units/Reference No": "FCU-2F-04B",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "9.73",
+          "Sensible KW": "9.10",
+          "Flow Rate L/S": "619.67"
+        },
+        {
+          "Units/Reference No": "FCU-2F-04C",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "9.73",
+          "Sensible KW": "9.10",
+          "Flow Rate L/S": "619.67"
+        },
+        {
+          "Units/Reference No": "FCU-2F-05A",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "4.80",
+          "Sensible KW": "4.20",
+          "Flow Rate L/S": "285.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-05B",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "4.80",
+          "Sensible KW": "4.20",
+          "Flow Rate L/S": "285.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-06A",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "4.50",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "360.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-06B",
+          "Location": "LABORATORY-01-B",
+          "Total KW": "4.50",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "360.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-L1",
+          "Location": "BREAKOUT AREA/ELE/TEL.RM/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-L2",
+          "Location": "BREAKOUT AREA/ELE/TEL.RM/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-L3",
+          "Location": "BREAKOUT AREA/ELE/TEL.RM/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-L4",
+          "Location": "BREAKOUT AREA/ELE/TEL.RM/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-L5",
+          "Location": "BREAKOUT AREA/ELE/TEL.RM/WASH",
+          "Total KW": "7.82",
+          "Sensible KW": "7.02",
+          "Flow Rate L/S": "472.80"
+        },
+        {
+          "Units/Reference No": "FCU-2F-DR",
+          "Location": "DINNING",
+          "Total KW": "7.80",
+          "Sensible KW": "5.70",
+          "Flow Rate L/S": "390.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-SR",
+          "Location": "STORE",
+          "Total KW": "2.40",
+          "Sensible KW": "2.00",
+          "Flow Rate L/S": "137.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-IDF-DX",
+          "Location": "IDF ROOM",
+          "Total KW": "10.00",
+          "Sensible KW": "8.40",
+          "Flow Rate L/S": "670.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-MR01",
+          "Location": "MEETING ROOM",
+          "Total KW": "6.55",
+          "Sensible KW": "5.35",
+          "Flow Rate L/S": "372.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-MR02",
+          "Location": "MEETING ROOM",
+          "Total KW": "6.55",
+          "Sensible KW": "5.35",
+          "Flow Rate L/S": "372.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-01",
+          "Location": "DY.SM OFFICE 04",
+          "Total KW": "2.50",
+          "Sensible KW": "2.30",
+          "Flow Rate L/S": "155.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-02",
+          "Location": "DY.SM OFFICE 03",
+          "Total KW": "1.60",
+          "Sensible KW": "1.30",
+          "Flow Rate L/S": "92.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-03A",
+          "Location": "OPEN SPACE (OFFICES)",
+          "Total KW": "7.60",
+          "Sensible KW": "6.70",
+          "Flow Rate L/S": "466.67"
+        },
+        {
+          "Units/Reference No": "FCU-3F-03B",
+          "Location": "OPEN SPACE (OFFICES)",
+          "Total KW": "7.60",
+          "Sensible KW": "6.70",
+          "Flow Rate L/S": "466.67"
+        },
+        {
+          "Units/Reference No": "FCU-3F-03C",
+          "Location": "OPEN SPACE (OFFICES)",
+          "Total KW": "7.60",
+          "Sensible KW": "6.70",
+          "Flow Rate L/S": "466.67"
+        },
+        {
+          "Units/Reference No": "FCU-3F-04",
+          "Location": "DY.SM OFFICE 02",
+          "Total KW": "2.80",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "174.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-05",
+          "Location": "DY.SM OFFICE 01",
+          "Total KW": "2.40",
+          "Sensible KW": "2.10",
+          "Flow Rate L/S": "146.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-06",
+          "Location": "SM OFFICE",
+          "Total KW": "2.40",
+          "Sensible KW": "2.10",
+          "Flow Rate L/S": "146.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-07",
+          "Location": "SR.SPEC.OFFICE",
+          "Total KW": "2.40",
+          "Sensible KW": "2.10",
+          "Flow Rate L/S": "146.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-08",
+          "Location": "SECRETARY/WASH",
+          "Total KW": "7.30",
+          "Sensible KW": "6.20",
+          "Flow Rate L/S": "428.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-09A",
+          "Location": "VIP OFFICE",
+          "Total KW": "6.35",
+          "Sensible KW": "5.95",
+          "Flow Rate L/S": "415.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-09A",
+          "Location": "VIP OFFICE",
+          "Total KW": "6.35",
+          "Sensible KW": "5.95",
+          "Flow Rate L/S": "415.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-10",
+          "Location": "HAPPINESS LOUNGE",
+          "Total KW": "9.80",
+          "Sensible KW": "8.60",
+          "Flow Rate L/S": "599.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L01",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L02",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L03",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L04",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L05",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-L06",
+          "Location": "BREAK OUT AREA/WASH/ELE",
+          "Total KW": "7.88",
+          "Sensible KW": "7.35",
+          "Flow Rate L/S": "504.50"
+        },
+        {
+          "Units/Reference No": "FCU-3F-PR",
+          "Location": "PRAYER AREA",
+          "Total KW": "2.70",
+          "Sensible KW": "2.40",
+          "Flow Rate L/S": "170.00"
+        },
+        {
+          "Units/Reference No": "FCU-3F-DR",
+          "Location": "DINING",
+          "Total KW": "5.60",
+          "Sensible KW": "4.10",
+          "Flow Rate L/S": "279.00"
+        },
+        {
+          "Units/Reference No": "FCU-R-SR1",
+          "Location": "SERVICES",
+          "Total KW": "3.50",
+          "Sensible KW": "3.00",
+          "Flow Rate L/S": "206.00"
+        },
+        {
+          "Units/Reference No": "FCU-R-ST",
+          "Location": "STORE & LIFT LOBBY",
+          "Total KW": "4.60",
+          "Sensible KW": "4.30",
+          "Flow Rate L/S": "296.00"
+        },
+        {
+          "Units/Reference No": "FCU-R-LR1",
+          "Location": "LIFT MACHINE",
+          "Total KW": "4.90",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "250.00"
+        },
+        {
+          "Units/Reference No": "FCU-R-LR2",
+          "Location": "LIFT MACHINE",
+          "Total KW": "4.90",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "250.00"
+        },
+        {
+          "Units/Reference No": "FCU-R-SR2",
+          "Location": "SERVICES",
+          "Total KW": "3.50",
+          "Sensible KW": "3.00",
+          "Flow Rate L/S": "206.00"
+        },
+        {
+          "Units/Reference No": "FCU-2F-IDF-DX",
+          "Location": "MDF ROOM",
+          "Total KW": "10.00",
+          "Sensible KW": "8.40",
+          "Flow Rate L/S": "670.00"
+        },
+        {
+          "Units/Reference No": "FAHU-01",
+          "Location": "",
+          "Total KW": "88.00",
+          "Sensible KW": "31.00",
+          "Flow Rate L/S": "2510.00"
+        },
+        {
+          "Units/Reference No": "FAHU-02",
+          "Location": "",
+          "Total KW": "121.00",
+          "Sensible KW": "43.00",
+          "Flow Rate L/S": "3480.00"
+        },
+        {
+          "Units/Reference No": "FAHU-03",
+          "Location": "",
+          "Total KW": "125.00",
+          "Sensible KW": "60.00",
+          "Flow Rate L/S": "2950.00"
+        }
+      ]
     },
     "costing": {
       "columns": [
@@ -147,136 +899,14 @@
         "Amount",
         "Selling Price / Unit"
       ],
-      "rows": [
-        {
-          "S.No": 1,
-          "Model": "RXYTQ16U5YF",
-          "Qty": 1,
-          "TR": 12.8,
-          "List Price": 54285,
-          "Multiplier": 0.5,
-          "Cost": 27142.5,
-          "Amount": 27142.5,
-          "Selling Price / Unit": 30158.33
-        },
-        {
-          "S.No": 2,
-          "Model": "RXYTQ12U5YF",
-          "Qty": 2,
-          "TR": 9.6,
-          "List Price": 43196,
-          "Multiplier": 0.5,
-          "Cost": 21598,
-          "Amount": 43196,
-          "Selling Price / Unit": 23997.78
-        },
-        {
-          "S.No": 3,
-          "Model": "RXYTQ10U5YF",
-          "Qty": 1,
-          "TR": 8,
-          "List Price": 39826,
-          "Multiplier": 0.5,
-          "Cost": 19913,
-          "Amount": 19913,
-          "Selling Price / Unit": 22125.56
-        },
-        {
-          "S.No": 4,
-          "Model": "FXMQ250NVE6",
-          "Qty": 3,
-          "TR": 0,
-          "List Price": 14027,
-          "Multiplier": 0.55,
-          "Cost": 7714.85,
-          "Amount": 23144.55,
-          "Selling Price / Unit": 8572.06
-        },
-        {
-          "S.No": 5,
-          "Model": "FXSQ63A",
-          "Qty": 5,
-          "TR": 0,
-          "List Price": 5955,
-          "Multiplier": 0.55,
-          "Cost": 3275.25,
-          "Amount": 16376.25,
-          "Selling Price / Unit": 3639.17
-        },
-        {
-          "S.No": 6,
-          "Model": "KHRQ22M20T",
-          "Qty": 2,
-          "TR": 0,
-          "List Price": 726,
-          "Multiplier": 0.65,
-          "Cost": 471.9,
-          "Amount": 943.8,
-          "Selling Price / Unit": 524.33
-        },
-        {
-          "S.No": 7,
-          "Model": "KHRQ22M29T9",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 805,
-          "Multiplier": 0.65,
-          "Cost": 523.25,
-          "Amount": 523.25,
-          "Selling Price / Unit": 581.39
-        },
-        {
-          "S.No": 8,
-          "Model": "KHRQ22M64T",
-          "Qty": 2,
-          "TR": 0,
-          "List Price": 1061,
-          "Multiplier": 0.65,
-          "Cost": 689.65,
-          "Amount": 1379.3,
-          "Selling Price / Unit": 766.28
-        },
-        {
-          "S.No": 9,
-          "Model": "KHRQ22M75T",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 2223,
-          "Multiplier": 0.65,
-          "Cost": 1444.95,
-          "Amount": 1444.95,
-          "Selling Price / Unit": 1605.5
-        },
-        {
-          "S.No": 10,
-          "Model": "BHFQ22P1517",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 2184,
-          "Multiplier": 0.65,
-          "Cost": 1419.6,
-          "Amount": 1419.6,
-          "Selling Price / Unit": 1577.33
-        },
-        {
-          "S.No": 11,
-          "Model": "BRC1H82W",
-          "Qty": 8,
-          "TR": 0,
-          "List Price": 493,
-          "Multiplier": 0.65,
-          "Cost": 320.45,
-          "Amount": 2563.6,
-          "Selling Price / Unit": 356.06
-        }
-      ],
+      "rows": [],
       "summary": {
-        "totalTR": 40,
-        "totalCost": 138046.8,
+        "totalTR": 0,
+        "totalCost": 0,
         "margin": 0.1,
-        "sellingPrice": 153385.33,
-        "profit": 15338.53,
-        "pricePerTon": 3834.63
+        "sellingPrice": 0,
+        "profit": 0,
+        "pricePerTon": 0
       }
     },
     "boq": {
@@ -286,78 +916,11 @@
         "Qty",
         "Unit"
       ],
-      "rows": [
-        {
-          "S.No": 1,
-          "Description": "RXYTQ16U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 2,
-          "Description": "RXYTQ12U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
-          "Qty": 2,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 3,
-          "Description": "RXYTQ10U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 4,
-          "Description": "FXMQ250NVE6 - DAIKIN VRV INDOOR UNIT- Ducted (high static) - INDIA",
-          "Qty": 3,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 5,
-          "Description": "FXSQ63A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
-          "Qty": 5,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 6,
-          "Description": "KHRQ22M20T - DAIKIN REFNETS - IDU - BELGIUM",
-          "Qty": 2,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 7,
-          "Description": "KHRQ22M29T9 - DAIKIN REFNETS - IDU - BELGIUM",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 8,
-          "Description": "KHRQ22M64T - DAIKIN REFNETS - IDU - BELGIUM",
-          "Qty": 2,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 9,
-          "Description": "KHRQ22M75T - DAIKIN REFNETS - IDU - BELGIUM",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 10,
-          "Description": "BHFQ22P1517 - DAIKIN REFNETS - ODU - BELGIUM",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 11,
-          "Description": "BRC1H82W - DAIKIN WIRED THERMOSTAT (WHITE) - CHINA",
-          "Qty": 8,
-          "Unit": "Nos"
-        }
-      ],
+      "rows": [],
       "summary": {
-        "total": 153385.33,
-        "vat": 7669.27,
-        "netAmount": 161054.6
+        "total": 0,
+        "vat": 0,
+        "netAmount": 0
       }
     },
     "vrvSchedule": {
@@ -3013,70 +3576,136 @@
       }
     ]
   },
-  "extracted": {
-    "vrv": {
-      "status": "ok",
-      "materialRows": [
-        {
-          "model": "RXYTQ16U5YF",
-          "qty": 1,
-          "description": "RXYTQ-U5YF (VRV IV High Ambient)"
-        },
-        {
-          "model": "RXYTQ12U5YF",
-          "qty": 2,
-          "description": "RXYTQ-U5YF (VRV IV High Ambient)"
-        },
-        {
-          "model": "RXYTQ10U5YF",
-          "qty": 1,
-          "description": "RXYTQ-U5YF (VRV IV High Ambient)"
-        },
-        {
-          "model": "FXMQ250NVE6",
-          "qty": 3,
-          "description": "FXMQ-N - NVE6 Ducted unit large ESP 50Hz"
-        },
-        {
-          "model": "FXSQ63A",
-          "qty": 5,
-          "description": "FXSQ-A - Concealed ceiling unit with medium ESP"
-        },
-        {
-          "model": "KHRQ22M20T",
-          "qty": 2,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRQ22M29T9",
-          "qty": 1,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRQ22M64T",
-          "qty": 2,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRQ22M75T",
-          "qty": 1,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "BHFQ22P1517",
-          "qty": 1,
-          "description": "Outdoor unit multi connection piping kit for 3 modules"
-        },
-        {
-          "model": "BRC1H82W",
-          "qty": 8,
-          "description": "Remote controller (white)"
-        }
-      ],
-      "vrvRows": [],
-      "projectName": "Project VRV Units",
-      "message": "VRV report extracted."
-    }
+  "thermalChatSelection": {
+    "mode": "custom",
+    "capacitySource": "Calculated AC Load",
+    "familyModel": "FX",
+    "customInstruction": "Extract Column, Units/Reference No, Location, Total KW, Sensible KW, Flow Rate L/S",
+    "requested": true,
+    "appendResults": false
   },
+  "thermalChatMessages": [
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Upload the thermal sheet PDF or a zoomed screenshot here."
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121235.png",
+      "size": 311413
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121255.png",
+      "size": 233035
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121320.png",
+      "size": 381101
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121336.png",
+      "size": 437059
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121358.png",
+      "size": 506991
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-13 121430.png",
+      "size": 465365
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "What do you want to extract?"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "For the regular VRV export, reply like: VRV first selection. Mention a model only if you want it filled."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "For any other table, tell me the table or columns, for example: extract columns Indoor, Room, Air Flow Rate."
+    },
+    {
+      "kind": "text",
+      "role": "user",
+      "text": "VRV Export, Calculated Ac load, Model FX"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Ok, I will use the regular VRV template with Calculated AC Load, model FX. Reading the file now."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Selected Calculated AC Load, model FX."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extracting values into the Export File table..."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Detected source options: Calculated AC Load, First Selection, Second Selection. Reply with the one you want to use."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extraction completed with high accuracy based on visible values and OCR."
+    },
+    {
+      "kind": "text",
+      "role": "user",
+      "text": "Extract Column, Units/Reference No, Location, Total KW, Sensible KW, Flow Rate L/S"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Ok. Reading the file now and placing the extracted table in the Export File table."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Selected custom extraction: Extract Column, Units/Reference No, Location, Total KW, Sensible KW, Flow Rate L/S."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extracting values into the Export File table..."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Requested table columns were extracted into the Export File table."
+    }
+  ],
+  "thermalChatUploadIds": [
+    "95d8b774-47eb-4b1e-b48d-691265a32c41",
+    "c6cb2570-0729-423e-8d7e-35dfef52eac4",
+    "6f59b560-269c-44e8-b919-0974a9ea3057",
+    "ff9b69e6-bd76-4f06-a6f2-9d08c813cb79",
+    "da68ca70-081c-44e9-99ce-2eb0bffaa70f",
+    "b3191936-d5f6-434a-8927-707d71d00331"
+  ],
+  "thermalPendingUploadIds": [
+    "95d8b774-47eb-4b1e-b48d-691265a32c41",
+    "c6cb2570-0729-423e-8d7e-35dfef52eac4",
+    "6f59b560-269c-44e8-b919-0974a9ea3057",
+    "ff9b69e6-bd76-4f06-a6f2-9d08c813cb79",
+    "da68ca70-081c-44e9-99ce-2eb0bffaa70f",
+    "b3191936-d5f6-434a-8927-707d71d00331"
+  ],
   "visible": true
 }

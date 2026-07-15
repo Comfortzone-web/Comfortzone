@@ -1,15 +1,15 @@
 {
-  "id": "06a14a9a-d84a-4f0a-b2d4-86c8dcd65d2d",
-  "title": "VRV project",
-  "createdAt": "2026-06-29T10:47:29.196Z",
-  "updatedAt": "2026-07-03T07:05:25.299Z",
+  "id": "7ad168cb-2b62-48cf-bfd7-683a494c1205",
+  "title": "Untitled Project",
+  "createdAt": "2026-07-14T06:47:52.305Z",
+  "updatedAt": "2026-07-14T07:43:38.034Z",
   "details": {
-    "customer": "TechNova Solutions",
-    "contactPerson": "Priya Nair",
-    "telNo": "+971 55 612 9911",
-    "email": "admin@technova.ae",
-    "project": "VRV project",
-    "date": "2026-06-29",
+    "customer": "",
+    "contactPerson": "",
+    "telNo": "",
+    "email": "",
+    "project": "",
+    "date": "2026-07-14",
     "location": "",
     "model": "Daikin",
     "validity": "Valid for 7 days",
@@ -17,7 +17,7 @@
     "preparedBy": ""
   },
   "quotation": {
-    "quotationNo": "QCZ-A/26/1016",
+    "quotationNo": "QCZ-A/26/1005",
     "generatedDocId": "",
     "generatedPdfId": ""
   },
@@ -39,7 +39,9 @@
       "x": 180,
       "y": 255,
       "locked": false,
-      "data": {}
+      "data": {
+        "uploadId": "60366b77-2115-4574-bac1-ae54bcfa9fd2"
+      }
     },
     {
       "id": "vrv-upload",
@@ -48,9 +50,7 @@
       "x": 640,
       "y": 250,
       "locked": false,
-      "data": {
-        "uploadId": "3466edf9-7d1b-4b81-8c51-fdcefba86f28"
-      }
+      "data": {}
     },
     {
       "id": "thermal-table",
@@ -60,7 +60,7 @@
       "y": 520,
       "locked": false,
       "width": 520,
-      "height": 205,
+      "height": 1446,
       "data": {}
     },
     {
@@ -70,8 +70,8 @@
       "x": 980,
       "y": 130,
       "locked": false,
-      "width": 616,
-      "height": 580,
+      "width": 650,
+      "height": 220,
       "data": {}
     },
     {
@@ -79,10 +79,10 @@
       "type": "boqTable",
       "title": "BOQ / Price",
       "x": 970,
-      "y": 746,
+      "y": 382,
       "locked": false,
       "width": 650,
-      "height": 542,
+      "height": 190,
       "data": {}
     },
     {
@@ -90,7 +90,7 @@
       "type": "quotation",
       "title": "Quotation",
       "x": 1680,
-      "y": 646,
+      "y": 340,
       "locked": false,
       "data": {}
     },
@@ -99,41 +99,368 @@
       "type": "vrvSchedule",
       "title": "VRV Schedule",
       "x": 170,
-      "y": 1353,
+      "y": 2031,
       "locked": false,
-      "width": 1533,
-      "height": 464,
+      "width": 1550,
+      "height": 230,
       "data": {}
     }
   ],
   "uploads": [
     {
-      "id": "3466edf9-7d1b-4b81-8c51-fdcefba86f28",
-      "projectId": "06a14a9a-d84a-4f0a-b2d4-86c8dcd65d2d",
-      "nodeId": "vrv-upload",
-      "originalName": "VRVSelectionReport-VRV project -(R0 INDIA).docx",
-      "storedName": "3466edf9-7d1b-4b81-8c51-fdcefba86f28-VRVSelectionReport-VRV project -_R0 INDIA_.docx",
-      "mimeType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "size": 1337636,
-      "createdAt": "2026-06-29T10:47:32.710Z"
+      "id": "60366b77-2115-4574-bac1-ae54bcfa9fd2",
+      "projectId": "7ad168cb-2b62-48cf-bfd7-683a494c1205",
+      "nodeId": "thermal-upload",
+      "originalName": "Screenshot 2026-07-14 104404.png",
+      "storedName": "60366b77-2115-4574-bac1-ae54bcfa9fd2-Screenshot 2026-07-14 104404.png",
+      "mimeType": "image/png",
+      "size": 428163,
+      "createdAt": "2026-07-14T06:48:04.346Z"
+    },
+    {
+      "id": "2882e66f-6269-4ba2-a8c1-3877dd6c1c7c",
+      "projectId": "7ad168cb-2b62-48cf-bfd7-683a494c1205",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-14 104419.png",
+      "storedName": "2882e66f-6269-4ba2-a8c1-3877dd6c1c7c-Screenshot 2026-07-14 104419.png",
+      "mimeType": "image/png",
+      "size": 278963,
+      "createdAt": "2026-07-14T06:48:04.435Z"
     }
   ],
   "tables": {
     "thermal": {
       "columns": [
-        "Indoor",
-        "Room",
-        "Mode",
-        "Family or Model",
-        "Cooling DBT",
-        "Cooling WBT",
-        "Heating T",
-        "Tot Cool Cap",
-        "Sens Cool Cap",
-        "Heat Cap",
-        "Air Flow Rate"
+        "Units Reference / No.",
+        "Location",
+        "Total kW",
+        "Sensible kW",
+        "Flow Rate L/s"
       ],
-      "rows": []
+      "rows": [
+        {
+          "Units Reference / No.": "VILLA-01",
+          "Location": "LIVING-DINNING-ST.CASE",
+          "Total kW": "22.30",
+          "Sensible kW": "19.70",
+          "Flow Rate L/s": "1420.00"
+        },
+        {
+          "Units Reference / No.": "GAC-01",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "3.90",
+          "Sensible kW": "3.60",
+          "Flow Rate L/s": "273.00"
+        },
+        {
+          "Units Reference / No.": "GAC-02",
+          "Location": "KITCHEN-LAUNDRY",
+          "Total kW": "6.70",
+          "Sensible kW": "5.40",
+          "Flow Rate L/s": "343.00"
+        },
+        {
+          "Units Reference / No.": "FAC-01",
+          "Location": "HALL-ST.CASE",
+          "Total kW": "8.70",
+          "Sensible kW": "7.60",
+          "Flow Rate L/s": "538.00"
+        },
+        {
+          "Units Reference / No.": "FAC-02",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "7.50",
+          "Sensible kW": "7.20",
+          "Flow Rate L/s": "565.00"
+        },
+        {
+          "Units Reference / No.": "FAC-03",
+          "Location": "BED ROOM02-DRESS",
+          "Total kW": "6.10",
+          "Sensible kW": "7.20",
+          "Flow Rate L/s": "453.00"
+        },
+        {
+          "Units Reference / No.": "FAC-04",
+          "Location": "BED ROOM03-DRESS",
+          "Total kW": "4.20",
+          "Sensible kW": "3.90",
+          "Flow Rate L/s": "293.00"
+        },
+        {
+          "Units Reference / No.": "VILLA-02",
+          "Location": "LIVING-DINNING-ST.CASE",
+          "Total kW": "16.90",
+          "Sensible kW": "14.40",
+          "Flow Rate L/s": "984.00"
+        },
+        {
+          "Units Reference / No.": "GAC-01",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "3.90",
+          "Sensible kW": "3.60",
+          "Flow Rate L/s": "273.00"
+        },
+        {
+          "Units Reference / No.": "GAC-02",
+          "Location": "KITCHEN-LAUNDRY",
+          "Total kW": "5.00",
+          "Sensible kW": "3.70",
+          "Flow Rate L/s": "202.00"
+        },
+        {
+          "Units Reference / No.": "FAC-01",
+          "Location": "HALL-ST.CASE",
+          "Total kW": "6.20",
+          "Sensible kW": "5.10",
+          "Flow Rate L/s": "329.00"
+        },
+        {
+          "Units Reference / No.": "FAC-02",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "6.80",
+          "Sensible kW": "6.50",
+          "Flow Rate L/s": "509.00"
+        },
+        {
+          "Units Reference / No.": "FAC-03",
+          "Location": "BED ROOM02-DRESS",
+          "Total kW": "5.30",
+          "Sensible kW": "5.00",
+          "Flow Rate L/s": "388.00"
+        },
+        {
+          "Units Reference / No.": "FAC-04",
+          "Location": "BED ROOM03-DRESS",
+          "Total kW": "4.20",
+          "Sensible kW": "3.90",
+          "Flow Rate L/s": "293.00"
+        },
+        {
+          "Units Reference / No.": "VILLA-03",
+          "Location": "HALL-LIVING-ST.CASE",
+          "Total kW": "20.50",
+          "Sensible kW": "17.60",
+          "Flow Rate L/s": "1038.00"
+        },
+        {
+          "Units Reference / No.": "GAC-01",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "14.00",
+          "Sensible kW": "13.10",
+          "Flow Rate L/s": "866.00"
+        },
+        {
+          "Units Reference / No.": "GAC-02",
+          "Location": "DINNING",
+          "Total kW": "7.90",
+          "Sensible kW": "6.40",
+          "Flow Rate L/s": "902.00"
+        },
+        {
+          "Units Reference / No.": "GAC-03",
+          "Location": "MAJLIS",
+          "Total kW": "10.90",
+          "Sensible kW": "8.80",
+          "Flow Rate L/s": "558.00"
+        },
+        {
+          "Units Reference / No.": "GAC-05",
+          "Location": "KITCHEN-LAUNDRY-ST-LOB",
+          "Total kW": "6.80",
+          "Sensible kW": "5.10",
+          "Flow Rate L/s": "283.00"
+        },
+        {
+          "Units Reference / No.": "FAC-01",
+          "Location": "VOIDS-ST.CASE-LOBBY",
+          "Total kW": "21.30",
+          "Sensible kW": "19.10",
+          "Flow Rate L/s": "1200.00"
+        },
+        {
+          "Units Reference / No.": "FAC-02",
+          "Location": "HALL",
+          "Total kW": "8.40",
+          "Sensible kW": "7.00",
+          "Flow Rate L/s": "398.00"
+        },
+        {
+          "Units Reference / No.": "FAC-03",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "9.60",
+          "Sensible kW": "8.70",
+          "Flow Rate L/s": "553.00"
+        },
+        {
+          "Units Reference / No.": "FAC-04",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "10.40",
+          "Sensible kW": "9.40",
+          "Flow Rate L/s": "606.00"
+        },
+        {
+          "Units Reference / No.": "FAC-05",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "10.40",
+          "Sensible kW": "9.40",
+          "Flow Rate L/s": "606.00"
+        },
+        {
+          "Units Reference / No.": "FAC-06",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "11.40",
+          "Sensible kW": "10.50",
+          "Flow Rate L/s": "680.00"
+        },
+        {
+          "Units Reference / No.": "RAC-01",
+          "Location": "HALL-STORE",
+          "Total kW": "14.20",
+          "Sensible kW": "12.90",
+          "Flow Rate L/s": "946.00"
+        },
+        {
+          "Units Reference / No.": "VILLA-04",
+          "Location": "LIVING-DINNING-ST.CASE",
+          "Total kW": "20.80",
+          "Sensible kW": "18.20",
+          "Flow Rate L/s": "1299.00"
+        },
+        {
+          "Units Reference / No.": "GAC-01",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "3.90",
+          "Sensible kW": "3.60",
+          "Flow Rate L/s": "273.00"
+        },
+        {
+          "Units Reference / No.": "GAC-02",
+          "Location": "KITCHEN-LAUNDRY",
+          "Total kW": "6.30",
+          "Sensible kW": "5.00",
+          "Flow Rate L/s": "312.00"
+        },
+        {
+          "Units Reference / No.": "FAC-01",
+          "Location": "HALL-ST.CASE",
+          "Total kW": "8.30",
+          "Sensible kW": "7.20",
+          "Flow Rate L/s": "502.00"
+        },
+        {
+          "Units Reference / No.": "FAC-02",
+          "Location": "BED ROOM01-DRESS",
+          "Total kW": "7.30",
+          "Sensible kW": "7.00",
+          "Flow Rate L/s": "545.00"
+        },
+        {
+          "Units Reference / No.": "FAC-03",
+          "Location": "BED ROOM02-DRESS",
+          "Total kW": "5.80",
+          "Sensible kW": "5.50",
+          "Flow Rate L/s": "428.00"
+        },
+        {
+          "Units Reference / No.": "FAC-04",
+          "Location": "BED ROOM03-DRESS",
+          "Total kW": "4.20",
+          "Sensible kW": "3.90",
+          "Flow Rate L/s": "293.00"
+        },
+        {
+          "Units Reference / No.": "SAC-01",
+          "Location": "GYM-HALL",
+          "Total kW": "22.10",
+          "Sensible kW": "16.00",
+          "Flow Rate L/s": "876.00"
+        },
+        {
+          "Units Reference / No.": "SAC-02",
+          "Location": "KITCHEN",
+          "Total kW": "10.90",
+          "Sensible kW": "7.80",
+          "Flow Rate L/s": "426.00"
+        },
+        {
+          "Units Reference / No.": "SAC-03",
+          "Location": "STORE",
+          "Total kW": "1.50",
+          "Sensible kW": "1.40",
+          "Flow Rate L/s": "96.00"
+        },
+        {
+          "Units Reference / No.": "SAC-04",
+          "Location": "LAUNDRY",
+          "Total kW": "3.50",
+          "Sensible kW": "2.10",
+          "Flow Rate L/s": "62.00"
+        },
+        {
+          "Units Reference / No.": "SAC-05",
+          "Location": "MAID ROOM",
+          "Total kW": "6.30",
+          "Sensible kW": "4.80",
+          "Flow Rate L/s": "286.00"
+        },
+        {
+          "Units Reference / No.": "SAC-06",
+          "Location": "BUFFET",
+          "Total kW": "3.70",
+          "Sensible kW": "2.10",
+          "Flow Rate L/s": "62.00"
+        },
+        {
+          "Units Reference / No.": "SAC-07",
+          "Location": "BED ROOM10",
+          "Total kW": "6.00",
+          "Sensible kW": "4.50",
+          "Flow Rate L/s": "266.00"
+        },
+        {
+          "Units Reference / No.": "SAC-08",
+          "Location": "DRIVER ROOM-02",
+          "Total kW": "5.60",
+          "Sensible kW": "4.10",
+          "Flow Rate L/s": "225.00"
+        },
+        {
+          "Units Reference / No.": "SAC-09",
+          "Location": "DRIVER ROOM-01",
+          "Total kW": "6.00",
+          "Sensible kW": "4.50",
+          "Flow Rate L/s": "266.00"
+        },
+        {
+          "Units Reference / No.": "SAC-10",
+          "Location": "STORE-01",
+          "Total kW": "3.10",
+          "Sensible kW": "2.70",
+          "Flow Rate L/s": "188.00"
+        },
+        {
+          "Units Reference / No.": "SAC-11",
+          "Location": "STORE-02",
+          "Total kW": "3.10",
+          "Sensible kW": "2.70",
+          "Flow Rate L/s": "188.00"
+        },
+        {
+          "Units Reference / No.": "ERV-01-02-04",
+          "Location": "ROOF FLOOR",
+          "Total kW": "15.31",
+          "Sensible kW": "5.41",
+          "Flow Rate L/s": "425.00"
+        },
+        {
+          "Units Reference / No.": "ERV-03",
+          "Location": "ROOF FLOOR",
+          "Total kW": "36.02",
+          "Sensible kW": "12.74",
+          "Flow Rate L/s": "1000.00"
+        }
+      ]
     },
     "costing": {
       "columns": [
@@ -147,158 +474,14 @@
         "Amount",
         "Selling Price / Unit"
       ],
-      "rows": [
-        {
-          "S.No": 1,
-          "Model": "RXQ16ARYFK",
-          "Qty": 1,
-          "TR": 12.8,
-          "List Price": 42299,
-          "Multiplier": 0.55,
-          "Cost": 23264.45,
-          "Amount": 23264.45,
-          "Selling Price / Unit": 25849.39
-        },
-        {
-          "S.No": 2,
-          "Model": "RXQ12ARYFK",
-          "Qty": 1,
-          "TR": 9.6,
-          "List Price": 34955,
-          "Multiplier": 0.55,
-          "Cost": 19225.25,
-          "Amount": 19225.25,
-          "Selling Price / Unit": 21361.39
-        },
-        {
-          "S.No": 3,
-          "Model": "RXQ10ARYFK",
-          "Qty": 1,
-          "TR": 8,
-          "List Price": 31920,
-          "Multiplier": 0.55,
-          "Cost": 17556,
-          "Amount": 17556,
-          "Selling Price / Unit": 19506.67
-        },
-        {
-          "S.No": 4,
-          "Model": "FXMQ40PBV1",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 4490,
-          "Multiplier": 0.55,
-          "Cost": 2469.5,
-          "Amount": 2469.5,
-          "Selling Price / Unit": 2743.89
-        },
-        {
-          "S.No": 5,
-          "Model": "FXMQ63PBV1",
-          "Qty": 7,
-          "TR": 0,
-          "List Price": 5600,
-          "Multiplier": 0.55,
-          "Cost": 3080,
-          "Amount": 21560,
-          "Selling Price / Unit": 3422.22
-        },
-        {
-          "S.No": 6,
-          "Model": "FXMQ125PBV1",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 6774,
-          "Multiplier": 0.55,
-          "Cost": 3725.7,
-          "Amount": 3725.7,
-          "Selling Price / Unit": 4139.67
-        },
-        {
-          "S.No": 7,
-          "Model": "FXMQ140PBV1",
-          "Qty": 2,
-          "TR": 0,
-          "List Price": 6080,
-          "Multiplier": 0.55,
-          "Cost": 3344,
-          "Amount": 6688,
-          "Selling Price / Unit": 3715.56
-        },
-        {
-          "S.No": 8,
-          "Model": "KHRP26A22T6",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 162,
-          "Multiplier": 0.65,
-          "Cost": 105.3,
-          "Amount": 105.3,
-          "Selling Price / Unit": 117
-        },
-        {
-          "S.No": 9,
-          "Model": "KHRP26A33T6",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 194,
-          "Multiplier": 0.65,
-          "Cost": 126.1,
-          "Amount": 126.1,
-          "Selling Price / Unit": 140.11
-        },
-        {
-          "S.No": 10,
-          "Model": "KHRP26A72T6",
-          "Qty": 6,
-          "TR": 0,
-          "List Price": 320,
-          "Multiplier": 0.65,
-          "Cost": 208,
-          "Amount": 1248,
-          "Selling Price / Unit": 231.11
-        },
-        {
-          "S.No": 11,
-          "Model": "KHRP26A73T6 + KHRP26M73TP",
-          "Qty": 2,
-          "TR": 0,
-          "List Price": 639,
-          "Multiplier": 0.65,
-          "Cost": 415.35,
-          "Amount": 830.7,
-          "Selling Price / Unit": 461.5
-        },
-        {
-          "S.No": 12,
-          "Model": "BHFP22P1516",
-          "Qty": 1,
-          "TR": 0,
-          "List Price": 1664,
-          "Multiplier": 0.65,
-          "Cost": 1081.6,
-          "Amount": 1081.6,
-          "Selling Price / Unit": 1201.78
-        },
-        {
-          "S.No": 13,
-          "Model": "BRC1H82W7",
-          "Qty": 11,
-          "TR": "",
-          "List Price": "",
-          "Multiplier": "",
-          "Cost": "",
-          "Amount": "",
-          "Selling Price / Unit": ""
-        }
-      ],
+      "rows": [],
       "summary": {
-        "totalTR": 30.4,
-        "totalCost": 97880.6,
+        "totalTR": 0,
+        "totalCost": 0,
         "margin": 0.1,
-        "sellingPrice": 108756.22,
-        "profit": 10875.62,
-        "pricePerTon": 3577.51
+        "sellingPrice": 0,
+        "profit": 0,
+        "pricePerTon": 0
       }
     },
     "boq": {
@@ -308,90 +491,11 @@
         "Qty",
         "Unit"
       ],
-      "rows": [
-        {
-          "S.No": 1,
-          "Description": "RXQ16ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 2,
-          "Description": "RXQ12ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 3,
-          "Description": "RXQ10ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 4,
-          "Description": "FXMQ40PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 5,
-          "Description": "FXMQ63PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "Qty": 7,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 6,
-          "Description": "FXMQ125PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 7,
-          "Description": "FXMQ140PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "Qty": 2,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 8,
-          "Description": "KHRP26A22T6 - DAIKIN REFNETS - IDU - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 9,
-          "Description": "KHRP26A33T6 - DAIKIN REFNETS - IDU - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 10,
-          "Description": "KHRP26A72T6 - DAIKIN REFNETS - IDU - INDIA",
-          "Qty": 6,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 11,
-          "Description": "KHRP26A73T6 + KHRP26M73TP - DAIKIN REFNETS - IDU - INDIA",
-          "Qty": 2,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 12,
-          "Description": "BHFP22P1516 - DAIKIN REFNETS - ODU - INDIA",
-          "Qty": 1,
-          "Unit": "Nos"
-        },
-        {
-          "S.No": 13,
-          "Description": "BRC1H82W7",
-          "Qty": 11,
-          "Unit": "Nos"
-        }
-      ],
+      "rows": [],
       "summary": {
-        "total": 108756.22,
-        "vat": 5437.81,
-        "netAmount": 114194.03
+        "total": 0,
+        "vat": 0,
+        "netAmount": 0
       }
     },
     "vrvSchedule": {
@@ -429,452 +533,7 @@
         "Outdoor WxHxD",
         "Outdoor Weight"
       ],
-      "rows": [
-        {
-          "System": "VRV-01",
-          "Name": "Ind 1",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ140PBV1",
-          "Nominal Index": 140,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 14.2,
-          "Max SC": 10.9,
-          "Proposed Air Flow Rate": 766.67,
-          "PIC": 0.405,
-          "Sound": "43 - 46",
-          "PS": "230V 1ph",
-          "MCA": 3.4,
-          "WxHxD": "1,400 x 300 x 700",
-          "Weight": 46,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 2",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ140PBV1",
-          "Nominal Index": 140,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 14.2,
-          "Max SC": 10.9,
-          "Proposed Air Flow Rate": 766.67,
-          "PIC": 0.405,
-          "Sound": "43 - 46",
-          "PS": "230V 1ph",
-          "MCA": 3.4,
-          "WxHxD": "1,400 x 300 x 700",
-          "Weight": 46,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 3",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "VRV-01",
-          "Outdoor Model": "RXQ38ANRYFK",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 4",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "A",
-          "Outdoor Model": "RXQ16ARYFK",
-          "Outdoor Nominal Index": 400,
-          "Ambient Temp": 46,
-          "CC": 33.3,
-          "PI ESMA": 12.5,
-          "Outdoor PS": "400V 3Nph",
-          "Outdoor MCA": 38.9,
-          "MOP": "-",
-          "RLA": "-",
-          "Outdoor WxHxD": "1,240 x 1,657 x 765",
-          "Outdoor Weight": 285
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 5",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "B",
-          "Outdoor Model": "RXQ12ARYFK",
-          "Outdoor Nominal Index": 300,
-          "Ambient Temp": 46,
-          "CC": 27.1,
-          "PI ESMA": 10.4,
-          "Outdoor PS": "400V 3Nph",
-          "Outdoor MCA": 26.9,
-          "MOP": "-",
-          "RLA": "-",
-          "Outdoor WxHxD": "1,240 x 1,657 x 765",
-          "Outdoor Weight": 220
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 6",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "C",
-          "Outdoor Model": "RXQ10ARYFK",
-          "Outdoor Nominal Index": 250,
-          "Ambient Temp": 46,
-          "CC": 23.9,
-          "PI ESMA": 9.4,
-          "Outdoor PS": "400V 3Nph",
-          "Outdoor MCA": 26.9,
-          "MOP": "-",
-          "RLA": "-",
-          "Outdoor WxHxD": "1,240 x 1,657 x 765",
-          "Outdoor Weight": 220
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 7",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 8",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 9",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ63PBV1",
-          "Nominal Index": 63,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 6.2,
-          "Max SC": 5.1,
-          "Proposed Air Flow Rate": 325,
-          "PIC": 0.138,
-          "Sound": "38 - 42",
-          "PS": "230V 1ph",
-          "MCA": 1.8,
-          "WxHxD": "1,000 x 300 x 700",
-          "Weight": 35,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 10",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ125PBV1",
-          "Nominal Index": 125,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 12.4,
-          "Max SC": 9.6,
-          "Proposed Air Flow Rate": 650,
-          "PIC": 0.284,
-          "Sound": "40 - 44",
-          "PS": "230V 1ph",
-          "MCA": 3.4,
-          "WxHxD": "1,400 x 300 x 700",
-          "Weight": 45,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "VRV-01",
-          "Name": "Ind 11",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "FXMQ40PBV1",
-          "Nominal Index": 40,
-          "Country of Origin": "India",
-          "Type": "Ducted",
-          "Ambient - On Coil Temperature": "46 - 24.4/17.2",
-          "Max TC": 4,
-          "Max SC": 3.5,
-          "Proposed Air Flow Rate": 266.67,
-          "PIC": 0.151,
-          "Sound": "35 - 39",
-          "PS": "230V 1ph",
-          "MCA": 1.4,
-          "WxHxD": "700 x 300 x 700",
-          "Weight": 27,
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": ""
-        },
-        {
-          "System": "",
-          "Name": "",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "",
-          "Nominal Index": "",
-          "Country of Origin": "",
-          "Type": "",
-          "Ambient - On Coil Temperature": "",
-          "Max TC": "88.2",
-          "Max SC": "70.6",
-          "Proposed Air Flow Rate": "4,725.01",
-          "PIC": "2.21",
-          "Sound": "",
-          "PS": "",
-          "MCA": "",
-          "WxHxD": "",
-          "Weight": "",
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "32.3",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": "",
-          "__rowType": "total"
-        },
-        {
-          "System": "",
-          "Name": "",
-          "Location": "",
-          "Rq TC": "",
-          "Rq SC": "",
-          "Air Flow Rate": "",
-          "FCU": "",
-          "Nominal Index": "",
-          "Country of Origin": "",
-          "Type": "",
-          "Ambient - On Coil Temperature": "",
-          "Max TC": "",
-          "Max SC": "",
-          "Proposed Air Flow Rate": "",
-          "PIC": "",
-          "Sound": "",
-          "PS": "",
-          "MCA": "",
-          "WxHxD": "",
-          "Weight": "",
-          "Outdoor Name": "",
-          "Outdoor Model": "",
-          "Outdoor Nominal Index": "",
-          "Ambient Temp": "",
-          "CC": "",
-          "PI ESMA": "",
-          "Outdoor PS": "",
-          "Outdoor MCA": "",
-          "MOP": "",
-          "RLA": "",
-          "Outdoor WxHxD": "",
-          "Outdoor Weight": "",
-          "__rowType": "separator"
-        }
-      ]
+      "rows": []
     }
   },
   "priceList": {
@@ -3492,192 +3151,73 @@
       }
     ]
   },
-  "extracted": {
-    "vrv": {
-      "status": "ok",
-      "materialRows": [
-        {
-          "model": "RXQ16ARYFK",
-          "qty": 1,
-          "description": "RXQ-ARYFK (High Ambient VRV X)"
-        },
-        {
-          "model": "RXQ12ARYFK",
-          "qty": 1,
-          "description": "RXQ-ARYFK (High Ambient VRV X)"
-        },
-        {
-          "model": "RXQ10ARYFK",
-          "qty": 1,
-          "description": "RXQ-ARYFK (High Ambient VRV X)"
-        },
-        {
-          "model": "FXMQ40PBV1",
-          "qty": 1,
-          "description": "FXMQ-PBV1 - HSP duct"
-        },
-        {
-          "model": "FXMQ63PBV1",
-          "qty": 7,
-          "description": "FXMQ-PBV1 - HSP duct"
-        },
-        {
-          "model": "FXMQ125PBV1",
-          "qty": 1,
-          "description": "FXMQ-PBV1 - HSP duct"
-        },
-        {
-          "model": "FXMQ140PBV1",
-          "qty": 2,
-          "description": "FXMQ-PBV1 - HSP duct"
-        },
-        {
-          "model": "KHRP26A22T6",
-          "qty": 1,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRP26A33T6",
-          "qty": 1,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRP26A72T6",
-          "qty": 6,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "KHRP26A73T6 + KHRP26M73TP",
-          "qty": 2,
-          "description": "Refnet branch piping kit"
-        },
-        {
-          "model": "BHFP22P1516",
-          "qty": 1,
-          "description": "Outdoor unit multi connection piping kit for 3 modules (DAIPL)"
-        },
-        {
-          "model": "BRC1H82W7",
-          "qty": 11,
-          "description": "Remote controller (white)"
-        }
-      ],
-      "vrvRows": [
-        {
-          "system": "VRV-01",
-          "name": "Ind 1",
-          "fcu": "FXMQ140PBV1",
-          "outdoorName": "",
-          "outdoorModel": "",
-          "outdoorRefs": [
-            {
-              "outdoorName": "VRV-01",
-              "outdoorModel": "RXQ38ANRYFK",
-              "outdoorComponents": [
-                "RXQ16ARYFK",
-                "RXQ12ARYFK",
-                "RXQ10ARYFK"
-              ]
-            },
-            {
-              "outdoorName": "A",
-              "outdoorModel": "RXQ16ARYFK",
-              "outdoorComponents": []
-            },
-            {
-              "outdoorName": "B",
-              "outdoorModel": "RXQ12ARYFK",
-              "outdoorComponents": []
-            },
-            {
-              "outdoorName": "C",
-              "outdoorModel": "RXQ10ARYFK",
-              "outdoorComponents": []
-            }
-          ]
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 2",
-          "fcu": "FXMQ140PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 3",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "VRV-01",
-          "outdoorModel": "RXQ38ANRYFK",
-          "outdoorComponents": [
-            "RXQ16ARYFK",
-            "RXQ12ARYFK",
-            "RXQ10ARYFK"
-          ]
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 4",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "A",
-          "outdoorModel": "RXQ16ARYFK",
-          "outdoorComponents": []
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 5",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "B",
-          "outdoorModel": "RXQ12ARYFK",
-          "outdoorComponents": []
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 6",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "C",
-          "outdoorModel": "RXQ10ARYFK",
-          "outdoorComponents": []
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 7",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 8",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 9",
-          "fcu": "FXMQ63PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 10",
-          "fcu": "FXMQ125PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        },
-        {
-          "system": "VRV-01",
-          "name": "Ind 11",
-          "fcu": "FXMQ40PBV1",
-          "outdoorName": "",
-          "outdoorModel": ""
-        }
-      ],
-      "projectName": "VRV project",
-      "message": "VRV report extracted."
-    }
+  "thermalChatSelection": {
+    "mode": "custom",
+    "capacitySource": "Calculated AC Load",
+    "familyModel": "",
+    "customInstruction": "Extract column Units Reference / No., Location, Total, Sensible & Flow rate",
+    "requested": true,
+    "appendResults": false
   },
+  "thermalChatMessages": [
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Upload the thermal sheet PDF or a zoomed screenshot here."
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-14 104404.png",
+      "size": 428163
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-14 104419.png",
+      "size": 278963
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Files added. Should I verify the table again using these screenshot(s)? Reply: verify again."
+    },
+    {
+      "kind": "text",
+      "role": "user",
+      "text": "Extract column Units Reference / No., Location, Total, Sensible & Flow rate"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Ok. Reading the file now and placing the extracted table in the Export File table."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Selected custom extraction: Extract column Units Reference / No., Location, Total, Sensible & Flow rate."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extracting values into the Export File table..."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extracted requested columns Units Reference / No., Location, Total kW, Sensible kW, and Flow Rate L/s from the table exactly as visible."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Unable to read clearly: Total kW, Sensible kW, Flow Rate L/s. Upload a zoomed screenshot of those parts and I will read it again."
+    }
+  ],
+  "thermalChatUploadIds": [
+    "60366b77-2115-4574-bac1-ae54bcfa9fd2",
+    "2882e66f-6269-4ba2-a8c1-3877dd6c1c7c"
+  ],
+  "thermalPendingUploadIds": [
+    "60366b77-2115-4574-bac1-ae54bcfa9fd2",
+    "2882e66f-6269-4ba2-a8c1-3877dd6c1c7c"
+  ],
   "visible": true
 }

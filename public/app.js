@@ -22,13 +22,16 @@ let purchaseScreen = "form";
 let purchaseDraft = null;
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
+let purchaseUploadLoading = false;
 let salesDeskScreen = "dashboard";
 let salesQuotationMode = "list";
 let salesProjectMode = "list";
 let salesProjectFilter = "";
+let salesProjectDetailId = "";
 let salesSearchQuery = "";
 let salesLeadFilter = "";
 let salesLeadTab = "all";
+let salesQuotationTab = "all";
 let salesLeadDetailId = "";
 let salesLeadFiltersOpen = false;
 let salesLeadFilters = {
@@ -137,7 +140,7 @@ Units offered are covered under a standard warranty of 12 months from the date o
 Exclusions:
 Installation of AC units, unloading of units at site & supply of items other than mentioned.`;
 const salesCrmData = {
-  settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001` },
+  settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
   leads: [
     { id: "L-1001", avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
     { id: "L-1002", avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -172,6 +175,13 @@ const tableKeys = {
   costingTable: "costing",
   boqTable: "boq",
   vrvSchedule: "vrvSchedule"
+};
+
+const tableDownloadFilenames = {
+  thermal: "Export File.xlsx",
+  costing: "Costing Sheet.xlsx",
+  boq: "BOQ.xlsx",
+  vrvSchedule: "VRV Schedule.xlsx"
 };
 
 const samplePriceItems = [
@@ -344,7 +354,7 @@ function applyAppSettings() {
   const title = brand.querySelector("strong");
   const subtitle = brand.querySelector("span");
   if (title) title.textContent = company.name || "Comfort Zone";
-  if (subtitle) subtitle.textContent = "Daikin";
+  if (subtitle) subtitle.textContent = "Daikin Authorized Dealer";
   if (mark) {
     if (company.logoUploadId) {
       mark.innerHTML = `<img src="/api/settings/uploads/${encodeURIComponent(company.logoUploadId)}" alt="">`;
@@ -512,8 +522,14 @@ async function showInventory(screen = "dashboard") {
     const activeScreen = screen === "supplierAll" ? "supplier" : screen;
     button.classList.toggle("active", button.dataset.inventoryView === activeScreen);
   });
-  $("#pageTitle").textContent = "Inventory";
-  $("#projectMeta").textContent = "Quantity-only AC unit stock tracking.";
+  const topbar = inventoryTopbarConfig();
+  if (topbar) {
+    $("#pageTitle").innerHTML = `<span>Inventory</span><b>&lt;</b><strong>${escapeHtml(topbar.title)}</strong>`;
+    $("#projectMeta").textContent = topbar.subtitle;
+  } else {
+    $("#pageTitle").textContent = "Inventory";
+    $("#projectMeta").textContent = "Quantity-only AC unit stock tracking.";
+  }
   await loadInventory();
   renderInventory();
 }
@@ -538,11 +554,16 @@ async function showPurchaseOrders(screen = "form") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
-  $("#pageTitle").textContent = "Purchase Orders";
+  $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
   await loadPurchaseOrders();
   if (!purchaseDraft) purchaseDraft = newPurchaseDraft();
   renderPurchaseOrders();
+}
+
+function refreshPurchaseTitleSpinner() {
+  const spinner = document.querySelector(".po-title-spinner");
+  if (spinner) spinner.classList.toggle("hidden", !purchaseUploadLoading);
 }
 
 async function showSalesDesk(screen = "dashboard") {
@@ -568,9 +589,19 @@ async function showSalesDesk(screen = "dashboard") {
   document.querySelectorAll("[data-sales-view]").forEach(button => {
     button.classList.toggle("active", button.dataset.salesView === screen);
   });
-  $("#pageTitle").textContent = "Sales Desk";
-  $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
+  const topbarConfig = salesDeskTopbarConfig();
+  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!topbarConfig);
+  if (topbarConfig) {
+    $("#pageTitle").innerHTML = `<span>Sales Desk</span><b>&lt;</b><strong>${escapeHtml(topbarConfig.title)}</strong>`;
+    $("#projectMeta").textContent = topbarConfig.subtitle;
+  } else {
+    $("#pageTitle").textContent = "Sales Desk";
+    $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
+  }
   await loadSalesCrm();
+  if (screen === "quotation" && salesQuotationMode === "create" && !inventoryState) {
+    await loadInventory().catch(() => {});
+  }
   renderSalesDesk();
 }
 
@@ -861,7 +892,100 @@ function salesData() {
   return salesCrmState || salesCrmData;
 }
 
+function salesDeskTopbarConfig() {
+  if (activeView !== "salesDesk") return null;
+  if (salesDeskScreen === "quotation" && salesQuotationMode === "create") return null;
+  const configs = {
+    dashboard: {
+      title: "Dashboard",
+      subtitle: "Overview of leads, quotations, orders, inventory and sales activity.",
+      search: "",
+      actions: ""
+    },
+    leads: {
+      title: "Leads & Enquiry Pipeline",
+      subtitle: "Track HVAC enquiries, quotations, follow-ups and project opportunities.",
+      search: "Search by customer, project, enquiry no...",
+      actions: `<button class="sales-secondary" data-sales-lead-filter-toggle>Filters</button><button class="sales-primary" data-sales-action="new-lead">+ New Enquiry</button>`
+    },
+    customers: {
+      title: "Customers",
+      subtitle: "Customer and company records for the Sales Desk.",
+      search: "Search CRM...",
+      actions: `<button class="sales-secondary" data-sales-export="customers">Export CSV</button><button class="sales-primary" data-sales-action="add-customer">Add Customer</button>`
+    },
+    projects: {
+      title: "Projects",
+      subtitle: "Manage active HVAC projects, BOQ delivery, stock reservation, and project progress.",
+      search: "Search by project, customer, location...",
+      actions: `<button class="sales-secondary" data-sales-export="projects">Export CSV</button><button class="sales-primary" data-sales-action="new-project">New Project</button>`
+    },
+    quotation: {
+      title: "Quotations",
+      subtitle: "Track draft, sent, revised, approved, and lost quotations.",
+      search: "Search quotations...",
+      actions: `<button class="sales-secondary" data-sales-export="quotations">Export CSV</button><button class="sales-primary" data-sales-action="create-quotation">Create Quotation</button>`
+    },
+    orderBook: {
+      title: "Order Book",
+      subtitle: "Track confirmed HVAC orders, job progress, invoices, payments and balance collection.",
+      search: "Search by order no, customer, job...",
+      actions: `<button class="sales-secondary" data-sales-order-book-filter-toggle>Filters</button><button class="sales-primary" data-sales-action="new-order-book">New Order</button>`
+    }
+  };
+  return configs[salesDeskScreen] || null;
+}
+
+function inventoryTopbarConfig() {
+  if (activeView !== "inventory") return null;
+  const configs = {
+    dashboard: {
+      title: "Dashboard",
+      subtitle: "Simple AC unit stock summary.",
+      searchId: "inventorySearch",
+      searchValue: "",
+      search: "Search model, description, or DN...",
+      actions: `<button class="sales-primary" data-inventory-top-action="upload-dn">Upload DN</button>`
+    },
+    supplier: {
+      title: "Supplier DN",
+      subtitle: "Upload, verify, and confirm stock in.",
+      searchId: "supplierSearchInput",
+      searchValue: "",
+      search: "Search DN No, Project Name, Model No",
+      actions: `<button class="sales-secondary" data-inventory-top-action="supplier-all">Supplier DN</button><button class="sales-primary" data-inventory-top-action="upload-dn">Upload DN</button>`
+    },
+    supplierAll: {
+      title: "Supplier DN",
+      subtitle: "All uploaded and manual stock entries.",
+      searchId: "supplierAllSearchInput",
+      searchValue: "",
+      search: "Search DN No, Project Name, Model No",
+      actions: `<button class="sales-secondary" data-inventory-top-action="supplier-latest">Latest 5</button><button class="sales-primary" data-inventory-top-action="upload-dn">Upload DN</button>`
+    },
+    delivery: {
+      title: "Delivery Note",
+      subtitle: "Create, manage, and track outbound delivery notes.",
+      searchId: "deliverySearchInput",
+      searchValue: deliverySearchQuery,
+      search: "Search delivery note...",
+      actions: `<button class="sales-primary" data-inventory-top-action="add-customer">Add Customer</button><button class="sales-primary" data-inventory-top-action="new-delivery">Create Delivery Note</button><button class="sales-primary" data-inventory-top-action="customer-list">Customer List</button>`
+    },
+    stock: {
+      title: "Stock",
+      subtitle: "Manage AC unit model master and view full stock details.",
+      searchId: "stockSearchInput",
+      searchValue: "",
+      search: "Search model or description",
+      searchClass: "stock-top-search",
+      actions: ""
+    }
+  };
+  return configs[inventoryScreen] || null;
+}
+
 function renderSalesDesk() {
+  renderViewActions();
   const root = $("#salesDeskRoot");
   const html = {
     dashboard: salesDashboardHtml,
@@ -872,10 +996,11 @@ function renderSalesDesk() {
     orderBook: salesOrderBookHtml,
     followUps: salesFollowUpsHtml
   }[salesDeskScreen];
-  root.innerHTML = `<div class="sales-page">${html ? html() : salesDashboardHtml()}</div>`;
+  root.innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}">${html ? html() : salesDashboardHtml()}</div>`;
 }
 
 function salesPageHeader(title, subtitle, actions = "") {
+  if (salesDeskTopbarConfig()) return "";
   return `
     <div class="sales-header">
       <div>
@@ -1101,7 +1226,8 @@ function salesLeadsHtml() {
   const normalizedRows = rawRows.map((lead, index) => normalizeSalesLead(lead, index));
   const searchedRows = salesLeadSearch(normalizedRows);
   const filteredRows = salesLeadAdvancedFilter(searchedRows);
-  const rows = salesLeadTabFilter(filteredRows);
+  const mainRows = salesLeadShowsClosedRows() ? filteredRows : filteredRows.filter(lead => !salesLeadIsClosedStatus(lead));
+  const rows = salesLeadTabFilter(mainRows);
   const selected = salesLeadDetailId ? normalizedRows.find(lead => lead.id === salesLeadDetailId) : null;
   const stats = salesLeadStats(normalizedRows);
   const detailOpen = !!selected && !!salesLeadDetailId;
@@ -1190,7 +1316,6 @@ function salesLeadRow(lead) {
           ${rowMenu([
             { label: "Create Quote", action: "lead-quote", id: lead.id },
             { label: "Create Customer", action: "lead-to-customer", id: lead.id },
-            { label: "Create Project", action: "lead-create-project", id: lead.id },
             { label: "Create Workflow", action: "lead-create-workflow", id: lead.id },
             { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
             { label: "Delete", action: "delete-lead", id: lead.id, danger: true }
@@ -1397,7 +1522,7 @@ function salesProductTypes() {
 }
 
 function salesLeadStatuses() {
-  return ["New Enquiry", "Selection Pending", "Quote Pending", "Quote Sent", "Follow-up", "Tender", "Revision Required", "Negotiation", "Job in Hand", "Lost", "On Hold"];
+  return ["New Enquiry", "Selection Pending", "Quote Pending", "Quote Sent", "Follow-up", "Tender", "Revision Required", "Negotiation", "Job in Hand", "Lost", "Order Received", "Completed", "On Hold"];
 }
 
 function salesFollowUpTypes() {
@@ -1410,7 +1535,7 @@ function salesProductBadge(productType) {
 }
 
 function salesLeadStats(rows) {
-  const active = rows.filter(lead => !["Lost", "Job in Hand"].includes(lead.status));
+  const active = rows.filter(lead => !salesLeadIsClosedStatus(lead) && lead.status !== "Job in Hand");
   const quotePending = rows.filter(lead => ["Selection Pending", "Quote Pending"].includes(lead.status));
   const followDue = rows.filter(lead => ["Quote Sent", "Follow-up", "Negotiation"].includes(lead.status) && isLeadFollowDue(lead));
   const pipelineValue = active.reduce((sum, lead) => sum + Number(lead.estimatedValue || 0), 0);
@@ -1431,8 +1556,17 @@ function salesLeadTabFilter(rows) {
   if (salesLeadTab === "followDue") return rows.filter(lead => ["Quote Sent", "Follow-up", "Negotiation"].includes(lead.status) && isLeadFollowDue(lead));
   if (salesLeadTab === "tender") return rows.filter(lead => lead.status === "Tender");
   if (salesLeadTab === "jobInHand") return rows.filter(lead => lead.status === "Job in Hand");
-  if (salesLeadTab === "lost") return rows.filter(lead => ["Lost", "On Hold"].includes(lead.status));
+  if (salesLeadTab === "lost") return rows.filter(lead => salesLeadIsClosedStatus(lead) || lead.status === "On Hold");
   return rows;
+}
+
+function salesLeadShowsClosedRows() {
+  return !!salesSearchQuery.trim() || salesLeadTab !== "all" || Object.values(salesLeadFilters).some(value => String(value || "").trim());
+}
+
+function salesLeadIsClosedStatus(lead) {
+  const status = norm(lead?.status);
+  return ["COMPLETED", "LOST", "CLOSED", "LOSTCLOSED"].includes(status);
 }
 
 function salesLeadSearch(rows) {
@@ -1456,7 +1590,7 @@ function salesLeadAdvancedFilter(rows) {
     if (salesLeadFilters.maxValue && Number(lead.estimatedValue || 0) > Number(salesLeadFilters.maxValue)) return false;
     if (salesLeadFilters.flag === "Tender" && lead.status !== "Tender") return false;
     if (salesLeadFilters.flag === "Job in Hand" && lead.status !== "Job in Hand") return false;
-    if (salesLeadFilters.flag === "Lost" && lead.status !== "Lost") return false;
+    if (salesLeadFilters.flag === "Lost" && !salesLeadIsClosedStatus(lead)) return false;
     return true;
   });
 }
@@ -1607,44 +1741,773 @@ function formatSalesDateInput(value) {
   return `${String(parsed.getDate()).padStart(2, "0")}/${String(parsed.getMonth() + 1).padStart(2, "0")}/${parsed.getFullYear()}`;
 }
 
+const SALES_PROJECT_TABS = [
+  { key: "all", label: "All Projects" },
+  { key: "ongoing", label: "Ongoing" },
+  { key: "delivery", label: "Delivery Pending" },
+  { key: "completed", label: "Completed" },
+  { key: "lost", label: "Lost / Closed" }
+];
+
 function salesProjectsHtml() {
   if (salesProjectMode === "kanban") salesProjectMode = "list";
-  const searchableRows = salesFilter(salesData().projects, ["name", "customer", "location", "type", "requirement", "engineer", "status"]);
-  const rows = salesProjectFilter ? searchableRows.filter(project => [project.type, project.requirement].map(value => norm(value)).includes(norm(salesProjectFilter))) : searchableRows;
-  const filterLabels = ["Residential", "Commercial", ...salesProductTypes()];
+  if (!SALES_PROJECT_TABS.some(tab => tab.key === salesProjectFilter)) salesProjectFilter = "all";
+  const searchableRows = salesFilter(salesData().projects || [], ["projectNo", "projectId", "name", "customer", "location", "type", "category", "productType", "requirement", "engineer", "status", "scope"]);
+  const rows = searchableRows.filter(project => salesProjectMatchesTab(project, salesProjectFilter));
+  const selected = salesSelectedProject(rows, searchableRows);
   return `
-    ${salesPageHeader("Active Projects", "Manage and track live opportunities across all regions.", `<button class="sales-secondary" data-sales-export="projects">Export CSV</button><button class="sales-primary" data-sales-action="new-project">New Project</button><button class="sales-primary" data-sales-action="create-quotation">Create Quotation</button>`)}
-    <section class="sales-card">
-      <div class="sales-filter-row">
-        <button class="${salesProjectMode === "list" ? "active" : ""}" data-sales-project-mode="list">List View</button>
-        ${filterLabels.map(label => salesChip(label, { class: norm(salesProjectFilter) === norm(label) ? "active" : "", "data-sales-project-filter": label })).join("")}
-        ${salesProjectFilter ? salesChip("Clear", { "data-sales-project-filter": "" }) : ""}
-        <span class="sales-filter-count">Showing: ${rows.length} of ${searchableRows.length}</span>
+    ${salesPageHeader("Sales Desk < Projects", "Manage active HVAC projects, BOQ delivery, stock reservation, and project progress.", `<button class="sales-secondary" data-sales-export="projects">Export CSV</button><button class="sales-primary" data-sales-action="new-project">New Project</button>`)}
+    <section class="sales-projects-layout ${selected ? "detail-open" : "detail-closed"}">
+      <div class="sales-project-list-card">
+        <div class="sales-project-tabs">
+          ${SALES_PROJECT_TABS.map(tab => `<button class="${salesProjectFilter === tab.key ? "active" : ""}" data-sales-project-filter="${tab.key}">${escapeHtml(tab.label)}</button>`).join("")}
+        </div>
+        ${salesProjectTableHtml(rows)}
+        <div class="sales-project-pagination">
+          <span>Showing ${rows.length ? 1 : 0} to ${rows.length} of ${searchableRows.length} projects</span>
+          <div><button class="active">1</button><button disabled>2</button><button disabled>3</button></div>
+        </div>
       </div>
-      ${salesProjectTableHtml(rows)}
+      ${selected ? salesProjectDetailHtml(selected) : ""}
     </section>
   `;
 }
 
 function salesProjectTableHtml(rows) {
   return `
-    <table class="sales-table">
-      <thead><tr><th>Project & Customer</th><th>Location</th><th>Type / Product Type</th><th>Assigned To</th><th>Status</th><th>Dates</th><th>Actions</th></tr></thead>
-      <tbody>${rows.map(project => `
-        <tr>
-          <td><strong>${escapeHtml(project.name)}</strong><br><span>${escapeHtml(project.customer)}</span></td>
-          <td>${escapeHtml(project.location)}</td>
-          <td>${escapeHtml(project.type)}<br><span>${escapeHtml(project.requirement)}</span></td>
-          <td>${escapeHtml(project.engineer)}</td>
-          <td>${salesBadge(project.status)}</td>
-          <td>${escapeHtml(project.date)}</td>
-          <td>${rowMenu([
-            { label: "Edit", action: "edit-project", id: project.id },
-            { label: "Delete", action: "delete-project", id: project.id, danger: true }
-          ])}</td>
-        </tr>`).join("")}</tbody>
+    <table class="sales-table sales-project-table">
+      <thead><tr><th>Project & Customer</th><th>Location</th><th>Product Type</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>${rows.map(project => {
+        const projectNo = salesProjectNo(project);
+        const productType = salesProjectProduct(project);
+        return `
+        <tr class="${project.id === salesProjectDetailId ? "selected" : ""}">
+          <td><strong>${escapeHtml(project.name || projectNo)}</strong><br><span>${escapeHtml(project.customer || "-")}</span></td>
+          <td>${escapeHtml(project.location || "-")}</td>
+          <td>${escapeHtml(productType || "-")}</td>
+          <td>${salesBadge(salesProjectStatus(project))}</td>
+          <td>
+            <div class="sales-project-actions">
+              <button data-sales-project-select="${escapeHtml(project.id)}">View</button>
+              <button data-sales-action="edit-project" data-sales-id="${escapeHtml(project.id)}">Edit</button>
+              ${rowMenu([
+                { label: "View", action: "view-project", id: project.id },
+                { label: "Edit", action: "edit-project", id: project.id },
+                { label: "Delete", action: "delete-project", id: project.id, danger: true }
+              ])}
+            </div>
+          </td>
+        </tr>`;
+      }).join("") || `<tr><td colspan="5">No projects found.</td></tr>`}</tbody>
     </table>
   `;
+}
+
+function salesSelectedProject(rows, allRows) {
+  if (!salesProjectDetailId) return null;
+  const selected = (allRows || []).find(project => project.id === salesProjectDetailId);
+  if (!selected) salesProjectDetailId = "";
+  return selected || null;
+}
+
+function salesProjectMatchesTab(project, tab) {
+  const status = norm(salesProjectStatus(project));
+  if (!tab || tab === "all") return true;
+  if (tab === "ongoing") return !["completed", "lost", "lost / closed", "closed"].includes(status);
+  if (tab === "delivery") return status.includes("delivery");
+  if (tab === "completed") return status === "completed";
+  if (tab === "lost") return ["lost", "lost / closed", "closed"].includes(status);
+  return true;
+}
+
+function salesProjectNo(project = {}) {
+  return project.projectNo || project.projectId || project.no || "";
+}
+
+function salesProjectStatus(project = {}) {
+  return project.status || "Ongoing";
+}
+
+function salesProjectAutoStatus(project = {}) {
+  const existingStatus = salesProjectStatus(project);
+  if (["LOST", "LOSTCLOSED", "CLOSED"].includes(norm(existingStatus))) return existingStatus;
+  const rows = salesProjectBoqRows(project).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
+  if (!rows.length) return "Ongoing";
+  return rows.some(row => (Number(row.qty || 0) - Number(row.deliveredQty || 0)) > 0) ? "Delivery Pending" : "Completed";
+}
+
+function salesProjectProduct(project = {}) {
+  return project.productType || project.requirement || project.category || project.type || "";
+}
+
+function salesProjectDetailHtml(project) {
+  const boqRows = salesProjectBoqRows(project);
+  const deliveryNotes = salesProjectDeliveryNotes(project);
+  return `
+    <aside class="sales-project-detail-panel order-book-detail" data-project-detail-id="${escapeHtml(project.id || "")}">
+      <div class="pipeline-detail-head">
+        <div class="pipeline-detail-title">
+          <h3>${escapeHtml(project.name || salesProjectNo(project) || "Project")}</h3>
+          ${salesBadge(salesProjectStatus(project))}
+        </div>
+        <button class="mini-button" type="button" data-sales-project-close-detail aria-label="Close project details">X</button>
+      </div>
+      <div class="pipeline-detail-meta">
+        <p>Created Date: ${escapeHtml(formatSalesDateInput(project.date || project.createdDate || ""))}${project.engineer ? ` by ${escapeHtml(project.engineer)}` : ""}</p>
+        ${rowMenu([
+          { label: "Edit", action: "edit-project", id: project.id },
+          { label: "Mark as Lost / Closed", action: "project-lost", id: project.id },
+          { label: "Delete", action: "delete-project", id: project.id, danger: true }
+        ])}
+      </div>
+      ${salesDetailSection("Project Information", [
+        ["Project No", salesProjectNo(project)],
+        ["Project Name", project.name],
+        ["Customer", project.customer],
+        ["Location", project.location],
+        ["Project Category", project.category || project.type],
+        ["Status", salesProjectStatus(project)],
+        ["Created Date", formatSalesDateInput(project.date || project.createdDate || "")]
+      ])}
+      <section class="pipeline-detail-section">
+        <h4>Scope Details</h4>
+        <p class="pipeline-muted">${escapeHtml(project.scope || project.description || "-")}</p>
+      </section>
+      <section class="pipeline-detail-section">
+        <h4>BOQ / Delivery Details</h4>
+        ${salesProjectBoqTableHtml(project, boqRows)}
+      </section>
+      <section class="pipeline-detail-section">
+        <h4>Delivery History</h4>
+        ${salesProjectDeliveryHistoryHtml(deliveryNotes)}
+      </section>
+    </aside>
+  `;
+}
+
+function salesProjectDetailField(label, key, value = "", type = "text", options = []) {
+  if (type === "select") {
+    const selectedValue = String(value || "");
+    return `<label>${escapeHtml(label)}<select data-project-detail-field="${escapeHtml(key)}">${options.map(option => `<option ${selectedValue === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  }
+  return `<label>${escapeHtml(label)}<input data-project-detail-field="${escapeHtml(key)}" ${type === "dateText" ? `inputmode="numeric" placeholder="DD/MM/YYYY"` : ""} value="${escapeHtml(value || "")}"></label>`;
+}
+
+function salesProjectBoqTableHtml(project, boqRows) {
+  return `
+    <table class="sales-mini-table sales-project-detail-boq-table">
+      <thead><tr><th>Model</th><th>Qty</th><th>Delivered Qty</th><th>Pending Qty</th></tr></thead>
+      <tbody>${boqRows.map(row => {
+        const model = row.model || row.modelNo || "";
+        const qty = Number(row.qty || row.quantity || 0) || 0;
+        const delivered = Number(row.deliveredQty || salesProjectDeliveredQty(project, model)) || 0;
+        const pending = qty - delivered;
+        return `<tr><td>${escapeHtml(model || "-")}</td><td>${qty || ""}</td><td class="sales-project-delivered-qty">${delivered || ""}</td><td class="sales-project-pending-qty">${pending}</td></tr>`;
+      }).join("") || `<tr><td colspan="4">No BOQ items yet.</td></tr>`}</tbody>
+    </table>
+  `;
+}
+
+function salesProjectDeliveryHistoryHtml(notes) {
+  return `
+    <table class="sales-mini-table">
+      <thead><tr><th>Date</th><th>DN No</th><th>Model</th><th>Delivered Qty</th></tr></thead>
+      <tbody>${notes.flatMap(note => (note.lines || note.items || []).map(line => `<tr><td>${escapeHtml(formatSalesDateInput(note.date || ""))}</td><td>${escapeHtml(note.dnNo || note.no || "")}</td><td>${escapeHtml(line.modelNo || line.model || "")}</td><td>${escapeHtml(line.qtyGoingOut || line.qty || line.quantity || "")}</td></tr>`)).join("") || `<tr><td colspan="4">No delivery history.</td></tr>`}</tbody>
+    </table>
+  `;
+}
+
+function salesProjectBoqRows(project = {}) {
+  if (Array.isArray(project.boq)) return project.boq;
+  if (Array.isArray(project.items)) return project.items;
+  return [];
+}
+
+function salesProjectDeliveryNotes(project = {}) {
+  const projectName = norm(project.name || "");
+  if (!projectName || !inventoryState) return [];
+  return (inventoryState.deliveryNotes || []).filter(note => {
+    const status = norm(note.status || "");
+    return norm(note.projectName || note.project || "") === projectName && !["draft", "cancelled"].includes(status);
+  });
+}
+
+function salesProjectDeliveredQty(project, model) {
+  const target = norm(model || "");
+  if (!target) return 0;
+  return salesProjectDeliveryNotes(project).reduce((total, note) => total + (note.lines || note.items || []).reduce((sum, line) => {
+    return norm(line.modelNo || line.model || "") === target ? sum + (Number(line.qtyGoingOut || line.qty || line.quantity || 0) || 0) : sum;
+  }, 0), 0);
+}
+
+function salesProjectStockQty(model) {
+  const target = norm(model || "");
+  if (!target || !inventoryState) return 0;
+  const stockRows = [...(inventoryState.dashboard?.stock || []), ...(inventoryState.models || []), ...(inventoryState.stock || [])];
+  const row = stockRows.find(item => norm(item.modelNo || item.model || item.name || "") === target);
+  return Number(row?.currentQty || row?.qty || row?.quantity || 0) || 0;
+}
+
+function salesProjectProductTypes() {
+  return ["", "DX", "VRV", "CHW", "VRV + FAHU", "VRV + AHU", "VRV + DX", "Other"];
+}
+
+function salesProjectStatusOptions() {
+  return ["Ongoing", "Delivery Pending", "Completed", "Lost / Closed"];
+}
+
+function salesProjectCategoryOptions() {
+  return ["", "Commercial", "Residential", "Trading", "Project/Inst", "AMC / Maintenance"];
+}
+
+function nextSalesProjectNo() {
+  let nextNo = salesData().settings?.nextProjectNo || `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001`;
+  for (const project of salesData().projects || []) {
+    const projectNo = salesProjectNo(project);
+    if (!projectNo) continue;
+    const candidate = nextSalesProjectNoFromBase(projectNo);
+    if (projectNoSequenceValue(candidate) > projectNoSequenceValue(nextNo)) nextNo = candidate;
+  }
+  return nextNo;
+}
+
+function nextSalesProjectNoFromBase(value) {
+  const text = String(value || "");
+  const match = text.match(/^(.*?)(\d+)$/);
+  if (!match) return `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001`;
+  return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function projectNoSequenceValue(value) {
+  const match = String(value || "").match(/(\d+)$/);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function salesProjectNewId() {
+  return `sales-project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function salesProjectBlank() {
+  const projectNo = nextSalesProjectNo();
+  return {
+    id: salesProjectNewId(),
+    projectNo,
+    projectId: projectNo,
+    name: "",
+    customer: "",
+    location: "",
+    category: "",
+    type: "Commercial",
+    productType: "",
+    engineer: currentUser?.name || "Admin User",
+    status: "Ongoing",
+    date: todaySalesDateInput(),
+    createdDate: todaySalesDateInput(),
+    targetDate: "",
+    scope: "",
+    boq: [],
+    reserveStock: false,
+    expectedDeliveryDate: "",
+    deliveryNoteReference: "",
+    remarks: "",
+    directDeliveryUploads: [],
+    value: ""
+  };
+}
+
+function salesProjectDrawerField(label, key, value = "", options = null, type = "text", className = "") {
+  if (options) {
+    return `<label class="${className}">${escapeHtml(label)}<select data-project-drawer-field="${escapeHtml(key)}">${options.map(option => `<option value="${escapeHtml(option)}" ${String(value || "") === option ? "selected" : ""}>${escapeHtml(option || "Select")}</option>`).join("")}</select></label>`;
+  }
+  if (type === "textarea") {
+    return `<label class="${className}">${escapeHtml(label)}<textarea data-project-drawer-field="${escapeHtml(key)}">${escapeHtml(value || "")}</textarea></label>`;
+  }
+  if (type === "checkbox") {
+    return `<label class="sales-project-check ${className}"><input type="checkbox" data-project-drawer-field="${escapeHtml(key)}" ${value ? "checked" : ""}> ${escapeHtml(label)}</label>`;
+  }
+  return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="${escapeHtml(key)}" ${type === "dateText" ? `inputmode="numeric" placeholder="DD/MM/YYYY"` : ""} value="${escapeHtml(value || "")}"></label>`;
+}
+
+function salesProjectDrawerBoqRowHtml(row = {}, index = 0) {
+  const model = salesProjectModelNo(row.model || row.modelNo || row.description || "");
+  const qty = Number(row.qty || row.quantity || 0) || 0;
+  const delivered = Number(row.deliveredQty || 0) || 0;
+  const pending = qty - delivered;
+  const stock = model ? salesProjectStockQty(model) : "";
+  const reserve = !!(row.reserve || row.reserveStock);
+  return `
+    <tr data-project-boq-row>
+      <td>
+        <input data-suggestion-list="salesProjectModelList" data-project-boq-field="model" value="${escapeHtml(model)}">
+        <input type="hidden" data-project-boq-field="description" value="${escapeHtml(row.description || "")}">
+      </td>
+      <td><input inputmode="decimal" data-project-boq-field="qty" value="${qty || ""}"></td>
+      <td><input inputmode="decimal" data-project-boq-field="deliveredQty" value="${delivered || ""}"></td>
+      <td data-project-boq-pending>${pending}</td>
+      <td data-project-boq-stock>${model ? escapeHtml(String(stock)) : ""}</td>
+      <td class="sales-project-reserve-cell">
+        <label class="sales-project-row-toggle" title="Reserve stock">
+          <input type="checkbox" data-project-boq-field="reserve" ${reserve ? "checked" : ""}>
+          <span></span>
+        </label>
+        <button class="sales-project-row-delete" type="button" data-delete-project-boq="${index}" aria-label="Delete BOQ row">x</button>
+      </td>
+    </tr>
+  `;
+}
+
+function salesProjectDirectDeliverySection(project = {}) {
+  const uploads = Array.isArray(project.directDeliveryUploads) ? project.directDeliveryUploads : [];
+  return `
+    <section class="sales-project-form-section sales-project-direct-delivery">
+      <h3><span>4</span> Direct Delivery Details</h3>
+      <p class="sales-project-direct-copy">Upload delivery note to detect delivered models and quantities.</p>
+      <label class="sales-project-direct-upload" data-project-direct-upload-zone>
+        <input type="file" data-project-direct-file accept=".pdf,.png,.jpg,.jpeg">
+        <span class="sales-project-direct-upload-icon">⇧</span>
+        <strong>Upload Delivery Note</strong>
+        <small>Drag & drop PDF, JPG, or PNG here, or click to upload.</small>
+      </label>
+      <div class="sales-project-direct-detected">
+        <h4>Detected Items</h4>
+        <table class="sales-project-direct-table">
+          <thead><tr><th>Detected Model</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody data-project-direct-detected-body>
+            ${salesProjectDirectDetectedRowsHtml([])}
+          </tbody>
+        </table>
+        <div class="sales-project-direct-actions">
+          <button type="button" class="ghost-button" data-clear-project-direct>Clear Upload</button>
+          <button type="button" class="sales-primary" data-verify-project-direct>Verify & Update Delivered Qty</button>
+        </div>
+      </div>
+      <div class="sales-project-direct-uploaded">
+        <h4>Uploaded Information</h4>
+        <table class="sales-project-direct-table">
+          <thead><tr><th>Date</th><th>Delivery Note No.</th><th>Total Quantity</th><th>Actions</th></tr></thead>
+          <tbody data-project-direct-uploaded-body>
+            ${salesProjectDirectUploadsHtml(uploads, project.id)}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
+function salesProjectDirectDetectedRowsHtml(rows = []) {
+  return rows.map((row, index) => `
+    <tr data-project-direct-detected-row>
+      <td><input data-project-direct-field="modelNo" data-suggestion-list="salesProjectModelList" value="${escapeHtml(row.modelNo || "")}"></td>
+      <td><input class="sales-project-orange-number" inputmode="decimal" data-project-direct-field="quantity" value="${escapeHtml(row.quantity ?? "")}"></td>
+      <td><span class="sales-project-direct-status ${salesProjectDirectStatusClass(row.status)}">${escapeHtml(row.status || "Needs Review")}</span></td>
+      <td><button type="button" class="sales-project-direct-remove" data-remove-project-direct="${index}">Remove</button></td>
+    </tr>
+  `).join("") || `<tr><td colspan="4" class="sales-project-direct-empty">No detected items yet.</td></tr>`;
+}
+
+function salesProjectDirectUploadsHtml(uploads = [], projectId = "") {
+  return uploads.map(upload => {
+    const uploadId = upload.uploadId || upload.id || "";
+    return `
+      <tr data-project-direct-upload-row="${escapeHtml(uploadId)}">
+        <td>${escapeHtml(formatSalesDateInput(upload.date || upload.uploadedAt || ""))}</td>
+        <td>${escapeHtml(upload.deliveryNoteNo || upload.originalName || "-")}</td>
+        <td class="sales-project-orange-number">${escapeHtml(upload.totalQuantity ?? 0)}</td>
+        <td class="sales-project-direct-menu-cell">
+          <button type="button" class="sales-project-direct-menu-button" data-project-direct-menu="${escapeHtml(uploadId)}">...</button>
+          <div class="sales-project-direct-menu" data-project-direct-menu-panel="${escapeHtml(uploadId)}">
+            <button type="button" data-download-project-direct="${escapeHtml(uploadId)}">Download File</button>
+            <button type="button" class="danger" data-delete-project-direct-upload="${escapeHtml(uploadId)}">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="4" class="sales-project-direct-empty">No uploaded delivery notes yet.</td></tr>`;
+}
+
+function salesProjectDirectStatusClass(status = "") {
+  const key = norm(status);
+  if (key.includes("NOTINBOQ")) return "not-in-boq";
+  if (key.includes("NEEDSREVIEW")) return "needs-review";
+  return "matched";
+}
+
+function openSalesProjectDrawer(itemId = "") {
+  const existing = itemId ? structuredClone((salesData().projects || []).find(item => item.id === itemId)) : null;
+  const project = existing || salesProjectBlank();
+  const customerOptions = (salesData().customers || []).map(customer => customer.name).filter(Boolean);
+  const modelOptions = (inventoryState?.models || inventoryState?.stock || []).map(item => item.modelNo || item.model || item.name || "").filter(Boolean);
+  const modal = document.createElement("div");
+  modal.className = "sales-project-drawer-backdrop";
+  modal.innerHTML = `
+    <section class="sales-project-drawer">
+      <div class="sales-project-drawer-head">
+        <div>
+          <h2>${existing ? "Edit Project" : "New Project"}</h2>
+          <p>Create a new HVAC project and capture all relevant details.</p>
+        </div>
+        <button class="mini-button" data-close-project-drawer>X</button>
+      </div>
+      <datalist id="salesProjectCustomerList">${customerOptions.map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
+      <datalist id="salesProjectModelList">${modelOptions.map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
+      <div class="sales-project-drawer-body">
+        <section class="sales-project-form-section">
+          <h3><span>1</span> Project Information</h3>
+          <div class="sales-project-form-grid">
+            ${salesProjectDrawerField("Project No", "projectNo", salesProjectNo(project))}
+            ${salesProjectDrawerField("Project Name", "name", project.name)}
+            <label>Customer<input list="salesProjectCustomerList" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}"></label>
+            ${salesProjectDrawerField("Location", "location", project.location)}
+            ${salesProjectDrawerField("Project Category", "category", project.category || project.type, salesProjectCategoryOptions())}
+            ${salesProjectDrawerField("Status", "status", salesProjectStatus(project), salesProjectStatusOptions())}
+            ${salesProjectDrawerField("Product Type", "productType", salesProjectProduct(project), salesProjectProductTypes())}
+            ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
+            ${salesProjectDrawerField("Target Completion Date", "targetDate", formatSalesDateInput(project.targetDate || ""), null, "dateText")}
+          </div>
+        </section>
+        <section class="sales-project-form-section">
+          <h3><span>2</span> Scope / Work Description</h3>
+          ${salesProjectDrawerField("Scope / Work Description", "scope", project.scope || project.description || "", null, "textarea")}
+        </section>
+        <section class="sales-project-form-section">
+          <h3><span>3</span> BOQ / Delivery Details</h3>
+          <div class="sales-project-boq-wrap">
+            <table class="sales-project-boq-edit">
+              <colgroup>
+                <col class="sales-project-boq-model">
+                <col class="sales-project-boq-qty">
+                <col class="sales-project-boq-delivered">
+                <col class="sales-project-boq-pending">
+                <col class="sales-project-boq-stock">
+                <col class="sales-project-boq-reserve">
+              </colgroup>
+              <thead><tr><th>Model</th><th>Qty</th><th>Delivered Qty</th><th>Pending Qty</th><th>Stock</th><th>Reserve</th></tr></thead>
+              <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map(salesProjectDrawerBoqRowHtml).join("")}</tbody>
+            </table>
+          </div>
+          <button class="sales-secondary sales-project-add-boq" data-add-project-boq>Add BOQ Row</button>
+        </section>
+        ${salesProjectDirectDeliverySection(project)}
+      </div>
+      <div class="sales-project-drawer-actions">
+        <button class="ghost-button" data-close-project-drawer>Cancel</button>
+        <button class="sales-primary" data-save-project-drawer>${existing ? "Save Changes" : "Save Project"}</button>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(modal);
+  modal._directDeliveryUploads = structuredClone(project.directDeliveryUploads || []);
+  modal._directDeliveryDetected = [];
+  modal._directDeliveryPendingUpload = null;
+  modal.querySelectorAll("[data-close-project-drawer]").forEach(button => button.addEventListener("click", () => modal.remove()));
+  modal.querySelector("[data-add-project-boq]").addEventListener("click", () => {
+    modal.querySelector(".sales-project-boq-edit tbody").insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({}, modal.querySelectorAll("[data-project-boq-row]").length));
+  });
+  modal.addEventListener("input", event => {
+    if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
+    const row = event.target.closest("[data-project-boq-row]");
+    if (row) salesProjectUpdateBoqRow(row);
+  });
+  modal.addEventListener("change", event => {
+    if (event.target.dataset.projectDirectFile !== undefined) return uploadSalesProjectDirectDelivery(modal, project, event.target.files?.[0]);
+    if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
+    const row = event.target.closest("[data-project-boq-row]");
+    if (row) salesProjectUpdateBoqRow(row, true);
+    if (event.target.closest("[data-project-direct-detected-row]")) salesProjectRefreshDirectDetectedStatuses(modal);
+  });
+  modal.addEventListener("click", event => {
+    const deleteButton = event.target.closest("[data-delete-project-boq]");
+    if (deleteButton) deleteButton.closest("[data-project-boq-row]")?.remove();
+    if (event.target.closest("[data-clear-project-direct]")) clearSalesProjectDirectDelivery(modal);
+    if (event.target.closest("[data-verify-project-direct]")) verifySalesProjectDirectDelivery(modal, project);
+    const directMenuButton = event.target.closest("[data-project-direct-menu]");
+    if (directMenuButton) {
+      const menuId = directMenuButton.dataset.projectDirectMenu;
+      modal.querySelectorAll("[data-project-direct-menu-panel]").forEach(panel => {
+        panel.classList.toggle("open", panel.dataset.projectDirectMenuPanel === menuId && !panel.classList.contains("open"));
+      });
+      return;
+    }
+    if (!event.target.closest(".sales-project-direct-menu-cell")) {
+      modal.querySelectorAll("[data-project-direct-menu-panel]").forEach(panel => panel.classList.remove("open"));
+    }
+    const removeDetected = event.target.closest("[data-remove-project-direct]");
+    if (removeDetected) {
+      removeDetected.closest("[data-project-direct-detected-row]")?.remove();
+      salesProjectRefreshDirectDetectedStatuses(modal);
+    }
+    const downloadUpload = event.target.closest("[data-download-project-direct]");
+    if (downloadUpload) downloadSalesProjectDirectUpload(project.id, downloadUpload.dataset.downloadProjectDirect);
+    const deleteUpload = event.target.closest("[data-delete-project-direct-upload]");
+    if (deleteUpload) deleteSalesProjectDirectUpload(modal, project, deleteUpload.dataset.deleteProjectDirectUpload);
+  });
+  modal.querySelector("[data-save-project-drawer]").addEventListener("click", async () => {
+    const payload = collectSalesProjectDrawer(modal, project);
+    if (!payload.name.trim()) return alert("Project name is required.");
+    if (!payload.customer.trim()) return alert("Customer is required.");
+    await saveSalesProject(payload);
+    modal.remove();
+  });
+}
+
+function salesProjectUpdateBoqRow(row, normalizeModel = false) {
+  const modelInput = row.querySelector('[data-project-boq-field="model"]');
+  const model = normalizeModel ? salesProjectModelNo(modelInput?.value || "") : modelInput?.value.trim() || "";
+  if (normalizeModel && modelInput) modelInput.value = model;
+  const qty = Number(row.querySelector('[data-project-boq-field="qty"]')?.value || 0) || 0;
+  const delivered = Number(row.querySelector('[data-project-boq-field="deliveredQty"]')?.value || 0) || 0;
+  const descriptionInput = row.querySelector('[data-project-boq-field="description"]');
+  const modelInfo = salesProjectModelInfo(model);
+  const pending = qty - delivered;
+  const stock = salesProjectStockQty(model);
+  const pendingCell = row.querySelector("[data-project-boq-pending]");
+  const stockCell = row.querySelector("[data-project-boq-stock]");
+  if (descriptionInput && modelInfo?.description) descriptionInput.value = modelInfo.description;
+  if (pendingCell) pendingCell.textContent = String(pending);
+  if (stockCell) stockCell.textContent = model ? String(stock) : "";
+}
+
+async function uploadSalesProjectDirectDelivery(modal, project, file) {
+  if (!file) return;
+  const input = modal.querySelector("[data-project-direct-file]");
+  const form = new FormData();
+  form.append("file", file);
+  form.append("projectId", project.id || "");
+  const uploadZone = modal.querySelector("[data-project-direct-upload-zone]");
+  uploadZone?.classList.add("is-loading");
+  try {
+    const result = await api("/api/sales-crm/projects/direct-delivery/upload", { method: "POST", body: form });
+    modal._directDeliveryPendingUpload = result.upload;
+    salesProjectRenderDirectUploadZone(modal, result.upload);
+    const rows = (result.detected?.lines || result.upload?.lines || []).map(line => ({
+      modelNo: salesProjectModelNo(line.modelNo || line.model || ""),
+      quantity: Number(line.quantity || line.finalQty || line.detectedQty || 0) || "",
+      status: line.status || ""
+    }));
+    modal._directDeliveryDetected = salesProjectApplyDirectStatuses(modal, rows.length ? rows : [{ modelNo: "", quantity: "", status: "Needs Review" }]);
+    salesProjectRenderDirectDetected(modal);
+    toast(result.message || "Delivery note scanned. Review detected items.");
+  } catch (error) {
+    toast(error.message || "Delivery note upload failed");
+  } finally {
+    uploadZone?.classList.remove("is-loading");
+    if (input) input.value = "";
+  }
+}
+
+function salesProjectRenderDirectDetected(modal) {
+  const body = modal.querySelector("[data-project-direct-detected-body]");
+  if (body) body.innerHTML = salesProjectDirectDetectedRowsHtml(modal._directDeliveryDetected || []);
+}
+
+function salesProjectRenderDirectUploads(modal, project) {
+  const body = modal.querySelector("[data-project-direct-uploaded-body]");
+  if (body) body.innerHTML = salesProjectDirectUploadsHtml(modal._directDeliveryUploads || [], project.id);
+}
+
+function salesProjectRenderDirectUploadZone(modal, upload = null) {
+  const zone = modal.querySelector("[data-project-direct-upload-zone]");
+  if (!zone) return;
+  const title = zone.querySelector("strong");
+  const detail = zone.querySelector("small");
+  if (title) title.textContent = upload?.originalName || "Upload Delivery Note";
+  if (detail) detail.textContent = upload ? `${prettyBytes(upload.size || 0)} uploaded. Review detected items, then verify.` : "Drag & drop PDF, JPG, or PNG here, or click to upload.";
+  zone.classList.toggle("has-file", !!upload);
+}
+
+function salesProjectCollectDirectRows(modal) {
+  return Array.from(modal.querySelectorAll("[data-project-direct-detected-row]")).map(row => {
+    const model = salesProjectModelNo(row.querySelector('[data-project-direct-field="modelNo"]')?.value || "");
+    const quantity = Number(row.querySelector('[data-project-direct-field="quantity"]')?.value || 0) || 0;
+    return { modelNo: model, quantity };
+  }).filter(row => row.modelNo || row.quantity);
+}
+
+function salesProjectApplyDirectStatuses(modal, rows = []) {
+  const boqModels = new Set(collectSalesProjectBoqRows(modal).map(row => norm(row.model)).filter(Boolean));
+  return rows.map(row => {
+    const modelNo = salesProjectModelNo(row.modelNo || "");
+    const quantity = Number(row.quantity || 0) || 0;
+    let status = row.status || "Matched";
+    if (!modelNo || !quantity) status = "Needs Review";
+    else if (!boqModels.has(norm(modelNo))) status = "Not in BOQ";
+    else status = "Matched";
+    return { modelNo, quantity: quantity || "", status };
+  });
+}
+
+function salesProjectRefreshDirectDetectedStatuses(modal) {
+  modal._directDeliveryDetected = salesProjectApplyDirectStatuses(modal, salesProjectCollectDirectRows(modal));
+  salesProjectRenderDirectDetected(modal);
+}
+
+function clearSalesProjectDirectDelivery(modal) {
+  modal._directDeliveryDetected = [];
+  modal._directDeliveryPendingUpload = null;
+  salesProjectRenderDirectDetected(modal);
+  salesProjectRenderDirectUploadZone(modal, null);
+}
+
+async function verifySalesProjectDirectDelivery(modal, project) {
+  const detectedRows = salesProjectApplyDirectStatuses(modal, salesProjectCollectDirectRows(modal));
+  if (!detectedRows.length) return toast("No detected items to verify.");
+  const boqBody = modal.querySelector(".sales-project-boq-edit tbody");
+  for (const item of detectedRows) {
+    if (!item.modelNo) continue;
+    const quantity = Number(item.quantity || 0) || 0;
+    const existingRow = Array.from(modal.querySelectorAll("[data-project-boq-row]")).find(row => {
+      const model = salesProjectModelNo(row.querySelector('[data-project-boq-field="model"]')?.value || "");
+      return norm(model) === norm(item.modelNo);
+    });
+    if (existingRow) {
+      const deliveredInput = existingRow.querySelector('[data-project-boq-field="deliveredQty"]');
+      deliveredInput.value = String((Number(deliveredInput.value || 0) || 0) + quantity);
+      salesProjectUpdateBoqRow(existingRow, true);
+    } else if (boqBody) {
+      boqBody.insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({ model: item.modelNo, qty: quantity, deliveredQty: quantity }, modal.querySelectorAll("[data-project-boq-row]").length));
+      salesProjectUpdateBoqRow(boqBody.lastElementChild, true);
+    }
+  }
+  const upload = modal._directDeliveryPendingUpload || {
+    id: `direct-delivery-${Date.now()}`,
+    uploadId: "",
+    originalName: "Manual Delivery Update",
+    date: todaySalesDateInput()
+  };
+  const savedUpload = {
+    ...upload,
+    date: formatSalesDateInput(upload.date || todaySalesDateInput()),
+    deliveryNoteNo: upload.deliveryNoteNo || upload.originalName || "",
+    totalQuantity: detectedRows.reduce((sum, row) => sum + (Number(row.quantity || 0) || 0), 0),
+    lines: detectedRows
+  };
+  modal._directDeliveryUploads = [savedUpload, ...(modal._directDeliveryUploads || [])];
+  clearSalesProjectDirectDelivery(modal);
+  salesProjectRenderDirectUploads(modal, project);
+  const payload = collectSalesProjectDrawer(modal, project);
+  if (payload.name?.trim() && payload.customer?.trim()) {
+    salesCrmState = await api("/api/sales-crm/projects", { method: "POST", body: JSON.stringify(payload) });
+  }
+  toast("Delivery note verified. Delivered quantities updated successfully.");
+}
+
+async function downloadSalesProjectDirectUpload(projectId, uploadId) {
+  if (!projectId || !uploadId) return toast("Save the project before downloading this upload.");
+  const project = (salesData().projects || []).find(item => item.id === projectId);
+  const upload = (project?.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+  const blob = await api(`/api/sales-crm/projects/${encodeURIComponent(projectId)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`);
+  downloadBlob(blob, upload?.originalName || "Delivery Note");
+}
+
+async function deleteSalesProjectDirectUpload(modal, project, uploadId) {
+  if (!uploadId) return;
+  if (project.id) {
+    try {
+      salesCrmState = await api(`/api/sales-crm/projects/${encodeURIComponent(project.id)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+    } catch (error) {
+      toast(error.message || "Could not delete uploaded file");
+      return;
+    }
+  }
+  modal._directDeliveryUploads = (modal._directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
+  salesProjectRenderDirectUploads(modal, project);
+  toast("Uploaded delivery note deleted");
+}
+
+function salesProjectModelInfo(value = "") {
+  const key = norm(salesProjectModelNo(value));
+  if (!key || !inventoryState) return null;
+  return [...(inventoryState.models || []), ...(inventoryState.dashboard?.stock || []), ...(inventoryState.stock || [])]
+    .find(item => norm(item.modelNo || item.model || item.name || "") === key) || null;
+}
+
+function salesProjectModelNo(value = "") {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const exact = [...(inventoryState?.models || []), ...(inventoryState?.dashboard?.stock || []), ...(inventoryState?.stock || [])]
+    .find(item => norm(item.modelNo || item.model || item.name || "") === norm(text));
+  if (exact) return exact.modelNo || exact.model || exact.name || text;
+  const splitModel = text.split(/\s+-\s+/)[0]?.trim();
+  const splitMatch = [...(inventoryState?.models || []), ...(inventoryState?.dashboard?.stock || []), ...(inventoryState?.stock || [])]
+    .find(item => norm(item.modelNo || item.model || item.name || "") === norm(splitModel));
+  return splitMatch ? (splitMatch.modelNo || splitMatch.model || splitMatch.name || splitModel) : splitModel || text;
+}
+
+function collectSalesProjectDrawer(modal, baseProject) {
+  const payload = { ...baseProject };
+  modal.querySelectorAll("[data-project-drawer-field]").forEach(field => {
+    const key = field.dataset.projectDrawerField;
+    payload[key] = field.type === "checkbox" ? field.checked : field.value.trim();
+  });
+  modal.querySelectorAll("[data-project-field]").forEach(field => {
+    const key = field.dataset.projectField;
+    payload[key] = field.type === "checkbox" ? field.checked : field.value.trim();
+  });
+  payload.projectNo = payload.projectNo || nextSalesProjectNo();
+  payload.projectId = payload.projectNo;
+  payload.createdDate = formatSalesDateInput(payload.createdDate || payload.date || todaySalesDateInput());
+  payload.date = payload.createdDate;
+  payload.targetDate = formatSalesDateInput(payload.targetDate || "");
+  payload.expectedDeliveryDate = formatSalesDateInput(payload.expectedDeliveryDate || "");
+  payload.type = payload.category || payload.type || "Commercial";
+  payload.requirement = payload.productType || payload.requirement || "";
+  payload.boq = collectSalesProjectBoqRows(modal);
+  payload.directDeliveryUploads = modal._directDeliveryUploads || [];
+  payload.status = salesProjectAutoStatus(payload);
+  return payload;
+}
+
+function collectSalesProjectBoqRows(container) {
+  return Array.from(container.querySelectorAll("[data-project-boq-row]")).map(row => {
+    const get = key => {
+      const field = row.querySelector(`[data-project-boq-field="${key}"]`);
+      if (!field) return "";
+      return field.type === "checkbox" ? field.checked : field.value.trim();
+    };
+    const qty = Number(get("qty")) || 0;
+    const deliveredQty = Number(get("deliveredQty")) || 0;
+    const model = salesProjectModelNo(get("model"));
+    return {
+      model,
+      description: get("description"),
+      qty,
+      deliveredQty,
+      reserve: !!get("reserve"),
+      pendingQty: qty - deliveredQty,
+      stock: salesProjectStockQty(model)
+    };
+  }).filter(row => row.model || row.description || row.qty || row.deliveredQty);
+}
+
+async function saveSalesProject(payload) {
+  salesCrmState = await api("/api/sales-crm/projects", { method: "POST", body: JSON.stringify(payload) });
+  renderSalesDesk();
+  toast("Project saved");
+}
+
+async function saveSalesProjectDetail(projectId) {
+  const project = salesData().projects.find(item => item.id === projectId);
+  const panel = document.querySelector(".sales-project-detail-panel");
+  if (!project || !panel) return;
+  const payload = { ...project };
+  panel.querySelectorAll("[data-project-detail-field]").forEach(field => {
+    const key = field.dataset.projectDetailField;
+    payload[key] = field.value.trim();
+  });
+  payload.projectNo = payload.projectNo || payload.projectId || nextSalesProjectNo();
+  payload.projectId = payload.projectNo;
+  payload.createdDate = formatSalesDateInput(payload.date || payload.createdDate || todaySalesDateInput());
+  payload.date = payload.createdDate;
+  payload.type = payload.category || payload.type || "Commercial";
+  payload.requirement = payload.productType || payload.requirement || "";
+  payload.boq = collectSalesProjectBoqRows(panel);
+  await saveSalesProject(payload);
+}
+
+async function markSalesProjectLost(projectId) {
+  const project = salesData().projects.find(item => item.id === projectId);
+  if (!project) return;
+  await saveSalesProject({ ...project, status: "Lost / Closed" });
 }
 
 function salesKanbanHtml(rows) {
@@ -1730,43 +2593,95 @@ function sortQuotationsByRevision(rows, allQuotes = []) {
 
 function salesQuotationListHtml() {
   const quotations = salesData().quotations || [];
-  const rows = sortQuotationsByRevision(salesFilter(quotations, ["no", "customer", "project", "location", "status"]), quotations);
+  const searchedRows = salesFilter(quotations, ["no", "customer", "project", "location", "status"]);
+  const tabRows = searchedRows.filter(quote => {
+    if (salesQuotationTab === "all") return true;
+    return String(quote.status || "").toLowerCase() === salesQuotationTab;
+  });
+  const rows = sortQuotationsByRevision(tabRows, quotations);
   const totalValue = quotations.reduce((sum, quote) => sum + Number(quote.amount || 0), 0);
   const pendingSent = quotations.filter(quote => ["draft", "revised"].includes(String(quote.status || "").toLowerCase())).length;
   const wonCount = quotations.filter(quote => ["approved", "won"].includes(String(quote.status || "").toLowerCase())).length;
   const conversionRate = quotations.length ? (wonCount / quotations.length) * 100 : 0;
-  const avgRevision = averageQuotationRevision(quotations);
+  const sentCount = quotations.filter(quote => String(quote.status || "").toLowerCase() === "sent").length;
+  const showingText = rows.length ? `Showing 1 to ${rows.length} of ${rows.length} entries` : "Showing 0 entries";
+  const quotationKpis = [
+    { label: "Total Value", value: salesCompactMoney(totalValue), caption: "Pipeline value", tone: "blue", icon: "▣" },
+    { label: "Pending Drafts", value: pendingSent.toLocaleString(), caption: "Quotes waiting", tone: "orange", icon: "✉" },
+    { label: "Conversion Rate", value: `${conversionRate.toFixed(1)}%`, caption: "Won deals", tone: "green", icon: "↗" },
+    { label: "Quotation Sent", value: sentCount.toLocaleString(), caption: "Live sent quotations", tone: "purple", icon: "✈" }
+  ];
   return `
-    ${salesPageHeader("Quotations", "Track draft, sent, revised, approved, and lost quotations.", `<button class="sales-secondary" data-sales-export="quotations">Export CSV</button><button class="sales-primary" data-sales-action="create-quotation">Create Quotation</button>`)}
-    <div class="sales-kpi-grid">
-      ${salesKpi("Total Value", salesCompactMoney(totalValue), "Pipeline", "value")}
-      ${salesKpi("Pending Sent", pendingSent.toLocaleString(), "Quotes", "waiting", "warning")}
-      ${salesKpi("Conversion Rate", `${conversionRate.toFixed(1)}%`, "Won", "deals", "success")}
-      ${salesKpi("Avg. Revision Time", `${avgRevision.toFixed(1)} Days`, "Revision", "cycle")}
-    </div>
-    <section class="sales-card">
-      <div class="sales-filter-row">${["All Quotations", "Draft", "Sent", "Revised", "Approved", "Lost"].map(label => salesChip(label)).join("")}</div>
-      <table class="sales-table">
-        <thead><tr><th>Quotation No</th><th>Date</th><th>Customer</th><th>Project</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
+    <div class="quotation-page">
+      <header class="quotation-topbar">
+        <div>
+          <div class="quotation-title-row">
+            <span>Sales Desk</span>
+            <b>&lt;</b>
+            <h2>Quotations</h2>
+          </div>
+          <p>Track draft, sent, revised, approved, and lost quotations.</p>
+        </div>
+        <div class="quotation-actions">
+          <label class="quotation-search">
+            <span>⌕</span>
+            <input data-sales-search value="${escapeHtml(salesSearchQuery)}" placeholder="Search quotations...">
+          </label>
+          <button class="sales-secondary" data-sales-export="quotations">⇩ Export CSV</button>
+          <button class="sales-primary" data-sales-action="create-quotation">⊕ Create Quotation</button>
+        </div>
+      </header>
+      <div class="quotation-kpi-grid">
+        ${quotationKpis.map(kpi => `
+          <article class="quotation-kpi quotation-kpi-${kpi.tone}">
+            <div class="quotation-kpi-icon">${kpi.icon}</div>
+            <span>${escapeHtml(kpi.label)}</span>
+            <strong>${escapeHtml(kpi.value)}</strong>
+            <small>${escapeHtml(kpi.caption)}</small>
+          </article>
+        `).join("")}
+      </div>
+      <section class="quotation-table-card">
+        <div class="quotation-tabs">
+          ${salesQuotationTabButton("all", "All Quotations")}
+          ${salesQuotationTabButton("draft", "Draft")}
+          ${salesQuotationTabButton("sent", "Sent")}
+        </div>
+        <table class="sales-table quotation-table">
+        <thead><tr><th>Quotation No</th><th>Customer</th><th>Project</th><th>Amount</th><th>Status</th><th>Sales Person</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(quote => `
           <tr>
-            <td><strong>${escapeHtml(quote.no)}</strong><br><span>${escapeHtml(quotationRevisionLabel(quote))}</span></td>
-            <td>${escapeHtml(quote.date)}</td>
+            <td><strong>${escapeHtml(quote.no)}</strong><br><span>${escapeHtml(quote.date || "")}</span></td>
             <td>${escapeHtml(quote.customer)}</td>
             <td>${escapeHtml(quote.project)}<br><span>${escapeHtml(quote.location)}</span></td>
             <td>${salesMoney(quote.amount)}</td>
             <td>${salesBadge(quote.status)}</td>
+            <td>${escapeHtml(quote.salesperson || quote.salesPerson || quote.preparedBy || "")}</td>
             <td>${rowMenu([
               { label: "Edit", action: "edit-quote", id: quote.id },
               { label: "Preview", action: "preview-quote", id: quote.id },
               { label: "PDF", action: "pdf-quote", id: quote.id },
               { label: "Revision", action: "revision-quote", id: quote.id },
+              { label: "Create Project", action: "create-project-from-quote", id: quote.id },
+              { label: "Create Order Book", action: "create-order-book-from-quote", id: quote.id },
               { label: "Delete", action: "delete-quote", id: quote.id, danger: true }
             ])}</td>
           </tr>`).join("")}</tbody>
       </table>
-    </section>
+        <div class="quotation-table-footer">
+          <span>${showingText}</span>
+          <div class="quotation-pagination"><button disabled>‹</button><button class="active">1</button><button disabled>›</button></div>
+        </div>
+      </section>
+    </div>
   `;
+}
+
+function salesQuotationTabButton(value, label) {
+  return salesChip(label, {
+    class: salesQuotationTab === value ? "active" : "",
+    "data-sales-quotation-tab": value
+  });
 }
 
 function salesCreateQuotationHtml() {
@@ -1783,6 +2698,7 @@ function salesCreateQuotationHtml() {
   const taxable = Math.max(0, subtotal - discount);
   const vat = taxable * 0.05;
   const total = taxable + vat;
+  const modelOptions = salesQuoteModelOptions();
   return `
     ${salesPageHeader("Create New Quotation", "Prepare a quotation inside Sales Desk.", `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary" data-sales-action="send-quote">Mark Sent</button>`)}
     <div class="sales-quote-layout">
@@ -1799,17 +2715,21 @@ function salesCreateQuotationHtml() {
           <label>Availability<input data-sales-quote-field="deliveryTime" value="${escapeHtml(salesQuotationDraft.deliveryTime || "To be discussed")}"></label>
           <label>Enquiry no<input data-sales-quote-field="warranty" value="${escapeHtml(salesQuotationDraft.warranty === "1 Year" ? "" : salesQuotationDraft.warranty || "")}"></label>
         </div>
-        <div class="sales-card-title"><h3>Item Breakdown</h3><button data-sales-action="add-quote-item">Add Item</button></div>
+        <datalist id="salesQuoteModelList">
+          ${modelOptions.map(item => `<option value="${escapeHtml(salesQuoteModelDisplay(item))}"></option>`).join("")}
+        </datalist>
+        <div class="sales-card-title"><h3>Item Breakdown</h3></div>
         <table class="sales-table sales-quote-table">
           <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead>
           <tbody>${salesQuotationDraft.items.map((item, index) => `
             <tr>
-              <td><input data-sales-quote-line="${index}" data-field="description" value="${escapeHtml(item.description)}"></td>
+              <td><input data-suggestion-list="salesQuoteModelList" data-sales-quote-line="${index}" data-field="description" placeholder="Type model no..." value="${escapeHtml(item.description)}"></td>
               <td><input type="number" data-sales-quote-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
               <td><select data-sales-quote-line="${index}" data-field="unit">${["Nos", "Sets", "Meters", "Units"].map(unit => `<option ${item.unit === unit ? "selected" : ""}>${unit}</option>`).join("")}</select></td>
               <td><button data-sales-delete-quote-line="${index}">Delete</button></td>
             </tr>`).join("")}</tbody>
         </table>
+        <div class="inventory-actions quote-item-actions"><button class="ghost-button" data-sales-action="add-quote-item">Add Item</button></div>
         <div class="sales-notes-block">
           <div class="sales-notes-heading">
             <span>Additional Remarks / Notes</span>
@@ -1830,6 +2750,42 @@ function salesCreateQuotationHtml() {
       </aside>
     </div>
   `;
+}
+
+function salesQuoteModelOptions() {
+  const rows = [
+    ...(inventoryState?.dashboard?.stock || []),
+    ...(inventoryState?.models || [])
+  ];
+  return Array.from(new Map(rows
+    .filter(item => item?.modelNo)
+    .map(item => [norm(item.modelNo), item])
+  ).values()).sort((a, b) => String(a.modelNo || "").localeCompare(String(b.modelNo || "")));
+}
+
+function salesQuoteModelDisplay(item = {}) {
+  const modelNo = String(item.modelNo || "").trim();
+  const description = String(item.description || "").trim();
+  return description ? `${modelNo} - ${description}` : modelNo;
+}
+
+function normalizeSalesQuoteModelValue(value = "") {
+  const typed = String(value || "").trim();
+  if (!typed) return "";
+  const typedKey = norm(typed);
+  const match = salesQuoteModelOptions().find(item => {
+    const modelKey = norm(item.modelNo);
+    const displayKey = norm(salesQuoteModelDisplay(item));
+    return typedKey === modelKey || typedKey === displayKey;
+  });
+  return match ? salesQuoteModelDisplay(match) : typed;
+}
+
+function toggleSuggestionList(input) {
+  const listId = input?.dataset?.suggestionList;
+  if (!listId) return;
+  if (String(input.value || "").trim()) input.setAttribute("list", listId);
+  else input.removeAttribute("list");
 }
 
 function salesOrderBookHtml() {
@@ -2844,7 +3800,9 @@ function salesCompactNumber(value) {
 
 function handleSalesClick(event) {
   const target = event.target.closest("button");
-  if (!target || !$("#salesDeskRoot").contains(target)) return;
+  const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
+  const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
+  if (!target || (!inSalesRoot && !inSalesTopbar)) return;
   if (target.dataset.rowMenu !== undefined) {
     const menu = target.closest(".row-menu").querySelector(".row-menu-list");
     document.querySelectorAll(".row-menu-list").forEach(list => {
@@ -2866,6 +3824,11 @@ function handleSalesClick(event) {
   }
   if (target.dataset.salesGoto) {
     showSalesDesk(target.dataset.salesGoto);
+    return;
+  }
+  if (target.dataset.salesQuotationTab) {
+    salesQuotationTab = target.dataset.salesQuotationTab;
+    renderSalesDesk();
     return;
   }
   if (target.dataset.salesLeadTab) {
@@ -2901,6 +3864,20 @@ function handleSalesClick(event) {
   if (target.dataset.salesProjectFilter !== undefined) {
     salesProjectFilter = target.dataset.salesProjectFilter;
     renderSalesDesk();
+    return;
+  }
+  if (target.dataset.salesProjectSelect) {
+    salesProjectDetailId = target.dataset.salesProjectSelect;
+    renderSalesDesk();
+    return;
+  }
+  if (target.dataset.salesProjectCloseDetail !== undefined) {
+    salesProjectDetailId = "";
+    renderSalesDesk();
+    return;
+  }
+  if (target.dataset.salesProjectDetailSave) {
+    saveSalesProjectDetail(target.dataset.salesProjectDetailSave);
     return;
   }
   if (target.dataset.salesFollowMode) {
@@ -2982,6 +3959,8 @@ function handleSalesClick(event) {
   if (action === "preview-quote") previewSalesQuotation(target.dataset.salesId);
   if (action === "pdf-quote") downloadSalesQuotationPdf(target.dataset.salesId);
   if (action === "copy-quote" || action === "revision-quote") createSalesQuotationRevision(target.dataset.salesId);
+  if (action === "create-project-from-quote") createProjectFromQuotation(target.dataset.salesId);
+  if (action === "create-order-book-from-quote") createOrderBookFromQuotation(target.dataset.salesId);
   if (action === "edit-quote") editSalesQuotation(target.dataset.salesId);
   if (action === "delete-quote") deleteSalesItem("quotations", target.dataset.salesId);
   if (action === "new-lead") openSalesLeadDrawer();
@@ -2996,8 +3975,13 @@ function handleSalesClick(event) {
     salesSearchQuery = salesData().customers.find(item => item.id === target.dataset.salesId)?.name || "";
     showSalesDesk("quotation");
   }
-  if (action === "edit-project") openSalesForm("projects", target.dataset.salesId);
-  if (action === "new-project") openSalesForm("projects");
+  if (action === "view-project") {
+    salesProjectDetailId = target.dataset.salesId || "";
+    renderSalesDesk();
+  }
+  if (action === "edit-project") openSalesProjectDrawer(target.dataset.salesId);
+  if (action === "new-project") openSalesProjectDrawer();
+  if (action === "project-lost") markSalesProjectLost(target.dataset.salesId);
   if (action === "delete-project") deleteSalesItem("projects", target.dataset.salesId);
   if (action === "add-follow-up") openSalesForm("followUps");
   if (action === "edit-follow-up") openSalesForm("followUps", target.dataset.salesId);
@@ -3021,7 +4005,7 @@ function handleSalesClick(event) {
 
 function handleSalesMenuAction(action, itemId, meta = {}) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
-  const quote = ["preview-quote", "pdf-quote", "copy-quote", "revision-quote", "edit-quote", "delete-quote"].includes(action) ? findSalesQuotation(itemId) : null;
+  const quote = ["preview-quote", "pdf-quote", "copy-quote", "revision-quote", "create-project-from-quote", "create-order-book-from-quote", "edit-quote", "delete-quote"].includes(action) ? findSalesQuotation(itemId) : null;
   const quoteId = quote?.id || itemId;
   if (action === "lead-to-customer") return createCustomerFromLead(itemId);
   if (action === "lead-create-project") return createProjectFromLead(itemId);
@@ -3053,11 +4037,18 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
     salesQuotationMode = "create";
     return showSalesDesk("quotation");
   }
-  if (action === "edit-project") return openSalesForm("projects", itemId);
+  if (action === "view-project") {
+    salesProjectDetailId = itemId;
+    return renderSalesDesk();
+  }
+  if (action === "edit-project") return openSalesProjectDrawer(itemId);
+  if (action === "project-lost") return markSalesProjectLost(itemId);
   if (action === "delete-project") return deleteSalesItem("projects", itemId);
   if (action === "preview-quote") return previewSalesQuotation(quoteId);
   if (action === "pdf-quote") return downloadSalesQuotationPdf(quoteId);
   if (action === "copy-quote" || action === "revision-quote") return createSalesQuotationRevision(quoteId);
+  if (action === "create-project-from-quote") return createProjectFromQuotation(quoteId);
+  if (action === "create-order-book-from-quote") return createOrderBookFromQuotation(quoteId);
   if (action === "edit-quote") return editSalesQuotation(quoteId);
   if (action === "delete-quote") return deleteSalesItem("quotations", quoteId);
   if (action === "edit-follow-up") return openSalesForm("followUps", itemId);
@@ -3076,6 +4067,9 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.suggestionList) {
+    toggleSuggestionList(event.target);
+  }
   if (event.target.matches("[data-sales-search]")) {
     const cursor = event.target.selectionStart || 0;
     salesSearchQuery = event.target.value;
@@ -3116,6 +4110,9 @@ function handleSalesInput(event) {
 }
 
 function handleSalesChange(event) {
+  if (event.target.dataset.suggestionList) {
+    toggleSuggestionList(event.target);
+  }
   if (event.target.dataset.salesLeadFilterField) {
     const key = event.target.dataset.salesLeadFilterField;
     salesLeadFilters[key] = event.target.value;
@@ -3177,7 +4174,10 @@ function updateSalesQuotationDraft(event, shouldRender = false) {
   if (index !== undefined && lineField) {
     const item = salesQuotationDraft.items[Number(index)];
     if (!item) return;
-    item[lineField] = ["qty", "unitPrice"].includes(lineField) ? Number(event.target.value || 0) : event.target.value;
+    const value = lineField === "description" && shouldRender
+      ? normalizeSalesQuoteModelValue(event.target.value)
+      : event.target.value;
+    item[lineField] = ["qty", "unitPrice"].includes(lineField) ? Number(value || 0) : value;
     if (shouldRender) renderSalesDesk();
   }
 }
@@ -3601,6 +4601,7 @@ function openSalesLeadFollowUp(leadId) {
 
 function openSalesForm(collection, itemId = "") {
   if (collection === "leads") return openSalesLeadDrawer(itemId);
+  if (collection === "projects") return openSalesProjectDrawer(itemId);
   const existing = itemId ? structuredClone((salesData()[collection] || []).find(item => item.id === itemId)) : null;
   const config = salesFormConfig(collection);
   const item = existing || config.blank();
@@ -3798,6 +4799,151 @@ function copySalesQuotation(quoteId) {
   return createSalesQuotationRevision(quoteId);
 }
 
+function salesQuotationOrderTotals(quote = {}) {
+  const itemSubtotal = (quote.items || []).reduce((sum, item) => {
+    const amount = salesNumber(item.amount);
+    if (amount) return sum + amount;
+    return sum + salesNumber(item.qty) * salesNumber(item.unitPrice);
+  }, 0);
+  const subtotal = salesNumber(quote.manualSubtotal || quote.subtotal || quote.totalBeforeVat) || itemSubtotal;
+  const discount = salesNumber(quote.discount);
+  let valueWithoutVat = Math.max(0, subtotal - discount);
+  let vatAmount = salesNumber(quote.vatAmount || quote.vatTotal || quote.vat);
+  let orderValue = salesNumber(quote.amount || quote.grandTotal || quote.netAmount || quote.total);
+  if (!vatAmount && valueWithoutVat) vatAmount = valueWithoutVat * 0.05;
+  if (!orderValue && valueWithoutVat) orderValue = valueWithoutVat + vatAmount;
+  if (!valueWithoutVat && orderValue) {
+    valueWithoutVat = orderValue / 1.05;
+    vatAmount = orderValue - valueWithoutVat;
+  }
+  const roundMoney = value => Math.round(salesNumber(value) * 100) / 100;
+  return {
+    valueWithoutVat: roundMoney(valueWithoutVat),
+    vatAmount: roundMoney(vatAmount),
+    orderValue: roundMoney(orderValue)
+  };
+}
+
+async function createOrderBookFromQuotation(quoteId) {
+  const quote = findSalesQuotation(quoteId);
+  if (!quote) return toast("Quotation not found");
+  const customerName = String(quote.customer || quote.customerName || "").trim();
+  const savedCustomer = findSalesCustomerByName(customerName);
+  const totals = salesQuotationOrderTotals(quote);
+  const orderId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `order-${Date.now()}`;
+  const order = {
+    ...blankOrderBookOrder(),
+    id: orderId,
+    customer: savedCustomer?.name || customerName,
+    jobDescription: quote.project || quote.projectName || quote.subject || "",
+    location: quote.location || quote.projectLocation || savedCustomer?.defaultDeliveryLocation || savedCustomer?.address || "",
+    contactPerson: quote.contactPerson || savedCustomer?.contactPerson || "",
+    contactNumber: quote.phone || quote.tel || savedCustomer?.phone || "",
+    salesPerson: quote.salesperson || quote.salesPerson || currentUser?.name || "",
+    division: "Project/Inst",
+    brand: "Daikin",
+    valueWithoutVat: totals.valueWithoutVat,
+    vatAmount: totals.vatAmount,
+    orderValue: totals.orderValue,
+    paymentReceived: 0,
+    status: orderBookStatusFromPayment(totals.orderValue, 0),
+    deliveryStatus: "Pending Delivery",
+    remarks: "",
+    quotationNo: quote.no || quote.quotationNo || "",
+    timeline: [{
+      date: todaySalesDateInput(),
+      title: "Order Book Created",
+      note: quote.no ? `Created from quotation ${quote.no}` : "Created from quotation."
+    }]
+  };
+  try {
+    salesCrmState = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(order) });
+    const savedOrder = (salesData().orderBook || []).find(item => item.id === orderId) || (salesData().orderBook || []).find(item => item.orderNo === order.orderNo);
+    salesOrderBookDetailId = savedOrder?.id || orderId;
+    salesOrderBookTab = "all";
+    toast("Order Book created from quotation");
+    return showSalesDesk("orderBook");
+  } catch (error) {
+    console.error(error);
+    return toast("Could not create Order Book");
+  }
+}
+
+function salesProjectBoqFromQuotation(quote = {}) {
+  const rows = Array.isArray(quote.items) ? quote.items : Array.isArray(quote.boq) ? quote.boq : Array.isArray(quote.boqRows) ? quote.boqRows : [];
+  return rows.map((item, index) => {
+    const model = String(item.model || item.modelNo || item.item || "").trim();
+    const description = String(item.description || item.itemDescription || item.desc || item.name || model || "").trim();
+    const qty = salesNumber(item.qty ?? item.quantity ?? item.Qty);
+    const deliveredQty = salesNumber(item.deliveredQty);
+    return {
+      id: `project-boq-${Date.now()}-${index}`,
+      model,
+      description,
+      qty,
+      deliveredQty,
+      pendingQty: qty - deliveredQty,
+      stock: model ? salesProjectStockQty(model) : ""
+    };
+  }).filter(row => row.model || row.description || row.qty || row.deliveredQty);
+}
+
+async function createProjectFromQuotation(quoteId) {
+  const quote = findSalesQuotation(quoteId);
+  if (!quote) return toast("Quotation not found");
+  const quoteNo = String(quote.no || quote.quotationNo || quote.quoteNo || "").trim();
+  const existing = (salesData().projects || []).find(project => {
+    return project.sourceQuotationId === quote.id || (quoteNo && norm(project.quotationNo || project.quoteNo || "") === norm(quoteNo));
+  });
+  if (existing) {
+    salesProjectDetailId = existing.id;
+    toast("Project already exists for this quotation");
+    return showSalesDesk("projects");
+  }
+
+  const customerName = String(quote.customer || quote.customerName || "").trim();
+  const savedCustomer = findSalesCustomerByName(customerName);
+  const projectNo = nextSalesProjectNo();
+  const today = todaySalesDateInput();
+  const boq = salesProjectBoqFromQuotation(quote);
+  const projectName = String(quote.project || quote.projectName || quote.subject || quoteNo || "Quotation Project").trim();
+  const project = {
+    ...salesProjectBlank(),
+    id: salesProjectNewId(),
+    projectNo,
+    projectId: projectNo,
+    sourceQuotationId: quote.id,
+    quotationNo: quoteNo,
+    quoteNo,
+    name: projectName,
+    customer: savedCustomer?.name || customerName,
+    location: quote.location || quote.projectLocation || savedCustomer?.defaultDeliveryLocation || savedCustomer?.address || "",
+    category: quote.category || "Commercial",
+    type: quote.category || "Commercial",
+    productType: quote.productType || quote.type || "Other",
+    engineer: quote.salesperson || quote.salesPerson || quote.preparedBy || currentUser?.name || "Admin User",
+    status: "Ongoing",
+    date: today,
+    createdDate: today,
+    scope: quote.notes || quote.remarks || quote.subject || "",
+    boq,
+    items: boq,
+    value: salesNumber(quote.amount || quote.grandTotal || quote.netAmount || quote.total || quote.manualSubtotal || ""),
+    deliveryHistory: []
+  };
+  try {
+    salesCrmState = await api("/api/sales-crm/projects", { method: "POST", body: JSON.stringify(project) });
+    const savedProject = (salesData().projects || []).find(item => item.id === project.id) || (salesData().projects || []).find(item => salesProjectNo(item) === projectNo);
+    salesProjectDetailId = savedProject?.id || project.id;
+    salesProjectFilter = "";
+    toast("Project created from quotation");
+    return showSalesDesk("projects");
+  } catch (error) {
+    console.error(error);
+    return toast("Could not create project");
+  }
+}
+
 function salesQuotationDocumentHtml(quote) {
   const itemSubtotal = (quote.items || []).reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
   const manualSubtotal = String(quote.manualSubtotal || "").trim();
@@ -3846,8 +4992,37 @@ function setCanvasActionsVisible(visible) {
 function renderViewActions() {
   const actions = $("#viewActions");
   if (!actions) return;
+  const salesTopbar = salesDeskTopbarConfig();
+  const inventoryTopbar = inventoryTopbarConfig();
+  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar);
   actions.classList.add("hidden");
   actions.innerHTML = "";
+  if (salesTopbar) {
+    if (salesTopbar.search || salesTopbar.actions) {
+      actions.classList.remove("hidden");
+      actions.innerHTML = `
+        ${salesTopbar.search ? `<label class="quotation-search">
+          <span></span>
+          <input data-sales-search value="${escapeHtml(salesSearchQuery)}" placeholder="${escapeHtml(salesTopbar.search)}">
+        </label>` : ""}
+        ${salesTopbar.actions}
+      `;
+      bindSalesTopbarActions();
+    }
+    return;
+  }
+  if (inventoryTopbar) {
+    actions.classList.remove("hidden");
+    actions.innerHTML = `
+      <label class="quotation-search ${escapeHtml(inventoryTopbar.searchClass || "")}">
+        <span></span>
+        <input id="${escapeHtml(inventoryTopbar.searchId)}" data-inventory-top-search value="${escapeHtml(inventoryTopbar.searchValue || "")}" placeholder="${escapeHtml(inventoryTopbar.search)}">
+      </label>
+      ${inventoryTopbar.actions}
+    `;
+    bindInventoryTopbarActions();
+    return;
+  }
   if (activeView === "purchaseOrders") {
     actions.classList.remove("hidden");
     actions.innerHTML = `
@@ -3893,6 +5068,37 @@ function renderViewActions() {
   $("#headerCustomerListBtn").addEventListener("click", () => showInventory("customers"));
 }
 
+function bindSalesTopbarActions() {
+  const root = $("#viewActions");
+  root.querySelectorAll("button").forEach(button => {
+    button.addEventListener("click", handleSalesClick);
+  });
+  root.querySelectorAll("[data-sales-search]").forEach(input => {
+    input.addEventListener("input", handleSalesInput);
+    input.addEventListener("change", handleSalesChange);
+  });
+}
+
+function bindInventoryTopbarActions() {
+  const topSearch = $("#viewActions [data-inventory-top-search]");
+  topSearch?.addEventListener("input", handleInventoryInput);
+  document.querySelectorAll("#viewActions [data-inventory-top-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.inventoryTopAction;
+      if (action === "upload-dn") return uploadSupplierDn();
+      if (action === "supplier-all") {
+        supplierAllPage = 1;
+        return showInventory("supplierAll");
+      }
+      if (action === "supplier-latest") return showInventory("supplier");
+      if (action === "add-customer") return openCustomerModal();
+      if (action === "new-delivery") return openDeliveryModal();
+      if (action === "customer-list") return showInventory("customers");
+      if (action === "save-stock") return openStockModelModal();
+    });
+  });
+}
+
 function renderPurchaseOrders() {
   const root = $("#purchaseOrdersRoot");
   if (!purchaseState) {
@@ -3919,16 +5125,22 @@ function purchaseOrderFormPageHtml() {
   recalcPurchaseOrder(purchaseDraft);
   return purchaseOrderShell(`
     <div class="po-layout">
-      <section class="inventory-card">
+      <section class="inventory-card po-form-card">
         <div class="po-form-title-row">
           <h3>New Purchase Order</h3>
           <label>LPO No.<input data-po-field="poNo" value="${escapeHtml(purchaseDraft.poNo || "")}"></label>
         </div>
         ${purchaseOrderFormHtml(purchaseDraft)}
       </section>
-      <aside class="inventory-card po-summary-card">
-        <h3>Order Summary</h3>
-        ${purchaseSummaryHtml(purchaseDraft)}
+      <aside class="po-summary-sidebar">
+        <section class="inventory-card po-summary-card">
+          <div class="po-summary-heading">
+            <span class="po-summary-heading-icon" aria-hidden="true">${poIcon("document")}</span>
+            <h3>Order Summary</h3>
+          </div>
+          ${purchaseSummaryHtml(purchaseDraft)}
+        </section>
+        ${purchaseAttachmentHtml(purchaseDraft)}
       </aside>
     </div>
   `);
@@ -4030,25 +5242,36 @@ function purchaseOrderFormHtml(po) {
       <label>Project Name<input data-po-field="projectName" value="${escapeHtml(po.projectName)}"></label>
       <label>TRN<input data-po-field="trn" value="${escapeHtml(po.trn)}"></label>
       <label>Payment Terms${paymentTermFieldHtml(po.paymentTerms, "po")}</label>
-      <label class="span-two">Notes<textarea data-po-field="notes">${escapeHtml(po.notes)}</textarea></label>
     </div>
+    <div class="po-table-wrap">
     <table class="inventory-table po-item-table">
+      <colgroup>
+        <col class="po-col-index">
+        <col class="po-col-description">
+        <col class="po-col-qty">
+        <col class="po-col-unit">
+        <col class="po-col-vat">
+        <col class="po-col-amount">
+        <col class="po-col-action">
+      </colgroup>
       <thead><tr><th>#</th><th>Item Description</th><th>Qty</th><th>Unit Price (AED)</th><th>VAT (%)</th><th>Amount (AED)</th><th>Action</th></tr></thead>
       <tbody>
         ${(po.items || []).map((item, index) => `
           <tr>
             <td>${index + 1}</td>
-            <td><textarea data-po-line="${index}" data-field="description">${escapeHtml(item.description)}</textarea></td>
+            <td><textarea data-po-line="${index}" data-field="description" placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
             <td><input type="number" min="0" data-po-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
             <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0)}"></td>
             <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" value="${Number(item.vatPercent ?? 5)}"></td>
             <td data-po-amount="${index}">${money(item.amount)}</td>
-            <td><button class="danger-button" data-delete-po-line="${index}">Delete</button></td>
+            <td><button class="danger-button po-delete-line" data-delete-po-line="${index}">${poIcon("trash")}<span>Delete</span></button></td>
           </tr>
         `).join("") || `<tr><td colspan="7">No items added.</td></tr>`}
       </tbody>
     </table>
-    <div class="inventory-actions" style="justify-content:flex-start"><button class="ghost-button" id="poAddItemBtn">+ Add Item</button></div>
+    </div>
+    <div class="inventory-actions po-table-actions"><button class="ghost-button" id="poAddItemBtn">${poIcon("plus")}<span>Add Item</span></button></div>
+    <label class="po-notes-field">Notes<textarea data-po-field="notes">${escapeHtml(po.notes)}</textarea></label>
   `;
 }
 
@@ -4057,15 +5280,54 @@ function purchaseSummaryHtml(po) {
   return `
     <div class="po-summary-row po-subtotal-row"><span>Subtotal (AED)</span><input id="poSubtotalInput" type="text" inputmode="decimal" data-po-subtotal value="${escapeHtml(subtotalValue)}"></div>
     <div class="po-summary-row po-subtotal-row"><span>Discount (AED)</span><input id="poDiscountInput" type="text" inputmode="decimal" data-po-discount value="${escapeHtml(po.discount || "")}"></div>
+    <div class="po-summary-row"><span>Total After Discount (AED)</span><strong id="poTotalAfterDiscount">${money(po.totalAfterDiscount)}</strong></div>
     <div class="po-summary-row"><span>VAT Total (AED)</span><strong id="poVatTotal">${money(po.vatTotal)}</strong></div>
     <div class="po-summary-row po-summary-total"><strong>Grand Total (AED)</strong><strong id="poGrandTotal">${money(po.grandTotal)}</strong></div>
-    <div class="po-status-box"><span>Status</span>${statusPill(po.status || "Draft")}</div>
-    <div class="inventory-actions">
-      <button class="ghost-button" id="poSaveDraftBtn">Save Draft</button>
-      <button class="primary-button" id="poCreateBtn">Create Purchase Order</button>
-      <button class="ghost-button" id="poDownloadBtn">Download PDF</button>
+    <div class="po-status-box"><span class="po-status-icon" aria-hidden="true">${poIcon("tag")}</span><span>Status</span>${statusPill(po.status || "Draft")}</div>
+    <div class="inventory-actions po-summary-actions">
+      <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span>Save Draft</span></button>
+      <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span>Create Purchase Order</span></button>
+      <button class="ghost-button" id="poDownloadBtn">${poIcon("download")}<span>Download PDF</span></button>
     </div>
   `;
+}
+
+function purchaseAttachmentHtml(po) {
+  const upload = (purchaseState?.uploads || []).find(item => item.id === po.sourceUploadId);
+  if (!upload) return "";
+  const url = `/api/purchase-orders/uploads/${encodeURIComponent(upload.id)}`;
+  return `
+    <section class="po-attachment-card">
+      <div class="po-attachment-title">Attachment</div>
+      <div class="po-attachment-main">
+        <span class="po-attachment-icon" aria-hidden="true">${poIcon("paperclip")}</span>
+        <div class="po-attachment-copy">
+          <strong>${escapeHtml(upload.originalName || "Uploaded file")}</strong>
+          <span>${escapeHtml(fileExt(upload.originalName))} &bull; ${escapeHtml(prettyBytes(upload.size))}</span>
+        </div>
+        <button class="po-attachment-close" type="button" data-remove-po-attachment aria-label="Remove attachment">&times;</button>
+      </div>
+      <div class="po-attachment-actions">
+        <a href="${url}" target="_blank" rel="noopener">View</a>
+        <span aria-hidden="true">|</span>
+        <a href="${url}" download="${escapeHtml(upload.originalName || "attachment")}">Download</a>
+      </div>
+    </section>
+  `;
+}
+
+function poIcon(name) {
+  const icons = {
+    document: `<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5"/><path d="M10 12h6M10 16h4"/><path d="M16 18h4v4h-4z"/></svg>`,
+    tag: `<svg viewBox="0 0 24 24"><path d="M4 12V5h7l9 9-7 7z"/><path d="M8.5 8.5h.01"/></svg>`,
+    save: `<svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v7h8V3"/><path d="M8 21v-7h8v7"/></svg>`,
+    clipboard: `<svg viewBox="0 0 24 24"><path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="M9 4h6v4H9z"/><path d="M9 13h6M9 17h4"/></svg>`,
+    download: `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>`,
+    paperclip: `<svg viewBox="0 0 24 24"><path d="M21 8.5 10.5 19a5 5 0 0 1-7-7L14 1.5a3.5 3.5 0 0 1 5 5L8.5 17a2 2 0 0 1-3-3L16 3.5"/></svg>`,
+    plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`,
+    trash: `<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>`
+  };
+  return icons[name] || "";
 }
 
 function newPurchaseDraft() {
@@ -4100,7 +5362,7 @@ function recalcPurchaseOrder(po) {
   for (const item of po.items) {
     const base = Number(item.qty || 0) * Number(item.unitPrice || 0);
     const vat = base * (Number(item.vatPercent || 0) / 100);
-    item.amount = base + vat;
+    item.amount = base;
     subtotal += base;
     vatTotal += vat;
   }
@@ -4108,9 +5370,11 @@ function recalcPurchaseOrder(po) {
   const finalSubtotal = hasManualSubtotal ? (Number(String(po.manualSubtotal).replace(/,/g, "")) || 0) : subtotal;
   const vatRate = subtotal > 0 ? vatTotal / subtotal : averageVatRate(po.items);
   const discount = Number(String(po.discount || "").replace(/,/g, "")) || 0;
-  const taxable = Math.max(0, finalSubtotal - discount);
+  const totalAfterDiscount = finalSubtotal - discount;
+  const taxable = Math.max(0, totalAfterDiscount);
   po.subtotal = finalSubtotal;
   po.discount = discount;
+  po.totalAfterDiscount = totalAfterDiscount;
   po.vatTotal = taxable * vatRate;
   po.grandTotal = taxable + po.vatTotal;
   return po;
@@ -4129,6 +5393,7 @@ function refreshPurchaseTotals() {
   if (subtotalInput && String(purchaseDraft.manualSubtotal ?? "").trim() === "") subtotalInput.value = money(purchaseDraft.subtotal);
   const discountInput = $("#poDiscountInput");
   if (discountInput) discountInput.value = purchaseDraft.discount || "";
+  $("#poTotalAfterDiscount") && ($("#poTotalAfterDiscount").textContent = money(purchaseDraft.totalAfterDiscount));
   $("#poVatTotal") && ($("#poVatTotal").textContent = money(purchaseDraft.vatTotal));
   $("#poGrandTotal") && ($("#poGrandTotal").textContent = money(purchaseDraft.grandTotal));
   (purchaseDraft.items || []).forEach((item, index) => {
@@ -4658,8 +5923,8 @@ function setWorkflowDetail(key, value, wrap) {
 
 function uploadCard(title, upload) {
   const card = document.createElement("div");
-  card.className = "upload-card";
-  card.innerHTML = `<div><div class="pdf-icon"></div><strong>${escapeHtml(upload ? upload.originalName : "No file uploaded")}</strong><span>${upload ? prettyBytes(upload.size) : "Click Upload"}</span></div>`;
+  card.className = `upload-card${upload ? " has-file" : ""}`;
+  card.innerHTML = `<div><div class="pdf-icon"></div><strong class="${upload ? "upload-file-name" : ""}">${escapeHtml(upload ? upload.originalName : "No file uploaded")}</strong><span>${upload ? prettyBytes(upload.size) : "Click Upload"}</span></div>`;
   return card;
 }
 
@@ -4921,17 +6186,21 @@ function renderInventory() {
     return;
   }
   renderViewActions();
-  if (inventoryScreen === "supplier") root.innerHTML = supplierDnViewHtml();
-  else if (inventoryScreen === "supplierAll") root.innerHTML = supplierDnAllViewHtml();
-  else if (inventoryScreen === "delivery") root.innerHTML = deliveryNoteViewHtml();
-  else if (inventoryScreen === "customers") root.innerHTML = customerListViewHtml();
-  else if (inventoryScreen === "stock") root.innerHTML = stockViewHtml();
-  else root.innerHTML = inventoryDashboardHtml();
+  let content = "";
+  if (inventoryScreen === "supplier") content = supplierDnViewHtml();
+  else if (inventoryScreen === "supplierAll") content = supplierDnAllViewHtml();
+  else if (inventoryScreen === "delivery") content = deliveryNoteViewHtml();
+  else if (inventoryScreen === "customers") content = customerListViewHtml();
+  else if (inventoryScreen === "stock") content = stockViewHtml();
+  else content = inventoryDashboardHtml();
+  root.innerHTML = inventoryTopbarConfig() ? `<div class="inventory-topbar-moved">${content}</div>` : content;
   bindInventoryEvents();
 }
 
 function inventoryDashboardHtml() {
   const d = inventoryState.dashboard;
+  const totalReservedQty = (d.stock || []).reduce((sum, item) => sum + Number(item.reservedQty || 0), 0);
+  const totalFreeStock = (d.stock || []).reduce((sum, item) => sum + Number(item.freeStock ?? (Number(item.qty || 0) - Number(item.reservedQty || 0))), 0);
   return `
     <div class="inventory-topbar">
       <div class="inventory-title"><h2>Inventory Dashboard</h2><p>Simple AC unit stock summary.</p></div>
@@ -4940,18 +6209,21 @@ function inventoryDashboardHtml() {
     <div class="kpi-grid">
       <div class="kpi-card"><span>Total Models</span><strong>${d.totalModels}</strong><span>Different AC Models</span></div>
       <div class="kpi-card"><span>Total Stock Units</span><strong>${d.totalStockUnits}</strong><span>All AC Units in Stock</span></div>
-      <div class="kpi-card"><span>Low Stock Models</span><strong>${d.lowStockModels}</strong><span>Below Minimum Stock</span></div>
-      <div class="kpi-card"><span>Pending Review</span><strong>${d.pendingReview}</strong><span>Supplier DN Pending</span></div>
+      <div class="kpi-card"><span>Total Reserved Qty</span><strong>${totalReservedQty}</strong><span>All Reserved Units</span></div>
+      <div class="kpi-card"><span>Total Free Stock</span><strong>${totalFreeStock}</strong><span>Free Stock After Reserved</span></div>
     </div>
     <div class="inventory-grid">
       <div class="inventory-card">
         <h3>Stock Overview</h3>
-        <table class="inventory-table"><thead><tr><th>Model No.</th><th>Description</th><th>Qty.</th></tr></thead><tbody>
-          ${d.stock.map(item => `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td>${escapeHtml(item.description)}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td></tr>`).join("") || `<tr><td colspan="3">No stock yet.</td></tr>`}
+        <table class="inventory-table dashboard-stock-table"><thead><tr><th>Model No.</th><th>Warehouse Qty</th><th>Reserved Qty</th><th>Free Stock</th></tr></thead><tbody>
+          ${d.stock.map(item => {
+            const reservedQty = Number(item.reservedQty || 0);
+            const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
+            return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description"> - ${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
+          }).join("") || `<tr><td colspan="4">No stock yet.</td></tr>`}
         </tbody></table>
       </div>
       <div>
-        <div class="inventory-card"><h3>Low Stock Alert</h3>${d.lowStock.slice(0,5).map(item => `<p><strong>${escapeHtml(item.modelNo)}</strong><br><span class="inventory-muted">Minimum Stock: ${item.minimumStock}</span> <span class="pill red">${item.qty} Units</span></p>`).join("") || `<p class="inventory-muted">No low stock alerts.</p>`}</div>
         <div class="inventory-card"><h3>Recent Stock In</h3>${d.recentIn.map(m => `<p><strong>${escapeHtml(m.referenceNo)}</strong> ${escapeHtml(m.modelNo)} <span class="pill green">+${m.quantity}</span><br><span class="inventory-muted">${formatInventoryDate(m.date)}</span></p>`).join("") || `<p class="inventory-muted">No stock in yet.</p>`}</div>
         <div class="inventory-card"><h3>Recent Stock Out</h3>${d.recentOut.map(m => `<p><strong>${escapeHtml(m.referenceNo)}</strong> ${escapeHtml(m.modelNo)} <span class="pill red">${m.quantity}</span><br><span class="inventory-muted">${formatInventoryDate(m.date)}</span></p>`).join("") || `<p class="inventory-muted">No stock out yet.</p>`}</div>
       </div>
@@ -5147,8 +6419,16 @@ function deliveryFormHtml(dn) {
     <datalist id="deliveryProjectList">${customerProjects.map(project => `<option value="${escapeHtml(project)}"></option>`).join("")}</datalist>
     <datalist id="modelList">${stock.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description)}</option>`).join("")}</datalist>
     <h3>Item Details</h3>
-    <table class="inventory-table"><thead><tr><th>Model No.</th><th>Description</th><th>Available Qty</th><th>Qty Going Out</th><th>Action</th></tr></thead><tbody>
-      ${(dn.lines || []).map((line, index) => `<tr><td><input list="modelList" data-delivery-model-line="${index}" value="${escapeHtml(line.modelNo)}"></td><td>${escapeHtml(line.description)}</td><td>${line.availableQty}</td><td><input type="number" min="1" max="${line.availableQty}" data-delivery-line="${index}" value="${line.qtyGoingOut}"></td><td><button class="danger-button" data-remove-delivery-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="5">No items added.</td></tr>`}
+    <table class="inventory-table delivery-line-table">
+      <colgroup>
+        <col class="delivery-col-model">
+        <col class="delivery-col-description">
+        <col class="delivery-col-available">
+        <col class="delivery-col-qty">
+        <col class="delivery-col-action">
+      </colgroup>
+      <thead><tr><th>MODEL NO.</th><th>DESCRIPTION</th><th>AVAILABLE QTY</th><th>QTY</th><th>ACTION</th></tr></thead><tbody>
+      ${(dn.lines || []).map((line, index) => `<tr><td><input data-suggestion-list="modelList" data-delivery-model-line="${index}" value="${escapeHtml(line.modelNo)}"></td><td>${escapeHtml(line.description)}</td><td>${line.availableQty}</td><td><input type="number" min="1" max="${line.availableQty}" data-delivery-line="${index}" value="${line.qtyGoingOut}"></td><td><button class="danger-button" data-remove-delivery-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="5">No items added.</td></tr>`}
     </tbody></table>
     <div class="inventory-actions" style="justify-content:flex-start"><button class="ghost-button" id="addDeliveryLineBtn">Add Row</button></div>
     <div class="inventory-actions"><button class="ghost-button" id="saveDraftBtn">Save Draft</button><button class="primary-button" id="issueDeliveryBtn">Create</button><button class="ghost-button" id="downloadDraftPdfBtn">Download PDF</button></div>
@@ -5209,6 +6489,9 @@ function handleDeliveryModalClick(event) {
 
 function handleDeliveryModalInput(event) {
   const input = event.target;
+  if (input.dataset.suggestionList) {
+    toggleSuggestionList(input);
+  }
   if (input.id === "customerNameInput") updateDeliveryProjectList(input.value);
   if (input.dataset.deliveryLine) {
     const line = deliveryDraft.lines[Number(input.dataset.deliveryLine)];
@@ -5220,48 +6503,73 @@ function handleDeliveryModalInput(event) {
 
 function handleDeliveryModalChange(event) {
   const input = event.target;
+  if (input.dataset.suggestionList) {
+    toggleSuggestionList(input);
+  }
   if (input.id === "customerNameInput") return fillCustomerDetails();
   if (input.dataset.deliveryModelLine) return updateDeliveryLineModel(Number(input.dataset.deliveryModelLine), input.value);
 }
 
 function stockViewHtml() {
   const stock = inventoryState.dashboard.stock || [];
-  const modelMap = new Map((inventoryState.models || []).map(model => [norm(model.modelNo), model]));
+  return `
+    <div class="inventory-topbar">
+      <div class="inventory-title"><h2>Stock</h2><p>Manage AC unit model master and view full stock details.</p></div>
+      <div class="inventory-search"><input id="stockSearchInput" placeholder="Search model or description"></div>
+    </div>
+    <div class="inventory-card stock-full-card">
+      <h3>Full Stock Details</h3>
+      <table class="inventory-table stock-details-table"><thead><tr><th>Model No.</th><th>Description</th><th>Current Qty</th><th>Reserved Qty</th><th>Free Stock</th><th>Action</th></tr></thead><tbody>
+        ${stock.map(item => {
+          const reservedQty = Number(item.reservedQty || 0);
+          const freeStock = Number(item.qty || 0) - reservedQty;
+          return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><input class="stock-reserved-input" type="number" min="0" data-stock-reserved-model="${escapeHtml(item.modelNo)}" value="${reservedQty}"></td><td data-stock-free="${escapeHtml(item.modelNo)}">${freeStock}</td><td>${rowMenu([{label:"Edit",action:"edit-stock-model",id:item.modelNo},{label:"Delete",action:"delete-stock-model",id:item.modelNo,danger:true}])}</td></tr>`;
+        }).join("") || `<tr><td colspan="6">No models yet. Add a model manually.</td></tr>`}
+      </tbody></table>
+    </div>
+  `;
+}
+
+function stockModelModalHtml() {
+  const stock = inventoryState.dashboard.stock || [];
   const stockModelOptions = Array.from(
     new Map([...(inventoryState.models || []), ...stock].filter(item => item?.modelNo).map(item => [norm(item.modelNo), item])).values()
   );
   return `
-    <div class="inventory-topbar">
-      <div class="inventory-title"><h2>Stock</h2><p>Manage AC unit model master and view full stock details.</p></div>
-      <div class="inventory-search"><input id="stockSearchInput" placeholder="Search model or description"><button class="primary-button" id="saveStockModelBtn">Save Model</button></div>
-    </div>
-    <div class="split-layout">
-      <div class="inventory-card">
-        <h3>Full Stock Details</h3>
-        <table class="inventory-table"><thead><tr><th>Model No.</th><th>Description</th><th>Brand</th><th>Type</th><th>Current Qty</th><th>Action</th></tr></thead><tbody>
-          ${stock.map(item => {
-            const model = modelMap.get(norm(item.modelNo)) || {};
-            return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td>${escapeHtml(item.description)}</td><td>${escapeHtml(model.brand || "Daikin")}</td><td>${escapeHtml(model.type || "")}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${rowMenu([{label:"Edit",action:"edit-stock-model",id:item.modelNo},{label:"Delete",action:"delete-stock-model",id:item.modelNo,danger:true}])}</td></tr>`;
-          }).join("") || `<tr><td colspan="6">No models yet. Add a model manually.</td></tr>`}
-        </tbody></table>
+    <div class="modal stock-model-modal">
+      <div class="inventory-topbar">
+        <div><h2>Stock Adjustment / Edit Model</h2><p class="inventory-muted">Update model details and current available stock.</p></div>
+        <button class="mini-button" data-close-stock-modal>Close</button>
       </div>
-      <div class="inventory-card">
-        <h3>Add / Edit Model</h3>
-        <div class="form-grid">
-          <label>Model No.<input id="stockModelNo" list="stockModelOptions"></label>
-          <datalist id="stockModelOptions">
-            ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
-          </datalist>
-          <label>Description<input id="stockDescription"></label>
-          <label>Brand<input id="stockBrand" value="Daikin"></label>
-          <label>Type<input id="stockType"></label>
-          <label>Quantity<input id="stockQuantity" type="number" min="0" value="0"></label>
-        </div>
-        <p class="inventory-muted">Quantity sets the current available stock using a manual inventory adjustment.</p>
-        <div class="inventory-actions"><button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button></div>
+      <div class="form-grid">
+        <label>Model No.<input id="stockModelNo" list="stockModelOptions"></label>
+        <datalist id="stockModelOptions">
+          ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
+        </datalist>
+        <label>Description<input id="stockDescription"></label>
+        <label>Brand<input id="stockBrand" value="Daikin"></label>
+        <label>Quantity<input id="stockQuantity" type="number" min="0" value="0"></label>
       </div>
+      <p class="inventory-muted">Quantity sets the current available stock using a manual inventory adjustment.</p>
+      <div class="inventory-actions"><button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button></div>
     </div>
   `;
+}
+
+function openStockModelModal(modelNo = "") {
+  document.querySelector("[data-stock-model-modal]")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "modal-backdrop";
+  modal.dataset.stockModelModal = "true";
+  modal.innerHTML = stockModelModalHtml();
+  $("#inventoryRoot")?.appendChild(modal);
+  if (modelNo) fillStockModelForm(modelNo);
+  else clearStockModelForm();
+  modal.querySelector("#stockModelNo")?.focus();
+}
+
+function closeStockModelModal() {
+  document.querySelector("[data-stock-model-modal]")?.remove();
 }
 
 function bindInventoryEvents() {
@@ -5333,10 +6641,12 @@ function handleInventoryClick(event) {
   if (target.id === "saveDraftBtn") return saveDelivery("Draft");
   if (target.id === "issueDeliveryBtn") return saveDelivery("Issued");
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
-  if (target.id === "saveStockModelBtn" || target.id === "saveStockModelBtn2") return saveStockModel();
+  if (target.id === "saveStockModelBtn") return openStockModelModal();
+  if (target.id === "saveStockModelBtn2") return saveStockModel();
   if (target.id === "deleteStockModelBtn") return deleteStockModel();
   if (target.id === "clearStockModelBtn") return clearStockModelForm();
-  if (target.dataset.editStockModel) return fillStockModelForm(target.dataset.editStockModel);
+  if (target.dataset.closeStockModal !== undefined) return closeStockModelModal();
+  if (target.dataset.editStockModel) return openStockModelModal(target.dataset.editStockModel);
 }
 
 function handlePurchaseClick(event) {
@@ -5362,9 +6672,19 @@ function handlePurchaseClick(event) {
     recalcPurchaseOrder(purchaseDraft);
     return renderPurchaseOrders();
   }
+  if (target.dataset.removePoAttachment !== undefined) return removePurchaseAttachment();
   if (target.id === "poSaveDraftBtn") return savePurchaseDraft(false);
   if (target.id === "poCreateBtn") return savePurchaseDraft(true);
   if (target.id === "poDownloadBtn") return downloadPurchasePdf(purchaseDraft);
+}
+
+function removePurchaseAttachment() {
+  if (!purchaseDraft) return;
+  purchaseDraft.sourceUploadId = "";
+  const savedOrder = (purchaseState?.orders || []).find(order => order.id && order.id === purchaseDraft.id);
+  if (savedOrder) savedOrder.sourceUploadId = "";
+  renderPurchaseOrders();
+  toast("Attachment removed");
 }
 
 function handlePurchaseMenuAction(action, idValue) {
@@ -5434,19 +6754,25 @@ async function uploadPurchaseQuotation() {
     if (!input.files[0]) return;
     const form = new FormData();
     form.append("file", input.files[0]);
-    toast("Scanning quotation...");
-    const result = await api("/api/purchase-orders/upload-quotation", { method: "POST", body: form });
-    purchaseDraft = { ...newPurchaseDraft(), ...(result.order || {}) };
-    if (!String(purchaseDraft.manualSubtotal || "").trim() && Number(purchaseDraft.subtotal || 0) > 0) {
-      purchaseDraft.manualSubtotal = money(purchaseDraft.subtotal);
+    purchaseUploadLoading = true;
+    refreshPurchaseTitleSpinner();
+    try {
+      toast("Scanning quotation...");
+      const result = await api("/api/purchase-orders/upload-quotation", { method: "POST", body: form });
+      purchaseDraft = { ...newPurchaseDraft(), ...(result.order || {}) };
+      purchaseDraft.notes = defaultPurchaseNotes;
+      if (!purchaseDraft.items || !purchaseDraft.items.length) purchaseDraft.items = [newPurchaseItem()];
+      recalcPurchaseOrder(purchaseDraft);
+      purchaseScreen = "form";
+      await loadPurchaseOrders();
+      renderPurchaseOrders();
+      toast(result.message || "Quotation scanned. Review and edit the PO form.");
+    } catch (error) {
+      toast(error.message || "Quotation upload failed");
+    } finally {
+      purchaseUploadLoading = false;
+      refreshPurchaseTitleSpinner();
     }
-    purchaseDraft.notes = defaultPurchaseNotes;
-    if (!purchaseDraft.items || !purchaseDraft.items.length) purchaseDraft.items = [newPurchaseItem()];
-    recalcPurchaseOrder(purchaseDraft);
-    purchaseScreen = "form";
-    await loadPurchaseOrders();
-    renderPurchaseOrders();
-    toast(result.message || "Quotation scanned. Review and edit the PO form.");
   });
   input.value = "";
   input.click();
@@ -5456,6 +6782,7 @@ async function savePurchaseDraft(createOfficial) {
   if (!purchaseDraft.supplierName.trim()) return alert("Supplier Name is required.");
   purchaseDraft.items = (purchaseDraft.items || []).filter(item => item.description || item.modelNo || Number(item.qty || 0) || Number(item.unitPrice || 0));
   if (!purchaseDraft.items.length) return alert("Add at least one item.");
+  purchaseDraft.status = createOfficial ? "Created" : "Draft";
   recalcPurchaseOrder(purchaseDraft);
   const result = await api("/api/purchase-orders", {
     method: "POST",
@@ -5519,17 +6846,21 @@ function handleInventoryMenuAction(action, idValue) {
     return openCustomerModal(customer);
   }
   if (action === "delete-customer") return deleteCustomer(idValue);
-  if (action === "edit-stock-model") return fillStockModelForm(idValue);
+  if (action === "edit-stock-model") return openStockModelModal(idValue);
   if (action === "delete-stock-model") {
-    fillStockModelForm(idValue);
-    return deleteStockModel();
+    return deleteStockModel(idValue);
   }
 }
 
 function handleInventoryInput(event) {
   const input = event.target;
+  if (input.dataset.suggestionList) {
+    toggleSuggestionList(input);
+  }
+  if (input.id === "inventorySearch") return filterScopedTable(".inventory-table", input.value);
   if (input.id === "stockSearchInput") return filterInventoryTable(input.value);
   if (input.id === "stockModelNo") return autofillStockModelFields(input.value);
+  if (input.dataset.stockReservedModel) return updateStockReservedQty(input.dataset.stockReservedModel, input.value);
   if (input.id === "deliverySearchInput") {
     deliverySearchQuery = input.value;
     deliveryListPage = 1;
@@ -5672,8 +7003,12 @@ function newDeliveryDraft() {
     deliveryLocation: "",
     projectName: "",
     status: "Draft",
-    lines: []
+    lines: [blankDeliveryLine()]
   };
+}
+
+function blankDeliveryLine() {
+  return { id: String(Date.now() + Math.random()), modelNo: "", description: "", availableQty: 0, qtyGoingOut: 1 };
 }
 
 function collectDeliveryDraft(status) {
@@ -5798,7 +7133,7 @@ async function deleteCustomer(customerId) {
 
 function addDeliveryLine() {
   deliveryDraft = collectDeliveryDraft(deliveryDraft.status || "Draft");
-  deliveryDraft.lines.push({ id: String(Date.now()), modelNo: "", description: "", availableQty: 0, qtyGoingOut: 1 });
+  deliveryDraft.lines.push(blankDeliveryLine());
   refreshDeliveryModalForm();
 }
 
@@ -5876,7 +7211,7 @@ function findStockModelInfo(modelNo) {
     modelNo: model?.modelNo || stock?.modelNo || "",
     description: model?.description || stock?.description || "",
     brand: model?.brand || stock?.brand || "Daikin",
-    type: model?.type || stock?.type || "",
+    reservedQty: Number(stock?.reservedQty ?? model?.reservedQty ?? 0),
     quantity: stock?.qty || 0
   };
 }
@@ -5886,10 +7221,8 @@ function autofillStockModelFields(modelNo) {
   if (!info) return;
   const description = $("#stockDescription");
   const brand = $("#stockBrand");
-  const type = $("#stockType");
   if (description) description.value = info.description || "";
   if (brand) brand.value = info.brand || "Daikin";
-  if (type) type.value = info.type || "";
 }
 
 function fillStockModelForm(modelNo) {
@@ -5897,17 +7230,18 @@ function fillStockModelForm(modelNo) {
   $("#stockModelNo").value = info.modelNo || "";
   $("#stockDescription").value = info.description || "";
   $("#stockBrand").value = info.brand || "Daikin";
-  $("#stockType").value = info.type || "";
   $("#stockQuantity").value = info.quantity || 0;
 }
 
 function clearStockModelForm() {
-  ["stockModelNo", "stockDescription", "stockType"].forEach(id => {
+  ["stockModelNo", "stockDescription"].forEach(id => {
     const el = $(`#${id}`);
     if (el) el.value = "";
   });
-  $("#stockBrand").value = "Daikin";
-  $("#stockQuantity").value = 0;
+  const brand = $("#stockBrand");
+  const quantity = $("#stockQuantity");
+  if (brand) brand.value = "Daikin";
+  if (quantity) quantity.value = 0;
 }
 
 async function saveStockModel() {
@@ -5915,7 +7249,7 @@ async function saveStockModel() {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
     description: $("#stockDescription")?.value.trim(),
     brand: $("#stockBrand")?.value.trim() || "Daikin",
-    type: $("#stockType")?.value.trim(),
+    reservedQty: findStockModelInfo($("#stockModelNo")?.value)?.reservedQty || 0,
     quantity: Number($("#stockQuantity")?.value || 0)
   };
   if (!payload.modelNo) return alert("Model No. is required.");
@@ -5924,12 +7258,30 @@ async function saveStockModel() {
   toast("Model saved");
 }
 
-async function deleteStockModel() {
-  const modelNo = $("#stockModelNo")?.value.trim().toUpperCase();
+async function updateStockReservedQty(modelNo, value) {
+  const info = findStockModelInfo(modelNo);
+  if (!info) return;
+  const reservedQty = Math.max(0, Number(value || 0));
+  const freeCell = document.querySelector(`[data-stock-free="${CSS.escape(modelNo)}"]`);
+  if (freeCell) freeCell.textContent = String(Number(info.quantity || 0) - reservedQty);
+  inventoryState = await api("/api/inventory/models", {
+    method: "POST",
+    body: JSON.stringify({
+      modelNo: info.modelNo,
+      description: info.description || "",
+      brand: info.brand || "Daikin",
+      reservedQty
+    })
+  });
+}
+
+async function deleteStockModel(modelNoValue = "") {
+  const modelNo = (modelNoValue || $("#stockModelNo")?.value || "").trim().toUpperCase();
   if (!modelNo) return alert("Select a model to delete.");
   if (!confirm(`Delete model ${modelNo}? Manual stock entries for this model will also be removed.`)) return;
   inventoryState = await api(`/api/inventory/models/${encodeURIComponent(modelNo)}`, { method: "DELETE" });
   clearStockModelForm();
+  closeStockModelModal();
   renderInventory();
   toast("Model deleted");
 }
@@ -6373,6 +7725,7 @@ async function extractThermalFromChat(options = {}) {
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...nextRows]
       : nextRows;
+    buildVrvSchedule();
     autoLayoutWorkflow();
     addChat(extracted.message || "Custom table extraction is ready in the Export File table.");
     if (extracted.unclearFields && extracted.unclearFields.length) {
@@ -6589,7 +7942,7 @@ function recalcBoq() {
 }
 
 function buildVrvSchedule(sourceRows) {
-  const thermalMap = new Map(state.tables.thermal.rows.map(row => [norm(row.Indoor), row]));
+  const thermalLookup = createThermalScheduleLookup();
   const indoorMap = new Map(state.lookup.indoorData.map(item => [norm(item.fcu), item]));
   const outdoorMap = new Map(state.lookup.outdoorData.map(item => [norm(item.model), item]));
   const rows = sourceRows || state.extracted?.vrv?.vrvRows || [];
@@ -6603,7 +7956,7 @@ function buildVrvSchedule(sourceRows) {
       output.push(emptyVrvSeparatorRow());
       systemRows = [];
     }
-    const thermal = thermalMap.get(norm(item.name)) || {};
+    const thermal = thermalLookup(item.name);
     const indoor = indoorMap.get(norm(item.fcu)) || {};
     const outdoor = outdoorDataForSchedule(item, outdoorMap);
     const row = vrvRow(item, thermal, indoor, outdoor);
@@ -6616,6 +7969,112 @@ function buildVrvSchedule(sourceRows) {
     output.push(emptyVrvSeparatorRow());
   }
   state.tables.vrvSchedule.rows = output;
+}
+
+function createThermalScheduleLookup() {
+  const rows = state.tables.thermal?.rows || [];
+  const queues = new Map();
+  rows.forEach(row => {
+    const reference = firstRowValue(row, [
+      "Units Reference / No.",
+      "Units Reference / No",
+      "Unit Reference / No.",
+      "Unit Reference / No",
+      "Units Reference No.",
+      "Units Reference No",
+      "Unit Reference No.",
+      "Unit Reference No",
+      "Units Reference",
+      "Unit Reference",
+      "Unit Ref",
+      "Reference",
+      "Name",
+      "Indoor",
+      "FCU Name",
+      "FCU",
+      "Indoor Unit",
+      "Unit"
+    ]);
+    const key = norm(reference);
+    if (!key) return;
+    const value = {
+      Location: firstRowValue(row, ["Location", "Room", "Area", "Zone"]),
+      "Rq TC": firstRowValue(row, [
+      "Rq TC",
+      "Req TC",
+      "Calculated AC Load - Total kW",
+      "Calculated AC Load Total kW",
+      "Calculated AC Load - Total KW",
+      "Calculated AC Load Total KW",
+      "Total kW",
+      "Total KW",
+      "Total Cooling kW",
+        "Total Cooling KW",
+        "Tot Cool Cap",
+        "Total Cool Cap",
+        "Total Capacity",
+        "Total Load",
+        "Cooling Load"
+      ]),
+      "Rq SC": firstRowValue(row, [
+      "Rq SC",
+      "Req SC",
+      "Calculated AC Load - Sensible kW",
+      "Calculated AC Load Sensible kW",
+      "Calculated AC Load - Sensible KW",
+      "Calculated AC Load Sensible KW",
+      "Sensible kW",
+      "Sensible KW",
+      "Sens Cool Cap",
+        "Sensible Cool Cap",
+        "Sensible Capacity",
+        "Sensible Load"
+      ]),
+      "Air Flow Rate": firstRowValue(row, [
+      "Air Flow Rate",
+      "Calculated AC Load - Flow Rate L/s",
+      "Calculated AC Load Flow Rate L/s",
+      "Calculated AC Load - Flow Rate Lps",
+      "Calculated AC Load Flow Rate Lps",
+      "Calculated AC Load - Air Flow Rate",
+      "Calculated AC Load Air Flow Rate",
+      "Airflow Rate",
+      "Air Flow",
+      "Airflow",
+        "Air Flowrate",
+        "Airflow CFM",
+        "CFM",
+        "L/S"
+      ])
+    };
+    if (!queues.has(key)) queues.set(key, []);
+    queues.get(key).push(value);
+  });
+  const usage = new Map();
+  return name => {
+    const key = norm(name);
+    const matches = queues.get(key) || [];
+    if (!matches.length) return {};
+    const index = usage.get(key) || 0;
+    usage.set(key, index + 1);
+    return matches[Math.min(index, matches.length - 1)];
+  };
+}
+
+function firstRowValue(row, candidates) {
+  if (!row) return "";
+  const lookup = new Map(Object.keys(row)
+    .filter(key => !String(key).startsWith("__"))
+    .map(key => [columnKey(key), row[key]]));
+  for (const candidate of candidates) {
+    const value = lookup.get(columnKey(candidate));
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
+function columnKey(value) {
+  return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 }
 
 function groupVrvRowsForSchedule(rows) {
@@ -6773,9 +8232,9 @@ function vrvRow(item, thermal, indoor, outdoor) {
   return {
     System: item.system,
     Name: item.name,
-    Location: thermal.Room || "",
-    "Rq TC": thermal["Tot Cool Cap"] || "",
-    "Rq SC": thermal["Sens Cool Cap"] || "",
+    Location: thermal.Location || "",
+    "Rq TC": thermal["Rq TC"] || "",
+    "Rq SC": thermal["Rq SC"] || "",
     "Air Flow Rate": thermal["Air Flow Rate"] || "",
     FCU: item.fcu,
     ...indoorFields(indoor),
@@ -6877,51 +8336,40 @@ function deleteUploadedFile(node) {
 
 async function downloadTable(key) {
   const table = state.tables[key];
+  const summaryRows = [];
   if (key === "costing") {
     recalcCosting();
     recalcBoq();
-    const blob = await api("/api/export/costing-sheet", {
-      method: "POST",
-      body: JSON.stringify({
-        filename: "costing.xlsx",
-        columns: table.columns,
-        rows: table.rows,
-        summary: table.summary
-      })
-    });
-    downloadBlob(blob, "costing.xlsx");
-    return;
+    const s = state.tables.costing.summary || {};
+    summaryRows.push(
+      ["Total TR", money(s.totalTr)],
+      ["Total Cost", money(s.totalCost)],
+      ["Margin", `${Math.round(Number(s.margin || 0) * 100)}%`],
+      ["Selling Price", money(s.sellingPrice)],
+      ["Profit", money(s.profit)],
+      ["Price / Ton", money(s.pricePerTon)]
+    );
   }
   if (key === "vrvSchedule") {
-    const blob = await api("/api/export/vrv-schedule", {
-      method: "POST",
-      body: JSON.stringify({
-        filename: "vrvSchedule.xlsx",
-        projectName: state.details?.project || state.title || "",
-        customerName: state.details?.customer || "",
-        columns: table.columns,
-        rows: table.rows
-      })
+    const blob = buildTableWorkbookBlob({
+      title: "VRV Schedule",
+      columns: table.columns,
+      rows: table.rows
     });
-    downloadBlob(blob, "vrvSchedule.xlsx");
+    downloadBlob(blob, tableDownloadFilenames[key]);
     return;
   }
-  const summaryRows = [];
   if (key === "boq") {
     const s = table.summary;
     summaryRows.push(["Total", money(s.total)], ["VAT 5%", money(s.vat)], ["Net Amount", money(s.netAmount)]);
   }
-  const blob = await api("/api/export/table", {
-    method: "POST",
-    body: JSON.stringify({
-      filename: `${key}.xls`,
-      title: key,
-      columns: table.columns,
-      rows: table.rows,
-      summaryRows: summaryRows.map(([label, value]) => ({ label, value }))
-    })
+  const blob = buildTableWorkbookBlob({
+    title: key,
+    columns: table.columns,
+    rows: table.rows,
+    summaryRows: summaryRows.map(([label, value]) => ({ label, value }))
   });
-  downloadBlob(blob, `${key}.xls`);
+  downloadBlob(blob, tableDownloadFilenames[key] || `${key}.xlsx`);
 }
 
 async function downloadQuotation() {
@@ -7036,6 +8484,191 @@ function downloadBlob(blob, filename) {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+function buildTableWorkbookBlob(payload = {}) {
+  const columns = Array.isArray(payload.columns) ? payload.columns.map(workbookCleanCell).filter(Boolean) : [];
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const summaryRows = Array.isArray(payload.summaryRows) ? payload.summaryRows : [];
+  const columnCount = Math.max(columns.length, 2);
+  const sheetRows = [];
+
+  if (columns.length) {
+    sheetRows.push(workbookRowXml(1, columns.map((column, index) => ({
+      column: index + 1,
+      value: column,
+      style: 1
+    }))));
+  }
+
+  rows.forEach((row, index) => {
+    sheetRows.push(workbookRowXml(index + 2, columns.map((column, columnIndex) => {
+      const value = workbookNumberOrText(row?.[column]);
+      return {
+        column: columnIndex + 1,
+        value,
+        style: typeof value === "number" ? 2 : 0
+      };
+    })));
+  });
+
+  const summaryStart = rows.length + 2;
+  summaryRows.forEach((item, index) => {
+    const value = workbookNumberOrText(item?.value);
+    sheetRows.push(workbookRowXml(summaryStart + index, [
+      { column: columnCount - 1, value: item?.label || "", style: 1 },
+      { column: columnCount, value, style: typeof value === "number" ? 2 : 1 }
+    ]));
+  });
+
+  const lastRow = Math.max(1, rows.length + 1, summaryStart + summaryRows.length - 1);
+  const colsXml = columns.map((column, index) => {
+    const width = workbookColumnWidth(column, rows);
+    return `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
+  }).join("");
+  const sheetName = workbookSheetName(payload.title || "Table");
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="A1:${workbookColumnName(columnCount)}${lastRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/>${colsXml ? `<cols>${colsXml}</cols>` : ""}<sheetData>${sheetRows.join("")}</sheetData><pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`;
+
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`,
+    "xl/worksheets/sheet1.xml": sheetXml
+  };
+
+  return new Blob([workbookZip(files)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+function workbookRowXml(rowNumber, cells) {
+  return `<row r="${rowNumber}">${cells.map(cell => workbookCellXml(rowNumber, cell)).join("")}</row>`;
+}
+
+function workbookCellXml(rowNumber, cell) {
+  const ref = `${workbookColumnName(cell.column)}${rowNumber}`;
+  const style = cell.style ? ` s="${cell.style}"` : "";
+  if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
+    return `<c r="${ref}"${style}><v>${cell.value}</v></c>`;
+  }
+  const value = workbookCleanCell(cell.value);
+  return `<c r="${ref}" t="inlineStr"${style}><is><t>${workbookEscapeXml(value)}</t></is></c>`;
+}
+
+function workbookColumnName(index) {
+  let name = "";
+  let value = index;
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
+  }
+  return name;
+}
+
+function workbookSheetName(name) {
+  return workbookCleanCell(name).replace(/[\[\]*\/\\?:]/g, " ").slice(0, 31).trim() || "Table";
+}
+
+function workbookColumnWidth(column, rows) {
+  const samples = [column, ...rows.slice(0, 75).map(row => row?.[column])].map(workbookCleanCell);
+  const maxLength = Math.max(8, ...samples.map(value => value.length));
+  return Math.min(45, Math.max(10, Math.ceil(maxLength * 1.15)));
+}
+
+function workbookNumberOrText(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const normalized = String(value).replace(/,/g, "").trim();
+  return /^-?\d+(\.\d+)?$/.test(normalized) ? Number(normalized) : value;
+}
+
+function workbookCleanCell(value) {
+  return String(value ?? "").replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
+}
+
+function workbookEscapeXml(value) {
+  return workbookCleanCell(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function workbookZip(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  Object.entries(files).forEach(([name, content]) => {
+    const nameBytes = encoder.encode(name);
+    const data = typeof content === "string" ? encoder.encode(content) : content;
+    const crc = workbookCrc32(data);
+    const local = new Uint8Array(30);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, data.length, true);
+    localView.setUint32(22, data.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localParts.push(local, nameBytes, data);
+
+    const central = new Uint8Array(46);
+    const centralView = new DataView(central.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, data.length, true);
+    centralView.setUint32(24, data.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint32(42, offset, true);
+    centralParts.push(central, nameBytes);
+    offset += local.length + nameBytes.length + data.length;
+  });
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, Object.keys(files).length, true);
+  endView.setUint16(10, Object.keys(files).length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  return new Blob([...localParts, ...centralParts, end]);
+}
+
+function workbookCrc32(data) {
+  let crc = -1;
+  for (let i = 0; i < data.length; i += 1) {
+    crc = (crc >>> 8) ^ WORKBOOK_CRC_TABLE[(crc ^ data[i]) & 0xff];
+  }
+  return (crc ^ -1) >>> 0;
+}
+
+const WORKBOOK_CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let value = i;
+    for (let j = 0; j < 8; j += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    table[i] = value >>> 0;
+  }
+  return table;
+})();
+
+async function ensureXlsxBlob(blob) {
+  const signature = await blob.slice(0, 8).arrayBuffer();
+  const bytes = Array.from(new Uint8Array(signature));
+  const isZipPackage = bytes[0] === 0x50 && bytes[1] === 0x4b;
+  if (isZipPackage) return true;
+  toast("Excel export returned an old/invalid file. Restart the server and try again.");
+  return false;
 }
 
 function toast(message) {

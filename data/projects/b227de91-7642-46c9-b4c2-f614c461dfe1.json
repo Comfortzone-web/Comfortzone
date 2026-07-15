@@ -1,15 +1,15 @@
 {
-  "id": "b7cace12-5632-4359-a7eb-825f2e2c643d",
+  "id": "b227de91-7642-46c9-b4c2-f614c461dfe1",
   "title": "Untitled Project",
-  "createdAt": "2026-07-03T06:59:08.279Z",
-  "updatedAt": "2026-07-03T06:59:32.605Z",
+  "createdAt": "2026-07-09T08:47:01.592Z",
+  "updatedAt": "2026-07-09T08:55:24.794Z",
   "details": {
     "customer": "",
     "contactPerson": "",
     "telNo": "",
     "email": "",
     "project": "",
-    "date": "2026-07-03",
+    "date": "2026-07-09",
     "location": "",
     "model": "Daikin",
     "validity": "Valid for 7 days",
@@ -17,7 +17,7 @@
     "preparedBy": ""
   },
   "quotation": {
-    "quotationNo": "QCZ-A/26/1022",
+    "quotationNo": "QCZ-A/26/1002",
     "generatedDocId": "",
     "generatedPdfId": ""
   },
@@ -39,7 +39,9 @@
       "x": 180,
       "y": 255,
       "locked": false,
-      "data": {}
+      "data": {
+        "uploadId": "2ea10900-3410-40fa-825a-3be0a9f9fe6b"
+      }
     },
     {
       "id": "vrv-upload",
@@ -57,8 +59,8 @@
       "x": 55,
       "y": 520,
       "locked": false,
-      "width": 518,
-      "height": 203,
+      "width": 520,
+      "height": 1754,
       "data": {}
     },
     {
@@ -68,8 +70,8 @@
       "x": 980,
       "y": 130,
       "locked": false,
-      "width": 616,
-      "height": 216,
+      "width": 650,
+      "height": 220,
       "data": {}
     },
     {
@@ -77,10 +79,10 @@
       "type": "boqTable",
       "title": "BOQ / Price",
       "x": 970,
-      "y": 430,
+      "y": 382,
       "locked": false,
-      "width": 616,
-      "height": 186,
+      "width": 650,
+      "height": 190,
       "data": {}
     },
     {
@@ -97,52 +99,445 @@
       "type": "vrvSchedule",
       "title": "VRV Schedule",
       "x": 170,
-      "y": 770,
+      "y": 2339,
       "locked": false,
-      "width": 1548,
-      "height": 228,
+      "width": 1550,
+      "height": 230,
       "data": {}
-    },
-    {
-      "id": "file-1783061962388",
-      "type": "file",
-      "title": "File 1",
-      "x": 2042.5931386319917,
-      "y": 425.74934085903425,
-      "locked": false,
-      "data": {
-        "uploadId": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5"
-      }
     }
   ],
   "uploads": [
     {
-      "id": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5",
-      "projectId": "b7cace12-5632-4359-a7eb-825f2e2c643d",
-      "nodeId": "file-1783061962388",
-      "originalName": "DN1791.pdf",
-      "storedName": "48db97a1-3fd3-49d4-ae55-3bc53f8ae0c5-DN1791.pdf",
-      "mimeType": "application/pdf",
-      "size": 142758,
-      "createdAt": "2026-07-03T06:59:32.605Z"
+      "id": "2ea10900-3410-40fa-825a-3be0a9f9fe6b",
+      "projectId": "b227de91-7642-46c9-b4c2-f614c461dfe1",
+      "nodeId": "thermal-upload",
+      "originalName": "Screenshot 2026-07-09 124624.png",
+      "storedName": "2ea10900-3410-40fa-825a-3be0a9f9fe6b-Screenshot 2026-07-09 124624.png",
+      "mimeType": "image/png",
+      "size": 954899,
+      "createdAt": "2026-07-09T08:47:32.221Z"
+    },
+    {
+      "id": "f5c8d205-69c9-4676-bb48-5732cfdf12e1",
+      "projectId": "b227de91-7642-46c9-b4c2-f614c461dfe1",
+      "nodeId": "thermal-screenshot",
+      "originalName": "Screenshot 2026-07-09 124649.png",
+      "storedName": "f5c8d205-69c9-4676-bb48-5732cfdf12e1-Screenshot 2026-07-09 124649.png",
+      "mimeType": "image/png",
+      "size": 927110,
+      "createdAt": "2026-07-09T08:47:32.305Z"
     }
   ],
   "tables": {
     "thermal": {
       "columns": [
-        "Indoor",
-        "Room",
-        "Mode",
-        "Family or Model",
-        "Cooling DBT",
-        "Cooling WBT",
-        "Heating T",
-        "Tot Cool Cap",
-        "Sens Cool Cap",
-        "Heat Cap",
-        "Air Flow Rate"
+        "Units Reference / No.",
+        "Location",
+        "Calculated AC Load - Total KW",
+        "Sensible KW",
+        "Flow Rate L/S"
       ],
-      "rows": []
+      "rows": [
+        {
+          "Units Reference / No.": "GF-01",
+          "Location": "SECURITY ROOM",
+          "Calculated AC Load - Total KW": "1.60",
+          "Sensible KW": "1.50",
+          "Flow Rate L/S": "123.00"
+        },
+        {
+          "Units Reference / No.": "GF-02",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "214.00"
+        },
+        {
+          "Units Reference / No.": "GF-03",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "214.00"
+        },
+        {
+          "Units Reference / No.": "GF-04",
+          "Location": "DINING AREA",
+          "Calculated AC Load - Total KW": "6.30",
+          "Sensible KW": "5.50",
+          "Flow Rate L/S": "411.00"
+        },
+        {
+          "Units Reference / No.": "GF-05",
+          "Location": "LAUNDRY ROOM",
+          "Calculated AC Load - Total KW": "3.00",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "171.00"
+        },
+        {
+          "Units Reference / No.": "GF-06",
+          "Location": "CORRIDOR",
+          "Calculated AC Load - Total KW": "6.70",
+          "Sensible KW": "5.30",
+          "Flow Rate L/S": "357.00"
+        },
+        {
+          "Units Reference / No.": "GF-07 & 08",
+          "Location": "STORE",
+          "Calculated AC Load - Total KW": "1.80",
+          "Sensible KW": "1.70",
+          "Flow Rate L/S": "137.00"
+        },
+        {
+          "Units Reference / No.": "GF-09",
+          "Location": "SHOP-01",
+          "Calculated AC Load - Total KW": "4.20",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "295.00"
+        },
+        {
+          "Units Reference / No.": "GF-10",
+          "Location": "SHOP-02",
+          "Calculated AC Load - Total KW": "4.20",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "295.00"
+        },
+        {
+          "Units Reference / No.": "GF-11",
+          "Location": "SHOP-03",
+          "Calculated AC Load - Total KW": "4.20",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "295.00"
+        },
+        {
+          "Units Reference / No.": "GF-12",
+          "Location": "SHOP-04",
+          "Calculated AC Load - Total KW": "4.20",
+          "Sensible KW": "3.80",
+          "Flow Rate L/S": "295.00"
+        },
+        {
+          "Units Reference / No.": "GF-13",
+          "Location": "SHOP-05",
+          "Calculated AC Load - Total KW": "4.80",
+          "Sensible KW": "4.40",
+          "Flow Rate L/S": "340.00"
+        },
+        {
+          "Units Reference / No.": "GF-14",
+          "Location": "SHOP-06",
+          "Calculated AC Load - Total KW": "4.70",
+          "Sensible KW": "4.30",
+          "Flow Rate L/S": "338.00"
+        },
+        {
+          "Units Reference / No.": "GF-15",
+          "Location": "TELEPHONE ROOM",
+          "Calculated AC Load - Total KW": "2.50",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "199.00"
+        },
+        {
+          "Units Reference / No.": "GF-16",
+          "Location": "ELECTRICAL ROOM",
+          "Calculated AC Load - Total KW": "2.40",
+          "Sensible KW": "2.40",
+          "Flow Rate L/S": "171.00"
+        },
+        {
+          "Units Reference / No.": "1F-01",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.80",
+          "Flow Rate L/S": "223.00"
+        },
+        {
+          "Units Reference / No.": "1F-02",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "209.00"
+        },
+        {
+          "Units Reference / No.": "1F-03",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "209.00"
+        },
+        {
+          "Units Reference / No.": "1F-04",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "210.00"
+        },
+        {
+          "Units Reference / No.": "1F-05",
+          "Location": "TYPE 02 ROOM",
+          "Calculated AC Load - Total KW": "3.10",
+          "Sensible KW": "2.90",
+          "Flow Rate L/S": "232.00"
+        },
+        {
+          "Units Reference / No.": "1F-06",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "1F-07",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "1F-08",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "1F-09",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "1F-10",
+          "Location": "TYPE 04 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "213.00"
+        },
+        {
+          "Units Reference / No.": "1F-11",
+          "Location": "TYPE 05 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "214.00"
+        },
+        {
+          "Units Reference / No.": "1F-12",
+          "Location": "SUPERVISOR ROOM",
+          "Calculated AC Load - Total KW": "2.20",
+          "Sensible KW": "2.00",
+          "Flow Rate L/S": "160.00"
+        },
+        {
+          "Units Reference / No.": "1F-13 & 14",
+          "Location": "CORRIDOR",
+          "Calculated AC Load - Total KW": "6.40",
+          "Sensible KW": "5.40",
+          "Flow Rate L/S": "397.00"
+        },
+        {
+          "Units Reference / No.": "TF-01",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.80",
+          "Flow Rate L/S": "223.00"
+        },
+        {
+          "Units Reference / No.": "TF-02",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "209.00"
+        },
+        {
+          "Units Reference / No.": "TF-03",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "209.00"
+        },
+        {
+          "Units Reference / No.": "TF-04",
+          "Location": "TYPE 01 ROOM",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "210.00"
+        },
+        {
+          "Units Reference / No.": "TF-05",
+          "Location": "TYPE 02 ROOM",
+          "Calculated AC Load - Total KW": "3.10",
+          "Sensible KW": "2.90",
+          "Flow Rate L/S": "232.00"
+        },
+        {
+          "Units Reference / No.": "TF-06",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "TF-07",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "TF-08",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "TF-09",
+          "Location": "TYPE 03 ROOM",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "TF-10",
+          "Location": "TYPE 04 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "213.00"
+        },
+        {
+          "Units Reference / No.": "TF-11",
+          "Location": "TYPE 05 ROOM",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "214.00"
+        },
+        {
+          "Units Reference / No.": "TF-12",
+          "Location": "SUPERVISOR ROOM",
+          "Calculated AC Load - Total KW": "2.20",
+          "Sensible KW": "2.00",
+          "Flow Rate L/S": "160.00"
+        },
+        {
+          "Units Reference / No.": "TF-13 & 14",
+          "Location": "CORRIDOR",
+          "Calculated AC Load - Total KW": "6.40",
+          "Sensible KW": "5.40",
+          "Flow Rate L/S": "397.00"
+        },
+        {
+          "Units Reference / No.": "4F-01",
+          "Location": "EXECUTIVE ROOM TYPE-01",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "217.00"
+        },
+        {
+          "Units Reference / No.": "4F-02",
+          "Location": "EXECUTIVE ROOM TYPE-01",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "205.00"
+        },
+        {
+          "Units Reference / No.": "4F-03",
+          "Location": "EXECUTIVE ROOM TYPE-01",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "205.00"
+        },
+        {
+          "Units Reference / No.": "4F-04",
+          "Location": "EXECUTIVE ROOM TYPE-01",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "205.00"
+        },
+        {
+          "Units Reference / No.": "4F-05",
+          "Location": "EXECUTIVE ROOM TYPE-02",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "209.00"
+        },
+        {
+          "Units Reference / No.": "4F-06",
+          "Location": "EXECUTIVE ROOM TYPE-03",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "203.00"
+        },
+        {
+          "Units Reference / No.": "4F-07",
+          "Location": "EXECUTIVE ROOM TYPE-04",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "207.00"
+        },
+        {
+          "Units Reference / No.": "4F-08",
+          "Location": "EXECUTIVE ROOM TYPE-04",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.60",
+          "Flow Rate L/S": "207.00"
+        },
+        {
+          "Units Reference / No.": "4F-09",
+          "Location": "EXECUTIVE ROOM TYPE-05",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "214.00"
+        },
+        {
+          "Units Reference / No.": "4F-10",
+          "Location": "EXECUTIVE ROOM TYPE-06",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "4F-11",
+          "Location": "EXECUTIVE ROOM TYPE-06",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "4F-12",
+          "Location": "EXECUTIVE ROOM TYPE-06",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "4F-13",
+          "Location": "EXECUTIVE ROOM TYPE-06",
+          "Calculated AC Load - Total KW": "2.70",
+          "Sensible KW": "2.50",
+          "Flow Rate L/S": "202.00"
+        },
+        {
+          "Units Reference / No.": "4F-14",
+          "Location": "EXECUTIVE ROOM TYPE-07",
+          "Calculated AC Load - Total KW": "2.90",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "220.00"
+        },
+        {
+          "Units Reference / No.": "4F-15",
+          "Location": "EXECUTIVE ROOM TYPE-08",
+          "Calculated AC Load - Total KW": "2.80",
+          "Sensible KW": "2.70",
+          "Flow Rate L/S": "215.00"
+        },
+        {
+          "Units Reference / No.": "4F-16 & 17",
+          "Location": "CORRIDOR",
+          "Calculated AC Load - Total KW": "7.80",
+          "Sensible KW": "6.90",
+          "Flow Rate L/S": "522.00"
+        }
+      ]
     },
     "costing": {
       "columns": [
@@ -2832,5 +3227,79 @@
         "nominalIndex": 400
       }
     ]
-  }
+  },
+  "thermalChatSelection": {
+    "mode": "custom",
+    "capacitySource": "Calculated AC Load",
+    "familyModel": "",
+    "customInstruction": "Export Column, Units Reference / No., Location, Calculated AC Load - Total KW, Sensible KW, Flow Rate L/S",
+    "requested": true,
+    "appendResults": false
+  },
+  "thermalChatMessages": [
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Upload the thermal sheet PDF or a zoomed screenshot here."
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-09 124624.png",
+      "size": 954899
+    },
+    {
+      "kind": "file",
+      "name": "Screenshot 2026-07-09 124649.png",
+      "size": 927110
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "What do you want to extract?"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "For the regular VRV export, reply like: VRV first selection. Mention a model only if you want it filled."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "For any other table, tell me the table or columns, for example: extract columns Indoor, Room, Air Flow Rate."
+    },
+    {
+      "kind": "text",
+      "role": "user",
+      "text": "Export Column, Units Reference / No., Location, Calculated AC Load - Total KW, Sensible KW, Flow Rate L/S"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Ok. Reading the file now and placing the extracted table in the Export File table."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Selected custom extraction: Export Column, Units Reference / No., Location, Calculated AC Load - Total KW, Sensible KW, Flow Rate L/S."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Extracting values into the Export File table..."
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Requested table columns were extracted into the Export File table."
+    }
+  ],
+  "thermalChatUploadIds": [
+    "2ea10900-3410-40fa-825a-3be0a9f9fe6b",
+    "f5c8d205-69c9-4676-bb48-5732cfdf12e1"
+  ],
+  "thermalPendingUploadIds": [
+    "2ea10900-3410-40fa-825a-3be0a9f9fe6b",
+    "f5c8d205-69c9-4676-bb48-5732cfdf12e1"
+  ],
+  "visible": true
 }

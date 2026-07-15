@@ -6,11 +6,14 @@ from datetime import datetime
 from io import BytesIO
 
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen import canvas
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LETTERHEAD = os.path.join(ROOT, "public", "assets", "purchase-order-letterhead.jpg")
+SEAL_IMAGE = r"D:\Al Mahira\Seal - Al mahira tech.png"
+SIGN_IMAGE = r"D:\Al Mahira\Sign - 2.jpg"
 GREEN = (0.0, 0.34, 0.18)
 GREEN_DARK = (0.0, 0.25, 0.13)
 INK = (0.08, 0.09, 0.10)
@@ -65,6 +68,28 @@ def wrap_text(text, max_chars):
     return lines or [""]
 
 
+def wrap_text_width(text, max_width, font="Helvetica", size=10):
+    words = esc(text).replace("\r", "\n").split()
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if stringWidth(candidate, font, size) <= max_width or not current:
+            current = candidate
+            continue
+        lines.append(current)
+        current = word
+        while stringWidth(current, font, size) > max_width and len(current) > 1:
+            cut = len(current)
+            while cut > 1 and stringWidth(current[:cut], font, size) > max_width:
+                cut -= 1
+            lines.append(current[:cut])
+            current = current[cut:]
+    if current:
+        lines.append(current)
+    return lines or [""]
+
+
 def draw_wrapped(c, text, x, y, max_chars, leading=13, max_lines=4, font="Helvetica", size=10):
     c.setFont(font, size)
     for line in wrap_text(text, max_chars)[:max_lines]:
@@ -105,7 +130,7 @@ def draw_background(c, width, height, page_no, total_pages):
         c.drawCentredString(width / 2, 42, "www.mahiratech.com | info@mahiratech.com | Po box: 343105, Dubai, UAE")
 
     c.setFillColorRGB(1, 1, 1)
-    c.rect(width / 2 - 45, 20, 90, 18, stroke=0, fill=1)
+    c.rect(width / 2 - 58, 18, 116, 30, stroke=0, fill=1)
     c.setFillColorRGB(*MUTED)
     c.setFont("Helvetica", 8.5)
     c.drawCentredString(width / 2, 25, f"Page {page_no} / {total_pages}")
@@ -149,7 +174,8 @@ def draw_party_and_details(c, po, x, y, width):
 
 
 def item_row_height(item):
-    desc_lines = max(1, min(6, len(wrap_text(item.get("description"), 32))))
+    desc_width = 176 - 18
+    desc_lines = max(1, min(8, len(wrap_text_width(item.get("description"), desc_width, "Helvetica", 9.2))))
     return max(28, 12 + desc_lines * 13)
 
 
@@ -190,9 +216,9 @@ def draw_item_row(c, item, x, y, col_widths, serial_no):
     c.setFont("Helvetica", 10.2)
     c.drawCentredString(x + col_widths[0] / 2, text_y, str(serial_no))
     desc_x = x + col_widths[0]
-    desc_lines = wrap_text(item.get("description"), 32)[:6]
+    desc_lines = wrap_text_width(item.get("description"), col_widths[1] - 18, "Helvetica", 9.2)[:8]
     desc_start_y = y - (row_h - len(desc_lines) * 13) / 2 - 9
-    c.setFont("Helvetica", 10.2)
+    c.setFont("Helvetica", 9.2)
     for line in desc_lines:
         c.drawString(desc_x + 10, desc_start_y, line)
         desc_start_y -= 13
@@ -238,7 +264,7 @@ def draw_summary(c, po, x, y):
     return y - row_h * len(rows)
 
 
-def draw_notes(c, notes, x, y):
+def draw_notes(c, notes, x, y, max_chars=92):
     c.setFillColorRGB(0, 0, 0)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(x, y, "Note:")
@@ -249,13 +275,31 @@ def draw_notes(c, notes, x, y):
         if not line.strip():
             y -= 15
             continue
-        for wrapped in wrap_text(line.rstrip(), 92)[:3]:
+        for wrapped in wrap_text(line.rstrip(), max_chars)[:4]:
             c.drawString(x, y, wrapped)
             y -= 15
     return y
 
 
-def paginate_items(items, first_limit=292, other_limit=500):
+def draw_seal_and_signature(c, x, y):
+    seal_size = 164
+    sign_w = 82
+    sign_h = 42
+    top_y = y - 8
+    bottom_y = top_y - seal_size
+    if bottom_y < 68:
+        top_y = 232
+        bottom_y = top_y - seal_size
+
+    if os.path.exists(SEAL_IMAGE):
+        c.drawImage(SEAL_IMAGE, x + 22, bottom_y, seal_size, seal_size, preserveAspectRatio=True, mask="auto")
+    if os.path.exists(SIGN_IMAGE):
+        sign_y = bottom_y + 58
+        c.drawImage(SIGN_IMAGE, x + 190, sign_y, sign_w, sign_h, preserveAspectRatio=True, mask="auto")
+    return bottom_y - 8
+
+
+def paginate_items(items, first_limit=430, other_limit=520):
     pages = []
     current = []
     used = 0
@@ -282,7 +326,7 @@ def reserve_summary_page_if_needed(pages):
         return [[]]
     last_page_start_y = 528 if len(pages) == 1 else 626
     last_page_end_y = last_page_start_y - page_items_height(pages[-1])
-    if pages[-1] and last_page_end_y < 354:
+    if pages[-1] and last_page_end_y < 330:
         pages.append([])
     return pages
 
@@ -319,8 +363,10 @@ def main():
 
         if page_no == total_pages:
             summary_bottom = draw_summary(c, po, table_x + table_w - 210, y)
-            notes_y = max(118, summary_bottom - 12)
-            draw_notes(c, po.get("notes"), margin, notes_y)
+            notes_beside_summary = bool(page_items and y >= 330)
+            notes_y = y - 22 if notes_beside_summary else max(118, summary_bottom - 12)
+            after_notes_y = draw_notes(c, po.get("notes"), margin, notes_y, 58 if notes_beside_summary else 92)
+            draw_seal_and_signature(c, margin, after_notes_y)
 
         c.showPage()
 

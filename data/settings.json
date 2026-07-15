@@ -25,6 +25,14 @@
       "email": "admin@comfortzone.local",
       "passwordHash": "637670de0159b7fe338dc8e181c820b3:4e47969c2131c521c34a1f4387b9b53b105885233131adb140924983d97d7b73",
       "active": true
+    },
+    {
+      "id": "2f7391f8-09b3-4d2d-b6cd-9722eba60d17",
+      "passwordHash": "69b72b8d509bf1c88f32f70d95241b02:eb3fc178f1ced58ac4ebfeefd62e301af2df87ab64a0b033d440603c3d4f3b12",
+      "name": "Abhishek",
+      "role": "Admin",
+      "email": "sales@comfortzoneuae.com",
+      "active": true
     }
   ],
   "attachments": [
@@ -36,15 +44,6 @@
       "size": 32005,
       "category": "Logo",
       "createdAt": "2026-06-26T10:45:22.876Z"
-    },
-    {
-      "id": "49002d1e-311d-46cf-8f8d-b8e46a9e6057",
-      "originalName": "Comfot zone Logo.jpeg",
-      "storedName": "49002d1e-311d-46cf-8f8d-b8e46a9e6057-Comfot zone Logo.jpeg",
-      "mimeType": "image/jpeg",
-      "size": 32005,
-      "category": "Logo",
-      "createdAt": "2026-06-23T09:25:15.579Z"
     }
   ]
 }

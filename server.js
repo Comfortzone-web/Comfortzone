@@ -36,6 +36,7 @@ const SALES_QUOTATION_PDF_SCRIPT = path.join(ROOT, "scripts", "sales_quotation_p
 const SETTINGS_FILE = path.join(DATA, "settings.json");
 const SETTINGS_UPLOADS = path.join(DATA, "settings-uploads");
 const PYTHON_EXE = process.env.PYTHON_EXE || "C:\\Users\\HP\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe";
+const PDFTOPPM_EXE = process.env.PDFTOPPM_EXE || "C:\\Users\\HP\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\poppler\\Library\\bin\\pdftoppm.exe";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_KEY = process.env.SUPABASE_KEY || "";
 const SUPABASE_TABLE = process.env.SUPABASE_TABLE || "app_data";
@@ -396,7 +397,7 @@ async function writePurchaseOrders(store) {
 
 function defaultSalesCrm() {
   return {
-    settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001` },
+    settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
     leads: [
       { id: id(), avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
       { id: id(), avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -440,6 +441,7 @@ function normalizeSalesCrm(parsed = {}) {
     followUps: Array.isArray(parsed.followUps) ? parsed.followUps : fallback.followUps
   };
   store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo || fallback.settings.nextQuotationNo, store.quotations);
+  store.settings.nextProjectNo = nextAvailableSalesProjectNo(store.settings.nextProjectNo || fallback.settings.nextProjectNo, store.projects);
   return store;
 }
 
@@ -900,18 +902,35 @@ function normalizeSalesItem(collection, input, store) {
     };
   }
   if (collection === "projects") {
-    return {
+    const projectNo = cleanCell(base.projectNo || base.projectId || base.no || store.settings.nextProjectNo || `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001`);
+    const createdDate = cleanCell(base.createdDate || base.date || todayDisplayDate());
+    const project = {
       id: base.id,
+      projectNo,
+      projectId: projectNo,
       name: cleanCell(base.name || ""),
       customer: cleanCell(base.customer || ""),
       location: cleanCell(base.location || ""),
-      type: cleanCell(base.type || "Commercial"),
-      requirement: cleanCell(base.requirement || ""),
+      category: cleanCell(base.category || base.type || "Commercial"),
+      type: cleanCell(base.type || base.category || "Commercial"),
+      productType: cleanCell(base.productType || base.requirement || ""),
+      requirement: cleanCell(base.requirement || base.productType || ""),
       engineer: cleanCell(base.engineer || ""),
-      status: cleanCell(base.status || "Site Visit Done"),
-      date: cleanCell(base.date || todayDisplayDate()),
+      status: cleanCell(base.status || "Ongoing"),
+      date: createdDate,
+      createdDate,
+      targetDate: cleanCell(base.targetDate || ""),
+      scope: cleanMultilineCell(base.scope || base.description || ""),
+      boq: Array.isArray(base.boq) ? base.boq.map(normalizeSalesProjectBoqItem) : [],
+      directDeliveryUploads: Array.isArray(base.directDeliveryUploads) ? base.directDeliveryUploads.map(normalizeSalesProjectDirectDeliveryUpload) : [],
+      reserveStock: !!base.reserveStock,
+      expectedDeliveryDate: cleanCell(base.expectedDeliveryDate || ""),
+      deliveryNoteReference: cleanCell(base.deliveryNoteReference || ""),
+      remarks: cleanMultilineCell(base.remarks || ""),
       value: cleanCell(base.value || "")
     };
+    project.status = salesProjectAutoStatusServer(project);
+    return project;
   }
   if (collection === "followUps") {
     const customer = cleanCell(base.customer || "");
@@ -1057,11 +1076,78 @@ function nextAvailableSalesQuotationNo(current, quotations = []) {
   return next;
 }
 
+function nextSalesProjectNoFrom(current) {
+  const text = cleanCell(current || "");
+  const match = text.match(/^(.*?)(\d+)$/);
+  if (!match) return `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001`;
+  return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function projectNoSequenceValue(value) {
+  const match = cleanCell(value).match(/(\d+)$/);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function nextAvailableSalesProjectNo(current, projects = []) {
+  let next = cleanCell(current || `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001`);
+  for (const project of projects || []) {
+    const projectNo = cleanCell(project.projectNo || project.projectId || project.no || "");
+    if (!projectNo) continue;
+    const candidate = nextSalesProjectNoFrom(projectNo);
+    if (projectNoSequenceValue(candidate) > projectNoSequenceValue(next)) next = candidate;
+  }
+  return next;
+}
+
 function nextSalesEnquiryNoFrom(current) {
   const text = String(current || "");
   const match = text.match(/^(.*?)(\d+)$/);
   if (!match) return `ENQ-${new Date().getFullYear()}-0001`;
   return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function normalizeSalesProjectBoqItem(item = {}) {
+  const qty = Number(item.qty || item.quantity || 0) || 0;
+  const deliveredQty = Number(item.deliveredQty || 0) || 0;
+  return {
+    model: cleanCell(item.model || item.modelNo || ""),
+    description: cleanCell(item.description || ""),
+    qty,
+    deliveredQty,
+    reserve: !!(item.reserve || item.reserveStock),
+    pendingQty: qty - deliveredQty,
+    stock: cleanCell(item.stock || "")
+  };
+}
+
+function salesProjectAutoStatusServer(project = {}) {
+  const existingStatus = cleanCell(project.status || "Ongoing");
+  const statusKey = inventoryNorm(existingStatus);
+  if (["LOST", "LOSTCLOSED", "CLOSED"].includes(statusKey)) return existingStatus;
+  const rows = (project.boq || project.items || []).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
+  if (!rows.length) return "Ongoing";
+  return rows.some(row => (Number(row.qty || 0) - Number(row.deliveredQty || 0)) > 0) ? "Delivery Pending" : "Completed";
+}
+
+function normalizeSalesProjectDirectDeliveryUpload(item = {}) {
+  const lines = Array.isArray(item.lines) ? item.lines.map(line => ({
+    modelNo: cleanCell(line.modelNo || line.model || ""),
+    quantity: Number(line.quantity || line.qty || line.finalQty || line.detectedQty || 0) || 0,
+    status: cleanCell(line.status || "")
+  })) : [];
+  return {
+    id: cleanCell(item.id || id()),
+    uploadId: cleanCell(item.uploadId || item.id || ""),
+    originalName: cleanCell(item.originalName || item.fileName || ""),
+    storedName: cleanCell(item.storedName || ""),
+    mimeType: cleanCell(item.mimeType || ""),
+    size: Number(item.size || 0) || 0,
+    uploadedAt: cleanCell(item.uploadedAt || item.createdAt || new Date().toISOString()),
+    date: cleanCell(item.date || todayDisplayDate()),
+    deliveryNoteNo: cleanCell(item.deliveryNoteNo || item.dnNo || item.supplierDnNo || ""),
+    totalQuantity: Number(item.totalQuantity || lines.reduce((sum, line) => sum + line.quantity, 0)) || 0,
+    lines
+  };
 }
 
 function initials(text) {
@@ -1319,6 +1405,65 @@ async function handleApi(req, res) {
     });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/sales-crm/projects/direct-delivery/upload") {
+    const buffer = await collect(req);
+    const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+    const filePart = multipart.find(part => part.filename);
+    const projectId = cleanCell((multipart.find(part => part.name === "projectId")?.body || Buffer.from("")).toString("utf8"));
+    if (!filePart) return send(res, 400, { error: "No delivery note uploaded" });
+    const uploadId = id();
+    const storedName = `${uploadId}-${safeName(filePart.filename)}`;
+    await saveUpload(`sales-project-deliveries/${projectId || "draft"}`, storedName, filePart.body, filePart.mimeType);
+    const extracted = await extractProjectDirectDeliveryWithOpenAI(filePart).catch(error => ({
+      deliveryNoteNo: "",
+      date: todayDisplayDate(),
+      lines: [],
+      message: error.message || "Delivery note extraction failed."
+    }));
+    const upload = normalizeSalesProjectDirectDeliveryUpload({
+      id: uploadId,
+      uploadId,
+      originalName: filePart.filename,
+      storedName,
+      mimeType: filePart.mimeType,
+      size: filePart.body.length,
+      uploadedAt: new Date().toISOString(),
+      date: extracted.date || todayDisplayDate(),
+      deliveryNoteNo: extracted.deliveryNoteNo || "",
+      lines: (extracted.lines || []).map(line => ({
+        modelNo: line.modelNo,
+        quantity: line.quantity || line.finalQty || line.detectedQty,
+        status: line.status
+      }))
+    });
+    return send(res, 201, { upload, detected: extracted, message: extracted.message || "Delivery note scanned. Review detected items." });
+  }
+
+  if (req.method === "GET" && url.pathname.match(/^\/api\/sales-crm\/projects\/[^/]+\/direct-delivery\/uploads\/[^/]+$/)) {
+    const parts = url.pathname.split("/");
+    const projectId = decodeURIComponent(parts[4]);
+    const uploadId = decodeURIComponent(parts[7]);
+    const store = await readSalesCrm();
+    const project = (store.projects || []).find(item => item.id === projectId);
+    const upload = (project?.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+    if (!upload) return notFound(res);
+    return sendStoredUpload(res, upload, `sales-project-deliveries/${projectId}`);
+  }
+
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/projects\/[^/]+\/direct-delivery\/uploads\/[^/]+$/)) {
+    const parts = url.pathname.split("/");
+    const projectId = decodeURIComponent(parts[4]);
+    const uploadId = decodeURIComponent(parts[7]);
+    const store = await readSalesCrm();
+    const project = (store.projects || []).find(item => item.id === projectId);
+    if (!project) return notFound(res);
+    const upload = (project.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+    project.directDeliveryUploads = (project.directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
+    if (upload?.storedName) await deleteUpload(`sales-project-deliveries/${projectId}`, upload.storedName);
+    await writeSalesCrm(store);
+    return send(res, 200, await salesCrmView(store));
+  }
+
   if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
     const store = await readSalesCrm();
     const collection = url.pathname.split("/").pop();
@@ -1336,6 +1481,9 @@ async function handleApi(req, res) {
     if (collection === "customers") store.customers = mergeDuplicateSalesCustomers(store.customers);
     if (collection === "quotations") {
       store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
+    }
+    if (collection === "projects") {
+      store.settings.nextProjectNo = nextAvailableSalesProjectNo(store.settings.nextProjectNo, store.projects);
     }
     if (collection === "leads" && item.enquiryNo) {
       store.settings.nextEnquiryNo = nextSalesEnquiryNoFrom(item.enquiryNo);
@@ -1408,9 +1556,15 @@ async function handleApi(req, res) {
     await writePurchaseOrders(store);
     const extracted = await extractPurchaseQuotationWithOpenAI(filePart).catch(error => ({ message: error.message, items: [] }));
     const extractedSubtotal = Number(String(extracted.manualSubtotal ?? extracted.subtotal ?? "").replace(/,/g, "")) || 0;
+    const extractedItemBaseTotal = (extracted.items || []).reduce((sum, item) => {
+      const qty = Number(item.qty || item.quantity || 0) || 0;
+      const unitPrice = Number(item.unitPrice || item.unitPriceAed || item.rate || 0) || 0;
+      const amount = Number(item.amount || 0) || 0;
+      return sum + (qty * unitPrice || amount);
+    }, 0);
     const order = normalizePurchaseOrder({
       ...extracted,
-      manualSubtotal: extractedSubtotal > 0 ? extractedSubtotal : "",
+      manualSubtotal: extractedItemBaseTotal > 0 ? "" : (extractedSubtotal > 0 ? extractedSubtotal : ""),
       discount: extracted.discount ?? 0,
       notes: DEFAULT_PURCHASE_NOTES,
       sourceUploadId: uploadId,
@@ -1424,7 +1578,11 @@ async function handleApi(req, res) {
   if (req.method === "POST" && url.pathname === "/api/purchase-orders") {
     const store = await readPurchaseOrders();
     const body = await readJson(req);
-    const order = normalizePurchaseOrder(body.order || body, store, !!body.createOfficial);
+    const sourceOrder = body.order || body;
+    const order = normalizePurchaseOrder({
+      ...sourceOrder,
+      status: body.createOfficial ? "Created" : "Draft"
+    }, store, !!body.createOfficial);
     const existingIndex = store.orders.findIndex(item => item.id === order.id);
     if (body.createOfficial && !order.poNo) {
       order.poNo = store.settings.nextPoNo || defaultPurchaseOrders().settings.nextPoNo;
@@ -1437,6 +1595,14 @@ async function handleApi(req, res) {
     else store.orders.unshift(order);
     await writePurchaseOrders(store);
     return send(res, 200, { state: purchaseOrderView(store), order });
+  }
+
+  if (req.method === "GET" && url.pathname.match(/^\/api\/purchase-orders\/uploads\/[^/]+$/)) {
+    const store = await readPurchaseOrders();
+    const uploadId = decodeURIComponent(url.pathname.split("/").pop());
+    const upload = (store.uploads || []).find(item => item.id === uploadId);
+    if (!upload) return notFound(res);
+    return sendStoredUpload(res, upload, "purchase-orders");
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/purchase-orders\/[^/]+$/)) {
@@ -1466,8 +1632,9 @@ async function handleApi(req, res) {
     const modelNo = cleanCell(body.modelNo || body.model || "").toUpperCase();
     if (!modelNo) return send(res, 400, { error: "Model No. is required" });
     const existing = inventory.models.find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
-    if (existing) Object.assign(existing, { modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "" });
-    else inventory.models.push({ id: id(), modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "" });
+    const reservedQty = Math.max(0, Number(body.reservedQty || 0));
+    if (existing) Object.assign(existing, { modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "", reservedQty });
+    else inventory.models.push({ id: id(), modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "", reservedQty });
     if (body.quantity !== undefined && body.quantity !== "") {
       const current = computeInventory(inventory).stockByModel[inventoryNorm(modelNo)]?.qty || 0;
       const target = Number(body.quantity || 0);
@@ -1782,13 +1949,15 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/export/table") {
-    const { filename = "table.xls", title = "Table", columns = [], rows = [], summaryRows = [] } = await readJson(req);
-    const html = tableWorkbookHtml(title, columns, rows, summaryRows);
+    const payload = await readJson(req);
+    const workbook = generateTableWorkbook(payload);
+    const filename = String(payload.filename || "table.xlsx").replace(/\.xls$/i, ".xlsx");
     res.writeHead(200, {
-      "Content-Type": "application/vnd.ms-excel; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+      "Content-Length": workbook.length
     });
-    return res.end(html);
+    return res.end(workbook);
   }
 
   if (req.method === "POST" && url.pathname === "/api/export/vrv-schedule") {
@@ -2378,7 +2547,7 @@ function normalizePurchaseOrder(input = {}, store = defaultPurchaseOrders(), cre
   const order = {
     id: input.id || id(),
     poNo: input.poNo || "",
-    status: createOfficial ? "Created" : (input.status || "Draft"),
+    status: createOfficial ? "Created" : cleanCell(input.status || "Draft"),
     supplierName: cleanCell(input.supplierName),
     supplierAddress: cleanCell(input.supplierAddress || input.address),
     trn: cleanCell(input.trn || input.supplierTrn || input.supplierTRN),
@@ -2442,7 +2611,7 @@ function recalcPurchaseOrderServer(order) {
   for (const item of order.items || []) {
     const base = Number(item.qty || 0) * Number(item.unitPrice || 0);
     const vat = base * (Number(item.vatPercent || 0) / 100);
-    item.amount = base + vat;
+    item.amount = base;
     subtotal += base;
     vatTotal += vat;
   }
@@ -2450,9 +2619,11 @@ function recalcPurchaseOrderServer(order) {
   const finalSubtotal = hasManualSubtotal ? Number(String(order.manualSubtotal).replace(/,/g, "")) || 0 : subtotal;
   const vatRate = subtotal > 0 ? vatTotal / subtotal : averagePurchaseVatRate(order.items);
   const discount = Number(String(order.discount || "").replace(/,/g, "")) || 0;
-  const taxable = Math.max(0, finalSubtotal - discount);
+  const totalAfterDiscount = finalSubtotal - discount;
+  const taxable = Math.max(0, totalAfterDiscount);
   order.subtotal = finalSubtotal;
   order.discount = discount;
+  order.totalAfterDiscount = totalAfterDiscount;
   order.vatTotal = taxable * vatRate;
   order.grandTotal = taxable + order.vatTotal;
 }
@@ -2472,7 +2643,7 @@ function parseServerDate(value) {
   return "";
 }
 
-function computeInventory(inventory) {
+function computeInventory(inventory, projectReservations = {}) {
   const lots = [];
   for (const dn of inventory.supplierDns || []) {
     if (dn.status !== "Confirmed") continue;
@@ -2534,14 +2705,26 @@ function computeInventory(inventory) {
 
   const stockByModel = {};
   for (const model of inventory.models || []) {
-    stockByModel[inventoryNorm(model.modelNo)] = { modelNo: model.modelNo, description: model.description, qty: 0, minimumStock: Number(model.minimumStock || 0) };
+    stockByModel[inventoryNorm(model.modelNo)] = {
+      modelNo: model.modelNo,
+      description: model.description,
+      qty: 0,
+      reservedQty: Math.max(0, Number(model.reservedQty || 0)),
+      freeStock: 0,
+      minimumStock: Number(model.minimumStock || 0)
+    };
   }
   for (const lot of lots) {
     const key = inventoryNorm(lot.modelNo);
-    if (!stockByModel[key]) stockByModel[key] = { modelNo: lot.modelNo, description: lot.description, qty: 0, minimumStock: 0 };
+    if (!stockByModel[key]) stockByModel[key] = { modelNo: lot.modelNo, description: lot.description, qty: 0, reservedQty: 0, freeStock: 0, minimumStock: 0 };
     stockByModel[key].qty += lot.availableQty;
     if (!stockByModel[key].description && lot.description) stockByModel[key].description = lot.description;
   }
+  Object.values(stockByModel).forEach(item => {
+    const projectReservedQty = Math.max(0, Number(projectReservations[inventoryNorm(item.modelNo)] || 0));
+    item.reservedQty = Number(item.reservedQty || 0) + projectReservedQty;
+    item.freeStock = Number(item.qty || 0) - Number(item.reservedQty || 0);
+  });
   for (const movement of movements) {
     const key = inventoryNorm(movement.modelNo);
     if (stockByModel[key]) movement.availableQty = stockByModel[key].qty;
@@ -2549,13 +2732,28 @@ function computeInventory(inventory) {
   return { lots, stockByModel, movements };
 }
 
+function salesProjectReservations(projects = []) {
+  return (projects || []).reduce((reserved, project) => {
+    const status = inventoryNorm(project.status || "");
+    if (["COMPLETED", "LOST", "LOSTCLOSED", "CLOSED"].includes(status)) return reserved;
+    for (const row of project.boq || project.items || []) {
+      if (!(row.reserve || row.reserveStock)) continue;
+      const modelNo = cleanCell(row.model || row.modelNo || "");
+      if (!modelNo) continue;
+      const key = inventoryNorm(modelNo);
+      reserved[key] = (reserved[key] || 0) + Math.max(0, Number(row.qty || row.quantity || 0));
+    }
+    return reserved;
+  }, {});
+}
+
 async function inventoryView(inventory) {
   ensureManualStockNumbers(inventory);
-  const computed = computeInventory(inventory);
+  const salesStore = await readSalesCrm();
+  const computed = computeInventory(inventory, salesProjectReservations(salesStore.projects || []));
   const stock = Object.values(computed.stockByModel).sort((a, b) => a.modelNo.localeCompare(b.modelNo));
   const lowStock = stock.filter(item => item.minimumStock && item.qty < item.minimumStock);
   const pendingReview = (inventory.supplierDns || []).filter(dn => dn.status === "Review Needed").length;
-  const salesStore = await readSalesCrm();
   return {
     settings: inventory.settings,
     models: inventory.models,
@@ -2635,6 +2833,108 @@ function supplierDnSchema() {
   };
 }
 
+async function extractProjectDirectDeliveryWithOpenAI(filePart) {
+  if (!process.env.OPENAI_API_KEY) {
+    return { deliveryNoteNo: "", date: todayDisplayDate(), lines: [], message: "OpenAI API key is missing. Add detected rows manually or configure OPENAI_API_KEY." };
+  }
+  const mime = filePart.mimeType || "application/octet-stream";
+  const base64 = filePart.body.toString("base64");
+  const content = [{
+    type: "input_text",
+    text: "Extract outbound delivery note item details for an HVAC project. Return JSON only. Identify deliveryNoteNo, date if present, and lines [{modelNo, quantity, status}]. Model number must be the exact equipment model/code when visible. Quantity must be the delivered quantity for that model. Combine duplicate model numbers. If quantity is unclear, use quantity 0 and status 'Needs Review'. If model is unclear, leave modelNo blank and status 'Needs Review'. Do not extract prices."
+  }];
+  if (mime.includes("pdf")) content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+  else if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+  else return { deliveryNoteNo: "", date: todayDisplayDate(), lines: [], message: "Unsupported file type for delivery note detection." };
+  const payload = {
+    model: OPENAI_MODEL,
+    input: [{ role: "user", content }],
+    temperature: 0,
+    text: { format: { type: "json_schema", name: "project_direct_delivery_extract", strict: true, schema: projectDirectDeliverySchema() } }
+  };
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) return { deliveryNoteNo: "", date: todayDisplayDate(), lines: [], message: json.error?.message || "Delivery note extraction failed." };
+  try {
+    return JSON.parse(extractResponseText(json));
+  } catch {
+    return { deliveryNoteNo: "", date: todayDisplayDate(), lines: [], message: "Delivery note OCR response could not be parsed." };
+  }
+}
+
+function projectDirectDeliverySchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      deliveryNoteNo: { type: "string" },
+      date: { type: "string" },
+      lines: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            modelNo: { type: "string" },
+            quantity: { type: "number" },
+            status: { type: "string" }
+          },
+          required: ["modelNo", "quantity", "status"]
+        }
+      },
+      message: { type: "string" }
+    },
+    required: ["deliveryNoteNo", "date", "lines", "message"]
+  };
+}
+
+function pdfPageImageInputs(filePart, label = "PDF page") {
+  const mime = filePart.mimeType || "application/octet-stream";
+  if (!mime.includes("pdf")) return [];
+  const tmpRoot = path.join(DATA, "tmp", `pdf-pages-${id()}`);
+  const pdfPath = path.join(tmpRoot, safeName(filePart.filename || "upload.pdf"));
+  const outputPrefix = path.join(tmpRoot, "page");
+  try {
+    fs.mkdirSync(tmpRoot, { recursive: true });
+    fs.writeFileSync(pdfPath, filePart.body);
+    const candidates = [...new Set([PDFTOPPM_EXE, "pdftoppm"].filter(Boolean))];
+    let rendered = false;
+    for (const candidate of candidates) {
+      const result = spawnSync(candidate, ["-png", "-r", "150", pdfPath, outputPrefix], {
+        encoding: "utf8",
+        maxBuffer: 10 * 1024 * 1024,
+        windowsHide: true
+      });
+      if (result.status === 0) {
+        rendered = true;
+        break;
+      }
+    }
+    if (!rendered) return [];
+    return fs.readdirSync(tmpRoot)
+      .filter(file => /^page-\d+\.png$/i.test(file))
+      .sort((a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0))
+      .map((file, index) => {
+        const image = fs.readFileSync(path.join(tmpRoot, file)).toString("base64");
+        return [
+          { type: "input_text", text: `${label} ${index + 1}` },
+          { type: "input_image", image_url: `data:image/png;base64,${image}` }
+        ];
+      })
+      .flat();
+  } catch {
+    return [];
+  } finally {
+    try {
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    } catch {}
+  }
+}
+
 async function extractPurchaseQuotationWithOpenAI(filePart) {
   if (!process.env.OPENAI_API_KEY) {
     return { message: "OpenAI API key is missing. Fill the PO manually or configure OPENAI_API_KEY.", items: [] };
@@ -2643,9 +2943,14 @@ async function extractPurchaseQuotationWithOpenAI(filePart) {
   const base64 = filePart.body.toString("base64");
   const content = [{
     type: "input_text",
-    text: "Extract supplier quotation details for a purchase order. Return blank strings for missing text values and 0 for missing numeric totals. Never invent values. Extract supplierName, supplierAddress, trn, quotationNo, quotationDate, projectName, paymentTerms, subtotal before VAT, discount if shown, and item rows with description, modelNo, qty, unitPrice, vatPercent, amount. Do not extract or change PO notes; return notes as an empty string. For paymentTerms, normalize cash/CDC/current dated cheque as CDC; 30 days as 30 Days PDC; 60 days as 60 Days PDC; 90 days as 90 Days PDC; 15 days as 15 Days PDC. For each item, combine every description-adjacent/specification column into the description field: Description, Size, Model, Type, Brand, Remarks, Specification, or any similar column next to description must become one description line joined with ' - '. Example: Description VCD, Size 1000 x 1000 mm, Model TAO => description 'VCD - 1000 x 1000 mm - TAO'. Keep qty, unit price, VAT, and amount separate as usual. Return JSON only."
+    text: "Extract supplier quotation details for a purchase order. Inspect every page in order. If the quotation has item tables continuing on page 2, page 3, or later pages, extract all item rows from every page; do not stop after the first page. Return blank strings for missing text values and 0 for missing numeric totals. Never invent values. Extract supplierName, supplierAddress, trn, quotationNo, quotationDate, projectName, paymentTerms, subtotal before VAT, discount if shown, and item rows with description, modelNo, qty, unitPrice, vatPercent, amount. Do not extract or change PO notes; return notes as an empty string. For paymentTerms, normalize cash/CDC/current dated cheque as CDC; 30 days as 30 Days PDC; 60 days as 60 Days PDC; 90 days as 90 Days PDC; 15 days as 15 Days PDC. For each item row on every page, combine every description-adjacent/specification column into the description field: Description, Size, Model, Type, Brand, Remarks, Specification, or any similar column next to description must become one description line joined with ' - '. Example: Description VCD, Size 1000 x 1000 mm, Model TAO => description 'VCD - 1000 x 1000 mm - TAO'. Keep qty, unit price, VAT, and amount separate as usual. Return JSON only."
   }];
   if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+  else if (mime.includes("pdf")) {
+    const pageInputs = pdfPageImageInputs(filePart, "Quotation PDF page");
+    if (pageInputs.length) content.push(...pageInputs);
+    else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+  }
   else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
   const payload = {
     model: OPENAI_MODEL,
@@ -3654,6 +3959,86 @@ function tableWorkbookHtml(title, columns, rows, summaryRows) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="ProgId" content="Excel.Sheet"><style>table{border-collapse:collapse}td{border:1px solid #d9d9d9;padding:2px 4px;vertical-align:top}</style></head><body><table><tbody><tr>${head}</tr>${body}${summary}</tbody></table></body></html>`;
 }
 
+function generateTableWorkbook(payload = {}) {
+  const columns = Array.isArray(payload.columns) ? payload.columns.map(cleanCell).filter(Boolean) : [];
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const summaryRows = Array.isArray(payload.summaryRows) ? payload.summaryRows : [];
+  const columnCount = Math.max(columns.length, 2);
+  const sheetRows = [];
+
+  if (columns.length) {
+    sheetRows.push(costingRowXml(1, columns.map((column, index) => ({
+      column: index + 1,
+      value: column,
+      style: 1
+    }))));
+  }
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    sheetRows.push(costingRowXml(rowNumber, columns.map((column, columnIndex) => {
+      const value = numberOrText(row?.[column]);
+      return {
+        column: columnIndex + 1,
+        value,
+        style: typeof value === "number" ? 4 : 2
+      };
+    })));
+  });
+
+  const summaryStart = rows.length + 2;
+  summaryRows.forEach((item, index) => {
+    const value = numberOrText(item?.value);
+    sheetRows.push(costingRowXml(summaryStart + index, [
+      { column: columnCount - 1, value: item?.label || "", style: 6 },
+      { column: columnCount, value, style: typeof value === "number" ? 7 : 6 }
+    ]));
+  });
+
+  const lastRow = Math.max(1, rows.length + 1, summaryStart + summaryRows.length - 1);
+  const colsXml = columns.map((column, index) => {
+    const width = tableColumnWidth(column, rows);
+    return `    <col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
+  }).join("\n");
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <dimension ref="A1:${xlsxColumnName(columnCount)}${lastRow}"/>
+  <sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews>
+  <sheetFormatPr defaultRowHeight="15"/>
+  ${colsXml ? `<cols>\n${colsXml}\n  </cols>` : ""}
+  <sheetData>${sheetRows.join("")}</sheetData>
+  <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
+</worksheet>`;
+
+  return zipEntries({
+    "[Content_Types].xml": { data: Buffer.from(costingContentTypesXml(), "utf8") },
+    "_rels/.rels": { data: Buffer.from(costingRootRelsXml(), "utf8") },
+    "docProps/app.xml": { data: Buffer.from(costingAppXml(), "utf8") },
+    "docProps/core.xml": { data: Buffer.from(costingCoreXml(), "utf8") },
+    "xl/workbook.xml": { data: Buffer.from(singleSheetWorkbookXml(payload.title || "Table"), "utf8") },
+    "xl/_rels/workbook.xml.rels": { data: Buffer.from(costingWorkbookRelsXml(), "utf8") },
+    "xl/styles.xml": { data: Buffer.from(costingStylesXml(), "utf8") },
+    "xl/worksheets/sheet1.xml": { data: Buffer.from(sheetXml, "utf8") }
+  });
+}
+
+function singleSheetWorkbookXml(sheetName) {
+  const safeName = cleanCell(sheetName || "Table")
+    .replace(/[\[\]*\/\\?:]/g, " ")
+    .slice(0, 31)
+    .trim() || "Table";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="${escapeXml(safeName)}" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+}
+
+function tableColumnWidth(column, rows) {
+  const samples = [column, ...rows.slice(0, 75).map(row => row?.[column])].map(cleanCell);
+  const maxLength = Math.max(8, ...samples.map(value => value.length));
+  return Math.min(45, Math.max(10, Math.ceil(maxLength * 1.15)));
+}
+
 const COSTING_EXPORT_COLUMNS = [
   "S.No",
   "Model",
@@ -4270,6 +4655,7 @@ function formatDocDate(value) {
 
 function escapeXml(value) {
   return String(value == null ? "" : value)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")

@@ -1,8 +1,412 @@
 {
   "settings": {
-    "nextPoNo": "PO-2026-0003"
+    "nextPoNo": "PO-2026-0005"
   },
   "orders": [
+    {
+      "id": "24bbe3f7-442a-4d7f-b225-e1e54ce06737",
+      "poNo": "PO-2026-0004",
+      "status": "Created",
+      "supplierName": "MMC ENGINEERING CO. L.L.C",
+      "supplierAddress": "P.O.BOX : 7325 ,UMM AL QUWAIN, U.A.E. Tel:- 06-7670082 Fax: 06-7641588 E-mail: sales@mmcengco.com",
+      "trn": "100054715600003",
+      "quotationNo": "MMC/602777/26",
+      "quotationDate": "",
+      "purchaseRepresentative": "",
+      "poDate": "2026-07-15",
+      "projectName": "G+2 School Project",
+      "deliveryTerms": "",
+      "paymentTerms": "CDC",
+      "manualSubtotal": "",
+      "discount": 0,
+      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
+      "sourceUploadId": "cd6d5755-ea1d-4c89-b6ae-538fd5401918",
+      "createdAt": "2026-07-15T10:22:50.770Z",
+      "updatedAt": "2026-07-15T10:22:50.770Z",
+      "items": [
+        {
+          "id": "c738241f-83bd-4cc7-819f-162dff5818d4",
+          "description": "SLBG - 550 x 250",
+          "modelNo": "",
+          "qty": 22,
+          "unitPrice": 72,
+          "vatPercent": 5,
+          "amount": 1584
+        },
+        {
+          "id": "e63e6d92-f72e-4765-8fbc-3c75a53408b2",
+          "description": "SLBG - 500 x 250",
+          "modelNo": "",
+          "qty": 14,
+          "unitPrice": 65,
+          "vatPercent": 5,
+          "amount": 910
+        },
+        {
+          "id": "8f934c4a-5f63-4f33-bd9f-688b2355fc7a",
+          "description": "SLBG - 650 x 250",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 85,
+          "vatPercent": 5,
+          "amount": 170
+        },
+        {
+          "id": "c8f68ec8-bcdb-448f-a2e1-a8a14d50b374",
+          "description": "SLBG - 600 x 150",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 51,
+          "vatPercent": 5,
+          "amount": 153
+        },
+        {
+          "id": "f8db649e-a534-457d-b3d2-e76bbcf774ed",
+          "description": "SLBG - 700 x 250",
+          "modelNo": "",
+          "qty": 8,
+          "unitPrice": 91,
+          "vatPercent": 5,
+          "amount": 728
+        },
+        {
+          "id": "0d12e007-9acb-4e11-ac63-f75d70480945",
+          "description": "SLBG - 750 x 250",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 98,
+          "vatPercent": 5,
+          "amount": 98
+        },
+        {
+          "id": "fcca54af-a7ed-49a8-b5d2-b69bba5de626",
+          "description": "SLBG - 350 x 200",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 40,
+          "vatPercent": 5,
+          "amount": 80
+        },
+        {
+          "id": "c6aa2071-0d76-4838-ac95-164253e0a7f7",
+          "description": "SLBG - 350 x 100",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 33,
+          "vatPercent": 5,
+          "amount": 33
+        },
+        {
+          "id": "3c1baf5e-395b-4bc3-9311-f3bf4b4f0cd3",
+          "description": "SLBG - 300 x 150",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 30,
+          "vatPercent": 5,
+          "amount": 90
+        },
+        {
+          "id": "85fb402f-0e45-4165-bbfb-a26f50db64d8",
+          "description": "SLBG - 150 x 150",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 23,
+          "vatPercent": 5,
+          "amount": 69
+        },
+        {
+          "id": "3e4bd2c4-a165-4f29-8e47-693188c013c1",
+          "description": "SAD - 225 x 225",
+          "modelNo": "",
+          "qty": 30,
+          "unitPrice": 50,
+          "vatPercent": 5,
+          "amount": 1500
+        },
+        {
+          "id": "5278c639-15fb-4465-9bd2-3fd3deadda1a",
+          "description": "SAD - 300 x 300",
+          "modelNo": "",
+          "qty": 10,
+          "unitPrice": 60,
+          "vatPercent": 5,
+          "amount": 600
+        },
+        {
+          "id": "e324a1c2-9b2a-4779-b82c-98f4018716de",
+          "description": "SAD - 450 x 450",
+          "modelNo": "",
+          "qty": 6,
+          "unitPrice": 80,
+          "vatPercent": 5,
+          "amount": 480
+        },
+        {
+          "id": "c42cb672-e4c7-4b57-b609-5887256cb6dd",
+          "description": "RLBG - 850 x 250",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 85,
+          "vatPercent": 5,
+          "amount": 255
+        },
+        {
+          "id": "45452fb6-0e78-4889-a2e0-45acb700840c",
+          "description": "RLBG - 850 x 240",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 85,
+          "vatPercent": 5,
+          "amount": 170
+        },
+        {
+          "id": "31975e39-97bd-438a-b0a3-5bc9a0374f1f",
+          "description": "RLBG - 890 x 250",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 89,
+          "vatPercent": 5,
+          "amount": 89
+        },
+        {
+          "id": "784dc962-8215-4c3c-815a-643a8bee871d",
+          "description": "RLBG - 845 x 250",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 85,
+          "vatPercent": 5,
+          "amount": 85
+        },
+        {
+          "id": "d44f8d8a-3c13-4e8b-a176-ed0141c35e3f",
+          "description": "RLBG - 990 x 240",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 99,
+          "vatPercent": 5,
+          "amount": 99
+        },
+        {
+          "id": "46c0496c-2b1e-4a2f-9b5d-015ebecb60c6",
+          "description": "RLBG - 900 x 250",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 90,
+          "vatPercent": 5,
+          "amount": 90
+        },
+        {
+          "id": "08f6f481-e54a-4e45-acdd-b044d98c68e4",
+          "description": "RLBG - 900 x 245",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 90,
+          "vatPercent": 5,
+          "amount": 90
+        },
+        {
+          "id": "818216c3-3317-4073-bab1-caf852656c94",
+          "description": "RLBG - 1150 x 250",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 115,
+          "vatPercent": 5,
+          "amount": 345
+        },
+        {
+          "id": "575067a0-8def-46a3-9964-fc8efc3881ec",
+          "description": "RLBG - 1200 x 250",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 120,
+          "vatPercent": 5,
+          "amount": 120
+        },
+        {
+          "id": "30ff175a-4f5e-44c0-90c4-2512707e4e18",
+          "description": "RLBG - 895 x 245",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 90,
+          "vatPercent": 5,
+          "amount": 90
+        },
+        {
+          "id": "4d878142-5518-4cea-be71-b7c857a42c33",
+          "description": "RLBG - 950 x 250",
+          "modelNo": "",
+          "qty": 5,
+          "unitPrice": 95,
+          "vatPercent": 5,
+          "amount": 475
+        },
+        {
+          "id": "b5dd4109-5339-4cf5-9ea0-f2316dcfa596",
+          "description": "RLBG - 1050 x 245",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 105,
+          "vatPercent": 5,
+          "amount": 105
+        },
+        {
+          "id": "dced5c65-0170-4d91-89b9-44a5348562bf",
+          "description": "RLBG - 350 x 100",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 30,
+          "vatPercent": 5,
+          "amount": 30
+        },
+        {
+          "id": "803a3dd5-7093-489d-ab27-702a75a96f1d",
+          "description": "RLBG - 300 x 150",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 27,
+          "vatPercent": 5,
+          "amount": 27
+        },
+        {
+          "id": "502e29b7-15e1-4bd1-b99a-11697a54e36f",
+          "description": "RLBG - 150 x 150",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 20,
+          "vatPercent": 5,
+          "amount": 60
+        },
+        {
+          "id": "31292abf-c1e2-48ae-a5c8-1a09b2a39679",
+          "description": "RLBG - 600 x 150",
+          "modelNo": "",
+          "qty": 3,
+          "unitPrice": 45,
+          "vatPercent": 5,
+          "amount": 135
+        },
+        {
+          "id": "1dd8e3bf-62c3-4eb8-9124-ead84b054bd1",
+          "description": "RAD - 450 x 450",
+          "modelNo": "",
+          "qty": 10,
+          "unitPrice": 60,
+          "vatPercent": 5,
+          "amount": 600
+        },
+        {
+          "id": "bee5b0f4-36af-4d6b-a8f3-230de6f08431",
+          "description": "RAD - 225 x 225",
+          "modelNo": "",
+          "qty": 25,
+          "unitPrice": 40,
+          "vatPercent": 5,
+          "amount": 1000
+        },
+        {
+          "id": "9757d55d-3b43-4bf7-be2f-6eab0d392ef9",
+          "description": "RAD - 300 x 300",
+          "modelNo": "",
+          "qty": 10,
+          "unitPrice": 50,
+          "vatPercent": 5,
+          "amount": 500
+        },
+        {
+          "id": "81ae2f95-6760-44e5-afac-fe293450a20e",
+          "description": "RAD - 150 x 150",
+          "modelNo": "",
+          "qty": 35,
+          "unitPrice": 30,
+          "vatPercent": 5,
+          "amount": 1050
+        }
+      ],
+      "subtotal": 11910,
+      "totalAfterDiscount": 11910,
+      "vatTotal": 595.5,
+      "grandTotal": 12505.5
+    },
+    {
+      "id": "f740bbe6-7169-4005-af89-e34e6c4495dd",
+      "poNo": "PO-2026-0003",
+      "status": "Created",
+      "supplierName": "MMC ENGINEERING CO. L.L.C",
+      "supplierAddress": "P.O.BOX : 7325 ,UMM AL QUWAIN, U.A.E.",
+      "trn": "100054715600003",
+      "quotationNo": "MMC/602868/26",
+      "quotationDate": "",
+      "purchaseRepresentative": "Akhil",
+      "poDate": "2026-07-15",
+      "projectName": "Marina 23",
+      "deliveryTerms": "",
+      "paymentTerms": "CDC",
+      "manualSubtotal": "",
+      "discount": 79,
+      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
+      "sourceUploadId": "cc2c0f09-224a-4f80-be43-1596c895ac67",
+      "createdAt": "2026-07-15T07:12:38.096Z",
+      "updatedAt": "2026-07-15T07:12:38.096Z",
+      "items": [
+        {
+          "id": "62af4c35-e1fc-40ab-b565-78a711bc24cb",
+          "description": "FLOWBAR 1SLOT-38MM - 4430 - WITHOUT ENDCAP",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 421,
+          "vatPercent": 5,
+          "amount": 442.05
+        },
+        {
+          "id": "dd9bafd3-9b55-4f2c-b4a2-04867684a88f",
+          "description": "FLOWBAR 1SLOT-38MM - 2120 - ONESIDE ENDCAP",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 201,
+          "vatPercent": 5,
+          "amount": 422.1
+        },
+        {
+          "id": "a6b1cfdf-f3d9-49d9-a5c1-a52fa00605e3",
+          "description": "CORNER FLOWBAR 1SLOT-38MM - 300X300 - WITHOUT ENDCAP",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 95,
+          "vatPercent": 5,
+          "amount": 199.5
+        },
+        {
+          "id": "af6da2d2-8bc7-4098-8072-feabfb5402cc",
+          "description": "FLOWBAR 1SLOT-38MM - 2600",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 247,
+          "vatPercent": 5,
+          "amount": 259.35
+        },
+        {
+          "id": "850cf1f5-1856-4439-ab0f-2d8bc321b1f6",
+          "description": "FLOWBAR 1SLOT-38MM - 2200",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 209,
+          "vatPercent": 5,
+          "amount": 219.45
+        },
+        {
+          "id": "4d67f80d-8c6d-42b4-b8c9-bd05fa3758be",
+          "description": "FLOWBAR 1SLOT-38MM - 500",
+          "modelNo": "",
+          "qty": 2,
+          "unitPrice": 55,
+          "vatPercent": 5,
+          "amount": 115.5
+        }
+      ],
+      "subtotal": 1579,
+      "vatTotal": 75,
+      "grandTotal": 1575
+    },
     {
       "id": "d1b58889-9cf2-4907-ab8d-197dd7635698",
       "poNo": "PO-2026-0002",
@@ -31,10 +435,11 @@
           "qty": 1,
           "unitPrice": 7099,
           "vatPercent": 5,
-          "amount": 7453.95
+          "amount": 7099
         }
       ],
       "subtotal": 7099,
+      "totalAfterDiscount": 7099,
       "vatTotal": 354.95000000000005,
       "grandTotal": 7453.95
     },
@@ -162,6 +567,110 @@
     }
   ],
   "uploads": [
+    {
+      "id": "c2cbcff8-d3b2-430a-a923-9d526633e4f9",
+      "originalName": "428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL (G+2) NURSERY-1126060039.pdf",
+      "storedName": "c2cbcff8-d3b2-430a-a923-9d526633e4f9-428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL _G_2_ NURSERY-1126060039.pdf",
+      "mimeType": "application/pdf",
+      "size": 201135,
+      "createdAt": "2026-07-15T11:18:11.877Z"
+    },
+    {
+      "id": "fdd41b89-6dc6-478a-88e6-cea13fda7869",
+      "originalName": "428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL (G+2) NURSERY-1126060039.pdf",
+      "storedName": "fdd41b89-6dc6-478a-88e6-cea13fda7869-428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL _G_2_ NURSERY-1126060039.pdf",
+      "mimeType": "application/pdf",
+      "size": 201135,
+      "createdAt": "2026-07-15T10:58:25.828Z"
+    },
+    {
+      "id": "df05d58a-db46-41fe-96b7-73aa7b6dd5c8",
+      "originalName": "428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL (G+2) NURSERY-1126060039.pdf",
+      "storedName": "df05d58a-db46-41fe-96b7-73aa7b6dd5c8-428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL _G_2_ NURSERY-1126060039.pdf",
+      "mimeType": "application/pdf",
+      "size": 201135,
+      "createdAt": "2026-07-15T10:57:41.969Z"
+    },
+    {
+      "id": "cd6d5755-ea1d-4c89-b6ae-538fd5401918",
+      "originalName": "602777-AL MAHIRA TECHNICAL SERVICES L.L.C -20-06-2026.pdf",
+      "storedName": "cd6d5755-ea1d-4c89-b6ae-538fd5401918-602777-AL MAHIRA TECHNICAL SERVICES L.L.C -20-06-2026.pdf",
+      "mimeType": "application/pdf",
+      "size": 543935,
+      "createdAt": "2026-07-15T10:22:32.267Z"
+    },
+    {
+      "id": "0154c6fc-6195-4035-a7ed-f266f7f35289",
+      "originalName": "602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "storedName": "0154c6fc-6195-4035-a7ed-f266f7f35289-602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "mimeType": "application/pdf",
+      "size": 516474,
+      "createdAt": "2026-07-15T10:20:41.238Z"
+    },
+    {
+      "id": "890c3e29-aae0-431e-9595-843290ff9f4a",
+      "originalName": "16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "storedName": "890c3e29-aae0-431e-9595-843290ff9f4a-16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "mimeType": "application/pdf",
+      "size": 467628,
+      "createdAt": "2026-07-15T10:13:17.584Z"
+    },
+    {
+      "id": "2c2dbd55-c2a1-44e3-856d-4e149e6d7874",
+      "originalName": "602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "storedName": "2c2dbd55-c2a1-44e3-856d-4e149e6d7874-602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "mimeType": "application/pdf",
+      "size": 516474,
+      "createdAt": "2026-07-15T10:07:23.880Z"
+    },
+    {
+      "id": "68697b94-c261-4454-a34a-9eab44a63479",
+      "originalName": "602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "storedName": "68697b94-c261-4454-a34a-9eab44a63479-602617-R1-AL MAHIRA TECHNICAL SERVICES L.L.C -08-05-2026.pdf",
+      "mimeType": "application/pdf",
+      "size": 516474,
+      "createdAt": "2026-07-15T10:04:23.078Z"
+    },
+    {
+      "id": "c1ae6456-4128-4e73-add9-ecbf7bfedcdc",
+      "originalName": "16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "storedName": "c1ae6456-4128-4e73-add9-ecbf7bfedcdc-16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "mimeType": "application/pdf",
+      "size": 467628,
+      "createdAt": "2026-07-15T09:44:54.198Z"
+    },
+    {
+      "id": "6595e9b3-2461-4f2c-b971-a4088a7080cc",
+      "originalName": "16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "storedName": "6595e9b3-2461-4f2c-b971-a4088a7080cc-16-26-59442-AL MAHIRA TECHNICAL SERVICES L.L.pdf",
+      "mimeType": "application/pdf",
+      "size": 467628,
+      "createdAt": "2026-07-15T09:09:24.077Z"
+    },
+    {
+      "id": "cc2c0f09-224a-4f80-be43-1596c895ac67",
+      "originalName": "602868-AL MAHIRA TECHNICAL SERVICES L.L.C -14-07-2026.pdf",
+      "storedName": "cc2c0f09-224a-4f80-be43-1596c895ac67-602868-AL MAHIRA TECHNICAL SERVICES L.L.C -14-07-2026.pdf",
+      "mimeType": "application/pdf",
+      "size": 519831,
+      "createdAt": "2026-07-15T07:12:27.491Z"
+    },
+    {
+      "id": "88d7c6be-d135-4a82-915b-f14330553561",
+      "originalName": "428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL (G+2) NURSERY-1126060039.pdf",
+      "storedName": "88d7c6be-d135-4a82-915b-f14330553561-428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL _G_2_ NURSERY-1126060039.pdf",
+      "mimeType": "application/pdf",
+      "size": 201135,
+      "createdAt": "2026-07-13T06:26:33.819Z"
+    },
+    {
+      "id": "2aebd115-fae0-4444-abe7-93a6bd2e226a",
+      "originalName": "428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL (G+2) NURSERY-1126060039.pdf",
+      "storedName": "2aebd115-fae0-4444-abe7-93a6bd2e226a-428-NF-SMS-26-0858-KV-R1-AL MAHIRA-PROPOSED SCHOOL _G_2_ NURSERY-1126060039.pdf",
+      "mimeType": "application/pdf",
+      "size": 201135,
+      "createdAt": "2026-07-13T06:19:43.451Z"
+    },
     {
       "id": "06fb0eea-1a54-4e22-8f41-f6bb7046132b",
       "originalName": "Table sample upload.jpeg",
