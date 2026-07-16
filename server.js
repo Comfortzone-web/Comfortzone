@@ -2597,7 +2597,7 @@ function normalizePurchaseItem(item = {}) {
     modelNo,
     qty: Number(item.qty || item.quantity || 0),
     unitPrice: Number(item.unitPrice || item.unitPriceAed || item.rate || 0),
-    vatPercent: Number(item.vatPercent ?? item.vat ?? item.vatPercentage ?? 5),
+    vatPercent: purchaseVatPercentServer(item.vatPercent ?? item.vat ?? item.vatPercentage),
     amount: Number(item.amount || 0)
   };
 }
@@ -2621,8 +2621,9 @@ function recalcPurchaseOrderServer(order) {
   let subtotal = 0;
   let vatTotal = 0;
   for (const item of order.items || []) {
+    item.vatPercent = purchaseVatPercentServer(item.vatPercent);
     const base = Number(item.qty || 0) * Number(item.unitPrice || 0);
-    const vat = base * (Number(item.vatPercent || 0) / 100);
+    const vat = base * (item.vatPercent / 100);
     item.amount = base;
     subtotal += base;
     vatTotal += vat;
@@ -2638,6 +2639,11 @@ function recalcPurchaseOrderServer(order) {
   order.totalAfterDiscount = totalAfterDiscount;
   order.vatTotal = taxable * vatRate;
   order.grandTotal = taxable + order.vatTotal;
+}
+
+function purchaseVatPercentServer(value) {
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate > 0 ? rate : 5;
 }
 
 function averagePurchaseVatRate(items = []) {

@@ -1636,13 +1636,13 @@ function salesCustomersHtml() {
     </div>
     <section class="sales-card">
       <table class="sales-table">
-        <thead><tr><th>Customer / Company Name</th><th>Contact Person</th><th>Contact Details</th><th>Location / Address</th><th>TRN Number</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Customer / Company Name</th><th>Contact Person</th><th>Contact Details</th><th>Address</th><th>TRN Number</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(customer => `
           <tr>
             <td>${salesAvatar(customer.icon)}<strong>${escapeHtml(customer.name)}</strong><br><span>${escapeHtml(customer.type)}</span></td>
             <td><strong>${escapeHtml(customer.contact)}</strong><br><span>${escapeHtml(customer.role)}</span></td>
             <td>${escapeHtml(customer.phone)}<br><span>${escapeHtml(customer.email)}</span></td>
-            <td>${escapeHtml(customer.address)}<br><span>${escapeHtml(customer.detail)}</span></td>
+            <td>${escapeHtml(customer.detail)}</td>
             <td>${escapeHtml(customer.trn)}</td>
             <td>${rowMenu([
               { label: "History", action: "customer-history", id: customer.id },
@@ -4698,7 +4698,6 @@ function salesFormConfig(collection) {
         { key: "role", label: "Role" },
         { key: "phone", label: "Phone" },
         { key: "email", label: "Email" },
-        { key: "address", label: "Location / Address" },
         { key: "detail", label: "Address Details" },
         { key: "trn", label: "TRN Number" }
       ]
@@ -5262,7 +5261,7 @@ function purchaseOrderFormHtml(po) {
             <td><textarea data-po-line="${index}" data-field="description" placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
             <td><input type="number" min="0" data-po-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
             <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0)}"></td>
-            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" value="${Number(item.vatPercent ?? 5)}"></td>
+            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" value="${purchaseVatPercent(item.vatPercent)}"></td>
             <td data-po-amount="${index}">${money(item.amount)}</td>
             <td><button class="danger-button po-delete-line" data-delete-po-line="${index}">${poIcon("trash")}<span>Delete</span></button></td>
           </tr>
@@ -5360,8 +5359,9 @@ function recalcPurchaseOrder(po) {
   let subtotal = 0;
   let vatTotal = 0;
   for (const item of po.items) {
+    item.vatPercent = purchaseVatPercent(item.vatPercent);
     const base = Number(item.qty || 0) * Number(item.unitPrice || 0);
-    const vat = base * (Number(item.vatPercent || 0) / 100);
+    const vat = base * (item.vatPercent / 100);
     item.amount = base;
     subtotal += base;
     vatTotal += vat;
@@ -5378,6 +5378,11 @@ function recalcPurchaseOrder(po) {
   po.vatTotal = taxable * vatRate;
   po.grandTotal = taxable + po.vatTotal;
   return po;
+}
+
+function purchaseVatPercent(value) {
+  const rate = Number(value);
+  return Number.isFinite(rate) && rate > 0 ? rate : 5;
 }
 
 function averageVatRate(items = []) {
