@@ -1542,7 +1542,17 @@
       "brand": "Daikin"
     }
   ],
-  "customers": [],
+  "customers": [
+    {
+      "id": "C-7B65213E",
+      "customerName": "ABRAR INFRA BUILDING CONTRACTING LLC",
+      "contactPerson": "",
+      "phone": "050 178 6815",
+      "email": "",
+      "address": "",
+      "defaultDeliveryLocation": "Dubai, U.A.E"
+    }
+  ],
   "supplierDns": [],
   "deliveryNotes": [],
   "uploads": [

@@ -1635,11 +1635,19 @@ function salesCustomersHtml() {
       ${salesKpi("Revenue / Client", salesCompactMoney(revenuePerClient), "Average", "value")}
     </div>
     <section class="sales-card">
-      <table class="sales-table">
+      <table class="sales-table sales-customers-table">
+        <colgroup>
+          <col class="customer-name-col">
+          <col class="customer-contact-col">
+          <col class="customer-details-col">
+          <col class="customer-address-col">
+          <col class="customer-trn-col">
+          <col class="customer-actions-col">
+        </colgroup>
         <thead><tr><th>Customer / Company Name</th><th>Contact Person</th><th>Contact Details</th><th>Address</th><th>TRN Number</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(customer => `
           <tr>
-            <td>${salesAvatar(customer.icon)}<strong>${escapeHtml(customer.name)}</strong><br><span>${escapeHtml(customer.type)}</span></td>
+            <td><div class="customer-name-cell">${salesAvatar(customer.icon)}<div><strong>${escapeHtml(customer.name)}</strong><span>${escapeHtml(customer.type)}</span></div></div></td>
             <td><strong>${escapeHtml(customer.contact)}</strong><br><span>${escapeHtml(customer.role)}</span></td>
             <td>${escapeHtml(customer.phone)}<br><span>${escapeHtml(customer.email)}</span></td>
             <td>${escapeHtml(customer.detail)}</td>

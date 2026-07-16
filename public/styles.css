@@ -1428,6 +1428,100 @@ td[contenteditable="true"]:focus {
   font-size: 12px;
 }
 
+.sales-customers-table {
+  table-layout: fixed;
+}
+
+.sales-customers-table .customer-name-col {
+  width: 40%;
+}
+
+.sales-customers-table .customer-contact-col {
+  width: 12%;
+}
+
+.sales-customers-table .customer-details-col {
+  width: 13%;
+}
+
+.sales-customers-table .customer-address-col {
+  width: 16%;
+}
+
+.sales-customers-table .customer-trn-col {
+  width: 12%;
+}
+
+.sales-customers-table .customer-actions-col {
+  width: 7%;
+}
+
+.sales-customers-table th,
+.sales-customers-table td {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.sales-customers-table th {
+  padding: 10px 10px;
+  letter-spacing: .02em;
+}
+
+.sales-customers-table td {
+  padding: 10px 10px;
+}
+
+.sales-customers-table th:last-child,
+.sales-customers-table td:last-child {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sales-customers-table .row-menu {
+  display: inline-flex;
+  justify-content: center;
+}
+
+.sales-customers-table .inventory-menu-button {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0;
+  border: 1px solid #153766;
+  border-radius: 7px;
+  display: inline-grid;
+  place-items: center;
+  line-height: 1;
+}
+
+.customer-name-cell {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.customer-name-cell .sales-avatar {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  margin-right: 0;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  font-size: 11px;
+  line-height: 1;
+  text-align: center;
+}
+
+.customer-name-cell > div > strong,
+.customer-name-cell > div > span {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .quotation-page {
   --quote-blue: #0b63f6;
   --quote-navy: #071b3a;
