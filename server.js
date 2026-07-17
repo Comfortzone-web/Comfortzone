@@ -4361,12 +4361,31 @@ function generateVrvScheduleWorkbook(payload = {}) {
     throw new Error("VRV Schedule template file is missing.");
   }
   const entries = unzipEntriesBuffer(fs.readFileSync(VRV_SCHEDULE_TEMPLATE));
+  removeWorkbookCalcChain(entries);
   const sheetPath = findWorkbookSheetPath(entries, "VRV Schedule") || "xl/worksheets/sheet1.xml";
   if (!entries[sheetPath]) throw new Error("VRV Schedule worksheet was not found in the template.");
   let xml = entries[sheetPath].data.toString("utf8");
   xml = fillVrvScheduleSheetXml(xml, payload);
   entries[sheetPath].data = Buffer.from(xml, "utf8");
   return zipEntries(entries);
+}
+
+function removeWorkbookCalcChain(entries) {
+  delete entries["xl/calcChain.xml"];
+  const workbookRels = entries["xl/_rels/workbook.xml.rels"];
+  if (workbookRels) {
+    workbookRels.data = Buffer.from(
+      workbookRels.data.toString("utf8").replace(/<Relationship\b(?=[^>]*Type="[^"]*\/calcChain")[^>]*\/>/g, ""),
+      "utf8"
+    );
+  }
+  const contentTypes = entries["[Content_Types].xml"];
+  if (contentTypes) {
+    contentTypes.data = Buffer.from(
+      contentTypes.data.toString("utf8").replace(/<Override\b(?=[^>]*PartName="\/xl\/calcChain\.xml")[^>]*\/>/g, ""),
+      "utf8"
+    );
+  }
 }
 
 function findWorkbookSheetPath(entries, sheetName) {
@@ -4449,6 +4468,7 @@ function fillVrvScheduleSheetXml(xml, payload) {
     ...xlsxMergeRefs(xml).filter(ref => xlsxMergeMaxRow(ref) <= 10),
     ...groupMerges
   ]);
+  next = next.replace(/<extLst\b[\s\S]*?<\/extLst>/g, "");
   return next;
 }
 
