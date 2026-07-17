@@ -1422,6 +1422,10 @@ td[contenteditable="true"]:focus {
   font-weight: 600;
 }
 
+#salesDeskRoot .row-menu-list {
+  z-index: 5000;
+}
+
 .sales-table td span,
 .sales-filter-count {
   color: #64748b;

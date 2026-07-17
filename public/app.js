@@ -3812,11 +3812,7 @@ function handleSalesClick(event) {
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
   if (target.dataset.rowMenu !== undefined) {
-    const menu = target.closest(".row-menu").querySelector(".row-menu-list");
-    document.querySelectorAll(".row-menu-list").forEach(list => {
-      if (list !== menu) list.classList.add("hidden");
-    });
-    menu.classList.toggle("hidden");
+    toggleSalesFloatingMenu(target);
     return;
   }
   if (target.dataset.menuAction) {
@@ -4188,6 +4184,44 @@ function updateSalesQuotationDraft(event, shouldRender = false) {
     item[lineField] = ["qty", "unitPrice"].includes(lineField) ? Number(value || 0) : value;
     if (shouldRender) renderSalesDesk();
   }
+}
+
+function toggleSalesFloatingMenu(button) {
+  const menu = button.closest(".row-menu")?.querySelector(".row-menu-list");
+  if (!menu) return;
+  const shouldOpen = menu.classList.contains("hidden");
+  document.querySelectorAll(".row-menu-list").forEach(list => {
+    if (list !== menu) list.classList.add("hidden");
+  });
+  if (!shouldOpen) {
+    menu.classList.add("hidden");
+    return;
+  }
+  menu.classList.remove("hidden");
+  positionSalesFloatingMenu(button, menu);
+}
+
+function positionSalesFloatingMenu(button, menu) {
+  const rect = button.getBoundingClientRect();
+  const menuWidth = menu.offsetWidth || 160;
+  const menuHeight = menu.offsetHeight || 180;
+  const viewportPadding = 10;
+  const gap = 6;
+  const left = Math.min(
+    window.innerWidth - menuWidth - viewportPadding,
+    Math.max(viewportPadding, rect.right - menuWidth)
+  );
+  let top = rect.bottom + gap;
+  if (top + menuHeight > window.innerHeight - viewportPadding) {
+    top = Math.max(viewportPadding, rect.top - menuHeight - gap);
+  }
+  Object.assign(menu.style, {
+    position: "fixed",
+    left: `${left}px`,
+    top: `${top}px`,
+    right: "auto",
+    zIndex: "5000"
+  });
 }
 
 function applySalesQuotePreset(type) {

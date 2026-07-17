@@ -1346,6 +1346,34 @@ async function handleApi(req, res) {
     return send(res, 200, await salesCrmView(await readSalesCrm()));
   }
 
+  if (req.method === "POST" && url.pathname === "/api/sales-crm/customers/import") {
+    const store = await readSalesCrm();
+    const inventory = await readInventory();
+    const body = await readJson(req);
+    const rows = Array.isArray(body.customers) ? body.customers : Array.isArray(body.items) ? body.items : [];
+    let imported = 0;
+    for (const row of rows) {
+      const item = normalizeSalesItem("customers", row, store);
+      if (!item.name) continue;
+      const existingIndex = (store.customers || []).findIndex(entry => entry.id === item.id || inventoryNorm(entry.name) === inventoryNorm(item.name));
+      if (existingIndex >= 0) {
+        item.id = store.customers[existingIndex].id || item.id;
+        store.customers[existingIndex] = item;
+      } else {
+        store.customers.unshift(item);
+      }
+      const inventoryIndex = (inventory.customers || []).findIndex(entry => entry.id === item.id || inventoryNorm(entry.customerName) === inventoryNorm(item.name));
+      const inventoryCustomer = salesCustomerToInventoryCustomer(item, inventoryIndex >= 0 ? inventory.customers[inventoryIndex] : null);
+      if (inventoryIndex >= 0) inventory.customers[inventoryIndex] = inventoryCustomer;
+      else inventory.customers.push(inventoryCustomer);
+      imported++;
+    }
+    store.customers = mergeDuplicateSalesCustomers(store.customers);
+    await writeSalesCrm(store);
+    await writeInventory(inventory);
+    return send(res, 200, { imported, state: await salesCrmView(store) });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/sales-crm/quotations/pdf") {
     const store = await readSalesCrm();
     const body = await readJson(req);
@@ -1666,6 +1694,30 @@ async function handleApi(req, res) {
     }
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/inventory/models/import") {
+    const inventory = await readInventory();
+    const body = await readJson(req);
+    const rows = Array.isArray(body.models) ? body.models : Array.isArray(body.items) ? body.items : [];
+    let imported = 0;
+    for (const row of rows) {
+      const modelNo = cleanCell(row.modelNo || row.model || "").toUpperCase();
+      if (!modelNo) continue;
+      const existing = (inventory.models || []).find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
+      const next = {
+        modelNo,
+        description: cleanCell(row.description || ""),
+        brand: cleanCell(row.brand || "Daikin"),
+        type: cleanCell(row.type || ""),
+        reservedQty: Math.max(0, Number(row.reservedQty || 0))
+      };
+      if (existing) Object.assign(existing, next);
+      else inventory.models.push({ id: id(), ...next });
+      imported++;
+    }
+    await writeInventory(inventory);
+    return send(res, 200, { imported, state: await inventoryView(inventory) });
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/inventory\/models\/[^/]+$/)) {
