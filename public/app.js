@@ -23,6 +23,8 @@ let purchaseDraft = null;
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
 let purchaseUploadLoading = false;
+let purchaseLoadedAt = 0;
+let purchaseLoadPromise = null;
 let salesDeskScreen = "dashboard";
 let salesQuotationMode = "list";
 let salesProjectMode = "list";
@@ -63,9 +65,14 @@ let salesOrderBookFilters = {
 };
 let salesQuotationDraft = null;
 let salesCrmState = null;
+let salesCrmLoadedAt = 0;
+let salesCrmLoadPromise = null;
 let currentUser = null;
 let appSettings = null;
 let settingsDraft = null;
+let inventoryLoadedAt = 0;
+let inventoryLoadPromise = null;
+const viewDataRefreshMs = 30000;
 let thermalChatSelection = {
   mode: "regular",
   capacitySource: "Calculated AC Load",
@@ -246,6 +253,7 @@ async function init() {
   } else {
     await showSalesDesk("dashboard");
   }
+  warmViewData();
 }
 
 function bindShell() {
@@ -335,8 +343,21 @@ async function login(event) {
     const projectId = url.searchParams.get("project");
     if (projectId) await loadProject(projectId);
     else await showSalesDesk("dashboard");
+    warmViewData();
   } catch {
     $("#loginMessage").textContent = "Invalid email or password.";
+  }
+}
+
+function warmViewData() {
+  const run = () => {
+    loadInventory().catch(error => console.warn(error));
+    loadPurchaseOrders().catch(error => console.warn(error));
+  };
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 1200 });
+  } else {
+    setTimeout(run, 300);
   }
 }
 
@@ -530,8 +551,10 @@ async function showInventory(screen = "dashboard") {
     $("#pageTitle").textContent = "Inventory";
     $("#projectMeta").textContent = "Quantity-only AC unit stock tracking.";
   }
-  await loadInventory();
+  const needsInitialInventory = !inventoryState;
+  if (needsInitialInventory) await loadInventory().catch(() => {});
   renderInventory();
+  if (!needsInitialInventory) refreshInventoryInBackground();
 }
 
 async function showPurchaseOrders(screen = "form") {
@@ -556,9 +579,11 @@ async function showPurchaseOrders(screen = "form") {
   $("#salesDeskSubnav").classList.add("hidden");
   $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
-  await loadPurchaseOrders();
+  const needsInitialPurchase = !purchaseState;
+  if (needsInitialPurchase) await loadPurchaseOrders().catch(() => {});
   if (!purchaseDraft) purchaseDraft = newPurchaseDraft();
   renderPurchaseOrders();
+  if (!needsInitialPurchase) refreshPurchaseOrdersInBackground();
 }
 
 function refreshPurchaseTitleSpinner() {
@@ -598,11 +623,13 @@ async function showSalesDesk(screen = "dashboard") {
     $("#pageTitle").textContent = "Sales Desk";
     $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
   }
-  await loadSalesCrm();
+  const needsInitialSales = !salesCrmState;
+  if (needsInitialSales) await loadSalesCrm().catch(() => {});
   if (screen === "quotation" && salesQuotationMode === "create" && !inventoryState) {
-    await loadInventory().catch(() => {});
+    loadInventory().then(() => activeView === "salesDesk" && renderSalesDesk()).catch(() => {});
   }
   renderSalesDesk();
+  if (!needsInitialSales) refreshSalesCrmInBackground();
 }
 
 async function showSettings() {
@@ -884,8 +911,29 @@ async function deleteSettingsUpload(uploadId) {
   toast("Attachment deleted");
 }
 
-async function loadSalesCrm() {
-  salesCrmState = await api("/api/sales-crm");
+async function loadSalesCrm(options = {}) {
+  const force = !!options.force;
+  if (!force && salesCrmState && Date.now() - salesCrmLoadedAt < viewDataRefreshMs) return salesCrmState;
+  if (salesCrmLoadPromise) return salesCrmLoadPromise;
+  salesCrmLoadPromise = api("/api/sales-crm")
+    .then(state => {
+      salesCrmState = state;
+      salesCrmLoadedAt = Date.now();
+      return state;
+    })
+    .finally(() => {
+      salesCrmLoadPromise = null;
+    });
+  return salesCrmLoadPromise;
+}
+
+function refreshSalesCrmInBackground() {
+  if (!salesCrmState || Date.now() - salesCrmLoadedAt < viewDataRefreshMs) return;
+  loadSalesCrm({ force: true })
+    .then(() => {
+      if (activeView === "salesDesk") renderSalesDesk();
+    })
+    .catch(error => console.warn(error));
 }
 
 function salesData() {
@@ -5022,8 +5070,29 @@ function csvCell(value) {
   return /[",\n]/.test(text) ? `"${text}"` : text;
 }
 
-async function loadPurchaseOrders() {
-  purchaseState = await api("/api/purchase-orders");
+async function loadPurchaseOrders(options = {}) {
+  const force = !!options.force;
+  if (!force && purchaseState && Date.now() - purchaseLoadedAt < viewDataRefreshMs) return purchaseState;
+  if (purchaseLoadPromise) return purchaseLoadPromise;
+  purchaseLoadPromise = api("/api/purchase-orders")
+    .then(state => {
+      purchaseState = state;
+      purchaseLoadedAt = Date.now();
+      return state;
+    })
+    .finally(() => {
+      purchaseLoadPromise = null;
+    });
+  return purchaseLoadPromise;
+}
+
+function refreshPurchaseOrdersInBackground() {
+  if (!purchaseState || Date.now() - purchaseLoadedAt < viewDataRefreshMs) return;
+  loadPurchaseOrders({ force: true })
+    .then(() => {
+      if (activeView === "purchaseOrders") renderPurchaseOrders();
+    })
+    .catch(error => console.warn(error));
 }
 
 function setCanvasActionsVisible(visible) {
@@ -5525,8 +5594,30 @@ async function deletePurchaseSupplier(supplierId) {
   toast("Supplier deleted");
 }
 
-async function loadInventory() {
-  inventoryState = await api("/api/inventory");
+async function loadInventory(options = {}) {
+  const force = !!options.force;
+  if (!force && inventoryState && Date.now() - inventoryLoadedAt < viewDataRefreshMs) return inventoryState;
+  if (inventoryLoadPromise) return inventoryLoadPromise;
+  inventoryLoadPromise = api("/api/inventory")
+    .then(state => {
+      inventoryState = state;
+      inventoryLoadedAt = Date.now();
+      return state;
+    })
+    .finally(() => {
+      inventoryLoadPromise = null;
+    });
+  return inventoryLoadPromise;
+}
+
+function refreshInventoryInBackground() {
+  if (!inventoryState || Date.now() - inventoryLoadedAt < viewDataRefreshMs) return;
+  loadInventory({ force: true })
+    .then(() => {
+      if (activeView === "inventory") renderInventory();
+      if (activeView === "salesDesk" && salesDeskScreen === "quotation" && salesQuotationMode === "create") renderSalesDesk();
+    })
+    .catch(error => console.warn(error));
 }
 
 async function loadProjectList() {
