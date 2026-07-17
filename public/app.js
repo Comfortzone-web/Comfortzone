@@ -8489,10 +8489,15 @@ async function downloadTable(key) {
     );
   }
   if (key === "vrvSchedule") {
-    const blob = buildTableWorkbookBlob({
-      title: "VRV Schedule",
-      columns: table.columns,
-      rows: table.rows
+    const blob = await api("/api/export/vrv-schedule", {
+      method: "POST",
+      body: JSON.stringify({
+        filename: tableDownloadFilenames[key],
+        projectName: state.details?.project || state.details?.projectName || "",
+        customerName: state.details?.customer || state.details?.customerName || "",
+        columns: table.columns,
+        rows: table.rows
+      })
     });
     downloadBlob(blob, tableDownloadFilenames[key]);
     return;
