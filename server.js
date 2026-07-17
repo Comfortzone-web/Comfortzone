@@ -1695,7 +1695,7 @@ async function handleApi(req, res) {
     const payload = await readJson(req);
     const order = normalizePurchaseOrder(payload.order || payload, await readPurchaseOrders(), false);
     if (order.status !== "Created" || !order.poNo) return send(res, 400, { error: "Create the Purchase Order before downloading PDF." });
-    const pdf = purchaseOrderPdfBuffer(order);
+    const pdf = await purchaseOrderPdfBuffer(order);
     res.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${purchaseOrderPdfFilename(order)}"`
@@ -1938,7 +1938,7 @@ async function handleApi(req, res) {
   if (req.method === "POST" && url.pathname === "/api/inventory/delivery-note-pdf") {
     const payload = await readJson(req);
     const dn = payload.deliveryNote || payload;
-    const pdf = deliveryNotePdfBuffer(payload);
+    const pdf = await deliveryNotePdfBuffer(payload);
     res.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Disposition": `attachment; filename="${(dn.dnNo || "delivery-note").replace(/"/g, "")}.pdf"`
@@ -3395,32 +3395,203 @@ function formatChallanDate(dateValue) {
   return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }).replace(/ /g, " ");
 }
 
-function deliveryNotePdfBuffer(payload) {
-  const input = {
-    ...(payload || {}),
-    letterheadPath: path.join(PUBLIC, "assets", "letterhead-full.jpg")
-  };
-  const result = spawnSync(PYTHON_EXE, [DELIVERY_NOTE_PDF_SCRIPT], {
-    input: JSON.stringify(input),
-    maxBuffer: 15 * 1024 * 1024
+function createPdfKitBuffer(draw) {
+  if (!PDFDocument) throw new Error("PDF generation library is not available on this deployment.");
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: "A4", margin: 0, bufferPages: true });
+    const chunks = [];
+    doc.on("data", chunk => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+    try {
+      draw(doc);
+      doc.end();
+    } catch (error) {
+      reject(error);
+    }
   });
-  if (result.status !== 0) {
-    const message = result.stderr ? result.stderr.toString("utf8") : "Unknown PDF generation error";
-    throw new Error(message);
-  }
-  return result.stdout;
 }
 
-function purchaseOrderPdfBuffer(order) {
-  const result = spawnSync(PYTHON_EXE, [PURCHASE_ORDER_PDF_SCRIPT], {
-    input: JSON.stringify({ order }),
-    maxBuffer: 15 * 1024 * 1024
+function drawPdfText(doc, text, x, y, width, options = {}) {
+  doc.font(options.bold ? "Helvetica-Bold" : "Helvetica")
+    .fontSize(options.size || 9)
+    .fillColor(options.color || "#07152f")
+    .text(String(text ?? ""), x, y, {
+      width,
+      align: options.align || "left",
+      lineGap: options.lineGap || 1
+    });
+}
+
+function drawPdfTableCell(doc, text, x, y, width, height, options = {}) {
+  doc.rect(x, y, width, height).stroke(options.border || "#c8d7ee");
+  drawPdfText(doc, text, x + 5, y + 6, width - 10, {
+    bold: options.bold,
+    size: options.size || 8.5,
+    align: options.align || "left",
+    color: options.color || "#07152f"
   });
-  if (result.status !== 0) {
-    const message = result.stderr ? result.stderr.toString("utf8") : "Unknown PO PDF generation error";
-    throw new Error(message);
-  }
-  return result.stdout;
+}
+
+function pdfTextHeight(doc, text, width, size = 8.5) {
+  doc.font("Helvetica").fontSize(size);
+  return doc.heightOfString(String(text || ""), { width, lineGap: 1 });
+}
+
+async function deliveryNotePdfBuffer(payload) {
+  return createPdfKitBuffer(doc => {
+    const dn = payload.deliveryNote || payload || {};
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const left = 46;
+    const right = 46;
+    const width = pageWidth - left - right;
+    const bottom = 62;
+    const letterhead = path.join(PUBLIC, "assets", "letterhead-full.jpg");
+
+    const drawPage = () => {
+      if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
+      doc.strokeColor("#c8d7ee").fillColor("#07152f");
+    };
+    const addPage = () => {
+      doc.addPage({ size: "A4", margin: 0 });
+      drawPage();
+      return 185;
+    };
+
+    drawPage();
+    drawPdfText(doc, "DELIVERY CHALLAN", left, 126, width, { bold: true, size: 21, align: "right" });
+    drawPdfText(doc, `Delivery Challan# ${deliveryChallanNo(dn.dnNo)}`, left, 156, width, { bold: true, size: 10, align: "right" });
+
+    drawPdfText(doc, "Deliver To", left, 212, 220, { size: 9, color: "#5b6a86" });
+    drawPdfText(doc, dn.customerName || "-", left, 230, 220, { bold: true, size: 10 });
+    drawPdfText(doc, dn.deliveryLocation || "-", left, 246, 220, { size: 9 });
+    if (dn.phone) drawPdfText(doc, `Tel: ${dn.phone}`, left, 262, 220, { size: 9 });
+    if (dn.contactPerson) drawPdfText(doc, `Contact: ${dn.contactPerson}`, left, 278, 220, { size: 9 });
+
+    drawPdfText(doc, "Challan Date :", pageWidth - right - 205, 218, 100, { size: 9, align: "right", color: "#5b6a86" });
+    drawPdfText(doc, formatChallanDate(dn.date || todayISO()), pageWidth - right - 95, 218, 95, { bold: true, size: 9, align: "right" });
+    drawPdfText(doc, "Ref :", pageWidth - right - 205, 244, 100, { size: 9, align: "right", color: "#5b6a86" });
+    drawPdfText(doc, dn.projectName || "-", pageWidth - right - 95, 244, 95, { bold: true, size: 9, align: "right" });
+
+    let y = 324;
+    const col = [35, width - 95, 60];
+    doc.rect(left, y, width, 24).fillAndStroke("#1d1f1e", "#1d1f1e");
+    drawPdfText(doc, "#", left, y + 7, col[0], { bold: true, size: 8.5, align: "center", color: "#ffffff" });
+    drawPdfText(doc, "Item & Description", left + col[0], y + 7, col[1], { bold: true, size: 8.5, color: "#ffffff" });
+    drawPdfText(doc, "Qty", left + col[0] + col[1], y + 7, col[2], { bold: true, size: 8.5, align: "right", color: "#ffffff" });
+    y += 24;
+
+    const lines = Array.isArray(dn.lines) ? dn.lines : [];
+    if (!lines.length) {
+      drawPdfTableCell(doc, "No items added.", left, y, width, 28);
+      y += 28;
+    }
+    lines.forEach((line, index) => {
+      const desc = `${line.modelNo || ""}${line.description ? `\n${line.description}` : ""}`;
+      const rowH = Math.max(34, pdfTextHeight(doc, desc, col[1] - 10, 8.5) + 15);
+      if (y + rowH > pageHeight - bottom - 80) y = addPage();
+      drawPdfTableCell(doc, index + 1, left, y, col[0], rowH, { align: "center" });
+      drawPdfTableCell(doc, desc, left + col[0], y, col[1], rowH, { bold: true });
+      drawPdfTableCell(doc, trimNumber(line.qtyGoingOut || line.quantity || 0), left + col[0] + col[1], y, col[2], rowH, { align: "right", bold: true });
+      y += rowH;
+    });
+
+    y += 42;
+    drawPdfText(doc, "Receivers Name:", pageWidth - right - 210, y, 210, { size: 10 });
+    drawPdfText(doc, "Receiver Number:", pageWidth - right - 210, y + 28, 210, { size: 10 });
+    drawPdfText(doc, "Date & Signature:", pageWidth - right - 210, y + 56, 210, { size: 10 });
+  });
+}
+
+async function purchaseOrderPdfBuffer(order) {
+  return createPdfKitBuffer(doc => {
+    const pageWidth = 595.28;
+    const pageHeight = 841.89;
+    const left = 36;
+    const right = 36;
+    const width = pageWidth - left - right;
+    const bottom = 54;
+    const letterhead = path.join(PUBLIC, "assets", "purchase-order-letterhead.jpg");
+
+    const drawPage = () => {
+      if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
+      doc.strokeColor("#b9c9e6").fillColor("#07152f");
+    };
+    const addPage = () => {
+      doc.addPage({ size: "A4", margin: 0 });
+      drawPage();
+      return 126;
+    };
+
+    drawPage();
+    drawPdfText(doc, "PURCHASE ORDER", left, 86, width, { bold: true, size: 18, align: "center", color: "#006f3c" });
+    drawPdfText(doc, `PO No: ${order.poNo || "-"}`, left, 120, width / 2, { bold: true, size: 9 });
+    drawPdfText(doc, `Date: ${formatPdfDate(order.poDate)}`, left + width / 2, 120, width / 2, { bold: true, size: 9, align: "right" });
+
+    const metaY = 150;
+    drawPdfText(doc, "Supplier", left, metaY, 245, { bold: true, size: 10, color: "#006f3c" });
+    drawPdfText(doc, `${order.supplierName || "-"}\n${order.supplierAddress || ""}\nTRN: ${order.trn || "-"}`, left, metaY + 18, 245, { size: 8.7 });
+    drawPdfText(doc, "Project / Reference", left + 285, metaY, 238, { bold: true, size: 10, color: "#006f3c" });
+    drawPdfText(doc, `Project: ${order.projectName || "-"}\nQuotation No: ${order.quotationNo || "-"}\nPayment Terms: ${order.paymentTerms || "-"}`, left + 285, metaY + 18, 238, { size: 8.7 });
+
+    let y = 238;
+    const col = [25, width - 245, 45, 72, 50, 53];
+    doc.rect(left, y, width, 24).fillAndStroke("#006f3c", "#006f3c");
+    ["#", "Item Description", "Qty", "Unit Price", "VAT %", "Amount"].forEach((title, index) => {
+      const x = left + col.slice(0, index).reduce((sum, item) => sum + item, 0);
+      drawPdfText(doc, title, x + 3, y + 7, col[index] - 6, { bold: true, size: 7.8, align: index > 1 ? "right" : "left", color: "#ffffff" });
+    });
+    y += 24;
+
+    (order.items || []).forEach((item, index) => {
+      const desc = item.description || item.modelNo || "";
+      const rowH = Math.max(26, pdfTextHeight(doc, desc, col[1] - 10, 7.8) + 14);
+      if (y + rowH > pageHeight - bottom - 150) {
+        y = addPage();
+        doc.rect(left, y, width, 24).fillAndStroke("#006f3c", "#006f3c");
+        ["#", "Item Description", "Qty", "Unit Price", "VAT %", "Amount"].forEach((title, headerIndex) => {
+          const x = left + col.slice(0, headerIndex).reduce((sum, value) => sum + value, 0);
+          drawPdfText(doc, title, x + 3, y + 7, col[headerIndex] - 6, { bold: true, size: 7.8, align: headerIndex > 1 ? "right" : "left", color: "#ffffff" });
+        });
+        y += 24;
+      }
+      let x = left;
+      const cells = [
+        { value: index + 1, align: "center" },
+        { value: desc, align: "left" },
+        { value: trimNumber(item.qty), align: "right" },
+        { value: money(item.unitPrice), align: "right" },
+        { value: trimNumber(item.vatPercent || 5), align: "right" },
+        { value: money(item.amount), align: "right" }
+      ];
+      cells.forEach((cell, cellIndex) => {
+        drawPdfTableCell(doc, cell.value, x, y, col[cellIndex], rowH, { align: cell.align, size: 7.8 });
+        x += col[cellIndex];
+      });
+      y += rowH;
+    });
+
+    y += 16;
+    const summaryX = pageWidth - right - 170;
+    [
+      ["Subtotal", order.subtotal],
+      ["Discount", order.discount],
+      ["Total After Discount", order.totalAfterDiscount],
+      ["VAT Total", order.vatTotal],
+      ["Grand Total", order.grandTotal]
+    ].forEach(([label, value], index) => {
+      drawPdfText(doc, label, summaryX, y, 95, { bold: index === 4, size: 8.5, align: "right" });
+      drawPdfText(doc, money(value), summaryX + 100, y, 70, { bold: index === 4, size: index === 4 ? 10 : 8.5, align: "right", color: index === 4 ? "#006f3c" : "#07152f" });
+      y += 15;
+    });
+
+    y += 12;
+    if (y > pageHeight - bottom - 95) y = addPage();
+    drawPdfText(doc, "Note:", left, y, width, { bold: true, size: 9 });
+    y += 14;
+    drawPdfText(doc, order.notes || DEFAULT_PURCHASE_NOTES, left, y, width, { size: 8.4, lineGap: 2 });
+  });
 }
 
 function purchaseOrderPdfFilename(order) {
