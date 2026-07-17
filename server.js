@@ -296,10 +296,47 @@ function parseCookies(req) {
   }));
 }
 
+function sessionSecret() {
+  return process.env.SESSION_SECRET || "comfortzone-session-v1";
+}
+
+function signSessionPayload(payload) {
+  return crypto.createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+}
+
+function createSessionToken(userId) {
+  const payload = Buffer.from(JSON.stringify({
+    userId,
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 14
+  }), "utf8").toString("base64url");
+  return `${payload}.${signSessionPayload(payload)}`;
+}
+
+function readSessionToken(token) {
+  const [payload, signature] = String(token || "").split(".");
+  if (!payload || !signature) return null;
+  const expected = signSessionPayload(payload);
+  if (Buffer.byteLength(signature) !== Buffer.byteLength(expected)) return null;
+  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const session = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!session.userId || Number(session.exp || 0) < Date.now()) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function sessionCookie(name, value, req, extra = "") {
+  const secure = req.headers["x-forwarded-proto"] === "https" || String(req.headers.host || "").includes("vercel.app");
+  return `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}${extra}`;
+}
+
 async function sessionUser(req) {
   const token = parseCookies(req).cz_session;
-  if (!token || !sessions.has(token)) return null;
-  const session = sessions.get(token);
+  if (!token) return null;
+  const session = readSessionToken(token) || sessions.get(token);
+  if (!session) return null;
   const settings = await readSettings();
   const user = (settings.users || []).find(item => item.id === session.userId && item.active !== false);
   if (!user) {
@@ -1198,11 +1235,11 @@ async function handleApi(req, res) {
     const settings = await readSettings();
     const matched = (settings.users || []).find(item => cleanCell(item.email).toLowerCase() === cleanCell(body.email).toLowerCase() && item.active !== false);
     if (!matched || !verifyPassword(body.password, matched.passwordHash)) return send(res, 401, { error: "Invalid email or password" });
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = createSessionToken(matched.id);
     sessions.set(token, { userId: matched.id, createdAt: Date.now() });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": `cz_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+      "Set-Cookie": sessionCookie("cz_session", token, req)
     });
     return res.end(JSON.stringify({ user: { id: matched.id, name: matched.name, role: matched.role, email: matched.email }, settings: publicSettings(settings) }));
   }
@@ -1212,7 +1249,7 @@ async function handleApi(req, res) {
     if (token) sessions.delete(token);
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Set-Cookie": "cz_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"
+      "Set-Cookie": sessionCookie("cz_session", "", req, "; Max-Age=0")
     });
     return res.end(JSON.stringify({ ok: true }));
   }

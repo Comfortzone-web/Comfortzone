@@ -390,6 +390,7 @@ function applyAppSettings() {
 async function api(path, options = {}) {
   const response = await fetch(path, {
     headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
+    credentials: "same-origin",
     ...options
   });
   if (response.status === 401 && path !== "/api/auth/me" && path !== "/api/auth/login") {
@@ -6944,8 +6945,12 @@ async function downloadPurchasePdf(order) {
   if (!order || order.status !== "Created" || !order.poNo) {
     return alert("Create the Purchase Order first, then download PDF.");
   }
-  const blob = await api("/api/purchase-orders/pdf", { method: "POST", body: JSON.stringify({ order }) });
-  downloadBlob(blob, `${safeFile(`${order.poNo}-${order.supplierName || "Supplier"}`)}.pdf`);
+  try {
+    const blob = await api("/api/purchase-orders/pdf", { method: "POST", body: JSON.stringify({ order }) });
+    downloadBlob(blob, `${safeFile(`${order.poNo}-${order.supplierName || "Supplier"}`)}.pdf`);
+  } catch (error) {
+    toast(error.message || "Purchase Order PDF download failed.");
+  }
 }
 
 function handleInventoryMenuAction(action, idValue) {
@@ -7325,8 +7330,12 @@ async function deleteDeliveryNote(deliveryNoteId) {
 }
 
 async function downloadDeliveryPdf(note) {
-  const blob = await api("/api/inventory/delivery-note-pdf", { method: "POST", body: JSON.stringify({ deliveryNote: note }) });
-  downloadBlob(blob, `${safeFile(note.dnNo || "delivery-note")}.pdf`);
+  try {
+    const blob = await api("/api/inventory/delivery-note-pdf", { method: "POST", body: JSON.stringify({ deliveryNote: note }) });
+    downloadBlob(blob, `${safeFile(note.dnNo || "delivery-note")}.pdf`);
+  } catch (error) {
+    toast(error.message || "Delivery Note PDF download failed.");
+  }
 }
 
 function openStockPopup(modelNo) {
@@ -8626,7 +8635,7 @@ function downloadBlob(blob, filename) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function buildTableWorkbookBlob(payload = {}) {
