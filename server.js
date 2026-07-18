@@ -1158,13 +1158,14 @@ function nextSalesEnquiryNoFrom(current) {
 function normalizeSalesProjectBoqItem(item = {}) {
   const qty = Number(item.qty || item.quantity || 0) || 0;
   const deliveredQty = Number(item.deliveredQty || 0) || 0;
+  const pendingQty = qty - deliveredQty;
   return {
     model: cleanCell(item.model || item.modelNo || ""),
     description: cleanCell(item.description || ""),
     qty,
     deliveredQty,
-    reserve: !!(item.reserve || item.reserveStock),
-    pendingQty: qty - deliveredQty,
+    reserve: pendingQty > 0 && !!(item.reserve || item.reserveStock),
+    pendingQty,
     stock: cleanCell(item.stock || "")
   };
 }
@@ -3021,7 +3022,11 @@ function salesProjectReservations(projects = []) {
       const modelNo = cleanCell(row.model || row.modelNo || "");
       if (!modelNo) continue;
       const key = inventoryNorm(modelNo);
-      reserved[key] = (reserved[key] || 0) + Math.max(0, Number(row.qty || row.quantity || 0));
+      const qty = Number(row.qty || row.quantity || 0) || 0;
+      const deliveredQty = Number(row.deliveredQty || 0) || 0;
+      const reserveQty = Math.max(0, qty - deliveredQty);
+      if (!reserveQty) continue;
+      reserved[key] = (reserved[key] || 0) + reserveQty;
     }
     return reserved;
   }, {});

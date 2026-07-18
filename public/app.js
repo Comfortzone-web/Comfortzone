@@ -2091,7 +2091,8 @@ function salesProjectDrawerBoqRowHtml(row = {}, index = 0) {
   const delivered = Number(row.deliveredQty || 0) || 0;
   const pending = qty - delivered;
   const stock = model ? salesProjectStockQty(model) : "";
-  const reserve = !!(row.reserve || row.reserveStock);
+  const canReserve = pending > 0;
+  const reserve = canReserve && !!(row.reserve || row.reserveStock);
   return `
     <tr data-project-boq-row>
       <td>
@@ -2103,8 +2104,8 @@ function salesProjectDrawerBoqRowHtml(row = {}, index = 0) {
       <td data-project-boq-pending>${pending}</td>
       <td data-project-boq-stock>${model ? escapeHtml(String(stock)) : ""}</td>
       <td class="sales-project-reserve-cell">
-        <label class="sales-project-row-toggle" title="Reserve stock">
-          <input type="checkbox" data-project-boq-field="reserve" ${reserve ? "checked" : ""}>
+        <label class="sales-project-row-toggle ${canReserve ? "" : "is-disabled"}" title="${canReserve ? "Reserve stock" : "No pending quantity to reserve"}">
+          <input type="checkbox" data-project-boq-field="reserve" ${reserve ? "checked" : ""} ${canReserve ? "" : "disabled"}>
           <span></span>
         </label>
         <button class="sales-project-row-delete" type="button" data-delete-project-boq="${index}" aria-label="Delete BOQ row">x</button>
@@ -2316,12 +2317,23 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false) {
   const descriptionInput = row.querySelector('[data-project-boq-field="description"]');
   const modelInfo = salesProjectModelInfo(model);
   const pending = qty - delivered;
+  const canReserve = pending > 0;
   const stock = salesProjectStockQty(model);
   const pendingCell = row.querySelector("[data-project-boq-pending]");
   const stockCell = row.querySelector("[data-project-boq-stock]");
+  const reserveInput = row.querySelector('[data-project-boq-field="reserve"]');
+  const reserveToggle = reserveInput?.closest(".sales-project-row-toggle");
   if (descriptionInput && modelInfo?.description) descriptionInput.value = modelInfo.description;
   if (pendingCell) pendingCell.textContent = String(pending);
   if (stockCell) stockCell.textContent = model ? String(stock) : "";
+  if (reserveInput) {
+    if (!canReserve) reserveInput.checked = false;
+    reserveInput.disabled = !canReserve;
+  }
+  if (reserveToggle) {
+    reserveToggle.classList.toggle("is-disabled", !canReserve);
+    reserveToggle.title = canReserve ? "Reserve stock" : "No pending quantity to reserve";
+  }
 }
 
 async function uploadSalesProjectDirectDelivery(modal, project, file) {
@@ -2523,14 +2535,15 @@ function collectSalesProjectBoqRows(container) {
     };
     const qty = Number(get("qty")) || 0;
     const deliveredQty = Number(get("deliveredQty")) || 0;
+    const pendingQty = qty - deliveredQty;
     const model = salesProjectModelNo(get("model"));
     return {
       model,
       description: get("description"),
       qty,
       deliveredQty,
-      reserve: !!get("reserve"),
-      pendingQty: qty - deliveredQty,
+      reserve: pendingQty > 0 && !!get("reserve"),
+      pendingQty,
       stock: salesProjectStockQty(model)
     };
   }).filter(row => row.model || row.description || row.qty || row.deliveredQty);
@@ -5509,7 +5522,7 @@ function refreshPurchaseTotals() {
   const subtotalInput = $("#poSubtotalInput");
   if (subtotalInput && String(purchaseDraft.manualSubtotal ?? "").trim() === "") subtotalInput.value = money(purchaseDraft.subtotal);
   const discountInput = $("#poDiscountInput");
-  if (discountInput) discountInput.value = purchaseDraft.discount || "";
+  if (discountInput && document.activeElement !== discountInput) discountInput.value = purchaseDraft.discount || "";
   $("#poTotalAfterDiscount") && ($("#poTotalAfterDiscount").textContent = money(purchaseDraft.totalAfterDiscount));
   $("#poVatTotal") && ($("#poVatTotal").textContent = money(purchaseDraft.vatTotal));
   $("#poGrandTotal") && ($("#poGrandTotal").textContent = money(purchaseDraft.grandTotal));
@@ -6871,6 +6884,7 @@ function handlePurchaseInput(event) {
     return;
   }
   if (input.dataset.poDiscount !== undefined) {
+    input.value = decimalInputValue(input.value);
     purchaseDraft.discount = input.value;
     refreshPurchaseTotals();
     return;
@@ -6887,6 +6901,12 @@ function handlePurchaseInput(event) {
     line[field] = ["qty", "unitPrice", "vatPercent"].includes(field) ? Number(input.value || 0) : input.value;
     refreshPurchaseTotals();
   }
+}
+
+function decimalInputValue(value) {
+  const text = String(value || "").replace(/,/g, "").replace(/[^\d.]/g, "");
+  const [whole, ...rest] = text.split(".");
+  return rest.length ? `${whole}.${rest.join("")}` : whole;
 }
 
 async function uploadPurchaseQuotation() {

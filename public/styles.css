@@ -4623,6 +4623,11 @@ td[contenteditable="true"]:focus {
   transition: background .15s ease, border-color .15s ease;
 }
 
+.sales-project-row-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
 .sales-project-row-toggle span::after {
   content: "";
   position: absolute;
