@@ -1217,7 +1217,14 @@ function serveStatic(req, res) {
     return notFound(res);
   }
   const ext = path.extname(normalized).toLowerCase();
-  send(res, 200, fs.readFileSync(normalized), mimeTypes[ext] || "application/octet-stream");
+  const cacheControl = [".html", ".js", ".css"].includes(ext)
+    ? "no-cache, no-store, must-revalidate"
+    : "public, max-age=86400";
+  res.writeHead(200, {
+    "Content-Type": mimeTypes[ext] || "application/octet-stream",
+    "Cache-Control": cacheControl
+  });
+  res.end(fs.readFileSync(normalized));
 }
 
 async function handleApi(req, res) {

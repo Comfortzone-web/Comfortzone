@@ -7501,6 +7501,7 @@ async function openThermalChat() {
   $("#chatLog").innerHTML = "";
   if (state.thermalChatMessages && state.thermalChatMessages.length) {
     renderThermalChatMessages();
+    ensureThermalExtractionChoicePrompt();
     return;
   }
   const uploadIds = thermalUploadIds();
@@ -7513,6 +7514,15 @@ async function openThermalChat() {
     if (upload) addChatFile(upload);
   });
   askThermalExtractionChoice();
+}
+
+function ensureThermalExtractionChoicePrompt() {
+  if (thermalChatSelection.requested) return;
+  if (!thermalUploadIds().length) return;
+  const hasPrompt = (state.thermalChatMessages || []).some(message =>
+    message.kind === "text" && /what do you want to extract/i.test(message.text || "")
+  );
+  if (!hasPrompt) askThermalExtractionChoice();
 }
 
 function renderThermalChatMessages() {
