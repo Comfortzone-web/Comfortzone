@@ -7871,13 +7871,13 @@ async function extractThermalFromChat(options = {}) {
       addChat(`Unable to read clearly: ${extracted.unclearFields.join(", ")}. Upload a higher-resolution or zoomed screenshot.`);
     }
   } else if (extracted.customColumns && extracted.customRows && extracted.customColumns.length) {
-    const nextRows = extracted.customRows.map(row => {
+    const nextRows = applyExtractionReviewCells(extracted.customRows.map(row => {
       const next = {};
       extracted.customColumns.forEach((column, index) => {
         next[column] = Array.isArray(row) ? (row[index] || "") : (row[column] || "");
       });
       return next;
-    });
+    }), extracted.customReviewCells);
     const existingColumns = state.tables.thermal.columns || [];
     state.tables.thermal.columns = thermalChatSelection.appendResults && existingColumns.length
       ? existingColumns
@@ -7885,7 +7885,6 @@ async function extractThermalFromChat(options = {}) {
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...nextRows]
       : nextRows;
-    buildVrvSchedule();
     autoLayoutWorkflow();
     addChat(extracted.message || "Custom table extraction is ready in the Export File table.");
     if (extracted.unclearFields && extracted.unclearFields.length) {

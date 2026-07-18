@@ -2118,6 +2118,18 @@ async function extractThermalWithOpenAI(project, options) {
     return { status: "no_files", rows: [], unclearFields: [], message: "Upload the thermal sheet PDF or screenshots first." };
   }
 
+  let detectedStructure = { rowCount: 0, columns: [], notes: "" };
+  try {
+    detectedStructure = await callOpenAIJson(
+      "thermal_structure_detection",
+      thermalStructureJsonSchema(),
+      await thermalOpenAIContent(project, uploads, thermalStructurePrompt(options))
+    );
+  } catch (error) {
+    detectedStructure = { rowCount: 0, columns: [], notes: "Structure pass failed." };
+  }
+  options = { ...options, detectedStructure };
+
   let parsed;
   try {
     parsed = await callOpenAIJson(
@@ -2131,7 +2143,7 @@ async function extractThermalWithOpenAI(project, options) {
   if (!Array.isArray(parsed.unclearFields)) parsed.unclearFields = [];
 
   const customColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns.map(safeExtract).filter(Boolean) : [];
-  const customRows = Array.isArray(parsed.customRows)
+  let customRows = Array.isArray(parsed.customRows)
     ? parsed.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
     : [];
   const rows = options.customExtraction ? [] : (parsed.rows || []).map(row => ({
@@ -2148,8 +2160,15 @@ async function extractThermalWithOpenAI(project, options) {
     "Air Flow Rate": safeExtract(row.airFlowRate)
   }));
   const reviewCells = {};
+  const customReviewCells = {};
   let verifiedRows = [];
   let numericMismatchCount = 0;
+  let customMismatchCount = 0;
+
+  const expectedRowCount = Number(detectedStructure.rowCount || 0);
+  if (!options.customExtraction && expectedRowCount > 0 && rows.length !== expectedRowCount) {
+    parsed.unclearFields.push(`Row count mismatch: detected ${expectedRowCount}, extracted ${rows.length}`);
+  }
 
   if (!options.customExtraction && rows.length) {
     try {
@@ -2167,9 +2186,27 @@ async function extractThermalWithOpenAI(project, options) {
       parsed.unclearFields.push("Numeric verification pass failed");
     }
   }
+  if (options.customExtraction && customColumns.length && customRows.length) {
+    try {
+      const customVerification = await callOpenAIJson(
+        "thermal_custom_column_verification",
+        thermalCustomVerificationJsonSchema(),
+        await thermalOpenAIContent(project, uploads, thermalCustomVerificationPrompt(options, customColumns))
+      );
+      const verifiedCustomRows = Array.isArray(customVerification.customRows)
+        ? customVerification.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+        : [];
+      customMismatchCount = applyThermalCustomVerification(customRows, verifiedCustomRows, customColumns, customReviewCells);
+      for (const field of customVerification.unclearFields || []) {
+        if (!parsed.unclearFields.includes(field)) parsed.unclearFields.push(field);
+      }
+    } catch (error) {
+      parsed.unclearFields.push("Custom column verification pass failed");
+    }
+  }
 
   return {
-    status: (parsed.unclearFields && parsed.unclearFields.length) || numericMismatchCount ? "needs_verification" : "ok",
+    status: (parsed.unclearFields && parsed.unclearFields.length) || numericMismatchCount || customMismatchCount ? "needs_verification" : "ok",
     capacitySources: parsed.capacitySources || [],
     selectedCapacitySource: options.capacitySource || parsed.selectedCapacitySource || "",
     familyModel: options.familyModel || parsed.familyModel || "",
@@ -2178,9 +2215,11 @@ async function extractThermalWithOpenAI(project, options) {
     customRows,
     unclearFields: parsed.unclearFields || [],
     reviewCells,
+    customReviewCells,
+    detectedStructure,
     numericVerificationRows: verifiedRows,
-    message: numericMismatchCount
-      ? `${numericMismatchCount} numeric cell(s) were unclear or did not match the second reading. They were left blank and highlighted for review.`
+    message: numericMismatchCount || customMismatchCount
+      ? `${numericMismatchCount + customMismatchCount} cell(s) were unclear or did not match the independent reading. They were left blank and highlighted for review.`
       : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : rows.length ? "Thermal values extracted into the Export File table." : "No rows were detected.")
   };
 }
@@ -2306,7 +2345,55 @@ function applyThermalNumericVerification(rows, verifiedRows, reviewCells) {
   return mismatchCount;
 }
 
+function applyThermalCustomVerification(customRows, verifiedRows, customColumns, customReviewCells) {
+  let mismatchCount = 0;
+  for (let rowIndex = 0; rowIndex < customRows.length; rowIndex += 1) {
+    const row = customRows[rowIndex] || [];
+    const verify = verifiedRows[rowIndex] || [];
+    for (let columnIndex = 0; columnIndex < customColumns.length; columnIndex += 1) {
+      const first = safeExtract(row[columnIndex]);
+      const second = safeExtract(verify[columnIndex]);
+      if (!first && !second) continue;
+      if (!second || first !== second) {
+        row[columnIndex] = "";
+        customReviewCells[`${rowIndex}:${customColumns[columnIndex]}`] = {
+          row: rowIndex,
+          column: customColumns[columnIndex],
+          first,
+          second,
+          reason: second ? "Independent verification mismatch" : "Independent verification unclear"
+        };
+        mismatchCount += 1;
+      }
+    }
+  }
+  return mismatchCount;
+}
+
+function thermalStructurePrompt(options) {
+  return `
+You are reading a scanned HVAC Thermal Load Sheet or screenshot before extraction.
+
+Task:
+- Identify the main visible table structure.
+- Count only actual data rows, not headers, totals, blank lines, or notes.
+- Detect the lowest-level column headers exactly as visible.
+- Detect merged/hierarchical headers and explain them briefly in notes.
+- Do not extract cell values in this pass.
+
+User extraction request:
+${options.customInstruction || (options.customExtraction ? "Custom requested columns/table." : "Regular VRV thermal export.")}
+
+Return JSON only.`;
+}
+
 function thermalPrompt(options) {
+  const structure = options.detectedStructure || {};
+  const structureNote = `
+Detected structure from first pass:
+- Expected data row count: ${Number(structure.rowCount || 0) || "unknown"}
+- Visible columns: ${(structure.columns || []).join(", ") || "unknown"}
+- Notes: ${structure.notes || "-"}`;
   if (options.customExtraction) {
     return `
 You are an accurate table extraction assistant for scanned PDFs and screenshots.
@@ -2314,11 +2401,14 @@ You are an accurate table extraction assistant for scanned PDFs and screenshots.
 The user wants a custom table extraction, not the regular VRV thermal export template.
 User request:
 ${options.customInstruction || "Extract the requested table and columns."}
+${structureNote}
 
 Rules:
 - Extract only the table(s), columns, and rows requested by the user.
 - If the user asks for specific columns, return only those columns in customColumns, in the requested order.
 - If the user asks for a particular table but not exact columns, return the visible table columns.
+- Extract column by column, not row by row, then assemble rows by the same row order.
+- Keep the final row count aligned with the detected table row count when it is visible.
 - Preserve row order exactly.
 - Transcribe values exactly as visible.
 - Do not calculate, infer, auto-correct, or guess.
@@ -2333,11 +2423,14 @@ Rules:
   return `
 You are an HVAC Schedule Extractor specialized in scanned Thermal Load Sheets.
 Priority is extraction accuracy, especially for numeric values.
+${structureNote}
 
 Follow this workflow:
+- Use the detected table structure first; then extract each required column independently.
 - Detect multi-row, merged, and hierarchical headers.
 - Use lowest-level child headers as extractable columns.
 - Preserve all rows exactly; never merge, deduplicate, or remove rows.
+- Keep extracted row count aligned with the detected row count when visible.
 - Include all units.
 - Detect capacity sources containing both Total kW and Sensible kW.
 - Capacity source selected by user: ${options.capacitySource || "auto if only one exists"}.
@@ -2377,6 +2470,7 @@ Return JSON only.`;
 }
 
 function thermalNumericVerificationPrompt(options) {
+  const structure = options.detectedStructure || {};
   return `
 You are doing a second independent verification pass for a scanned HVAC Thermal Load Sheet.
 
@@ -2387,6 +2481,7 @@ Important:
 - Use OCR text and visual inspection together. If they disagree or a digit is unclear, return an empty string.
 
 Selected capacity source: ${options.capacitySource || "auto if only one exists"}.
+Expected data row count from structure pass: ${Number(structure.rowCount || 0) || "unknown"}.
 
 For each visible schedule row, return:
 - indoor = Unit Reference No. exactly as visible.
@@ -2404,6 +2499,43 @@ Rules:
 - If any numeric cell is not clearly readable, return "" for that cell and list it in unclearFields.
 
 Return JSON only.`;
+}
+
+function thermalCustomVerificationPrompt(options, customColumns) {
+  const structure = options.detectedStructure || {};
+  return `
+You are doing a second independent verification pass for a scanned table extraction.
+
+Important:
+- Do not use or infer from any previous extraction.
+- Read directly from the uploaded PDF/image again.
+- Verify only these requested columns, in this exact order:
+${customColumns.map(column => `- ${column}`).join("\n")}
+- Expected data row count from structure pass: ${Number(structure.rowCount || 0) || "unknown"}.
+
+Rules:
+- Extract column by column, then assemble rows by the same row order.
+- Transcribe values exactly as visible.
+- Do not calculate.
+- Do not guess.
+- Do not auto-correct.
+- Preserve exact decimal places and trailing zeros.
+- If any cell is not clearly readable, return "" for that cell and list it in unclearFields.
+
+Return JSON only.`;
+}
+
+function thermalStructureJsonSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      rowCount: { type: "number" },
+      columns: { type: "array", items: { type: "string" } },
+      notes: { type: "string" }
+    },
+    required: ["rowCount", "columns", "notes"]
+  };
 }
 
 function thermalJsonSchema() {
@@ -2445,6 +2577,29 @@ function thermalJsonSchema() {
       message: { type: "string" }
     },
     required: ["capacitySources", "selectedCapacitySource", "familyModel", "rows", "customColumns", "customRows", "unclearFields", "message"]
+  };
+}
+
+function thermalCustomVerificationJsonSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      customRows: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            cells: { type: "array", items: { type: "string" } }
+          },
+          required: ["cells"]
+        }
+      },
+      unclearFields: { type: "array", items: { type: "string" } },
+      message: { type: "string" }
+    },
+    required: ["customRows", "unclearFields", "message"]
   };
 }
 
