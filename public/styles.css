@@ -3839,6 +3839,27 @@ td[contenteditable="true"]:focus {
 .delivery-list-table th:nth-child(5) { width: 14%; }
 .delivery-list-table th:nth-child(6) { width: 12%; }
 
+.delivery-list-table th:nth-child(3),
+.delivery-list-table th:nth-child(4),
+.delivery-list-table th:nth-child(5),
+.delivery-list-table th:nth-child(6),
+.delivery-list-table td:nth-child(3),
+.delivery-list-table td:nth-child(4),
+.delivery-list-table td:nth-child(5),
+.delivery-list-table td:nth-child(6) {
+  text-align: center;
+}
+
+.delivery-list-table td:nth-child(5) .pill,
+.delivery-list-table td:nth-child(6) .row-menu {
+  margin-inline: auto;
+}
+
+.delivery-list-table td:nth-child(6) .row-menu {
+  display: inline-flex;
+  justify-content: center;
+}
+
 #deliverySplit .inventory-card {
   min-width: 0;
 }

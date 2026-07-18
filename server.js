@@ -1900,7 +1900,7 @@ async function handleApi(req, res) {
     const body = await readJson(req);
     const deliveryNote = normalizeDeliveryNote(body, inventory);
     const existingIndex = inventory.deliveryNotes.findIndex(dn => dn.id === deliveryNote.id);
-    const issuing = deliveryNote.status === "Issued";
+    const issuing = deliveryNote.status === "Issued" || deliveryNote.status === "Delivered";
     if (issuing) {
       const availabilityInventory = { ...inventory, deliveryNotes: inventory.deliveryNotes.filter(dn => dn.id !== deliveryNote.id) };
       const availability = computeInventory(availabilityInventory).stockByModel;
@@ -2786,7 +2786,7 @@ function computeInventory(inventory, projectReservations = {}) {
   }
 
   for (const dn of inventory.deliveryNotes || []) {
-    if (dn.status !== "Issued") continue;
+    if (dn.status !== "Issued" && dn.status !== "Delivered") continue;
     for (const line of dn.lines || []) {
       let remaining = Number(line.qtyGoingOut || 0);
       const modelLots = lots.filter(lot => inventoryNorm(lot.modelNo) === inventoryNorm(line.modelNo) && lot.availableQty > 0);
@@ -2803,7 +2803,7 @@ function computeInventory(inventory, projectReservations = {}) {
         description: line.description,
         projectName: dn.projectName,
         referenceNo: dn.dnNo,
-        movementType: "Delivery Note Issued",
+        movementType: "Delivery Note Delivered",
         quantity: -Number(line.qtyGoingOut || 0),
         availableQty: 0
       });
@@ -3438,69 +3438,142 @@ function pdfTextHeight(doc, text, width, size = 8.5) {
   return doc.heightOfString(String(text || ""), { width, lineGap: 1 });
 }
 
+function pdfWrapWords(doc, text, width, font = "Helvetica", size = 9) {
+  const words = String(text || "").replace(/\r/g, "\n").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  doc.font(font).fontSize(size);
+  for (const word of words) {
+    const candidate = `${current} ${word}`.trim();
+    if (!current || doc.widthOfString(candidate) <= width) {
+      current = candidate;
+      continue;
+    }
+    lines.push(current);
+    current = word;
+    while (doc.widthOfString(current) > width && current.length > 1) {
+      let cut = current.length;
+      while (cut > 1 && doc.widthOfString(current.slice(0, cut)) > width) cut -= 1;
+      lines.push(current.slice(0, cut));
+      current = current.slice(cut);
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+}
+
+function amountAed(value) {
+  return `${money(value)} AED`;
+}
+
 async function deliveryNotePdfBuffer(payload) {
   return createPdfKitBuffer(doc => {
     const dn = payload.deliveryNote || payload || {};
     const pageWidth = 595.28;
     const pageHeight = 841.89;
-    const left = 46;
-    const right = 46;
-    const width = pageWidth - left - right;
-    const bottom = 62;
     const letterhead = path.join(PUBLIC, "assets", "letterhead-full.jpg");
-
-    const drawPage = () => {
+    const tableX = 46;
+    const tableW = pageWidth - 92;
+    const tableBottomY = 700;
+    const rowH = 43;
+    const drawBackground = () => {
       if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
-      doc.strokeColor("#c8d7ee").fillColor("#07152f");
     };
-    const addPage = () => {
-      doc.addPage({ size: "A4", margin: 0 });
-      drawPage();
-      return 185;
+    const drawHeaderBlock = pageIndex => {
+      drawBackground();
+      if (pageIndex > 0) return 120;
+      doc.fillColor("#333333").font("Helvetica-Bold").fontSize(10.8).text("COMFORT ZONE A/C. DEVICES TR. LLC", 44, 136);
+      doc.font("Helvetica").fontSize(9.5).text([
+        "SHOWROOM 1",
+        "INDUSTRIAL AREA 18",
+        "SHARJAH Sharjah 343105",
+        "U.A.E",
+        "TRN 100543358400003",
+        "00971561772530",
+        "mudassir@comfortzoneuae.com",
+        "https://comfortzoneuae.com/"
+      ].join("\n"), 44, 150, { lineGap: 1.6 });
+
+      const titleX = pageWidth - 39;
+      doc.fillColor("#000000").font("Helvetica").fontSize(27).text("DELIVERY CHALLAN", 160, 151, { width: titleX - 160, align: "right" });
+      doc.fillColor("#383838").font("Helvetica-Bold").fontSize(10).text(`Delivery Challan# ${deliveryChallanNo(dn.dnNo)}`, 160, 179, { width: titleX - 160, align: "right" });
+
+      const metaTop = 260;
+      doc.fillColor("#404040").font("Helvetica").fontSize(10.5).text("Deliver To", 47, metaTop);
+      doc.font("Helvetica-Bold").fontSize(9.7).text(dn.customerName || "", 47, metaTop + 14);
+      const deliverLines = [
+        "U.A.E",
+        dn.contactPerson,
+        dn.phone
+      ].filter(value => String(value || "").trim());
+      doc.font("Helvetica").fontSize(9.7).text(deliverLines.join("\n"), 47, metaTop + 28, { width: 230, lineGap: 1.5 });
+
+      const details = [
+        ["Challan Date :", formatChallanDate(dn.date || todayISO())],
+        ["Reference :", dn.projectName],
+        ["Delivery Location :", dn.deliveryLocation]
+      ].filter(([, value], index) => index === 0 || String(value || "").trim());
+      const labelX = 330;
+      const valueX = pageWidth - 45;
+      doc.font("Helvetica").fontSize(10.5).fillColor("#404040");
+      details.forEach(([label, value], index) => {
+        const y = metaTop + 1 + index * 22;
+        doc.text(label, labelX, y, { width: 110, align: "right" });
+        doc.text(String(value || ""), valueX - 150, y, { width: 150, align: "right" });
+      });
+      return Math.max(350, metaTop + details.length * 22 + 20);
+    };
+    const drawTableHeader = y => {
+      doc.rect(tableX, y, tableW, 24).fill("#383b39");
+      doc.fillColor("#ffffff").font("Helvetica").fontSize(9.5);
+      doc.text("#", tableX + 13, y + 8);
+      doc.text("Item & Description", tableX + 40, y + 8);
+      doc.text("Qty", tableX + tableW - 60, y + 8, { width: 52, align: "right" });
+      return y + 24;
+    };
+    const drawLine = (line, index, rowY) => {
+      const contentTop = rowY + 8;
+      doc.fillColor("#000000").font("Helvetica").fontSize(9.5);
+      doc.text(String(index + 1), tableX + 13, contentTop + 5);
+      doc.text(line.modelNo || "", tableX + 40, contentTop, { width: tableW - 110 });
+      doc.font("Helvetica").fontSize(8.4);
+      const descLines = pdfWrapWords(doc, line.description || "", tableW - 120, "Helvetica", 8.4).slice(0, 2);
+      descLines.forEach((desc, descIndex) => doc.text(desc, tableX + 40, contentTop + 13 + descIndex * 10, { width: tableW - 120 }));
+      doc.font("Helvetica").fontSize(9.5).text(money(line.qtyGoingOut || line.quantity || 0), tableX + tableW - 70, contentTop, { width: 62, align: "right" });
+      doc.font("Helvetica").fontSize(8.4).text("pcs", tableX + tableW - 70, contentTop + 14, { width: 62, align: "right" });
+      doc.moveTo(tableX, rowY + rowH).lineTo(tableX + tableW, rowY + rowH).strokeColor("#9e9e9e").stroke();
+      return rowY + rowH;
+    };
+    const drawReceiver = y => {
+      const receiverY = y + 18;
+      doc.fillColor("#000000").font("Helvetica").fontSize(10.5)
+        .text("Receivers Name:", 345, receiverY)
+        .text("Receiver Number:", 345, receiverY + 25)
+        .text("Date & Signature:", 345, receiverY + 50);
     };
 
-    drawPage();
-    drawPdfText(doc, "DELIVERY CHALLAN", left, 126, width, { bold: true, size: 21, align: "right" });
-    drawPdfText(doc, `Delivery Challan# ${deliveryChallanNo(dn.dnNo)}`, left, 156, width, { bold: true, size: 10, align: "right" });
-
-    drawPdfText(doc, "Deliver To", left, 212, 220, { size: 9, color: "#5b6a86" });
-    drawPdfText(doc, dn.customerName || "-", left, 230, 220, { bold: true, size: 10 });
-    drawPdfText(doc, dn.deliveryLocation || "-", left, 246, 220, { size: 9 });
-    if (dn.phone) drawPdfText(doc, `Tel: ${dn.phone}`, left, 262, 220, { size: 9 });
-    if (dn.contactPerson) drawPdfText(doc, `Contact: ${dn.contactPerson}`, left, 278, 220, { size: 9 });
-
-    drawPdfText(doc, "Challan Date :", pageWidth - right - 205, 218, 100, { size: 9, align: "right", color: "#5b6a86" });
-    drawPdfText(doc, formatChallanDate(dn.date || todayISO()), pageWidth - right - 95, 218, 95, { bold: true, size: 9, align: "right" });
-    drawPdfText(doc, "Ref :", pageWidth - right - 205, 244, 100, { size: 9, align: "right", color: "#5b6a86" });
-    drawPdfText(doc, dn.projectName || "-", pageWidth - right - 95, 244, 95, { bold: true, size: 9, align: "right" });
-
-    let y = 324;
-    const col = [35, width - 95, 60];
-    doc.rect(left, y, width, 24).fillAndStroke("#1d1f1e", "#1d1f1e");
-    drawPdfText(doc, "#", left, y + 7, col[0], { bold: true, size: 8.5, align: "center", color: "#ffffff" });
-    drawPdfText(doc, "Item & Description", left + col[0], y + 7, col[1], { bold: true, size: 8.5, color: "#ffffff" });
-    drawPdfText(doc, "Qty", left + col[0] + col[1], y + 7, col[2], { bold: true, size: 8.5, align: "right", color: "#ffffff" });
-    y += 24;
-
-    const lines = Array.isArray(dn.lines) ? dn.lines : [];
+    const lines = dn.lines || [];
+    let pageIndex = 0;
+    let y = drawTableHeader(drawHeaderBlock(pageIndex));
     if (!lines.length) {
-      drawPdfTableCell(doc, "No items added.", left, y, width, 28);
-      y += 28;
+      doc.fillColor("#000000").font("Helvetica").fontSize(9.5).text("No items added.", tableX + 13, y + 10);
+      drawReceiver(y + 40);
+      return;
     }
     lines.forEach((line, index) => {
-      const desc = `${line.modelNo || ""}${line.description ? `\n${line.description}` : ""}`;
-      const rowH = Math.max(34, pdfTextHeight(doc, desc, col[1] - 10, 8.5) + 15);
-      if (y + rowH > pageHeight - bottom - 80) y = addPage();
-      drawPdfTableCell(doc, index + 1, left, y, col[0], rowH, { align: "center" });
-      drawPdfTableCell(doc, desc, left + col[0], y, col[1], rowH, { bold: true });
-      drawPdfTableCell(doc, trimNumber(line.qtyGoingOut || line.quantity || 0), left + col[0] + col[1], y, col[2], rowH, { align: "right", bold: true });
-      y += rowH;
+      if (y + rowH > tableBottomY) {
+        doc.addPage({ size: "A4", margin: 0 });
+        pageIndex += 1;
+        y = drawTableHeader(drawHeaderBlock(pageIndex));
+      }
+      y = drawLine(line, index, y);
     });
-
-    y += 42;
-    drawPdfText(doc, "Receivers Name:", pageWidth - right - 210, y, 210, { size: 10 });
-    drawPdfText(doc, "Receiver Number:", pageWidth - right - 210, y + 28, 210, { size: 10 });
-    drawPdfText(doc, "Date & Signature:", pageWidth - right - 210, y + 56, 210, { size: 10 });
+    if (y + 95 > tableBottomY) {
+      doc.addPage({ size: "A4", margin: 0 });
+      pageIndex += 1;
+      y = drawTableHeader(drawHeaderBlock(pageIndex));
+    }
+    drawReceiver(y);
   });
 }
 
@@ -3509,88 +3582,203 @@ async function purchaseOrderPdfBuffer(order) {
     const pageWidth = 595.28;
     const pageHeight = 841.89;
     const left = 36;
-    const right = 36;
-    const width = pageWidth - left - right;
-    const bottom = 54;
     const letterhead = path.join(PUBLIC, "assets", "purchase-order-letterhead.jpg");
+    const sealImage = path.join(PUBLIC, "assets", "seal-al-mahira-square.png");
+    const fallbackSealImage = path.join(PUBLIC, "assets", "seal-al-mahira.png");
+    const signImage = path.join(PUBLIC, "assets", "sign-2.jpg");
+    const green = "#00572e";
+    const line = "#949494";
+    const tableW = pageWidth - left * 2;
+    const col = [42, 176, 66, 86, 50, tableW - 420];
+    const py = (value, height = 0) => pageHeight - value - height;
+    const firstTableY = 312;
+    const nextTableY = 210;
+    const tableBottomY = 750;
+    const finalContentReserve = 300;
 
-    const drawPage = () => {
-      if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
-      doc.strokeColor("#b9c9e6").fillColor("#07152f");
-    };
-    const addPage = () => {
-      doc.addPage({ size: "A4", margin: 0 });
-      drawPage();
-      return 126;
-    };
-
-    drawPage();
-    drawPdfText(doc, "PURCHASE ORDER", left, 86, width, { bold: true, size: 18, align: "center", color: "#006f3c" });
-    drawPdfText(doc, `PO No: ${order.poNo || "-"}`, left, 120, width / 2, { bold: true, size: 9 });
-    drawPdfText(doc, `Date: ${formatPdfDate(order.poDate)}`, left + width / 2, 120, width / 2, { bold: true, size: 9, align: "right" });
-
-    const metaY = 150;
-    drawPdfText(doc, "Supplier", left, metaY, 245, { bold: true, size: 10, color: "#006f3c" });
-    drawPdfText(doc, `${order.supplierName || "-"}\n${order.supplierAddress || ""}\nTRN: ${order.trn || "-"}`, left, metaY + 18, 245, { size: 8.7 });
-    drawPdfText(doc, "Project / Reference", left + 285, metaY, 238, { bold: true, size: 10, color: "#006f3c" });
-    drawPdfText(doc, `Project: ${order.projectName || "-"}\nQuotation No: ${order.quotationNo || "-"}\nPayment Terms: ${order.paymentTerms || "-"}`, left + 285, metaY + 18, 238, { size: 8.7 });
-
-    let y = 238;
-    const col = [25, width - 245, 45, 72, 50, 53];
-    doc.rect(left, y, width, 24).fillAndStroke("#006f3c", "#006f3c");
-    ["#", "Item Description", "Qty", "Unit Price", "VAT %", "Amount"].forEach((title, index) => {
-      const x = left + col.slice(0, index).reduce((sum, item) => sum + item, 0);
-      drawPdfText(doc, title, x + 3, y + 7, col[index] - 6, { bold: true, size: 7.8, align: index > 1 ? "right" : "left", color: "#ffffff" });
-    });
-    y += 24;
-
-    (order.items || []).forEach((item, index) => {
-      const desc = item.description || item.modelNo || "";
-      const rowH = Math.max(26, pdfTextHeight(doc, desc, col[1] - 10, 7.8) + 14);
-      if (y + rowH > pageHeight - bottom - 150) {
-        y = addPage();
-        doc.rect(left, y, width, 24).fillAndStroke("#006f3c", "#006f3c");
-        ["#", "Item Description", "Qty", "Unit Price", "VAT %", "Amount"].forEach((title, headerIndex) => {
-          const x = left + col.slice(0, headerIndex).reduce((sum, value) => sum + value, 0);
-          drawPdfText(doc, title, x + 3, y + 7, col[headerIndex] - 6, { bold: true, size: 7.8, align: headerIndex > 1 ? "right" : "left", color: "#ffffff" });
-        });
-        y += 24;
+    const rowHeight = item => Math.max(28, 12 + Math.min(8, pdfWrapWords(doc, item.description || "", col[1] - 18, "Helvetica", 9.2).length) * 13);
+    const paginate = items => {
+      const pages = [];
+      let current = [];
+      let used = 0;
+      let limit = tableBottomY - firstTableY - 30;
+      for (const item of items) {
+        const h = rowHeight(item);
+        if (current.length && used + h > limit) {
+          pages.push(current);
+          current = [];
+          used = 0;
+          limit = tableBottomY - nextTableY - 30;
+        }
+        current.push(item);
+        used += h;
       }
-      let x = left;
-      const cells = [
-        { value: index + 1, align: "center" },
-        { value: desc, align: "left" },
-        { value: trimNumber(item.qty), align: "right" },
-        { value: money(item.unitPrice), align: "right" },
-        { value: trimNumber(item.vatPercent || 5), align: "right" },
-        { value: money(item.amount), align: "right" }
-      ];
-      cells.forEach((cell, cellIndex) => {
-        drawPdfTableCell(doc, cell.value, x, y, col[cellIndex], rowH, { align: cell.align, size: 7.8 });
-        x += col[cellIndex];
+      pages.push(current);
+      const finalTableLimit = Math.max(120, tableBottomY - nextTableY - 30 - finalContentReserve);
+      const pageHeightUsed = page => page.reduce((sum, item) => sum + rowHeight(item), 0);
+      while (pages[pages.length - 1].length && pageHeightUsed(pages[pages.length - 1]) > finalTableLimit) {
+        const overflow = [];
+        while (
+          pages[pages.length - 1].length &&
+          (pageHeightUsed(pages[pages.length - 1]) > finalTableLimit || !overflow.length)
+        ) {
+          overflow.unshift(pages[pages.length - 1].pop());
+        }
+        pages.push(overflow);
+      }
+      return pages;
+    };
+
+    const drawBackground = (pageNo, totalPages) => {
+      if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
+    };
+
+    const drawTitle = y => {
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(20).text("PURCHASE ORDER", 0, py(y, 20), { width: pageWidth, align: "center" });
+    };
+
+    const drawDetails = y => {
+      const supplierLines = [order.supplierName, ...pdfWrapWords(doc, order.supplierAddress || "", 210, "Helvetica", 11).slice(0, 4), order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
+      doc.fillColor("#000000").font("Helvetica").fontSize(11);
+      supplierLines.slice(0, 7).forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230 }));
+      const details = [
+        ["PO No:", order.poNo],
+        ["PO Date:", formatPdfDate(order.poDate)],
+        ["Reference:", order.quotationNo],
+        ["Payment Terms:", order.paymentTerms],
+        ["Purchase Rep:", order.purchaseRepresentative]
+      ].filter(([, value]) => String(value || "").trim());
+      details.forEach(([label, value], index) => {
+        const rowY = y - index * 18;
+        doc.font("Helvetica-Bold").fontSize(11).text(label, pageWidth - 262, py(rowY, 11), { width: 100 });
+        doc.font("Helvetica").fontSize(10.5).text(String(value || ""), pageWidth - 180, py(rowY, 10.5), { width: 122, align: "right" });
       });
-      y += rowH;
-    });
+    };
 
-    y += 16;
-    const summaryX = pageWidth - right - 170;
-    [
-      ["Subtotal", order.subtotal],
-      ["Discount", order.discount],
-      ["Total After Discount", order.totalAfterDiscount],
-      ["VAT Total", order.vatTotal],
-      ["Grand Total", order.grandTotal]
-    ].forEach(([label, value], index) => {
-      drawPdfText(doc, label, summaryX, y, 95, { bold: index === 4, size: 8.5, align: "right" });
-      drawPdfText(doc, money(value), summaryX + 100, y, 70, { bold: index === 4, size: index === 4 ? 10 : 8.5, align: "right", color: index === 4 ? "#006f3c" : "#07152f" });
-      y += 15;
-    });
+    const drawHeader = y => {
+      const headers = ["S.No", "Item Description", "QTY", "UNIT PRICE", "TAXES", "AMOUNT"];
+      const top = py(y, 30);
+      doc.rect(left, top, tableW, 30).fill(green);
+      let x = left;
+      headers.forEach((header, index) => {
+        doc.moveTo(x, top).lineTo(x, top + 30).strokeColor("#bfbfbf").lineWidth(0.45).stroke();
+        doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10.5);
+        doc.text(header, x + (index === 1 ? 10 : 0), top + 10, { width: col[index], align: index === 1 ? "left" : "center" });
+        x += col[index];
+      });
+      doc.moveTo(x, top).lineTo(x, top + 30).stroke();
+      return top + 30;
+    };
 
-    y += 12;
-    if (y > pageHeight - bottom - 95) y = addPage();
-    drawPdfText(doc, "Note:", left, y, width, { bold: true, size: 9 });
-    y += 14;
-    drawPdfText(doc, order.notes || DEFAULT_PURCHASE_NOTES, left, y, width, { size: 8.4, lineGap: 2 });
+    const drawRow = (item, top, serial) => {
+      const h = rowHeight(item);
+      doc.rect(left, top, tableW, h).strokeColor(line).lineWidth(0.45).stroke();
+      let x = left;
+      for (const width of col.slice(0, -1)) {
+        x += width;
+        doc.moveTo(x, top).lineTo(x, top + h).stroke();
+      }
+      const midY = top + h / 2 - 5;
+      doc.fillColor("#000000").font("Helvetica").fontSize(10.2);
+      doc.text(String(serial), left, midY, { width: col[0], align: "center" });
+      const descLines = pdfWrapWords(doc, item.description || "", col[1] - 18, "Helvetica", 9.2).slice(0, 8);
+      let descY = top + (h - descLines.length * 13) / 2;
+      doc.font("Helvetica").fontSize(9.2);
+      descLines.forEach(lineText => {
+        doc.text(lineText, left + col[0] + 10, descY, { width: col[1] - 18 });
+        descY += 13;
+      });
+      const qtyX = left + col[0] + col[1];
+      doc.font("Helvetica").fontSize(10.2);
+      doc.text(`${money(item.qty)} Nos`, qtyX, midY, { width: col[2], align: "center" });
+      doc.text(money(item.unitPrice), qtyX + col[2], midY, { width: col[3], align: "center" });
+      doc.text(`${String(money(item.vatPercent || 5)).replace(/\.00$/, "")}%`, qtyX + col[2] + col[3], midY, { width: col[4], align: "center" });
+      doc.text(money(Number(item.qty || 0) * Number(item.unitPrice || 0)), qtyX + col[2] + col[3] + col[4], midY, { width: col[5], align: "center" });
+      return top + h;
+    };
+
+    const drawSummary = (top) => {
+      const valueW = col[5];
+      const labelW = 122;
+      const summaryW = labelW + valueW;
+      const x = left + tableW - summaryW;
+      const itemSubtotal = (order.items || []).reduce((sum, item) => {
+        const savedAmount = Number(item.amount || 0);
+        const lineAmount = savedAmount || Number(item.qty || 0) * Number(item.unitPrice || 0);
+        return sum + lineAmount;
+      }, 0);
+      const subtotal = Number(order.subtotal || itemSubtotal);
+      const discount = Number(order.discount || 0);
+      const totalAfterDiscount = Number.isFinite(Number(order.totalAfterDiscount))
+        ? Number(order.totalAfterDiscount)
+        : subtotal - discount;
+      const vatTotal = Number.isFinite(Number(order.vatTotal))
+        ? Number(order.vatTotal)
+        : totalAfterDiscount * 0.05;
+      const grandTotal = Number.isFinite(Number(order.grandTotal))
+        ? Number(order.grandTotal)
+        : totalAfterDiscount + vatTotal;
+      const rows = [["Subtotal", amountAed(subtotal)]];
+      if (discount) {
+        rows.push(["Discount", `-${amountAed(discount)}`]);
+        rows.push(["Total After Discount", amountAed(totalAfterDiscount)]);
+      }
+      rows.push(["VAT Total", amountAed(vatTotal)], ["Grand Total", amountAed(grandTotal)]);
+      rows.forEach(([label, value], index) => {
+        const isLast = index === rows.length - 1;
+        const rowTop = top + index * 34;
+        doc.rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? green : "#ffffff", line);
+        doc.moveTo(x + labelW, rowTop).lineTo(x + labelW, rowTop + 34).stroke();
+        doc.fillColor(isLast ? "#ffffff" : "#000000").font(isLast ? "Helvetica-Bold" : "Helvetica").fontSize(10.5);
+        doc.text(label, x + 8, rowTop + 11, { width: labelW - 14 });
+        doc.text(value, x + labelW + 8, rowTop + 11, { width: valueW - 16, align: "right" });
+      });
+      return top + rows.length * 34;
+    };
+
+    const drawNotes = (x, top, width, maxLines = 12) => {
+      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text("Note:", x, top);
+      top += 22;
+      doc.font("Helvetica").fontSize(9.8);
+      const lines = String(order.notes || DEFAULT_PURCHASE_NOTES).replace(/\r/g, "\n").split("\n");
+      for (const lineText of lines.slice(0, maxLines)) {
+        const wrapped = pdfWrapWords(doc, lineText, width, "Helvetica", 9.8).slice(0, 4);
+        wrapped.forEach(w => {
+          doc.text(w, x, top, { width });
+          top += 15;
+        });
+      }
+      return top;
+    };
+
+    const drawSealAndSign = top => {
+      const sealTop = Math.min(top + 10, pageHeight - 220);
+      const sealSource = fs.existsSync(sealImage) ? sealImage : fallbackSealImage;
+      const sealSize = 131;
+      if (fs.existsSync(sealSource)) doc.image(sealSource, left + 22, sealTop, { width: sealSize, height: sealSize });
+      if (fs.existsSync(signImage)) doc.image(signImage, left + 168, sealTop + 50, { width: 82, height: 42 });
+    };
+
+    const pages = paginate(order.items || []);
+    const totalPages = pages.length;
+    pages.forEach((items, pageIndex) => {
+      if (pageIndex > 0) doc.addPage({ size: "A4", margin: 0 });
+      drawBackground(pageIndex + 1, totalPages);
+      drawTitle(pageIndex === 0 ? 704 : 700);
+      if (pageIndex === 0) drawDetails(662);
+      let y = drawHeader(pageHeight - (pageIndex === 0 ? firstTableY : nextTableY));
+      const startIndex = pages.slice(0, pageIndex).reduce((sum, page) => sum + page.length, 0);
+      items.forEach((item, index) => {
+        y = drawRow(item, y, startIndex + index + 1);
+      });
+      if (pageIndex === totalPages - 1) {
+        const summaryBottom = drawSummary(y + 14);
+        const notesBesideSummary = items.length && y < 520;
+        const notesY = notesBesideSummary ? y + 20 : summaryBottom + 14;
+        const afterNotesY = drawNotes(left, notesY, notesBesideSummary ? 280 : tableW, notesBesideSummary ? 8 : 12);
+        drawSealAndSign(afterNotesY);
+      }
+    });
   });
 }
 

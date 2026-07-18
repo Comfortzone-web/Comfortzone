@@ -1,6 +1,6 @@
 {
   "settings": {
-    "nextDeliveryNo": "DN-2067"
+    "nextDeliveryNo": "DN-2068"
   },
   "models": [
     {
@@ -15,55 +15,73 @@
       "id": "3108f0f7-6750-4001-96e7-00a9bb74aa46",
       "modelNo": "BHFP22P1006",
       "description": "REFNETS - ODU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "ae657f66-9af1-4617-bf29-2790cb9a3c90",
       "modelNo": "BHFP22P1516",
       "description": "REFNETS - ODU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "7466a193-3a0f-4eb0-9b0d-18553245a775",
       "modelNo": "BHFQ22P1007",
       "description": "REFNETS - ODU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "a6118207-1802-4690-b792-aa31435d96b7",
       "modelNo": "BHFQ22P1517",
       "description": "REFNETS - ODU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "9cce7de2-6c62-4534-bda1-ba5bead3cd3c",
       "modelNo": "BRC1H82K",
       "description": "WIRED THERMOSTAT (BLACK) - CHINA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "de8735f3-dbbb-44e4-be36-067f9e2625e2",
       "modelNo": "BRC1H82S",
       "description": "WIRED THERMOSTAT (SILVER) - CHINA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "3025e3f2-989c-4b3c-bde7-713163458084",
       "modelNo": "BRC1H82W",
       "description": "WIRED THERMOSTAT (WHITE) - CHINA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "1f566216-2aad-448f-935a-4905bc8799e3",
       "modelNo": "BRC1H82W7",
       "description": "WIRED THERMOSTAT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "5014cc54-186e-4927-a80d-7011db236c68",
       "modelNo": "BRC51D66",
       "description": "Wired Remote Controller - White - Malaysia",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "type": "",
+      "reservedQty": 0
     },
     {
       "id": "7ebc6b40-fce2-4f9e-b1a6-18e9f5f77d0b",
@@ -1553,8 +1571,274 @@
       "defaultDeliveryLocation": "Dubai, U.A.E"
     }
   ],
-  "supplierDns": [],
-  "deliveryNotes": [],
+  "supplierDns": [
+    {
+      "id": "f588c186-561d-4006-89b0-204f88367c16",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202608",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "02890946-3478-424f-8942-29a6eff86b6e",
+          "modelNo": "BRC51D66",
+          "description": "Wired Remote Controller - White - Malaysia",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "fc5524de-cf00-49a3-8cd9-f54b39584ba1",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202607",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "dfcb0df7-9c97-4caa-b11c-6b54338efb32",
+          "modelNo": "BRC1H82W7",
+          "description": "WIRED THERMOSTAT",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "3591f636-8fbf-42e3-8059-ec94ee4ac903",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202606",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "b540b533-87ec-4558-94de-46044a8367fa",
+          "modelNo": "BRC1H82W",
+          "description": "WIRED THERMOSTAT (WHITE) - CHINA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "dea35e1a-dc5b-4ba0-91ff-30d781f2607d",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202605",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "8338459e-ded1-4231-ad90-f10a30e7501e",
+          "modelNo": "BRC1H82S",
+          "description": "WIRED THERMOSTAT (SILVER) - CHINA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "c7379f6f-39d6-4e05-86ae-17384802383e",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202604",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "4b7b9a4a-1ab5-4f77-9940-884374087ddc",
+          "modelNo": "BRC1H82K",
+          "description": "WIRED THERMOSTAT (BLACK) - CHINA",
+          "detectedQty": 10,
+          "finalQty": 10,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "b3b3d896-f1d7-435d-b115-1690c93d73da",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202603",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "2cfa8f23-08fc-47a1-8c08-08acde31d006",
+          "modelNo": "BHFQ22P1517",
+          "description": "REFNETS - ODU - BELGIUM",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "3541d79b-6ac6-40f6-b760-6efe2336dde1",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202602",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "e7170d75-bf40-413d-b3dc-a8377b2873bd",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "9b198104-feba-453f-b5f4-f6830a23182e",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202601",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "77d57626-57a5-4a77-bef6-37b15674a3d4",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "a97f85eb-6d66-4ac7-a06e-ee5a0f1ee26a",
+      "uploadedDate": "2026-07-18",
+      "supplierDnNo": "Stock 1807202600",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "d638a817-938d-4bad-a453-d2fced93c59a",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        }
+      ]
+    },
+    {
+      "id": "b82b80ac-06aa-412f-8f89-5ae8ef961c6d",
+      "uploadedDate": "2026-07-17",
+      "supplierDnNo": "Stock 1707202600",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "c55ec823-7309-4f6f-b49d-ba543f6ab085",
+          "modelNo": "BAG",
+          "description": "SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        }
+      ]
+    }
+  ],
+  "deliveryNotes": [
+    {
+      "id": "2657b256-aac3-49f6-a72f-b19d95c74969",
+      "dnNo": "DN-2067",
+      "date": "2026-07-17",
+      "customerId": "",
+      "customerName": "Aerocool System Air Solutions LLC",
+      "contactPerson": "Mr. ACBDEFG",
+      "phone": "+971 55698456",
+      "deliveryLocation": "Abu Dhabi ",
+      "projectName": "Villa 247, Al Ain",
+      "status": "Delivered",
+      "lines": [
+        {
+          "id": "1784292032069.7234",
+          "modelNo": "BAG",
+          "description": "SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
+          "availableQty": 5,
+          "qtyGoingOut": 3
+        },
+        {
+          "id": "1784352681564.1262",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 5,
+          "qtyGoingOut": 4
+        },
+        {
+          "id": "1784352688188.4705",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 3,
+          "qtyGoingOut": 2
+        },
+        {
+          "id": "1784352693772.4287",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1784352703556.1658",
+          "modelNo": "BHFQ22P1517",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 6,
+          "qtyGoingOut": 6
+        },
+        {
+          "id": "1784352709844.1277",
+          "modelNo": "BRC1H82K",
+          "description": "WIRED THERMOSTAT (BLACK) - CHINA",
+          "availableQty": 10,
+          "qtyGoingOut": 9
+        },
+        {
+          "id": "1784352721389.2673",
+          "modelNo": "BRC1H82S",
+          "description": "WIRED THERMOSTAT (SILVER) - CHINA",
+          "availableQty": 6,
+          "qtyGoingOut": 4
+        },
+        {
+          "id": "1784352734739.7925",
+          "modelNo": "BRC1H82W",
+          "description": "WIRED THERMOSTAT (WHITE) - CHINA",
+          "availableQty": 5,
+          "qtyGoingOut": 5
+        },
+        {
+          "id": "1784352746884.6394",
+          "modelNo": "BRC1H82W7",
+          "description": "WIRED THERMOSTAT",
+          "availableQty": 3,
+          "qtyGoingOut": 3
+        },
+        {
+          "id": "1784352753996.4248",
+          "modelNo": "BRC51D66",
+          "description": "Wired Remote Controller - White - Malaysia",
+          "availableQty": 5,
+          "qtyGoingOut": 4
+        }
+      ]
+    }
+  ],
   "uploads": [
     {
       "id": "3dde0d33-297f-4795-8dd1-e08b645b52b4",

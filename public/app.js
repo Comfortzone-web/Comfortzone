@@ -6477,7 +6477,11 @@ function deliveryNoteViewHtml() {
 }
 
 function deliveryNoteRows(notes) {
-  return notes.map(note => `<tr><td><strong>${escapeHtml(note.dnNo)}</strong></td><td>${escapeHtml(note.customerName)}<br><span class="inventory-muted">${escapeHtml(note.projectName)}</span></td><td>${formatInventoryDate(note.date)}</td><td>${sumDeliveryQty(note)}</td><td>${statusPill(note.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-delivery",id:note.id},{label:"Download",action:"download-delivery",id:note.id},{label:"Cancel",action:"cancel-delivery",id:note.id,danger:true},{label:"Delete",action:"delete-delivery",id:note.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
+  return notes.map(note => `<tr><td><strong>${escapeHtml(note.dnNo)}</strong></td><td>${escapeHtml(note.customerName)}<br><span class="inventory-muted">${escapeHtml(note.projectName)}</span></td><td>${formatInventoryDate(note.date)}</td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu([{label:"Edit",action:"edit-delivery",id:note.id},{label:"Download",action:"download-delivery",id:note.id},{label:"Cancel",action:"cancel-delivery",id:note.id,danger:true},{label:"Delete",action:"delete-delivery",id:note.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
+}
+
+function deliveryNoteStatusLabel(status = "") {
+  return norm(status) === "issued" ? "Delivered" : status;
 }
 
 function deliveryNotePagination(total, pageSize, currentPage, search, visibleCount) {
@@ -6622,7 +6626,7 @@ function handleDeliveryModalClick(event) {
     return refreshDeliveryModalForm();
   }
   if (target.id === "saveDraftBtn") return saveDelivery("Draft");
-  if (target.id === "issueDeliveryBtn") return saveDelivery("Issued");
+  if (target.id === "issueDeliveryBtn") return saveDelivery("Delivered");
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
 }
 
@@ -6778,7 +6782,7 @@ function handleInventoryClick(event) {
     return renderInventory();
   }
   if (target.id === "saveDraftBtn") return saveDelivery("Draft");
-  if (target.id === "issueDeliveryBtn") return saveDelivery("Issued");
+  if (target.id === "issueDeliveryBtn") return saveDelivery("Delivered");
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
   if (target.id === "saveStockModelBtn") return openStockModelModal();
   if (target.id === "saveStockModelBtn2") return saveStockModel();
@@ -7312,7 +7316,7 @@ async function saveDelivery(status) {
   deliveryListPage = 1;
   closeDeliveryModal();
   renderInventory();
-  toast(status === "Issued" ? "Delivery Note issued and stock reduced" : "Draft saved");
+  toast(status === "Delivered" ? "Delivery Note delivered and stock reduced" : "Draft saved");
 }
 
 async function cancelDeliveryNote(deliveryNoteId) {
@@ -7449,7 +7453,7 @@ function filterScopedTable(selector, query) {
 
 function statusPill(status) {
   const s = status || "Draft";
-  const color = s === "Confirmed" || s === "Issued" || s === "Ready" || s === "Created" ? "green" : s === "Cancelled" ? "red" : s === "Review Needed" || s === "Check Needed" ? "orange" : "gray";
+  const color = s === "Confirmed" || s === "Issued" || s === "Delivered" || s === "Ready" || s === "Created" ? "green" : s === "Cancelled" ? "red" : s === "Review Needed" || s === "Check Needed" ? "orange" : "gray";
   return `<span class="pill ${color}">${escapeHtml(s)}</span>`;
 }
 
