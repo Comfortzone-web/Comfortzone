@@ -2100,6 +2100,7 @@ async function handleApi(req, res) {
 }
 
 async function extractThermalWithOpenAI(project, options) {
+  options = normalizeThermalExtractionOptions(options || {});
   if (!process.env.OPENAI_API_KEY) {
     return {
       status: "missing_api_key",
@@ -2181,6 +2182,16 @@ async function extractThermalWithOpenAI(project, options) {
     message: numericMismatchCount
       ? `${numericMismatchCount} numeric cell(s) were unclear or did not match the second reading. They were left blank and highlighted for review.`
       : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : rows.length ? "Thermal values extracted into the Export File table." : "No rows were detected.")
+  };
+}
+
+function normalizeThermalExtractionOptions(options) {
+  const customInstruction = cleanCell(options.customInstruction || "");
+  const asksForColumns = /\b(custom|specific|particular|selected|only)\b.*\b(column|columns|table|field|fields)\b|\b(column|columns|field|fields)\b/i.test(customInstruction);
+  return {
+    ...options,
+    customInstruction,
+    customExtraction: !!options.customExtraction || options.mode === "custom" || asksForColumns
   };
 }
 

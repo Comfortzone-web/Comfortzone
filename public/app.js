@@ -7767,14 +7767,14 @@ function parseThermalChatReply(text) {
   const clearTable = /\b(clear|empty|remove|delete)\b.*\b(table|export file|export)\b|\b(clear table|empty table)\b/.test(lower);
   const resetFlow = /\b(start over|from first|from beginning|generate from first|fresh|restart)\b/.test(lower);
   if (clearTable || resetFlow) return { clearTable: true, resetFlow };
-  const wantsRegular = /\bvrv\b|regular template|thermal template|export template|export file template|export file|fixed template/.test(lower);
+  const explicitCustom = /\b(custom|specific|particular|selected|only)\b.*\b(column|columns|table|field|fields)\b|\b(column|columns|field|fields)\b/.test(lower);
+  const wantsRegular = !explicitCustom && /\bvrv\b|regular template|thermal template|export template|export file template|export file|fixed template/.test(lower);
   const feedbackOnly = /\b(wrong|mistake|incorrect|not correct|bad extraction|error)\b/.test(lower) &&
     !/\b(extract|regenerate|verify|recheck|check again|rerun|retry|use|add|include|column|columns|first|second|calculated|continue|append)\b/.test(lower);
   if (feedbackOnly) return { feedbackOnly: true };
   const wantsRegenerate = /\b(regenerate|verify|recheck|check again|rerun|retry)\b/.test(lower);
   const wantsAppend = /\b(continue|append|add below|below|next screenshot|next page|remaining|rest)\b/.test(lower);
-  const explicitCustom = /\b(custom|specific|particular)\b.*\b(column|columns|table)\b|\b(column|columns)\b/.test(lower);
-  const wantsCustom = !wantsRegular && explicitCustom;
+  const wantsCustom = explicitCustom;
   if (wantsCustom) {
     return {
       mode: "custom",
@@ -7865,7 +7865,6 @@ async function extractThermalFromChat(options = {}) {
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...thermalRows]
       : thermalRows;
-    buildVrvSchedule();
     autoLayoutWorkflow();
     addChat(extracted.message || "Preview table is ready in the Export File table. Please verify and edit there before downloading Excel.");
     if (extracted.unclearFields && extracted.unclearFields.length) {
