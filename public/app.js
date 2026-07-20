@@ -4392,12 +4392,13 @@ function applySalesQuotePreset(type) {
 }
 
 function quoteDraftFromSource(source = {}) {
+  const loginName = String(currentUser?.name || "").trim();
   return {
     id: source.id || "",
     quotationNo: source.quotationNo || source.no || cleanNextSalesQuotationNo(),
     quotationDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
     validity: "7 Days",
-    salesperson: "",
+    salesperson: source.salesperson || source.salesPerson || source.preparedBy || loginName,
     customer: source.customer || "",
     project: source.project || "",
     location: source.location || "",
@@ -4593,6 +4594,7 @@ function openSalesLeadDrawer(itemId = "") {
   const existingRaw = itemId ? (salesData().leads || []).find(item => item.id === itemId) : null;
   const existing = existingRaw ? normalizeSalesLead(existingRaw, (salesData().leads || []).indexOf(existingRaw)) : null;
   const item = existing || blankSalesLead();
+  if (!String(item.salesPerson || "").trim()) item.salesPerson = String(currentUser?.name || "").trim();
   const modal = document.createElement("div");
   modal.className = "modal-backdrop sales-drawer-backdrop";
   modal.innerHTML = `
@@ -5370,13 +5372,14 @@ function purchaseOrderShell(inner) {
 function purchaseOrderFormPageHtml() {
   purchaseDraft = purchaseDraft || newPurchaseDraft();
   if (!purchaseDraft.poNo && purchaseState?.settings?.nextPoNo) purchaseDraft.poNo = purchaseState.settings.nextPoNo;
+  if (!String(purchaseDraft.purchaseRepresentative || "").trim()) purchaseDraft.purchaseRepresentative = String(currentUser?.name || "").trim();
   recalcPurchaseOrder(purchaseDraft);
   return purchaseOrderShell(`
     <div class="po-layout">
       <section class="inventory-card po-form-card">
         <div class="po-form-title-row">
           <h3>New Purchase Order</h3>
-          <label>LPO No.<input data-po-field="poNo" value="${escapeHtml(purchaseDraft.poNo || "")}"></label>
+          <label>LPO No.<input data-po-field="poNo" ${poInputAttrs("lpo-no")} value="${escapeHtml(purchaseDraft.poNo || "")}"></label>
         </div>
         ${purchaseOrderFormHtml(purchaseDraft)}
       </section>
@@ -5455,11 +5458,15 @@ function purchaseFilteredSuppliers() {
 }
 
 function paymentTermFieldHtml(value, mode = "po") {
-  return `<input list="poPaymentTermOptions" data-po-field="paymentTerms" value="${escapeHtml(value || "")}">`;
+  return `<input list="poPaymentTermOptions" data-po-field="paymentTerms" ${poInputAttrs(`${mode}-payment-terms`)} value="${escapeHtml(value || "")}">`;
 }
 
 function supplierPaymentTermFieldHtml(value) {
   return `<input list="poSupplierPaymentOptions" data-po-supplier-payment value="${escapeHtml(value || "")}">`;
+}
+
+function poInputAttrs(field) {
+  return `name="po-${escapeHtml(field)}" autocomplete="off" autocapitalize="off" spellcheck="false"`;
 }
 
 function purchaseFilteredOrders() {
@@ -5482,13 +5489,13 @@ function purchaseOrderFormHtml(po) {
     <datalist id="poSupplierList">${suppliers.map(supplier => `<option value="${escapeHtml(supplier.supplierName)}"></option>`).join("")}</datalist>
     <datalist id="poPaymentTermOptions">${paymentTermOptions.map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist>
     <div class="po-form-grid">
-      <label>Supplier Name<input list="poSupplierList" data-po-field="supplierName" value="${escapeHtml(po.supplierName)}"></label>
-      <label>Reference No<input data-po-field="quotationNo" value="${escapeHtml(po.quotationNo)}"></label>
-      <label>Purchase Representative<input data-po-field="purchaseRepresentative" value="${escapeHtml(po.purchaseRepresentative || "")}"></label>
-      <label class="wide-field">Supplier Address<textarea data-po-field="supplierAddress">${escapeHtml(po.supplierAddress)}</textarea></label>
-      <label>PO Date<input data-po-field="poDate" placeholder="DD-MM-YYYY" value="${formatInventoryDate(po.poDate)}"></label>
-      <label>Project Name<input data-po-field="projectName" value="${escapeHtml(po.projectName)}"></label>
-      <label>TRN<input data-po-field="trn" value="${escapeHtml(po.trn)}"></label>
+      <label>Supplier Name<input list="poSupplierList" data-po-field="supplierName" ${poInputAttrs("supplier-name")} value="${escapeHtml(po.supplierName)}"></label>
+      <label>Reference No<input data-po-field="quotationNo" ${poInputAttrs("reference-no")} value="${escapeHtml(po.quotationNo)}"></label>
+      <label>Purchase Representative<input data-po-field="purchaseRepresentative" ${poInputAttrs("purchase-representative")} value="${escapeHtml(po.purchaseRepresentative || currentUser?.name || "")}"></label>
+      <label class="wide-field">Supplier Address<textarea data-po-field="supplierAddress" ${poInputAttrs("supplier-address")}>${escapeHtml(po.supplierAddress)}</textarea></label>
+      <label>PO Date<input data-po-field="poDate" ${poInputAttrs("po-date")} placeholder="DD-MM-YYYY" value="${formatInventoryDate(po.poDate)}"></label>
+      <label>Project Name<input data-po-field="projectName" ${poInputAttrs("project-name")} value="${escapeHtml(po.projectName)}"></label>
+      <label>TRN<input data-po-field="trn" ${poInputAttrs("trn")} value="${escapeHtml(po.trn)}"></label>
       <label>Payment Terms${paymentTermFieldHtml(po.paymentTerms, "po")}</label>
     </div>
     <div class="po-table-wrap">
@@ -5507,10 +5514,10 @@ function purchaseOrderFormHtml(po) {
         ${(po.items || []).map((item, index) => `
           <tr>
             <td>${index + 1}</td>
-            <td><textarea data-po-line="${index}" data-field="description" placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
-            <td><input type="number" min="0" data-po-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
-            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0)}"></td>
-            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" value="${purchaseVatPercent(item.vatPercent)}"></td>
+            <td><textarea data-po-line="${index}" data-field="description" ${poInputAttrs(`item-description-${index}`)} placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
+            <td><input type="number" min="0" data-po-line="${index}" data-field="qty" ${poInputAttrs(`qty-${index}`)} value="${Number(item.qty || 0)}"></td>
+            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="unitPrice" ${poInputAttrs(`unit-price-${index}`)} value="${Number(item.unitPrice || 0)}"></td>
+            <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" ${poInputAttrs(`vat-percent-${index}`)} value="${purchaseVatPercent(item.vatPercent)}"></td>
             <td data-po-amount="${index}">${money(item.amount)}</td>
             <td><button class="danger-button po-delete-line" data-delete-po-line="${index}">${poIcon("trash")}<span>Delete</span></button></td>
           </tr>
@@ -5519,15 +5526,15 @@ function purchaseOrderFormHtml(po) {
     </table>
     </div>
     <div class="inventory-actions po-table-actions"><button class="ghost-button" id="poAddItemBtn">${poIcon("plus")}<span>Add Item</span></button></div>
-    <label class="po-notes-field">Notes<textarea data-po-field="notes">${escapeHtml(po.notes)}</textarea></label>
+    <label class="po-notes-field">Notes<textarea data-po-field="notes" ${poInputAttrs("notes")}>${escapeHtml(po.notes)}</textarea></label>
   `;
 }
 
 function purchaseSummaryHtml(po) {
   const subtotalValue = String(po.manualSubtotal ?? "").trim() ? po.manualSubtotal : money(po.subtotal);
   return `
-    <div class="po-summary-row po-subtotal-row"><span>Subtotal (AED)</span><input id="poSubtotalInput" type="text" inputmode="decimal" data-po-subtotal value="${escapeHtml(subtotalValue)}"></div>
-    <div class="po-summary-row po-subtotal-row"><span>Discount (AED)</span><input id="poDiscountInput" type="text" inputmode="decimal" data-po-discount value="${escapeHtml(po.discount || "")}"></div>
+    <div class="po-summary-row po-subtotal-row"><span>Subtotal (AED)</span><input id="poSubtotalInput" type="text" inputmode="decimal" data-po-subtotal ${poInputAttrs("subtotal")} value="${escapeHtml(subtotalValue)}"></div>
+    <div class="po-summary-row po-subtotal-row"><span>Discount (AED)</span><input id="poDiscountInput" type="text" inputmode="decimal" data-po-discount ${poInputAttrs("discount")} value="${escapeHtml(po.discount || "")}"></div>
     <div class="po-summary-row"><span>Total After Discount (AED)</span><strong id="poTotalAfterDiscount">${money(po.totalAfterDiscount)}</strong></div>
     <div class="po-summary-row"><span>VAT Total (AED)</span><strong id="poVatTotal">${money(po.vatTotal)}</strong></div>
     <div class="po-summary-row po-summary-total"><strong>Grand Total (AED)</strong><strong id="poGrandTotal">${money(po.grandTotal)}</strong></div>
@@ -5579,6 +5586,7 @@ function poIcon(name) {
 }
 
 function newPurchaseDraft() {
+  const representativeName = String(currentUser?.name || "").trim();
   return {
     id: "",
     poNo: "",
@@ -5588,7 +5596,7 @@ function newPurchaseDraft() {
     trn: "",
     quotationNo: "",
     quotationDate: "",
-    purchaseRepresentative: "",
+    purchaseRepresentative: representativeName,
     poDate: new Date().toISOString().slice(0, 10),
     projectName: "",
     paymentTerms: "",
@@ -7065,6 +7073,7 @@ async function uploadPurchaseQuotation() {
       toast("Scanning quotation...");
       const result = await api("/api/purchase-orders/upload-quotation", { method: "POST", body: form });
       purchaseDraft = { ...newPurchaseDraft(), ...(result.order || {}) };
+      if (!String(purchaseDraft.purchaseRepresentative || "").trim()) purchaseDraft.purchaseRepresentative = String(currentUser?.name || "").trim();
       purchaseDraft.notes = defaultPurchaseNotes;
       if (!purchaseDraft.items || !purchaseDraft.items.length) purchaseDraft.items = [newPurchaseItem()];
       recalcPurchaseOrder(purchaseDraft);

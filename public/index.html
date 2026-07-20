@@ -87,7 +87,7 @@
   </main>
 
   <section id="loginView" class="login-view hidden">
-    <form id="loginForm" class="login-card">
+    <form id="loginForm" class="login-card" autocomplete="off">
       <div class="brand login-brand">
         <div class="brand-mark">CZ</div>
         <div>
@@ -97,8 +97,8 @@
       </div>
       <h1>Login</h1>
       <p>Use your admin or employee login to continue.</p>
-      <label>Email<input id="loginEmail" type="email" autocomplete="username" required></label>
-      <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <label>Email<input id="loginEmail" type="email" autocomplete="off" name="cz-login-email" data-lpignore="true" required></label>
+      <label>Password<input id="loginPassword" type="password" autocomplete="off" name="cz-login-passcode" data-lpignore="true" required></label>
       <button class="primary-button" type="submit">Login</button>
       <p id="loginMessage" class="login-message"></p>
     </form>
