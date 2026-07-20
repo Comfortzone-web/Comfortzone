@@ -1,5 +1,6 @@
 const $ = selector => document.querySelector(selector);
 const canvas = $("#canvas");
+const loginRoles = ["Admin", "Staff", "PO Only"];
 
 let state = null;
 let activeView = "canvas";
@@ -247,6 +248,12 @@ async function init() {
   bindShell();
   const authenticated = await loadAuth();
   if (!authenticated) return;
+  applyRoleAccess();
+  if (isPoOnlyUser()) {
+    await showPurchaseOrders("list");
+    warmViewData();
+    return;
+  }
   await loadSalesCrm().catch(() => {});
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
@@ -259,12 +266,27 @@ async function init() {
 }
 
 function bindShell() {
-  $("#newProjectBtn").addEventListener("click", createProject);
-  $("#inventoryBtn").addEventListener("click", () => showInventory("dashboard"));
-  $("#documentsBtn").addEventListener("click", showDocuments);
+  $("#newProjectBtn").addEventListener("click", () => {
+    if (!canAccessModule("workflow")) return showLockedModuleToast();
+    createProject();
+  });
+  $("#inventoryBtn").addEventListener("click", () => {
+    if (!canAccessModule("inventory")) return showLockedModuleToast();
+    showInventory("dashboard");
+  });
+  $("#documentsBtn").addEventListener("click", () => {
+    if (!canAccessModule("workflow")) return showLockedModuleToast();
+    showDocuments();
+  });
   $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("form"));
-  $("#salesDeskBtn").addEventListener("click", () => showSalesDesk("dashboard"));
-  $("#settingsBtn").addEventListener("click", showSettings);
+  $("#salesDeskBtn").addEventListener("click", () => {
+    if (!canAccessModule("sales")) return showLockedModuleToast();
+    showSalesDesk("dashboard");
+  });
+  $("#settingsBtn").addEventListener("click", () => {
+    if (!canAccessModule("settings")) return showLockedModuleToast();
+    showSettings();
+  });
   $("#logoutBtn").addEventListener("click", logout);
   $("#loginForm").addEventListener("submit", login);
   $("#saveBtn").addEventListener("click", () => saveProject({ manual: true, force: true }));
@@ -284,10 +306,16 @@ function bindShell() {
     }
   });
   document.querySelectorAll("[data-inventory-view]").forEach(button => {
-    button.addEventListener("click", () => showInventory(button.dataset.inventoryView));
+    button.addEventListener("click", () => {
+      if (!canAccessModule("inventory")) return showLockedModuleToast();
+      showInventory(button.dataset.inventoryView);
+    });
   });
   document.querySelectorAll("[data-sales-view]").forEach(button => {
-    button.addEventListener("click", () => showSalesDesk(button.dataset.salesView));
+    button.addEventListener("click", () => {
+      if (!canAccessModule("sales")) return showLockedModuleToast();
+      showSalesDesk(button.dataset.salesView);
+    });
   });
   $("#inventoryRoot").addEventListener("click", handleInventoryClick);
   $("#inventoryRoot").addEventListener("input", handleInventoryInput);
@@ -310,6 +338,7 @@ async function loadAuth() {
   currentUser = auth.user;
   appSettings = auth.settings;
   applyAppSettings();
+  applyRoleAccess();
   if (!currentUser) {
     showLogin();
     return false;
@@ -321,6 +350,7 @@ async function loadAuth() {
 function showLogin() {
   $("#loginView").classList.remove("hidden");
   document.body.classList.add("login-active");
+  applyRoleAccess();
 }
 
 function hideLogin() {
@@ -339,7 +369,13 @@ async function login(event) {
     currentUser = auth.user;
     appSettings = auth.settings;
     applyAppSettings();
+    applyRoleAccess();
     hideLogin();
+    if (isPoOnlyUser()) {
+      await showPurchaseOrders("list");
+      warmViewData();
+      return;
+    }
     await loadSalesCrm().catch(() => {});
     const url = new URL(location.href);
     const projectId = url.searchParams.get("project");
@@ -353,7 +389,7 @@ async function login(event) {
 
 function warmViewData() {
   const run = () => {
-    loadInventory().catch(error => console.warn(error));
+    if (!isPoOnlyUser()) loadInventory().catch(error => console.warn(error));
     loadPurchaseOrders().catch(error => console.warn(error));
   };
   if ("requestIdleCallback" in window) {
@@ -366,7 +402,38 @@ function warmViewData() {
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
   currentUser = null;
+  applyRoleAccess();
   showLogin();
+}
+
+function isPoOnlyUser() {
+  return norm(currentUser?.role) === "POONLY";
+}
+
+function canAccessModule(moduleName) {
+  if (!isPoOnlyUser()) return true;
+  return moduleName === "purchase";
+}
+
+function showLockedModuleToast() {
+  toast("This login has Purchase Orders access only.");
+}
+
+function applyRoleAccess() {
+  const poOnly = isPoOnlyUser();
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "documentsBtn", "inventoryBtn", "settingsBtn"];
+  lockIds.forEach(id => {
+    const button = document.getElementById(id);
+    if (!button) return;
+    button.disabled = poOnly;
+    button.classList.toggle("locked-nav", poOnly);
+    if (poOnly) button.title = "Locked for PO Only users";
+    else button.removeAttribute("title");
+  });
+  $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeView !== "salesDesk");
+  $("#projectSubnav")?.classList.toggle("hidden", poOnly || !["canvas", "documents"].includes(activeView));
+  $("#inventorySubnav")?.classList.toggle("hidden", poOnly || activeView !== "inventory");
+  $("#purchaseOrdersBtn")?.classList.toggle("active", poOnly && activeView === "purchaseOrders");
 }
 
 function applyAppSettings() {
@@ -414,6 +481,7 @@ async function api(path, options = {}) {
 }
 
 async function createProject() {
+  if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   state = await api("/api/projects?draft=1", { method: "POST", body: "{}" });
   projectPersisted = false;
   projectTouched = false;
@@ -426,6 +494,7 @@ async function createProject() {
 }
 
 async function loadProject(id) {
+  if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   state = await api(`/api/projects/${id}`);
   projectPersisted = true;
   projectTouched = false;
@@ -478,6 +547,7 @@ function hasWorkflowSourceUpload() {
 }
 
 async function showDocuments() {
+  if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   activeView = "documents";
   setCanvasActionsVisible(false);
   renderViewActions();
@@ -502,6 +572,7 @@ async function showDocuments() {
 }
 
 function showCanvas() {
+  if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   activeView = "canvas";
   setCanvasActionsVisible(true);
   renderViewActions();
@@ -523,6 +594,7 @@ function showCanvas() {
 }
 
 async function showInventory(screen = "dashboard") {
+  if (!canAccessModule("inventory")) return showPurchaseOrders("list");
   activeView = "inventory";
   setCanvasActionsVisible(false);
   inventoryScreen = screen;
@@ -608,6 +680,7 @@ function refreshWorkflowTitleSpinner() {
 }
 
 async function showSalesDesk(screen = "dashboard") {
+  if (!canAccessModule("sales")) return showPurchaseOrders("list");
   activeView = "salesDesk";
   setCanvasActionsVisible(false);
   salesDeskScreen = screen;
@@ -649,6 +722,7 @@ async function showSalesDesk(screen = "dashboard") {
 }
 
 async function showSettings() {
+  if (!canAccessModule("settings")) return showPurchaseOrders("list");
   activeView = "settings";
   setCanvasActionsVisible(false);
   renderViewActions();
@@ -769,7 +843,7 @@ function settingsUsersCard() {
         <tbody>${users.map(user => `
           <tr>
             <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="name" value="${escapeHtml(user.name || "")}"></td>
-            <td><select data-settings-user="${escapeHtml(user.id)}" data-user-field="role">${["Admin", "Staff"].map(role => `<option ${user.role === role ? "selected" : ""}>${role}</option>`).join("")}</select></td>
+            <td><select data-settings-user="${escapeHtml(user.id)}" data-user-field="role">${loginRoles.map(role => `<option ${user.role === role ? "selected" : ""}>${role}</option>`).join("")}</select></td>
             <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="email" value="${escapeHtml(user.email || "")}"></td>
             <td><select data-settings-user="${escapeHtml(user.id)}" data-user-field="active"><option value="true" ${user.active !== false ? "selected" : ""}>Active</option><option value="false" ${user.active === false ? "selected" : ""}>Disabled</option></select></td>
             <td>${rowMenu([
@@ -783,7 +857,7 @@ function settingsUsersCard() {
         <h3>New User</h3>
         <div class="form-grid">
           <label>Name<input id="settingsNewUserName"></label>
-          <label>Role<select id="settingsNewUserRole"><option>Staff</option><option>Admin</option></select></label>
+          <label>Role<select id="settingsNewUserRole">${loginRoles.map(role => `<option ${role === "Staff" ? "selected" : ""}>${role}</option>`).join("")}</select></label>
           <label>Email<input id="settingsNewUserEmail" type="email"></label>
           <label>Password<input id="settingsNewUserPassword" type="password"></label>
         </div>
@@ -4990,12 +5064,44 @@ async function createOrderBookFromQuotation(quoteId) {
   }
 }
 
+function splitQuotationModelDescription(item = {}) {
+  const rawModel = String(item.model || item.modelNo || item.item || item.productCode || "").trim();
+  const rawDescription = String(item.description || item.itemDescription || item.desc || item.name || "").trim();
+  const combined = rawModel || rawDescription;
+  const model = salesProjectModelNo(rawModel || combined);
+  let description = rawDescription;
+  if (description && model && norm(description).startsWith(norm(model))) {
+    description = description.replace(new RegExp(`^\\s*${escapeRegExp(model)}\\s*-?\\s*`, "i"), "").trim();
+  }
+  if (!description && rawModel && rawDescription && norm(rawDescription) !== norm(rawModel)) {
+    description = rawDescription;
+  }
+  return { model, description };
+}
+
+function quotationProjectNameForProject(quote = {}, quoteNo = "") {
+  const candidates = [
+    quote.project,
+    quote.projectName,
+    quote.jobDescription,
+    quote.projectDescription,
+    quote.enquiryProject
+  ];
+  const selected = candidates
+    .map(value => String(value || "").trim())
+    .find(value => value && norm(value) !== norm(quoteNo));
+  return selected || "Quotation Project";
+}
+
+function quotationScopeForProject(quote = {}) {
+  return String(quote.scope || quote.workDescription || quote.scopeOfWork || quote.projectScope || "").trim();
+}
+
 function salesProjectBoqFromQuotation(quote = {}) {
   const rows = Array.isArray(quote.items) ? quote.items : Array.isArray(quote.boq) ? quote.boq : Array.isArray(quote.boqRows) ? quote.boqRows : [];
   return rows.map((item, index) => {
-    const model = String(item.model || item.modelNo || item.item || "").trim();
-    const description = String(item.description || item.itemDescription || item.desc || item.name || model || "").trim();
-    const qty = salesNumber(item.qty ?? item.quantity ?? item.Qty);
+    const { model, description } = splitQuotationModelDescription(item);
+    const qty = salesNumber(item.qty ?? item.quantity ?? item.Qty ?? item.qtyRequired);
     const deliveredQty = salesNumber(item.deliveredQty);
     return {
       id: `project-boq-${Date.now()}-${index}`,
@@ -5027,7 +5133,7 @@ async function createProjectFromQuotation(quoteId) {
   const projectNo = nextSalesProjectNo();
   const today = todaySalesDateInput();
   const boq = salesProjectBoqFromQuotation(quote);
-  const projectName = String(quote.project || quote.projectName || quote.subject || quoteNo || "Quotation Project").trim();
+  const projectName = quotationProjectNameForProject(quote, quoteNo);
   const project = {
     ...salesProjectBlank(),
     id: salesProjectNewId(),
@@ -5046,7 +5152,7 @@ async function createProjectFromQuotation(quoteId) {
     status: "Ongoing",
     date: today,
     createdDate: today,
-    scope: quote.notes || quote.remarks || quote.subject || "",
+    scope: quotationScopeForProject(quote),
     boq,
     items: boq,
     value: salesNumber(quote.amount || quote.grandTotal || quote.netAmount || quote.total || quote.manualSubtotal || ""),
@@ -8695,6 +8801,10 @@ function money(value) {
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+
+function escapeRegExp(value) {
+  return String(value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function prettyBytes(bytes) {

@@ -94,6 +94,12 @@ button, input, select, textarea {
   color: #fff;
 }
 
+.nav-button.locked-nav,
+.subnav button.locked-nav {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
 .subnav {
   display: grid;
   gap: 6px;

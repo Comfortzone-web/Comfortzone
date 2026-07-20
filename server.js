@@ -350,12 +350,27 @@ function isAdmin(user) {
   return String(user?.role || "").toLowerCase() === "admin";
 }
 
+function isPoOnly(user) {
+  return String(user?.role || "").toLowerCase().replace(/\s+/g, "") === "poonly";
+}
+
 function sendAuthRequired(res) {
   return send(res, 401, { error: "Login required" });
 }
 
 function sendForbidden(res) {
   return send(res, 403, { error: "Admin access required" });
+}
+
+function sendPoOnlyForbidden(res) {
+  return send(res, 403, { error: "Purchase Orders access only" });
+}
+
+function canPoOnlyAccessPath(req, pathname) {
+  if (req.method === "GET" && pathname === "/api/settings") return true;
+  if (req.method === "GET" && pathname.startsWith("/api/settings/uploads/")) return true;
+  if (pathname.startsWith("/api/purchase-orders")) return true;
+  return false;
 }
 
 function projectPath(projectId) {
@@ -1263,6 +1278,10 @@ async function handleApi(req, res) {
   }
 
   if (!user) return sendAuthRequired(res);
+
+  if (isPoOnly(user) && !canPoOnlyAccessPath(req, url.pathname)) {
+    return sendPoOnlyForbidden(res);
+  }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
     return send(res, 200, { user, settings: publicSettings(await readSettings()) });
