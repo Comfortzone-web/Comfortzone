@@ -4654,6 +4654,11 @@ td[contenteditable="true"]:focus {
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
+.sales-project-direct-spinner {
+  flex: 0 0 auto;
+  margin-left: 2px;
+}
+
 .sales-project-direct-copy {
   color: #52647d;
   font-size: 13px;

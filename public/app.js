@@ -10,6 +10,7 @@ let projectPersisted = false;
 let projectTouched = false;
 let inventoryState = null;
 let inventoryScreen = "dashboard";
+let inventoryDashboardSearchQuery = "";
 let activeSupplierDnId = "";
 let supplierAllPage = 1;
 let deliveryDraft = null;
@@ -23,6 +24,7 @@ let purchaseDraft = null;
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
 let purchaseUploadLoading = false;
+let workflowUploadLoading = false;
 let purchaseLoadedAt = 0;
 let purchaseLoadPromise = null;
 let salesDeskScreen = "dashboard";
@@ -592,6 +594,19 @@ function refreshPurchaseTitleSpinner() {
   if (spinner) spinner.classList.toggle("hidden", !purchaseUploadLoading);
 }
 
+function workflowTitleHtml(title) {
+  return `${escapeHtml(title || "Workflow")} <span class="po-upload-spinner workflow-title-spinner ${workflowUploadLoading ? "" : "hidden"}" aria-label="Uploading workflow file"></span>`;
+}
+
+function setWorkflowTitle(title) {
+  $("#pageTitle").innerHTML = workflowTitleHtml(title);
+}
+
+function refreshWorkflowTitleSpinner() {
+  const spinner = document.querySelector(".workflow-title-spinner");
+  if (spinner) spinner.classList.toggle("hidden", !workflowUploadLoading);
+}
+
 async function showSalesDesk(screen = "dashboard") {
   activeView = "salesDesk";
   setCanvasActionsVisible(false);
@@ -992,7 +1007,7 @@ function inventoryTopbarConfig() {
       title: "Dashboard",
       subtitle: "Simple AC unit stock summary.",
       searchId: "inventorySearch",
-      searchValue: "",
+      searchValue: inventoryDashboardSearchQuery,
       search: "Search model, description, or DN...",
       actions: `<button class="sales-primary" data-inventory-top-action="upload-dn">Upload DN</button>`
     },
@@ -2118,7 +2133,7 @@ function salesProjectDirectDeliverySection(project = {}) {
   const uploads = Array.isArray(project.directDeliveryUploads) ? project.directDeliveryUploads : [];
   return `
     <section class="sales-project-form-section sales-project-direct-delivery">
-      <h3><span>4</span> Direct Delivery Details</h3>
+      <h3><span>4</span> Direct Delivery Details <i class="po-upload-spinner sales-project-direct-spinner hidden" data-project-direct-spinner aria-label="Uploading delivery note"></i></h3>
       <p class="sales-project-direct-copy">Upload delivery note to detect delivered models and quantities.</p>
       <label class="sales-project-direct-upload" data-project-direct-upload-zone>
         <input type="file" data-project-direct-file accept=".pdf,.png,.jpg,.jpeg">
@@ -2343,7 +2358,9 @@ async function uploadSalesProjectDirectDelivery(modal, project, file) {
   form.append("file", file);
   form.append("projectId", project.id || "");
   const uploadZone = modal.querySelector("[data-project-direct-upload-zone]");
+  const spinner = modal.querySelector("[data-project-direct-spinner]");
   uploadZone?.classList.add("is-loading");
+  spinner?.classList.remove("hidden");
   try {
     const result = await api("/api/sales-crm/projects/direct-delivery/upload", { method: "POST", body: form });
     modal._directDeliveryPendingUpload = result.upload;
@@ -2360,6 +2377,7 @@ async function uploadSalesProjectDirectDelivery(modal, project, file) {
     toast(error.message || "Delivery note upload failed");
   } finally {
     uploadZone?.classList.remove("is-loading");
+    spinner?.classList.add("hidden");
     if (input) input.value = "";
   }
 }
@@ -5670,7 +5688,7 @@ function render() {
     recalcCosting();
     recalcBoq();
   }
-  $("#pageTitle").textContent = state.details.project || "Workflow";
+  setWorkflowTitle(state.details.project || "Workflow");
   $("#projectMeta").textContent = `${state.details.customer || "Internal project"} · ${state.quotation.quotationNo}`;
   canvas.innerHTML = "";
   state.nodes.forEach(renderNode);
@@ -5958,7 +5976,7 @@ function detailsBody() {
       if (key === "project") applyWorkflowProject(input.value, wrap);
       if (key === "project") {
         state.title = input.value || "Untitled Project";
-        $("#pageTitle").textContent = state.title;
+        setWorkflowTitle(state.title);
       }
       scheduleProjectSave();
     });
@@ -6069,7 +6087,7 @@ function setWorkflowDetail(key, value, wrap) {
   if (input && input.value !== state.details[key]) input.value = state.details[key];
   if (key === "project") {
     state.title = state.details.project || "Untitled Project";
-    $("#pageTitle").textContent = state.title;
+    setWorkflowTitle(state.title);
   }
 }
 
@@ -6368,11 +6386,7 @@ function inventoryDashboardHtml() {
       <div class="inventory-card">
         <h3>Stock Overview</h3>
         <table class="inventory-table dashboard-stock-table"><thead><tr><th>Model No.</th><th>Warehouse Qty</th><th>Reserved Qty</th><th>Free Stock</th></tr></thead><tbody>
-          ${d.stock.map(item => {
-            const reservedQty = Number(item.reservedQty || 0);
-            const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
-            return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description"> - ${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
-          }).join("") || `<tr><td colspan="4">No stock yet.</td></tr>`}
+          ${dashboardStockOverviewRowsHtml()}
         </tbody></table>
       </div>
       <div>
@@ -6381,6 +6395,28 @@ function inventoryDashboardHtml() {
       </div>
     </div>
   `;
+}
+
+function dashboardStockOverviewRowsHtml() {
+  const query = norm(inventoryDashboardSearchQuery);
+  const overviewStock = (inventoryState?.dashboard?.stock || []).filter(item => {
+    const warehouseQty = Number(item.qty || 0);
+    const reservedQty = Number(item.reservedQty || 0);
+    const freeStock = Number(item.freeStock ?? (warehouseQty - reservedQty));
+    const rowText = norm(`${item.modelNo || ""} ${item.description || ""}`);
+    if (query) return rowText.includes(query);
+    return warehouseQty !== 0 || reservedQty !== 0 || freeStock !== 0;
+  });
+  return overviewStock.map(item => {
+    const reservedQty = Number(item.reservedQty || 0);
+    const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
+    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description"> - ${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
+  }).join("") || `<tr><td colspan="4">${query ? "No matching models found." : "No stock yet."}</td></tr>`;
+}
+
+function refreshDashboardStockOverview() {
+  const body = document.querySelector(".dashboard-stock-table tbody");
+  if (body) body.innerHTML = dashboardStockOverviewRowsHtml();
 }
 
 function supplierDnViewHtml() {
@@ -7024,7 +7060,10 @@ function handleInventoryInput(event) {
   if (input.dataset.suggestionList) {
     toggleSuggestionList(input);
   }
-  if (input.id === "inventorySearch") return filterScopedTable(".inventory-table", input.value);
+  if (input.id === "inventorySearch") {
+    inventoryDashboardSearchQuery = input.value;
+    return refreshDashboardStockOverview();
+  }
   if (input.id === "stockSearchInput") return filterInventoryTable(input.value);
   if (input.id === "stockModelNo") return autofillStockModelFields(input.value);
   if (input.dataset.stockReservedModel) return updateStockReservedQty(input.dataset.stockReservedModel, input.value);
@@ -7824,6 +7863,8 @@ async function uploadThermalFromChat() {
   const input = $("#thermalFileInput");
   const files = Array.from(input.files || []);
   if (!files.length) return;
+  workflowUploadLoading = true;
+  refreshWorkflowTitleSpinner();
   try {
     await ensureProjectSaved({ hidden: true });
     const uploaded = [];
@@ -7850,12 +7891,15 @@ async function uploadThermalFromChat() {
     } else {
       askThermalExtractionChoice();
     }
-    input.value = "";
     render();
     saveProject();
   } catch (error) {
     addChat(error.message || "File upload failed. Please try again.");
     toast(error.message || "File upload failed");
+  } finally {
+    workflowUploadLoading = false;
+    refreshWorkflowTitleSpinner();
+    input.value = "";
   }
 }
 
@@ -7974,6 +8018,11 @@ async function chooseUpload(nodeId) {
   input.accept = ".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg";
   input.addEventListener("change", async () => {
     if (!input.files[0]) return;
+    const showWorkflowSpinner = nodeId === "thermal-upload" || nodeId === "vrv-upload";
+    if (showWorkflowSpinner) {
+      workflowUploadLoading = true;
+      refreshWorkflowTitleSpinner();
+    }
     try {
       await ensureProjectSaved({ hidden: true });
       const form = new FormData();
@@ -7995,6 +8044,11 @@ async function chooseUpload(nodeId) {
       toast("File uploaded");
     } catch (error) {
       toast(error.message || "File upload failed");
+    } finally {
+      if (showWorkflowSpinner) {
+        workflowUploadLoading = false;
+        refreshWorkflowTitleSpinner();
+      }
     }
   });
   input.value = "";
