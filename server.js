@@ -1666,10 +1666,11 @@ async function handleApi(req, res) {
       const amount = Number(item.amount || 0) || 0;
       return sum + (qty * unitPrice || amount);
     }, 0);
+    const supplierMerged = mergeScannedPurchaseSupplierDetails(extracted, store);
     const order = normalizePurchaseOrder({
-      ...extracted,
+      ...supplierMerged,
       manualSubtotal: extractedItemBaseTotal > 0 ? "" : (extractedSubtotal > 0 ? extractedSubtotal : ""),
-      discount: extracted.discount ?? 0,
+      discount: supplierMerged.discount ?? 0,
       notes: DEFAULT_PURCHASE_NOTES,
       sourceUploadId: uploadId,
       status: "Draft"
@@ -2834,6 +2835,31 @@ function normalizePurchasePaymentTerms(value) {
   if (/\b60\b/.test(lower) && /\b(day|days|pdc)\b/.test(lower)) return "60 Days PDC";
   if (/\b90\b/.test(lower) && /\b(day|days|pdc)\b/.test(lower)) return "90 Days PDC";
   return text;
+}
+
+function findMatchingPurchaseSupplier(store = {}, supplierName = "") {
+  const supplierMatchKey = value => String(value || "").toUpperCase().replace(/[^A-Z0-9]+/g, "");
+  const key = supplierMatchKey(supplierName);
+  if (!key) return null;
+  return (store.suppliers || [])
+    .map(normalizePurchaseSupplier)
+    .find(supplier => supplierMatchKey(supplier.supplierName) === key) || null;
+}
+
+function mergeScannedPurchaseSupplierDetails(extracted = {}, store = {}) {
+  const supplier = findMatchingPurchaseSupplier(store, extracted.supplierName || extracted.name || "");
+  if (!supplier) return extracted;
+  const scannedPaymentTerms = cleanCell(extracted.paymentTerms);
+  const savedPaymentTerms = cleanCell(supplier.paymentTerms);
+  return {
+    ...extracted,
+    supplierName: supplier.supplierName || cleanCell(extracted.supplierName),
+    supplierAddress: cleanCell(extracted.supplierAddress || extracted.address) || supplier.address || "",
+    address: cleanCell(extracted.address || extracted.supplierAddress) || supplier.address || "",
+    trn: cleanCell(extracted.trn || extracted.supplierTrn || extracted.supplierTRN) || supplier.trn || "",
+    supplierTrn: cleanCell(extracted.supplierTrn || extracted.trn || extracted.supplierTRN) || supplier.trn || "",
+    paymentTerms: savedPaymentTerms || scannedPaymentTerms
+  };
 }
 
 function normalizePurchaseOrder(input = {}, store = defaultPurchaseOrders(), createOfficial = false) {

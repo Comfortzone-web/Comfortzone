@@ -2977,7 +2977,7 @@ function salesOrderBookHtml() {
         ${orderBookKpi("Payment Received", salesCompactMoney(stats.received), "Including VAT", "purple")}
         ${orderBookKpi("Balance to Receive", salesCompactMoney(stats.balance), "Pending collection", "orange")}
         ${orderBookKpi("Pending Jobs", stats.pendingJobs, "Not completed", "blue")}
-        ${orderBookKpi("Invoices Pending", stats.invoicesPending, "No invoice uploaded", "red")}
+        ${orderBookKpi("Delivery Pending", stats.deliveryPending, "Delivery Status", "red")}
       </div>
       ${salesOrderBookFiltersOpen ? salesOrderBookFilterPanel(orders) : ""}
       <div class="order-book-body ${detailOpen ? "has-detail" : ""}">
@@ -3147,8 +3147,13 @@ function salesOrderBookStats(orders) {
     received: orders.reduce((sum, order) => sum + order.paymentReceived, 0),
     balance: orders.reduce((sum, order) => sum + Math.max(0, order.balance), 0),
     pendingJobs: orders.filter(order => !["COMPLETED", "CLOSED", "CANCELLED"].includes(norm(order.status))).length,
-    invoicesPending: orders.filter(order => order.invoiceStatus === "Not Attached").length
+    deliveryPending: orders.filter(order => orderBookIsDeliveryPending(order)).length
   };
+}
+
+function orderBookIsDeliveryPending(order = {}) {
+  const deliveryStatus = norm(order.deliveryStatus || order.status);
+  return deliveryStatus !== "DELIVERED";
 }
 
 function salesOrderBookSearch(rows) {
@@ -5361,6 +5366,19 @@ function renderPurchaseOrders() {
   bindPurchaseEvents();
 }
 
+function renderPurchaseOrdersKeepingInputFocus(inputId, value) {
+  renderPurchaseOrders();
+  requestAnimationFrame(() => {
+    const nextInput = document.getElementById(inputId);
+    if (!nextInput) return;
+    nextInput.focus();
+    const cursor = String(value || "").length;
+    try {
+      nextInput.setSelectionRange(cursor, cursor);
+    } catch {}
+  });
+}
+
 function purchaseOrderShell(inner) {
   return `
     <div class="po-page">
@@ -5408,10 +5426,19 @@ function purchaseOrderListHtml() {
         </div>
         <input id="poSearchInput" type="search" placeholder="Search PO, supplier, quotation, project..." value="${escapeHtml(purchaseSearchQuery)}">
       </div>
-      <table class="inventory-table">
-        <thead><tr><th>PO No.</th><th>Supplier / Project</th><th>PO Date</th><th>Items</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
+      <table class="inventory-table po-list-table">
+        <colgroup>
+          <col class="po-list-col-no">
+          <col class="po-list-col-supplier">
+          <col class="po-list-col-project">
+          <col class="po-list-col-items">
+          <col class="po-list-col-total">
+          <col class="po-list-col-status">
+          <col class="po-list-col-action">
+        </colgroup>
+        <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Items</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong></td><td>${escapeHtml(order.supplierName || "-")}<br><span class="inventory-muted">${escapeHtml(order.projectName || "")}</span></td><td>${formatInventoryDate(order.poDate)}</td><td>${(order.items || []).length}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
+          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${(order.items || []).length}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -7017,11 +7044,11 @@ function handlePurchaseInput(event) {
   const input = event.target;
   if (input.id === "poSearchInput") {
     purchaseSearchQuery = input.value;
-    return renderPurchaseOrders();
+    return renderPurchaseOrdersKeepingInputFocus("poSearchInput", purchaseSearchQuery);
   }
   if (input.id === "poSupplierSearchInput") {
     purchaseSupplierSearchQuery = input.value;
-    return renderPurchaseOrders();
+    return renderPurchaseOrdersKeepingInputFocus("poSupplierSearchInput", purchaseSupplierSearchQuery);
   }
   if (!purchaseDraft) return;
   if (input.dataset.poPaymentCustomInline !== undefined) {
