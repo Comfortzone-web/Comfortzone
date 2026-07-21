@@ -36,8 +36,10 @@ let salesProjectDetailId = "";
 let salesSearchQuery = "";
 let salesLeadFilter = "";
 let salesLeadTab = "all";
+let salesLeadViewMode = "table";
 let salesQuotationTab = "all";
 let salesLeadDetailId = "";
+let salesLeadDraggedId = "";
 let salesLeadFiltersOpen = false;
 let salesLeadFilters = {
   salesPerson: "",
@@ -324,6 +326,11 @@ function bindShell() {
   $("#salesDeskRoot").addEventListener("click", handleSalesClick);
   $("#salesDeskRoot").addEventListener("input", handleSalesInput);
   $("#salesDeskRoot").addEventListener("change", handleSalesChange);
+  $("#salesDeskRoot").addEventListener("dragstart", handleSalesLeadBoardDragStart);
+  $("#salesDeskRoot").addEventListener("dragover", handleSalesLeadBoardDragOver);
+  $("#salesDeskRoot").addEventListener("dragleave", handleSalesLeadBoardDragLeave);
+  $("#salesDeskRoot").addEventListener("drop", handleSalesLeadBoardDrop);
+  $("#salesDeskRoot").addEventListener("dragend", handleSalesLeadBoardDragEnd);
   $("#settingsRoot").addEventListener("click", handleSettingsClick);
   $("#settingsRoot").addEventListener("input", handleSettingsInput);
   $("#settingsRoot").addEventListener("change", handleSettingsChange);
@@ -1364,11 +1371,12 @@ function salesLeadsHtml() {
   const normalizedRows = rawRows.map((lead, index) => normalizeSalesLead(lead, index));
   const searchedRows = salesLeadSearch(normalizedRows);
   const filteredRows = salesLeadAdvancedFilter(searchedRows);
-  const mainRows = salesLeadShowsClosedRows() ? filteredRows : filteredRows.filter(lead => !salesLeadIsClosedStatus(lead));
-  const rows = salesLeadTabFilter(mainRows);
+  const mainRows = salesLeadViewMode === "board" || salesLeadShowsClosedRows() ? filteredRows : filteredRows.filter(lead => !salesLeadIsClosedStatus(lead));
+  const rows = salesLeadViewMode === "board" ? mainRows.filter(lead => !salesLeadIsLostStatus(lead)) : salesLeadTabFilter(mainRows);
+  if (salesLeadViewMode === "split" && !salesLeadDetailId && rows.length) salesLeadDetailId = rows[0].id;
   const selected = salesLeadDetailId ? normalizedRows.find(lead => lead.id === salesLeadDetailId) : null;
   const stats = salesLeadStats(normalizedRows);
-  const detailOpen = !!selected && !!salesLeadDetailId;
+  const detailOpen = salesLeadViewMode === "table" && !!selected && !!salesLeadDetailId;
   return `
     <section class="sales-leads-page">
       <div class="pipeline-header">
@@ -1391,22 +1399,24 @@ function salesLeadsHtml() {
         ${salesPipelineKpi("Tender Value", salesCompactNumber(stats.tenderValue), "Tender stage value (AED)", "orange")}
       </div>
       ${salesLeadFiltersOpen ? salesLeadFilterPanel() : ""}
-      <div class="pipeline-body ${detailOpen ? "has-detail" : ""}">
+      <div class="pipeline-body ${detailOpen ? "has-detail" : ""} ${salesLeadViewMode !== "table" ? `lead-view-${salesLeadViewMode}` : ""}">
         <section class="pipeline-table-card">
-          <div class="pipeline-tabs">
-            ${salesLeadTabButton("all", "All Enquiries")}
-            ${salesLeadTabButton("quotePending", "Quotation Pending")}
-            ${salesLeadTabButton("followDue", "Follow-up Due")}
-            ${salesLeadTabButton("tender", "Tender Jobs")}
-            ${salesLeadTabButton("jobInHand", "Job in Hand")}
-            ${salesLeadTabButton("lost", "Lost / Closed")}
+          <div class="pipeline-tabs-row">
+            <div class="pipeline-tabs">
+              ${salesLeadTabButton("all", "All Enquiries")}
+              ${salesLeadTabButton("quotePending", "Quotation Pending")}
+              ${salesLeadTabButton("followDue", "Follow-up Due")}
+              ${salesLeadTabButton("tender", "Tender Jobs")}
+              ${salesLeadTabButton("jobInHand", "Job in Hand")}
+              ${salesLeadTabButton("lost", "Lost / Closed")}
+            </div>
+            <div class="lead-view-switcher">
+              ${salesLeadViewButton("table", "Table")}
+              ${salesLeadViewButton("split", "Split")}
+              ${salesLeadViewButton("board", "Board")}
+            </div>
           </div>
-          <div class="pipeline-table-wrap">
-            <table class="sales-table sales-pipeline-table">
-              <thead><tr><th>Enquiry No</th><th>Customer / Contractor</th><th>Project / Description</th><th>Product Type</th><th>Status</th><th>Value (AED)</th><th>Sales Person</th><th>Actions</th></tr></thead>
-              <tbody>${rows.map(lead => salesLeadRow(lead)).join("") || `<tr><td colspan="8" class="pipeline-empty">No enquiries found.</td></tr>`}</tbody>
-            </table>
-          </div>
+          ${salesLeadViewMode === "split" ? salesLeadSplitViewHtml(rows, selected) : salesLeadViewMode === "board" ? salesLeadBoardViewHtml(rows) : salesLeadTableViewHtml(rows)}
           <div class="pipeline-footer">Showing ${rows.length} of ${normalizedRows.length} enquiries</div>
         </section>
         ${detailOpen ? salesLeadDetailPanel(selected) : ""}
@@ -1464,15 +1474,223 @@ function salesLeadRow(lead) {
   `;
 }
 
+function salesLeadTableViewHtml(rows) {
+  return `
+    <div class="pipeline-table-wrap">
+      <table class="sales-table sales-pipeline-table">
+        <thead><tr><th>Enquiry No</th><th>Customer / Contractor</th><th>Project / Description</th><th>Product Type</th><th>Status</th><th>Value (AED)</th><th>Sales Person</th><th>Actions</th></tr></thead>
+        <tbody>${rows.map(lead => salesLeadRow(lead)).join("") || `<tr><td colspan="8" class="pipeline-empty">No enquiries found.</td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+function salesLeadViewButton(mode, label) {
+  return `<button class="${salesLeadViewMode === mode ? "active" : ""}" data-sales-lead-view="${escapeHtml(mode)}">${salesPipelineSmallIcon(mode)}${escapeHtml(label)}</button>`;
+}
+
+function salesPipelineSmallIcon(mode) {
+  if (mode === "split") return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v14H4z"/><path d="M13 5h7v14h-7z"/></svg>`;
+  if (mode === "board") return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h4v14H4z"/><path d="M10 5h4v14h-4z"/><path d="M16 5h4v14h-4z"/></svg>`;
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/><path d="M8 5v14"/></svg>`;
+}
+
+function salesLeadSplitViewHtml(rows, selected) {
+  return `
+    <div class="lead-split-view">
+      <div class="lead-split-list">
+        <div class="lead-split-search"><span>Search</span><input data-sales-search value="${escapeHtml(salesSearchQuery)}" placeholder="Search enquiries"></div>
+        <div class="lead-split-items">
+          ${rows.map(lead => salesLeadSplitItem(lead)).join("") || `<div class="pipeline-empty">No enquiries found.</div>`}
+        </div>
+      </div>
+      <div class="lead-split-detail">
+        ${selected ? salesLeadSplitDetailHtml(selected) : `<div class="pipeline-empty">Select an enquiry to view details.</div>`}
+      </div>
+    </div>
+  `;
+}
+
+function salesLeadSplitItem(lead) {
+  return `
+    <button class="lead-split-item ${lead.id === salesLeadDetailId ? "active" : ""}" data-sales-lead-select="${escapeHtml(lead.id)}">
+      <span class="lead-card-icon">${salesPipelineKpiIcon("Open Enquiries")}</span>
+      <span class="lead-split-item-main">
+        <strong>${escapeHtml(lead.enquiryNo)}</strong>
+        <b>${escapeHtml(lead.customer || "-")}</b>
+        <small>${escapeHtml(lead.projectDescription || "-")}</small>
+      </span>
+      <span class="lead-split-item-meta">
+        ${salesProductBadge(lead.productType)}
+        ${salesBadge(lead.status)}
+        <small>${escapeHtml(lead.receivedDate || "")}</small>
+      </span>
+    </button>
+  `;
+}
+
+function salesLeadBoardViewHtml(rows) {
+  const groups = salesLeadBoardGroups();
+  return `
+    <div class="lead-board-view">
+      ${groups.map(group => {
+        const groupRows = rows.filter(lead => salesLeadBoardGroupKey(lead) === group.key);
+        return `
+          <section class="lead-board-column ${escapeHtml(group.tone)}" data-lead-board-drop="${escapeHtml(group.key)}" data-lead-board-status="${escapeHtml(group.status)}">
+            <div class="lead-board-column-head">
+              <h4>${escapeHtml(group.label)}</h4>
+              <span>${groupRows.length}</span>
+            </div>
+            <div class="lead-board-cards">
+              ${groupRows.map(lead => salesLeadBoardCard(lead)).join("") || `<div class="lead-board-empty">No enquiries</div>`}
+            </div>
+          </section>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function salesLeadBoardGroups() {
+  return [
+    { key: "new", label: "1. New Enquiry", tone: "blue", status: "New Enquiry" },
+    { key: "quote", label: "2. Quote Sent", tone: "orange", status: "Quote Sent" },
+    { key: "follow", label: "3. Follow-up Due", tone: "purple", status: "Follow-up" },
+    { key: "negotiation", label: "4. Negotiation", tone: "green", status: "Negotiation" },
+    { key: "order", label: "5. Order Received", tone: "blue", status: "Order Received" },
+    { key: "closed", label: "6. Closed", tone: "gray", status: "Completed" }
+  ];
+}
+
+function salesLeadBoardGroupKey(lead) {
+  const status = norm(normalizeLeadStatus(lead.status));
+  if (salesLeadIsLostStatus(lead)) return "hidden";
+  if (["COMPLETED", "CLOSED", "ONHOLD"].includes(status)) return "closed";
+  if (["NEWENQUIRY", "SELECTIONPENDING", "QUOTEPENDING"].includes(status)) return "new";
+  if (["QUOTESENT", "QUOTATIONSENT"].includes(status)) return "quote";
+  if (["FOLLOWUP", "FOLLOWUPDUE", "REVISIONREQUIRED"].includes(status)) return "follow";
+  if (["NEGOTIATION", "TENDER", "JOBINHAND"].includes(status)) return "negotiation";
+  if (status === "ORDERRECEIVED") return "order";
+  return "new";
+}
+
+function salesLeadBoardCard(lead) {
+  return `
+    <article class="lead-board-card" draggable="true" data-lead-board-card="${escapeHtml(lead.id)}">
+      <div class="lead-board-card-head">
+        <button class="pipeline-link" data-sales-action="view-lead" data-sales-id="${escapeHtml(lead.id)}">${escapeHtml(lead.enquiryNo)}</button>
+        ${rowMenu([
+          { label: "View", action: "view-lead", id: lead.id },
+          { label: "Edit", action: "edit-lead", id: lead.id },
+          { label: "Create Quote", action: "lead-quote", id: lead.id },
+          { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
+          { label: "Delete", action: "delete-lead", id: lead.id, danger: true }
+        ])}
+      </div>
+      <strong>${escapeHtml(lead.customer || "-")}</strong>
+      <p>${escapeHtml(lead.projectDescription || "-")}</p>
+      <div class="lead-board-tags">${salesProductBadge(lead.productType)}${salesBadge(lead.status)}</div>
+      <div class="lead-board-meta">
+        <span>${lead.estimatedValue ? `${Number(lead.estimatedValue).toLocaleString("en-US")} AED` : "-"}</span>
+        <span>${escapeHtml(lead.receivedDate || "-")}</span>
+        <span>${escapeHtml(lead.salesPerson || "-")}</span>
+        <span>${escapeHtml(lead.contactNumber || "-")}</span>
+      </div>
+    </article>
+  `;
+}
+
+function salesLeadSplitDetailHtml(lead) {
+  return `
+    <div class="lead-split-detail-head">
+      <span class="lead-card-icon">${salesPipelineKpiIcon("Open Enquiries")}</span>
+      <div>
+        <h3>${escapeHtml(lead.enquiryNo)}</h3>
+        <p>Last updated: ${escapeHtml(lead.lastUpdated || lead.receivedDate)}${lead.updatedBy ? ` by ${escapeHtml(lead.updatedBy)}` : ""}</p>
+      </div>
+      ${salesBadge(lead.status)}
+    </div>
+    <div class="lead-split-detail-grid">
+      ${salesLeadSplitInfoCard("Enquiry Information", [
+        ["Sales Person", lead.salesPerson],
+        ["S. No", lead.sNo],
+        ["Enquiry No", lead.enquiryNo],
+        ["Date Enquiry Received", lead.receivedDate],
+        ["Date Enquiry Quoted", lead.quotedDate],
+        ["Quote No", lead.quoteNo],
+        ["Selection & Quote Prepared By", lead.preparedBy]
+      ])}
+      ${salesLeadSplitInfoCard("Customer & Project", [
+        ["Customer", lead.customer],
+        ["Project / Description", lead.projectDescription],
+        ["Plot No", lead.plotNo],
+        ["Client", lead.client],
+        ["Main Contractor", lead.mainContractor],
+        ["Consultant", lead.consultant],
+        ["AC Contractor", lead.acContractor],
+        ["Contact Name", lead.contactName],
+        ["Contact Number", lead.contactNumber]
+      ])}
+      ${salesLeadSplitInfoCard("Product & Commercial", [
+        ["Product Type", lead.productType],
+        ["Scope", lead.scope],
+        ["Status", lead.status],
+        ["Tentative Finalizing Month", lead.finalizingMonth],
+        ["Estimated Value (AED)", lead.estimatedValue ? Number(lead.estimatedValue).toLocaleString("en-US") : ""],
+        ["Daikin Purchase Value (AED)", lead.daikinPurchaseValue ? Number(lead.daikinPurchaseValue).toLocaleString("en-US") : ""],
+        ["Competitors", lead.competitors]
+      ])}
+      <section class="lead-split-info-card lead-split-history-card">
+        <h4>Follow-up History</h4>
+        <table>
+          <colgroup><col><col><col></colgroup>
+          <thead><tr><th>Date</th><th>Type</th><th>Note</th></tr></thead>
+          <tbody>
+            ${(lead.followUps || []).map((item, index) => `<tr><td>${escapeHtml(item.date || "-")}</td><td>${escapeHtml(item.type || "-")}</td><td>${escapeHtml(item.note || "-")}<button class="lead-follow-delete" data-sales-action="delete-lead-follow-up" data-sales-id="${escapeHtml(lead.id)}" data-follow-index="${index}" title="Delete follow-up">x</button></td></tr>`).join("") || `<tr><td colspan="3">No follow-up history yet.</td></tr>`}
+          </tbody>
+        </table>
+      </section>
+      ${salesLeadSplitInfoCard("Next Follow-up", [
+        ["Next Follow-up Date", lead.nextFollowUpDate],
+        ["Follow-up Type", lead.followUpType],
+        ["Follow-up Note", lead.followUpNote],
+        ["Priority", lead.priority]
+      ], "lead-split-next-card")}
+    </div>
+    <div class="lead-split-actions">
+      <button class="sales-secondary" data-sales-action="edit-lead" data-sales-id="${escapeHtml(lead.id)}">Edit Enquiry</button>
+      <button class="sales-secondary" data-sales-action="lead-add-follow-up" data-sales-id="${escapeHtml(lead.id)}">Add Follow-up</button>
+      <button class="sales-primary" data-sales-action="lead-quote" data-sales-id="${escapeHtml(lead.id)}">Create Quotation</button>
+    </div>
+  `;
+}
+
+function salesLeadSplitInfoCard(title, rows, extraClass = "") {
+  return `
+    <section class="lead-split-info-card ${escapeHtml(extraClass)}">
+      <h4>${escapeHtml(title)}</h4>
+      <dl>${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}</dl>
+    </section>
+  `;
+}
+
 function salesLeadDetailPanel(lead) {
   return `
     <aside class="pipeline-detail">
+      ${salesLeadDetailContent(lead)}
+    </aside>
+  `;
+}
+
+function salesLeadDetailContent(lead, options = {}) {
+  const close = options.close !== false;
+  return `
       <div class="pipeline-detail-head">
         <div class="pipeline-detail-title">
           <h3>${escapeHtml(lead.enquiryNo)}</h3>
           ${salesBadge(lead.status)}
         </div>
-        <button class="mini-button" data-sales-action="close-lead-detail">X</button>
+        ${close ? `<button class="mini-button" data-sales-action="close-lead-detail">X</button>` : ""}
       </div>
       <div class="pipeline-detail-meta">
         <p>Last updated: ${escapeHtml(lead.lastUpdated || lead.receivedDate)}${lead.updatedBy ? ` by ${escapeHtml(lead.updatedBy)}` : ""}</p>
@@ -1527,7 +1745,6 @@ function salesLeadDetailPanel(lead) {
         ["Follow-up Note", lead.followUpNote],
         ["Priority", lead.priority]
       ])}
-    </aside>
   `;
 }
 
@@ -1705,6 +1922,11 @@ function salesLeadShowsClosedRows() {
 function salesLeadIsClosedStatus(lead) {
   const status = norm(lead?.status);
   return ["COMPLETED", "LOST", "CLOSED", "LOSTCLOSED"].includes(status);
+}
+
+function salesLeadIsLostStatus(lead) {
+  const status = norm(normalizeLeadStatus(lead?.status));
+  return ["LOST", "LOSTCLOSED"].includes(status);
 }
 
 function salesLeadSearch(rows) {
@@ -3965,6 +4187,83 @@ function salesCompactNumber(value) {
   return amount.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
+function clearSalesLeadBoardDragState() {
+  document.querySelectorAll(".lead-board-card.dragging, .lead-board-column.drag-over").forEach(element => {
+    element.classList.remove("dragging", "drag-over");
+  });
+}
+
+function handleSalesLeadBoardDragStart(event) {
+  const card = event.target.closest("[data-lead-board-card]");
+  if (salesLeadViewMode !== "board" || !card || event.target.closest("button")) return;
+  salesLeadDraggedId = card.dataset.leadBoardCard || "";
+  if (!salesLeadDraggedId) return;
+  card.classList.add("dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", salesLeadDraggedId);
+}
+
+function handleSalesLeadBoardDragOver(event) {
+  const column = event.target.closest("[data-lead-board-drop]");
+  if (salesLeadViewMode !== "board" || !column || !salesLeadDraggedId) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  document.querySelectorAll(".lead-board-column.drag-over").forEach(element => {
+    if (element !== column) element.classList.remove("drag-over");
+  });
+  column.classList.add("drag-over");
+}
+
+function handleSalesLeadBoardDragLeave(event) {
+  const column = event.target.closest("[data-lead-board-drop]");
+  if (!column || column.contains(event.relatedTarget)) return;
+  column.classList.remove("drag-over");
+}
+
+function updateSalesLeadStatusLocal(leadId, status) {
+  const current = salesData();
+  if (!current?.leads) return;
+  salesCrmState = {
+    ...current,
+    leads: current.leads.map(lead => lead.id === leadId ? { ...lead, status } : lead)
+  };
+  salesCrmLoadedAt = Date.now();
+}
+
+async function handleSalesLeadBoardDrop(event) {
+  const column = event.target.closest("[data-lead-board-drop]");
+  if (salesLeadViewMode !== "board" || !column) return;
+  event.preventDefault();
+  const leadId = event.dataTransfer?.getData("text/plain") || salesLeadDraggedId;
+  const nextStatus = column.dataset.leadBoardStatus || "";
+  clearSalesLeadBoardDragState();
+  salesLeadDraggedId = "";
+  if (!leadId || !nextStatus) return;
+  const lead = (salesData().leads || []).find(item => item.id === leadId);
+  if (!lead || salesLeadBoardGroupKey(lead) === column.dataset.leadBoardDrop) return;
+  updateSalesLeadStatusLocal(leadId, nextStatus);
+  salesLeadDetailId = leadId;
+  renderSalesDesk();
+  try {
+    salesCrmState = await api("/api/sales-crm/leads", {
+      method: "POST",
+      body: JSON.stringify({ ...lead, status: nextStatus })
+    });
+    salesCrmLoadedAt = Date.now();
+    renderSalesDesk();
+    toast(`Enquiry moved to ${nextStatus}`);
+  } catch (error) {
+    await loadSalesCrm({ force: true });
+    renderSalesDesk();
+    toast(error.message || "Unable to move enquiry");
+  }
+}
+
+function handleSalesLeadBoardDragEnd() {
+  salesLeadDraggedId = "";
+  clearSalesLeadBoardDragState();
+}
+
 function handleSalesClick(event) {
   const target = event.target.closest("button");
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
@@ -3997,6 +4296,17 @@ function handleSalesClick(event) {
   if (target.dataset.salesLeadTab) {
     salesLeadTab = target.dataset.salesLeadTab;
     salesLeadDetailId = "";
+    renderSalesDesk();
+    return;
+  }
+  if (target.dataset.salesLeadView) {
+    salesLeadViewMode = target.dataset.salesLeadView;
+    if (salesLeadViewMode !== "split") salesLeadDetailId = "";
+    renderSalesDesk();
+    return;
+  }
+  if (target.dataset.salesLeadSelect) {
+    salesLeadDetailId = target.dataset.salesLeadSelect;
     renderSalesDesk();
     return;
   }
@@ -4087,6 +4397,7 @@ function handleSalesClick(event) {
   if (action === "import-leads") toast("Excel import for enquiry pipeline will be mapped in the next step");
   if (action === "view-lead") {
     salesLeadDetailId = target.dataset.salesId || "";
+    if (salesLeadViewMode === "board") salesLeadViewMode = "split";
     renderSalesDesk();
   }
   if (action === "close-lead-detail") {
@@ -4099,7 +4410,7 @@ function handleSalesClick(event) {
   }
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === target.dataset.salesId) || {});
-    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "" });
+    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || target.dataset.salesId || "" });
     salesQuotationMode = "create";
     showSalesDesk("quotation");
   }
@@ -4130,6 +4441,7 @@ function handleSalesClick(event) {
   if (action === "edit-lead") openSalesLeadDrawer(target.dataset.salesId);
   if (action === "delete-lead") deleteSalesItem("leads", target.dataset.salesId);
   if (action === "lead-add-follow-up") openSalesLeadFollowUp(target.dataset.salesId);
+  if (action === "delete-lead-follow-up") deleteLeadFollowUp(target.dataset.salesId, target.dataset.followIndex);
   if (action === "add-customer") openSalesForm("customers");
   if (action === "edit-customer") openSalesForm("customers", target.dataset.salesId);
   if (action === "delete-customer") deleteSalesItem("customers", target.dataset.salesId);
@@ -4175,7 +4487,7 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "lead-create-workflow") return createWorkflowFromLead(itemId);
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === itemId) || {});
-    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "" });
+    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || itemId || "" });
     salesQuotationMode = "create";
     return showSalesDesk("quotation");
   }
@@ -4419,6 +4731,7 @@ function quoteDraftFromSource(source = {}) {
     baseQuotationNo: source.baseQuotationNo || "",
     revisionNo: Number(source.revisionNo || 0) || 0,
     revision: source.revision || "Fresh Quote",
+    sourceLeadId: source.sourceLeadId || "",
     status: "Draft"
   };
 }
@@ -4435,10 +4748,22 @@ async function saveSalesQuotation(status = "Draft") {
     status
   };
   salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
+  await markLeadQuoteSentFromQuotation(quote);
   salesQuotationMode = "list";
   salesQuotationDraft = null;
   renderSalesDesk();
   toast(status === "Sent" ? "Quotation marked as sent" : "Quotation saved");
+}
+
+async function markLeadQuoteSentFromQuotation(quote) {
+  const sourceLeadId = quote.sourceLeadId || "";
+  if (!sourceLeadId) return;
+  const lead = (salesData().leads || []).find(item => item.id === sourceLeadId);
+  if (!lead || normalizeLeadStatus(lead.status) === "Quote Sent") return;
+  salesCrmState = await api("/api/sales-crm/leads", {
+    method: "POST",
+    body: JSON.stringify({ ...lead, status: "Quote Sent", quoteNo: quote.no || quote.quotationNo || lead.quoteNo || "" })
+  });
 }
 
 async function updateQuotationFollowStatus(quoteId, status) {
@@ -4459,6 +4784,33 @@ async function updateManualFollowStatus(itemId, status) {
   });
   renderSalesDesk();
   toast("Follow-up status updated");
+}
+
+async function deleteLeadFollowUp(leadId, followIndex) {
+  const raw = (salesData().leads || []).find(item => item.id === leadId);
+  if (!raw) return;
+  const index = Number(followIndex);
+  if (!Number.isInteger(index) || index < 0) return;
+  const normalized = normalizeSalesLead(raw);
+  const followUps = [...(normalized.followUps || [])];
+  if (!followUps[index]) return;
+  if (!confirm("Delete this follow-up?")) return;
+  followUps.splice(index, 1);
+  const payload = {
+    ...raw,
+    followUps,
+    followUp: followUps[0]?.date || "",
+    nextFollowUpDate: followUps[0]?.date || "",
+    followUpType: followUps[0]?.type || "",
+    followUpNote: followUps[0]?.note || "",
+    priority: followUps.length ? raw.priority || "Planned" : "",
+    lastUpdated: todaySalesDateInput(),
+    updatedBy: currentUser?.name || raw.salesPerson || ""
+  };
+  salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
+  salesLeadDetailId = leadId;
+  renderSalesDesk();
+  toast("Follow-up deleted");
 }
 
 function editSalesQuotation(quoteId) {

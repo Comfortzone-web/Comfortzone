@@ -1037,6 +1037,7 @@ function normalizeSalesItem(collection, input, store) {
       items: Array.isArray(base.items) ? base.items.map(normalizeSalesQuoteItem) : [],
       manualSubtotal: cleanCell(base.manualSubtotal || ""),
       discount: Number(base.discount || 0),
+      sourceLeadId: cleanCell(base.sourceLeadId || ""),
       status: cleanCell(base.status || "Draft")
     };
     quote.amount = salesQuotationTotal(quote);
