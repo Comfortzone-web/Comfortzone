@@ -352,6 +352,20 @@ button, input, select, textarea {
   background-size: 16px 16px;
 }
 
+.workflow-loading-card {
+  position: absolute;
+  left: 24px;
+  top: 24px;
+  min-width: 210px;
+  padding: 18px 20px;
+  border: 1px solid #d5e1f2;
+  border-radius: 8px;
+  color: #52627a;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(15, 42, 85, .08);
+  font: 600 14px Inter, "Segoe UI", Arial, sans-serif;
+}
+
 .node {
   position: absolute;
   background: var(--panel);

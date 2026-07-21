@@ -6,6 +6,8 @@ let state = null;
 let activeView = "canvas";
 let drag = null;
 let canvasZoom = 0.72;
+let workflowDraftPromise = null;
+let workflowRenderRequest = 0;
 let preserveTableSizes = false;
 let projectPersisted = false;
 let projectTouched = false;
@@ -489,15 +491,29 @@ async function api(path, options = {}) {
 
 async function createProject() {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
-  state = await api("/api/projects?draft=1", { method: "POST", body: "{}" });
+  showCanvas();
+  if (state) {
+    scheduleWorkflowRender({ fit: activeView === "canvas" && !canvas.innerHTML.trim() });
+    return;
+  }
+  canvas.innerHTML = `<div class="workflow-loading-card">Loading workflow...</div>`;
+  try {
+    workflowDraftPromise = workflowDraftPromise || api("/api/projects?draft=1", { method: "POST", body: "{}" })
+      .finally(() => {
+        workflowDraftPromise = null;
+      });
+    state = await workflowDraftPromise;
+  } catch (error) {
+    canvas.innerHTML = `<div class="workflow-loading-card">Unable to load workflow.</div>`;
+    toast(error.message || "Unable to load workflow");
+    return;
+  }
   projectPersisted = false;
   projectTouched = false;
   if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
   applyCompactLayout(true);
   history.replaceState(null, "", location.pathname);
-  showCanvas();
-  render();
-  requestAnimationFrame(zoomToFit);
+  scheduleWorkflowRender({ fit: true });
 }
 
 async function loadProject(id) {
@@ -507,8 +523,7 @@ async function loadProject(id) {
   projectTouched = false;
   applyCompactLayout(false);
   showCanvas();
-  render();
-  requestAnimationFrame(zoomToFit);
+  scheduleWorkflowRender({ fit: true });
 }
 
 async function saveProject(options = {}) {
@@ -6174,6 +6189,17 @@ async function deleteProject(projectId) {
   if (state && state.id === projectId) state = null;
   await loadProjectList();
   toast("Project deleted");
+}
+
+function scheduleWorkflowRender(options = {}) {
+  const shouldFit = !!options.fit;
+  if (workflowRenderRequest) cancelAnimationFrame(workflowRenderRequest);
+  workflowRenderRequest = requestAnimationFrame(() => {
+    workflowRenderRequest = 0;
+    if (activeView !== "canvas" || !state) return;
+    render();
+    if (shouldFit) requestAnimationFrame(zoomToFit);
+  });
 }
 
 function render() {
