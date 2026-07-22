@@ -3816,9 +3816,8 @@ async function purchaseOrderPdfBuffer(order) {
     const col = [42, 176, 66, 86, 50, tableW - 420];
     const py = (value, height = 0) => pageHeight - value - height;
     const firstTableY = 312;
-    const nextTableY = 210;
-    const tableBottomY = 750;
-    const finalContentReserve = 300;
+    const nextTableY = 170;
+    const tableBottomY = 765;
 
     const rowHeight = item => Math.max(28, 12 + Math.min(8, pdfWrapWords(doc, item.description || "", col[1] - 18, "Helvetica", 9.2).length) * 13);
     const paginate = items => {
@@ -3838,18 +3837,6 @@ async function purchaseOrderPdfBuffer(order) {
         used += h;
       }
       pages.push(current);
-      const finalTableLimit = Math.max(120, tableBottomY - nextTableY - 30 - finalContentReserve);
-      const pageHeightUsed = page => page.reduce((sum, item) => sum + rowHeight(item), 0);
-      while (pages[pages.length - 1].length && pageHeightUsed(pages[pages.length - 1]) > finalTableLimit) {
-        const overflow = [];
-        while (
-          pages[pages.length - 1].length &&
-          (pageHeightUsed(pages[pages.length - 1]) > finalTableLimit || !overflow.length)
-        ) {
-          overflow.unshift(pages[pages.length - 1].pop());
-        }
-        pages.push(overflow);
-      }
       return pages;
     };
 
@@ -3960,6 +3947,25 @@ async function purchaseOrderPdfBuffer(order) {
       return top + rows.length * 34;
     };
 
+    const summaryRowCount = () => {
+      const discount = Number(order.discount || 0);
+      return 1 + (discount ? 2 : 0) + 2;
+    };
+
+    const estimateNotesHeight = maxLines => {
+      const lines = String(order.notes || DEFAULT_PURCHASE_NOTES).replace(/\r/g, "\n").split("\n");
+      return 22 + Math.min(lines.length, maxLines) * 15;
+    };
+
+    const estimateFinalBlockBottom = (tableEndY, finalStartY, notesBesideSummary) => {
+      const summaryBottom = finalStartY + summaryRowCount() * 34;
+      const notesTop = notesBesideSummary ? tableEndY + 20 : summaryBottom + 14;
+      const afterNotes = notesTop + estimateNotesHeight(notesBesideSummary ? 8 : 12);
+      const sealTop = Math.min(afterNotes + 10, pageHeight - 220);
+      if (sealTop < afterNotes) return Infinity;
+      return Math.max(summaryBottom, sealTop + 131);
+    };
+
     const drawNotes = (x, top, width, maxLines = 12) => {
       doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text("Note:", x, top);
       top += 22;
@@ -3988,7 +3994,7 @@ async function purchaseOrderPdfBuffer(order) {
     pages.forEach((items, pageIndex) => {
       if (pageIndex > 0) doc.addPage({ size: "A4", margin: 0 });
       drawBackground(pageIndex + 1, totalPages);
-      drawTitle(pageIndex === 0 ? 704 : 700);
+      if (pageIndex === 0) drawTitle(704);
       if (pageIndex === 0) drawDetails(662);
       let y = drawHeader(pageHeight - (pageIndex === 0 ? firstTableY : nextTableY));
       const startIndex = pages.slice(0, pageIndex).reduce((sum, page) => sum + page.length, 0);
@@ -3996,9 +4002,26 @@ async function purchaseOrderPdfBuffer(order) {
         y = drawRow(item, y, startIndex + index + 1);
       });
       if (pageIndex === totalPages - 1) {
-        const summaryBottom = drawSummary(y + 14);
-        const notesBesideSummary = items.length && y < 520;
+        let finalStartY = y + 14;
+        if (finalStartY + summaryRowCount() * 34 > tableBottomY) {
+          doc.addPage({ size: "A4", margin: 0 });
+          drawBackground(pageIndex + 2, totalPages + 1);
+          finalStartY = 145;
+          y = 145;
+        }
+        let notesBesideSummary = items.length && estimateFinalBlockBottom(y, finalStartY, true) <= tableBottomY;
+        if (estimateFinalBlockBottom(y, finalStartY, notesBesideSummary) > tableBottomY) {
+          notesBesideSummary = false;
+        }
+        const summaryBottom = drawSummary(finalStartY);
         const notesY = notesBesideSummary ? y + 20 : summaryBottom + 14;
+        if (estimateFinalBlockBottom(y, finalStartY, notesBesideSummary) > tableBottomY) {
+          doc.addPage({ size: "A4", margin: 0 });
+          drawBackground(pageIndex + 2, totalPages + 1);
+          const afterNotesY = drawNotes(left, 145, tableW, 12);
+          drawSealAndSign(afterNotesY);
+          return;
+        }
         const afterNotesY = drawNotes(left, notesY, notesBesideSummary ? 280 : tableW, notesBesideSummary ? 8 : 12);
         drawSealAndSign(afterNotesY);
       }
