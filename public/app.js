@@ -357,12 +357,14 @@ async function loadAuth() {
 }
 
 function showLogin() {
+  document.body.classList.remove("auth-pending");
   $("#loginView").classList.remove("hidden");
   document.body.classList.add("login-active");
   applyRoleAccess();
 }
 
 function hideLogin() {
+  document.body.classList.remove("auth-pending");
   $("#loginView").classList.add("hidden");
   document.body.classList.remove("login-active");
 }

@@ -21,6 +21,12 @@ body {
   overflow: hidden;
 }
 
+body.auth-pending .sidebar,
+body.auth-pending .app-shell,
+body.auth-pending .login-view {
+  visibility: hidden;
+}
+
 button, input, select, textarea {
   font: inherit;
 }
