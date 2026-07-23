@@ -4241,7 +4241,7 @@ function salesQuotationPdfFilename(quote) {
 
 function extractVrvFile(file, originalName) {
   const ext = path.extname(originalName).toLowerCase();
-  if (ext !== ".docx") {
+  if (![".docx", ".xml"].includes(ext)) {
     return {
       status: "needs_parser",
       materialRows: [],
@@ -4250,8 +4250,11 @@ function extractVrvFile(file, originalName) {
       message: "Automatic VRV extraction is available for DOCX in this MVP. PDF/image parsing needs OCR."
     };
   }
-  const entries = unzipEntries(Buffer.isBuffer(file) ? file : fs.readFileSync(file));
-  const documentXml = entries["word/document.xml"];
+  const bytes = Buffer.isBuffer(file) ? file : fs.readFileSync(file);
+  const textStart = bytes.subarray(0, 120).toString("utf8").trimStart();
+  const documentXml = textStart.startsWith("<")
+    ? bytes.toString("utf8")
+    : unzipEntries(bytes)["word/document.xml"];
   if (!documentXml) return { status: "error", materialRows: [], vrvRows: [], projectName: "", message: "Could not read DOCX document.xml" };
   const text = xmlText(documentXml);
   const projectMatch = text.match(/Project name:\s*([^\n]+)/i);

@@ -8540,6 +8540,7 @@ async function chooseUpload(nodeId) {
   input.accept = ".pdf,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg";
   input.addEventListener("change", async () => {
     if (!input.files[0]) return;
+    const selectedFile = input.files[0];
     const showWorkflowSpinner = nodeId === "thermal-upload" || nodeId === "vrv-upload";
     if (showWorkflowSpinner) {
       workflowUploadLoading = true;
@@ -8549,7 +8550,8 @@ async function chooseUpload(nodeId) {
       await ensureProjectSaved({ hidden: true });
       const form = new FormData();
       form.append("nodeId", nodeId);
-      form.append("file", input.files[0]);
+      const uploadFile = await workflowUploadFileForNode(nodeId, selectedFile);
+      form.append("file", uploadFile, selectedFile.name);
       const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
       const project = await api(`/api/projects/${state.id}`);
       state.uploads = project.uploads;
@@ -8575,6 +8577,56 @@ async function chooseUpload(nodeId) {
   });
   input.value = "";
   input.click();
+}
+
+async function workflowUploadFileForNode(nodeId, file) {
+  const isDocx = /\.docx$/i.test(file.name || "");
+  if (nodeId !== "vrv-upload" || !isDocx || file.size < 3.5 * 1024 * 1024) return file;
+  const xml = await extractDocxDocumentXml(file);
+  if (!xml) throw new Error("This Word file is too large to upload directly. Save it as a smaller DOCX or upload the VRV schedule as a screenshot/PDF.");
+  toast("Large Word file optimized for VRV extraction");
+  return new File([xml], file.name, {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document+xml"
+  });
+}
+
+async function extractDocxDocumentXml(file) {
+  if (!("DecompressionStream" in window)) return "";
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const decoder = new TextDecoder();
+  const read16 = offset => bytes[offset] | (bytes[offset + 1] << 8);
+  const read32 = offset => (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0;
+  const target = "word/document.xml";
+  let eocd = -1;
+  for (let offset = bytes.length - 22; offset >= Math.max(0, bytes.length - 70000); offset -= 1) {
+    if (read32(offset) === 0x06054b50) {
+      eocd = offset;
+      break;
+    }
+  }
+  if (eocd < 0) return "";
+  let centralOffset = read32(eocd + 16);
+  while (centralOffset < bytes.length - 46 && read32(centralOffset) === 0x02014b50) {
+    const method = read16(centralOffset + 10);
+    const compressedSize = read32(centralOffset + 20);
+    const nameLength = read16(centralOffset + 28);
+    const extraLength = read16(centralOffset + 30);
+    const commentLength = read16(centralOffset + 32);
+    const localOffset = read32(centralOffset + 42);
+    const name = decoder.decode(bytes.slice(centralOffset + 46, centralOffset + 46 + nameLength));
+    if (name === target && read32(localOffset) === 0x04034b50) {
+      const localNameLength = read16(localOffset + 26);
+      const localExtraLength = read16(localOffset + 28);
+      const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+      const compressed = bytes.slice(dataStart, dataStart + compressedSize);
+      if (method === 0) return decoder.decode(compressed);
+      if (method !== 8) return "";
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return decoder.decode(await new Response(stream).arrayBuffer());
+    }
+    centralOffset += 46 + nameLength + extraLength + commentLength;
+  }
+  return "";
 }
 
 async function extractVrvUpload(uploadId) {
