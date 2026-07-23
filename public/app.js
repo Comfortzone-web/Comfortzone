@@ -6173,24 +6173,26 @@ function refreshInventoryInBackground() {
 async function loadProjectList() {
   const q = encodeURIComponent($("#searchInput").value || "");
   const projects = await api(`/api/projects?q=${q}`);
-  $("#projectList").innerHTML = projects.map(project => `
+  const list = $("#projectList");
+  list.innerHTML = projects.map(project => `
     <article class="project-card">
       <div>
         <h3>${escapeHtml(project.project || project.title || "Untitled Project")}</h3>
         <p>${escapeHtml(project.customer || "No customer")} · ${escapeHtml(project.quotationNo || "")} · ${new Date(project.updatedAt).toLocaleString()}</p>
       </div>
       <div class="project-card-actions">
-        <button class="primary-button" data-open-project="${project.id}">Open Canvas</button>
-        <button class="danger-button" data-delete-project="${project.id}">Delete</button>
+        <button class="workflow-menu-button" type="button" data-workflow-menu="${project.id}" aria-label="Workflow actions">...</button>
+        <div class="workflow-row-menu hidden" data-workflow-menu-panel="${project.id}">
+          <button type="button" data-workflow-action="open" data-project-id="${project.id}">Open Canvas</button>
+          <button type="button" data-workflow-action="clone" data-project-id="${project.id}">Clone</button>
+          <button type="button" class="danger-menu-item" data-workflow-action="delete" data-project-id="${project.id}">Delete</button>
+        </div>
       </div>
     </article>
   `).join("") || "<p>No saved projects found.</p>";
-  document.querySelectorAll("[data-open-project]").forEach(button => {
-    button.addEventListener("click", () => loadProject(button.dataset.openProject));
-  });
-  document.querySelectorAll("[data-delete-project]").forEach(button => {
-    button.addEventListener("click", () => deleteProject(button.dataset.deleteProject));
-  });
+  list.onclick = handleWorkflowListClick;
+  document.removeEventListener("click", closeWorkflowMenus);
+  document.addEventListener("click", closeWorkflowMenus);
 }
 
 async function deleteProject(projectId) {
@@ -6199,6 +6201,53 @@ async function deleteProject(projectId) {
   if (state && state.id === projectId) state = null;
   await loadProjectList();
   toast("Project deleted");
+}
+
+function closeWorkflowMenus() {
+  document.querySelectorAll(".workflow-row-menu").forEach(menu => menu.classList.add("hidden"));
+}
+
+async function handleWorkflowListClick(event) {
+  const menuButton = event.target.closest("[data-workflow-menu]");
+  if (menuButton) {
+    event.stopPropagation();
+    const panel = document.querySelector(`[data-workflow-menu-panel="${CSS.escape(menuButton.dataset.workflowMenu)}"]`);
+    const wasOpen = panel && !panel.classList.contains("hidden");
+    closeWorkflowMenus();
+    if (panel && !wasOpen) panel.classList.remove("hidden");
+    return;
+  }
+
+  const actionButton = event.target.closest("[data-workflow-action]");
+  if (!actionButton) return;
+  event.stopPropagation();
+  closeWorkflowMenus();
+  const projectId = actionButton.dataset.projectId;
+  if (actionButton.dataset.workflowAction === "open") return loadProject(projectId);
+  if (actionButton.dataset.workflowAction === "delete") return deleteProject(projectId);
+  if (actionButton.dataset.workflowAction === "clone") return cloneProject(projectId);
+}
+
+async function cloneProject(projectId) {
+  const original = await api(`/api/projects/${projectId}`);
+  const draft = await api("/api/projects?draft=1", { method: "POST", body: "{}" });
+  const baseTitle = original.details?.project || original.title || "Untitled Project";
+  const clone = structuredClone(original);
+  clone.id = draft.id;
+  clone.createdAt = draft.createdAt;
+  clone.updatedAt = draft.updatedAt;
+  clone.visible = true;
+  clone.title = `${baseTitle} (Copy)`;
+  clone.quotation = draft.quotation || clone.quotation;
+  clone.details = { ...(clone.details || {}), project: `${baseTitle} (Copy)` };
+  clone.uploads = [];
+  clone.nodes = (clone.nodes || []).map(node => ({
+    ...node,
+    data: node.data && node.data.uploadId ? { ...node.data, uploadId: "", fileName: "", fileSize: 0 } : node.data
+  }));
+  await api(`/api/projects/${clone.id}`, { method: "PUT", body: JSON.stringify(clone) });
+  await loadProjectList();
+  toast("Workflow cloned");
 }
 
 function scheduleWorkflowRender(options = {}) {
@@ -6332,16 +6381,21 @@ function applyAutoNodeSize(node, heights) {
 }
 
 function applyDefaultNodeSize(node, reset = false) {
+  const size = workflowNodeDefaultSize(node.id);
+  if (size) {
+    node.width = reset ? size[0] : node.width || size[0];
+    node.height = reset ? size[1] : node.height || size[1];
+  }
+}
+
+function workflowNodeDefaultSize(nodeId) {
   const sizes = {
     "thermal-table": [520, 205],
     "costing-table": [650, 220],
     "boq-table": [650, 190],
     "vrv-schedule": [1550, 230]
   };
-  if (sizes[node.id]) {
-    node.width = reset ? sizes[node.id][0] : node.width || sizes[node.id][0];
-    node.height = reset ? sizes[node.id][1] : node.height || sizes[node.id][1];
-  }
+  return sizes[nodeId] || null;
 }
 
 function setZoom(next) {
@@ -6369,6 +6423,11 @@ function renderNode(node) {
   const template = $("#nodeTemplate").content.firstElementChild.cloneNode(true);
   template.dataset.nodeId = node.id;
   template.classList.toggle("locked", !!node.locked);
+  const minSize = workflowNodeDefaultSize(node.id);
+  if (minSize) {
+    node.width = Math.max(node.width || 0, minSize[0]);
+    node.height = Math.max(node.height || 0, minSize[1]);
+  }
   template.style.left = `${node.x}px`;
   template.style.top = `${node.y}px`;
   if (node.width) template.style.width = `${node.width}px`;
@@ -6385,6 +6444,7 @@ function renderNode(node) {
   bindNode(template, node);
   bindResizeObserver(template, node);
   canvas.appendChild(template);
+  clampWorkflowTableNode(template, node);
 }
 
 function bindResizeObserver(el, node) {
@@ -6392,7 +6452,13 @@ function bindResizeObserver(el, node) {
   const observer = new ResizeObserver(entries => {
     const rect = entries[0].contentRect;
     const width = Math.round(rect.width);
-    const height = Math.round(rect.height);
+    let height = Math.round(rect.height);
+    const fittedHeight = workflowTableFittedHeight(el);
+    if (fittedHeight) el.style.maxHeight = `${fittedHeight}px`;
+    if (fittedHeight && height > fittedHeight + 2) {
+      height = fittedHeight;
+    }
+    if (el.dataset.userResizing !== "1") return;
     if (Math.abs((node.width || 0) - width) > 2 || Math.abs((node.height || 0) - height) > 2) {
       node.width = width;
       node.height = height;
@@ -6402,11 +6468,56 @@ function bindResizeObserver(el, node) {
   observer.observe(el);
 }
 
+function workflowTableFittedHeight(el) {
+  const header = el.querySelector(".node-header");
+  const body = el.querySelector(".node-body");
+  const table = el.querySelector(".table-scroll table");
+  if (!header || !body || !table) return 0;
+  const bodyStyle = getComputedStyle(body);
+  const bodyPadding = parseFloat(bodyStyle.paddingTop || 0) + parseFloat(bodyStyle.paddingBottom || 0);
+  const scrollHeight = Math.max(70, Math.ceil(table.offsetHeight + 18));
+  const summaryHeight = workflowOuterHeight(el.querySelector(".summary"));
+  const badgeHeight = workflowOuterHeight(el.querySelector(".excel-badge"));
+  const minHeight = workflowNodeDefaultSize(el.dataset.nodeId)?.[1] || 0;
+  return Math.max(minHeight, Math.ceil(header.offsetHeight + bodyPadding + scrollHeight + summaryHeight + badgeHeight + 4));
+}
+
+function clampWorkflowTableNode(el, node) {
+  if (!tableKeys[node.type]) return;
+  requestAnimationFrame(() => {
+    const fittedHeight = workflowTableFittedHeight(el);
+    if (!fittedHeight) return;
+    el.style.maxHeight = `${fittedHeight}px`;
+    if ((node.height || 0) > fittedHeight + 2) {
+      el.style.height = `${fittedHeight}px`;
+    }
+  });
+}
+
+function workflowOuterHeight(el) {
+  if (!el) return 0;
+  const style = getComputedStyle(el);
+  return el.offsetHeight + parseFloat(style.marginTop || 0) + parseFloat(style.marginBottom || 0);
+}
+
 function bindNode(el, node) {
   const header = el.querySelector(".node-header");
   if (tableKeys[node.type]) {
-    el.addEventListener("pointerdown", () => {
+    el.addEventListener("pointerdown", event => {
       projectTouched = true;
+      const rect = el.getBoundingClientRect();
+      const resizeZone = 22;
+      const nearResizeHandle = event.clientX >= rect.right - resizeZone && event.clientY >= rect.bottom - resizeZone;
+      if (nearResizeHandle) {
+        el.dataset.userResizing = "1";
+        const stopResizeTracking = () => {
+          delete el.dataset.userResizing;
+          window.removeEventListener("pointerup", stopResizeTracking);
+          window.removeEventListener("pointercancel", stopResizeTracking);
+        };
+        window.addEventListener("pointerup", stopResizeTracking);
+        window.addEventListener("pointercancel", stopResizeTracking);
+      }
     });
   }
   header.addEventListener("pointerdown", event => {
@@ -6692,6 +6803,7 @@ async function buildVrvTablesFromNode(node) {
 function tableBody(key, node) {
   const table = state.tables[key];
   const wrap = document.createElement("div");
+  wrap.className = "workflow-table-wrap";
   if (!table) {
     wrap.innerHTML = `<div class="upload-card"><div><strong>${node.title} unavailable</strong></div></div>`;
     return wrap;

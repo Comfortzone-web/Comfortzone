@@ -394,6 +394,7 @@ button, input, select, textarea {
   height: calc(100% - 36px);
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .node.locked {
@@ -622,6 +623,13 @@ input, select, textarea {
 
 .quotation-node {
   width: 260px;
+}
+
+.workflow-table-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .table-scroll {
@@ -4663,6 +4671,65 @@ td[contenteditable="true"]:focus {
   display: flex;
   gap: 8px;
   align-items: center;
+  position: relative;
+}
+
+.workflow-menu-button {
+  width: 44px;
+  height: 40px;
+  border: 1px solid #b9cff0;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--blue);
+  cursor: pointer;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.workflow-menu-button:hover {
+  background: #eef6ff;
+}
+
+.workflow-row-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 35;
+  min-width: 160px;
+  padding: 8px;
+  border: 1px solid #cbdaf0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+}
+
+.workflow-row-menu button {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--navy);
+  cursor: pointer;
+  display: block;
+  font-family: Inter, system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.workflow-row-menu button:hover {
+  background: #eef6ff;
+}
+
+.workflow-row-menu .danger-menu-item {
+  color: var(--danger);
+}
+
+.workflow-row-menu .danger-menu-item:hover {
+  background: #feecec;
 }
 
 .danger-button {
