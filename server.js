@@ -4437,7 +4437,7 @@ function extractMaterialRows(xml) {
 }
 
 function outdoorModelFromCell(value) {
-  const match = cleanCell(value).match(/(?:RXYTQ|RXQ)[A-Z0-9]+/i);
+  const match = cleanCell(value).match(/(?:RXY[A-Z0-9]+|RXQ[A-Z0-9]+)/i);
   return match ? match[0].toUpperCase() : "";
 }
 
@@ -4584,9 +4584,9 @@ function extractVrvRows(xml, text) {
     if (system) {
       const normalizedSystem = system.toUpperCase();
       systemByPrefix[system.replace(/^VRV-/i, "").toUpperCase()] = normalizedSystem;
-      const main = (line.match(/-\s*(RXYTQ[A-Z0-9]+)\s*=/i) || [])[1];
+      const main = (line.match(/-\s*((?:RXY[A-Z0-9]+|RXQ[A-Z0-9]+))\s*=/i) || [])[1];
       const componentsPart = line.includes("=") ? line.split("=").slice(1).join("=") : "";
-      const components = (componentsPart.match(/RXYTQ[A-Z0-9]+/gi) || []).map(part => cleanCell(part).toUpperCase());
+      const components = (componentsPart.match(/(?:RXY[A-Z0-9]+|RXQ[A-Z0-9]+)/gi) || []).map(part => cleanCell(part).toUpperCase());
       if (main || components.length) {
         outdoorBySystem[normalizedSystem] = { main, components };
       }

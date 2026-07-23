@@ -9,6 +9,7 @@ let canvasZoom = 0.72;
 let workflowDraftPromise = null;
 let workflowRenderRequest = 0;
 let preserveTableSizes = false;
+const workflowTableScrollState = {};
 let projectPersisted = false;
 let projectTouched = false;
 let inventoryState = null;
@@ -293,7 +294,7 @@ function bindShell() {
   });
   $("#logoutBtn").addEventListener("click", logout);
   $("#loginForm").addEventListener("submit", login);
-  $("#saveBtn").addEventListener("click", () => saveProject({ manual: true, force: true }));
+  $("#saveBtn").addEventListener("click", () => createProject({ fresh: true }));
   $("#addNodeBtn").addEventListener("click", addFileNode);
   $("#zoomOutBtn").addEventListener("click", () => setZoom(canvasZoom - 0.1));
   $("#zoomInBtn").addEventListener("click", () => setZoom(canvasZoom + 0.1));
@@ -491,12 +492,19 @@ async function api(path, options = {}) {
   return type.includes("application/json") ? response.json() : response.blob();
 }
 
-async function createProject() {
+async function createProject(options = {}) {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
+  const fresh = !!options.fresh;
   showCanvas();
-  if (state) {
+  if (state && !fresh) {
     scheduleWorkflowRender({ fit: activeView === "canvas" && !canvas.innerHTML.trim() });
     return;
+  }
+  if (fresh) {
+    state = null;
+    workflowDraftPromise = null;
+    projectPersisted = false;
+    projectTouched = false;
   }
   canvas.innerHTML = `<div class="workflow-loading-card">Loading workflow...</div>`;
   try {
@@ -6205,6 +6213,7 @@ function scheduleWorkflowRender(options = {}) {
 }
 
 function render() {
+  captureWorkflowTableScrollState();
   if (state.tables?.costing?.rows?.length) {
     recalcCosting();
     recalcBoq();
@@ -6214,6 +6223,30 @@ function render() {
   canvas.innerHTML = "";
   state.nodes.forEach(renderNode);
   applyCanvasZoom();
+  restoreWorkflowTableScrollState();
+}
+
+function captureWorkflowTableScrollState() {
+  if (!canvas) return;
+  canvas.querySelectorAll(".node[data-node-id] .table-scroll").forEach(scroll => {
+    const nodeId = scroll.closest(".node")?.dataset.nodeId;
+    if (!nodeId) return;
+    workflowTableScrollState[nodeId] = {
+      left: scroll.scrollLeft,
+      top: scroll.scrollTop
+    };
+  });
+}
+
+function restoreWorkflowTableScrollState() {
+  requestAnimationFrame(() => {
+    Object.entries(workflowTableScrollState).forEach(([nodeId, pos]) => {
+      const scroll = canvas.querySelector(`.node[data-node-id="${CSS.escape(nodeId)}"] .table-scroll`);
+      if (!scroll) return;
+      scroll.scrollLeft = pos.left || 0;
+      scroll.scrollTop = pos.top || 0;
+    });
+  });
 }
 
 function applyCompactLayout(force) {
@@ -6294,7 +6327,7 @@ function applyAutoNodeSize(node, heights) {
   };
   if (sizes[node.id]) {
     node.width = Math.max(node.width || 0, sizes[node.id][0]);
-    node.height = preserveTableSizes ? Math.max(node.height || 0, sizes[node.id][1]) : sizes[node.id][1];
+    node.height = Math.max(node.height || 0, sizes[node.id][1]);
   }
 }
 

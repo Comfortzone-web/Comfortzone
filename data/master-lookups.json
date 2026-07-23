@@ -976,6 +976,45 @@
       "wxhxd": "1,240 x 1,685 x 765",
       "weight": 283,
       "nominalIndex": 400
+    },
+    {
+      "model": "RXYMQ4AYFK",
+      "ambient": 46,
+      "cc": 10.6,
+      "piEsma": 3.38,
+      "ps": "400V 3Nph",
+      "mca": 18.9,
+      "mop": "-",
+      "rla": 5.1,
+      "wxhxd": "1,100 x 870 x 460",
+      "weight": 120,
+      "nominalIndex": 100
+    },
+    {
+      "model": "RXYMQ5AYFK",
+      "ambient": 46,
+      "cc": 12.7,
+      "piEsma": 4.29,
+      "ps": "400V 3Nph",
+      "mca": 18.9,
+      "mop": "-",
+      "rla": 6.33,
+      "wxhxd": "1,100 x 870 x 460",
+      "weight": 120,
+      "nominalIndex": 125
+    },
+    {
+      "model": "RXYMQ6AYFK",
+      "ambient": 46,
+      "cc": 14.5,
+      "piEsma": 4.9,
+      "ps": "400V 3Nph",
+      "mca": 18.9,
+      "mop": "-",
+      "rla": 7.27,
+      "wxhxd": "1,100 x 870 x 460",
+      "weight": 120,
+      "nominalIndex": 150
     }
   ]
 }
