@@ -28,9 +28,17 @@ let purchaseDraft = null;
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
 let purchaseUploadLoading = false;
+let supplierDnUploadLoading = false;
 let workflowUploadLoading = false;
 let purchaseLoadedAt = 0;
 let purchaseLoadPromise = null;
+let areaCalculationState = null;
+let areaCalculationActiveId = "";
+let areaCalculationMode = "detail";
+let areaCalculationUploadLoading = false;
+let areaCalculationLoadedAt = 0;
+let areaCalculationLoadPromise = null;
+let areaCalculationSaveTimer = null;
 let salesDeskScreen = "dashboard";
 let salesQuotationMode = "list";
 let salesProjectMode = "list";
@@ -284,6 +292,7 @@ function bindShell() {
     showDocuments();
   });
   $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("form"));
+  $("#areaCalculationBtn").addEventListener("click", () => showAreaCalculation("detail"));
   $("#salesDeskBtn").addEventListener("click", () => {
     if (!canAccessModule("sales")) return showLockedModuleToast();
     showSalesDesk("dashboard");
@@ -324,8 +333,12 @@ function bindShell() {
   });
   $("#inventoryRoot").addEventListener("click", handleInventoryClick);
   $("#inventoryRoot").addEventListener("input", handleInventoryInput);
+  $("#inventoryRoot").addEventListener("change", handleInventoryInput);
   $("#purchaseOrdersRoot").addEventListener("click", handlePurchaseClick);
   $("#purchaseOrdersRoot").addEventListener("input", handlePurchaseInput);
+  $("#areaCalculationRoot").addEventListener("click", handleAreaCalculationClick);
+  $("#areaCalculationRoot").addEventListener("input", handleAreaCalculationInput);
+  $("#areaDrawingInput").addEventListener("change", uploadAreaDrawing);
   $("#salesDeskRoot").addEventListener("click", handleSalesClick);
   $("#salesDeskRoot").addEventListener("input", handleSalesInput);
   $("#salesDeskRoot").addEventListener("change", handleSalesChange);
@@ -424,11 +437,11 @@ function isPoOnlyUser() {
 
 function canAccessModule(moduleName) {
   if (!isPoOnlyUser()) return true;
-  return moduleName === "purchase";
+  return moduleName === "purchase" || moduleName === "area";
 }
 
 function showLockedModuleToast() {
-  toast("This login has Purchase Orders access only.");
+  toast("This login has Purchase Orders and Area Calculation access only.");
 }
 
 function applyRoleAccess() {
@@ -445,7 +458,8 @@ function applyRoleAccess() {
   $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeView !== "salesDesk");
   $("#projectSubnav")?.classList.toggle("hidden", poOnly || !["canvas", "documents"].includes(activeView));
   $("#inventorySubnav")?.classList.toggle("hidden", poOnly || activeView !== "inventory");
-  $("#purchaseOrdersBtn")?.classList.toggle("active", poOnly && activeView === "purchaseOrders");
+  $("#purchaseOrdersBtn")?.classList.toggle("active", activeView === "purchaseOrders");
+  $("#areaCalculationBtn")?.classList.toggle("active", activeView === "areaCalculation");
 }
 
 function applyAppSettings() {
@@ -587,12 +601,14 @@ async function showDocuments() {
   $("#documentsView").classList.remove("hidden");
   $("#inventoryView").classList.add("hidden");
   $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#documentsBtn").classList.add("active");
   $("#newProjectBtn").classList.add("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.remove("active");
   $("#settingsBtn").classList.remove("active");
   $("#projectSubnav").classList.remove("hidden");
@@ -611,6 +627,7 @@ function showCanvas() {
   $("#documentsView").classList.add("hidden");
   $("#inventoryView").classList.add("hidden");
   $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#canvasView").classList.remove("hidden");
@@ -618,6 +635,7 @@ function showCanvas() {
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.remove("active");
   $("#settingsBtn").classList.remove("active");
   $("#projectSubnav").classList.remove("hidden");
@@ -635,12 +653,14 @@ async function showInventory(screen = "dashboard") {
   $("#documentsView").classList.add("hidden");
   $("#inventoryView").classList.remove("hidden");
   $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.add("active");
   $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.remove("active");
   $("#settingsBtn").classList.remove("active");
   $("#projectSubnav").classList.add("hidden");
@@ -652,7 +672,10 @@ async function showInventory(screen = "dashboard") {
   });
   const topbar = inventoryTopbarConfig();
   if (topbar) {
-    $("#pageTitle").innerHTML = `<span>Inventory</span><b>&lt;</b><strong>${escapeHtml(topbar.title)}</strong>`;
+    const titleHtml = topbar.title === "Supplier DN"
+      ? `<span>Inventory</span><b>&lt;</b><strong class="inventory-section-title">${escapeHtml(topbar.title)} <span class="po-upload-spinner supplier-dn-title-spinner ${supplierDnUploadLoading ? "" : "hidden"}" aria-label="Scanning supplier DN"></span></strong>`
+      : `<span>Inventory</span><b>&lt;</b><strong>${escapeHtml(topbar.title)}</strong>`;
+    $("#pageTitle").innerHTML = titleHtml;
     $("#projectMeta").textContent = topbar.subtitle;
   } else {
     $("#pageTitle").textContent = "Inventory";
@@ -673,12 +696,14 @@ async function showPurchaseOrders(screen = "form") {
   $("#documentsView").classList.add("hidden");
   $("#inventoryView").classList.add("hidden");
   $("#purchaseOrdersView").classList.remove("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.add("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.remove("active");
   $("#settingsBtn").classList.remove("active");
   $("#projectSubnav").classList.add("hidden");
@@ -693,9 +718,51 @@ async function showPurchaseOrders(screen = "form") {
   if (!needsInitialPurchase) refreshPurchaseOrdersInBackground();
 }
 
+async function showAreaCalculation(mode = "detail") {
+  if (!canAccessModule("area")) return showLockedModuleToast();
+  activeView = "areaCalculation";
+  setCanvasActionsVisible(false);
+  areaCalculationMode = mode;
+  renderViewActions();
+  $("#canvasView").classList.add("hidden");
+  $("#documentsView").classList.add("hidden");
+  $("#inventoryView").classList.add("hidden");
+  $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.remove("hidden");
+  $("#salesDeskView").classList.add("hidden");
+  $("#settingsView").classList.add("hidden");
+  $("#newProjectBtn").classList.remove("active");
+  $("#documentsBtn").classList.remove("active");
+  $("#inventoryBtn").classList.remove("active");
+  $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.add("active");
+  $("#salesDeskBtn").classList.remove("active");
+  $("#settingsBtn").classList.remove("active");
+  $("#projectSubnav").classList.add("hidden");
+  $("#inventorySubnav").classList.add("hidden");
+  $("#salesDeskSubnav").classList.add("hidden");
+  $("#pageTitle").innerHTML = `Area Calculation <span class="po-upload-spinner area-title-spinner ${areaCalculationUploadLoading ? "" : "hidden"}" aria-label="Uploading drawing"></span>`;
+  $("#projectMeta").textContent = "Upload duct drawings and review editable fabrication area calculations.";
+  const needsInitialArea = !areaCalculationState;
+  if (needsInitialArea) await loadAreaCalculations().catch(() => {});
+  if (!areaCalculationActiveId && areaCalculationState?.calculations?.length) areaCalculationActiveId = areaCalculationState.calculations[0].id;
+  renderAreaCalculation();
+  if (!needsInitialArea) refreshAreaCalculationsInBackground();
+}
+
+function refreshAreaTitleSpinner() {
+  const spinner = document.querySelector(".area-title-spinner");
+  if (spinner) spinner.classList.toggle("hidden", !areaCalculationUploadLoading);
+}
+
 function refreshPurchaseTitleSpinner() {
   const spinner = document.querySelector(".po-title-spinner");
   if (spinner) spinner.classList.toggle("hidden", !purchaseUploadLoading);
+}
+
+function refreshSupplierDnTitleSpinner() {
+  const spinner = document.querySelector(".supplier-dn-title-spinner");
+  if (spinner) spinner.classList.toggle("hidden", !supplierDnUploadLoading);
 }
 
 function workflowTitleHtml(title) {
@@ -721,12 +788,14 @@ async function showSalesDesk(screen = "dashboard") {
   $("#documentsView").classList.add("hidden");
   $("#inventoryView").classList.add("hidden");
   $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.remove("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.add("active");
   $("#settingsBtn").classList.remove("active");
   $("#projectSubnav").classList.add("hidden");
@@ -762,12 +831,14 @@ async function showSettings() {
   $("#documentsView").classList.add("hidden");
   $("#inventoryView").classList.add("hidden");
   $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.remove("hidden");
   $("#newProjectBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
   $("#salesDeskBtn").classList.remove("active");
   $("#settingsBtn").classList.add("active");
   $("#projectSubnav").classList.add("hidden");
@@ -5617,6 +5688,31 @@ function refreshPurchaseOrdersInBackground() {
     .catch(error => console.warn(error));
 }
 
+async function loadAreaCalculations(options = {}) {
+  const force = !!options.force;
+  if (!force && areaCalculationState && Date.now() - areaCalculationLoadedAt < viewDataRefreshMs) return areaCalculationState;
+  if (areaCalculationLoadPromise) return areaCalculationLoadPromise;
+  areaCalculationLoadPromise = api("/api/area-calculations")
+    .then(state => {
+      areaCalculationState = state;
+      areaCalculationLoadedAt = Date.now();
+      return state;
+    })
+    .finally(() => {
+      areaCalculationLoadPromise = null;
+    });
+  return areaCalculationLoadPromise;
+}
+
+function refreshAreaCalculationsInBackground() {
+  if (!areaCalculationState || Date.now() - areaCalculationLoadedAt < viewDataRefreshMs) return;
+  loadAreaCalculations({ force: true })
+    .then(() => {
+      if (activeView === "areaCalculation") renderAreaCalculation();
+    })
+    .catch(error => console.warn(error));
+}
+
 function setCanvasActionsVisible(visible) {
   document.querySelector(".top-actions")?.classList.toggle("hidden", !visible);
 }
@@ -5729,6 +5825,164 @@ function bindInventoryTopbarActions() {
       if (action === "save-stock") return openStockModelModal();
     });
   });
+}
+
+const areaCalculationColumns = [
+  ["item", "Item"],
+  ["section", "Section"],
+  ["type", "Type"],
+  ["connection", "Connection"],
+  ["w1", "W1 (mm)"],
+  ["h1", "H1 (mm)"],
+  ["w2", "W2 (mm)"],
+  ["h2", "H2 (mm)"],
+  ["qty", "Qty"],
+  ["drawingLengthAngle", "Drawing Length / Angle"],
+  ["offset", "Offset (mm)"],
+  ["calculatedLength", "Calculated Length (mm)"],
+  ["areaM2", "Area (m²)"],
+  ["areaFt2", "Area (ft²)"],
+  ["status", "Status"],
+  ["action", "Action"]
+];
+
+function renderAreaCalculation() {
+  const root = $("#areaCalculationRoot");
+  if (!areaCalculationState) {
+    root.innerHTML = "";
+    return;
+  }
+  root.innerHTML = areaCalculationMode === "files" ? areaCalculationFilesHtml() : areaCalculationDetailHtml();
+}
+
+function activeAreaCalculation() {
+  return (areaCalculationState?.calculations || []).find(item => item.id === areaCalculationActiveId) || null;
+}
+
+function areaCalculationDetailHtml() {
+  const calc = activeAreaCalculation();
+  return `
+    <div class="area-page">
+      ${areaCalculationToolbarHtml(calc)}
+      ${calc ? areaCalculationTableHtml(calc) : areaCalculationEmptyHtml()}
+    </div>
+  `;
+}
+
+function areaCalculationToolbarHtml(calc) {
+  return `
+    <div class="area-header">
+      <div>
+        <h2>Duct Area Calculator</h2>
+        <p>Upload duct drawings and review editable fabrication area calculations.</p>
+      </div>
+      <div class="area-header-actions">
+        <button class="ghost-button area-toolbar-button" data-area-files>${poIcon("folder")}<span>All Files</span></button>
+        <button class="primary-button area-toolbar-button" data-area-upload>${poIcon("upload")}<span>${areaCalculationUploadLoading ? "Uploading..." : "Upload Drawing"}</span></button>
+      </div>
+    </div>
+    <div class="area-control-row">
+      <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}" placeholder="Calculation title"></label>
+      <div class="area-control-actions">
+        <button class="ghost-button area-toolbar-button" data-area-add-row>${poIcon("plus")}<span>Add Row</span></button>
+        <button class="ghost-button area-toolbar-button" data-area-export>${poIcon("excel")}<span>Excel Export</span></button>
+      </div>
+    </div>
+  `;
+}
+
+function areaCalculationEmptyHtml() {
+  return `
+    <section class="area-empty">
+      <h3>No area calculation yet</h3>
+      <p>Upload a duct drawing to create the first saved calculation file.</p>
+      <button class="primary-button" data-area-upload>${poIcon("upload")}<span>Upload Drawing</span></button>
+    </section>
+  `;
+}
+
+function areaCalculationFilesHtml() {
+  const calculations = areaCalculationState?.calculations || [];
+  return `
+    <div class="area-page">
+      <div class="area-header">
+        <div><h2>All Files</h2><p>Saved duct area calculations by title.</p></div>
+        <div class="area-header-actions">
+          <button class="ghost-button area-toolbar-button" data-area-back>${poIcon("document")}<span>Current Table</span></button>
+          <button class="primary-button area-toolbar-button" data-area-upload>${poIcon("upload")}<span>Upload Drawing</span></button>
+        </div>
+      </div>
+      <div class="area-files-list">
+        ${calculations.map(calc => `
+          <article class="area-file-card">
+            <div>
+              <h3>${escapeHtml(calc.title || "Untitled Area Calculation")}</h3>
+              <p>${calc.totals?.totalItems || 0} items · ${Number(calc.totals?.totalM2 || 0).toFixed(4)} m² · ${Number(calc.totals?.totalFt2 || 0).toFixed(2)} ft² · ${new Date(calc.updatedAt || calc.createdAt).toLocaleString()}</p>
+            </div>
+            <div class="area-file-actions">
+              <button class="ghost-button" data-area-open="${escapeHtml(calc.id)}">Open</button>
+              <button class="danger-button" data-area-delete="${escapeHtml(calc.id)}">Delete</button>
+            </div>
+          </article>
+        `).join("") || `<section class="area-empty"><h3>No saved files</h3><p>Upload a duct drawing to create a saved calculation.</p></section>`}
+      </div>
+    </div>
+  `;
+}
+
+function areaCalculationTableHtml(calc) {
+  const rows = calc.rows || [];
+  const totals = areaRecalculateCalculation(calc).totals;
+  return `
+    <div class="area-table-wrap">
+      <table class="area-table">
+        <thead><tr>${areaCalculationColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead>
+        <tbody>
+          ${rows.map((row, index) => areaCalculationRowHtml(row, index)).join("") || `<tr><td colspan="${areaCalculationColumns.length}">No rows extracted. Add rows manually or upload a clearer drawing.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <div class="area-summary-bar">
+      <span>Total Items: <strong>${totals.totalItems}</strong></span>
+      <span>Grand Total:</span>
+      <strong>${Number(totals.totalM2 || 0).toFixed(4)} m²</strong>
+      <i></i>
+      <strong>${Number(totals.totalFt2 || 0).toFixed(2)} ft²</strong>
+    </div>
+    ${calc.message ? `<p class="area-message">${escapeHtml(calc.message)}</p>` : ""}
+  `;
+}
+
+function areaCalculationRowHtml(row, index) {
+  const status = row.status || "Clear";
+  const reviewClass = status === "Review" ? "review" : status === "Missing Dim." ? "missing" : "";
+  const input = (key, type = "text") => `<input ${type === "number" ? `type="number" step="any"` : `type="text"`} data-area-row="${index}" data-area-field="${key}" value="${escapeHtml(row[key] ?? "")}">`;
+  return `
+    <tr class="${reviewClass}">
+      <td>${input("item")}</td>
+      <td>${input("section")}</td>
+      <td>${input("type")}</td>
+      <td>${input("connection")}</td>
+      <td>${input("w1", "number")}</td>
+      <td>${input("h1", "number")}</td>
+      <td>${input("w2", "number")}</td>
+      <td>${input("h2", "number")}</td>
+      <td>${input("qty", "number")}</td>
+      <td>${input("drawingLengthAngle")}</td>
+      <td>${input("offset", "number")}</td>
+      <td>${input("calculatedLength", "number")}</td>
+      <td><span data-area-display="${index}:areaM2">${Number(row.areaM2 || 0).toFixed(4)}</span></td>
+      <td><span data-area-display="${index}:areaFt2">${Number(row.areaFt2 || 0).toFixed(2)}</span></td>
+      <td><span data-area-display="${index}:status">${areaStatusPill(status)}</span></td>
+      <td><button class="area-action-button" title="${escapeHtml(row.remarks || "Edit row")}" data-area-focus-row="${index}">${poIcon("edit")}</button></td>
+    </tr>
+  `;
+}
+
+function areaStatusPill(status) {
+  const key = String(status || "Clear").toLowerCase();
+  const cls = key.includes("missing") ? "missing" : key.includes("review") ? "review" : "clear";
+  return `<span class="area-status ${cls}">${escapeHtml(status || "Clear")}</span>`;
 }
 
 function renderPurchaseOrders() {
@@ -5984,7 +6238,11 @@ function poIcon(name) {
     download: `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>`,
     paperclip: `<svg viewBox="0 0 24 24"><path d="M21 8.5 10.5 19a5 5 0 0 1-7-7L14 1.5a3.5 3.5 0 0 1 5 5L8.5 17a2 2 0 0 1-3-3L16 3.5"/></svg>`,
     plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`,
-    trash: `<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>`
+    trash: `<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>`,
+    folder: `<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 10h18"/></svg>`,
+    upload: `<svg viewBox="0 0 24 24"><path d="M12 17V5"/><path d="M7 10l5-5 5 5"/><path d="M5 19h14"/></svg>`,
+    excel: `<svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v5h5"/><path d="m8 10 5 6M13 10l-5 6"/></svg>`,
+    edit: `<svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/><path d="m14 6 4 4"/></svg>`
   };
   return icons[name] || "";
 }
@@ -7095,7 +7353,7 @@ function supplierDnViewHtml() {
       <div class="inventory-search"><input id="supplierSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card">
-      <table class="inventory-table supplier-dn-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Project Name</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      <table class="inventory-table supplier-dn-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Details</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
         ${supplierDnRows(latestDns)}
       </tbody></table>
     </div>
@@ -7118,7 +7376,7 @@ function supplierDnAllViewHtml() {
       <div class="inventory-search"><input id="supplierAllSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card">
-      <table class="inventory-table supplier-dn-all-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Project Name</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      <table class="inventory-table supplier-dn-all-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Details</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
         ${supplierDnRows(pageRows)}
       </tbody></table>
       ${supplierDnPagination(dns.length, pageSize, supplierAllPage)}
@@ -7127,7 +7385,13 @@ function supplierDnAllViewHtml() {
 }
 
 function supplierDnRows(dns) {
-  return dns.map(dn => `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td><strong>${escapeHtml(dn.supplierDnNo || "-")}</strong></td><td>${escapeHtml(dn.projectName)}</td><td>${(dn.lines || []).length}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`).join("") || `<tr><td colspan="7">No Supplier DN uploaded.</td></tr>`;
+  return dns.map(dn => `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td><strong>${escapeHtml(dn.supplierDnNo || "-")}</strong></td><td>${escapeHtml(supplierDnDetails(dn))}</td><td>${(dn.lines || []).length}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`).join("") || `<tr><td colspan="7">No Supplier DN uploaded.</td></tr>`;
+}
+
+function supplierDnDetails(dn) {
+  if (!dn?.isManualAdjustment) return dn?.projectName || "-";
+  const models = [...new Set((dn.lines || []).map(line => line.modelNo).filter(Boolean))];
+  return models.join(", ") || dn.projectName || "-";
 }
 
 function supplierDnPagination(total, pageSize, currentPage) {
@@ -7162,8 +7426,9 @@ function supplierVerificationHtml(dn) {
       <label>Project Name<input data-supplier-field="projectName" value="${escapeHtml(dn.projectName || "")}"></label>
     </div>
     ${dn.duplicateWarning ? `<p class="pill orange">Duplicate Supplier DN No. warning</p>` : ""}
+    <datalist id="supplierModelList">${(inventoryState.dashboard?.stock || inventoryState.models || []).map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || "")}</option>`).join("")}</datalist>
     <table class="inventory-table"><thead><tr><th>Model No.</th><th>Description</th><th>Detected Qty</th><th>Final Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
-      ${(dn.lines || []).map((line, index) => `<tr><td contenteditable="true" data-supplier-line="${index}" data-field="modelNo">${escapeHtml(line.modelNo)}</td><td contenteditable="true" data-supplier-line="${index}" data-field="description">${escapeHtml(line.description)}</td><td>${line.detectedQty}</td><td><input type="number" min="0" data-supplier-line="${index}" data-field="finalQty" value="${line.finalQty}"></td><td>${statusPill(line.status)}</td><td><button class="danger-button" data-remove-supplier-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="6">No detected rows. Add manually.</td></tr>`}
+      ${(dn.lines || []).map((line, index) => `<tr><td><input data-suggestion-list="supplierModelList" data-supplier-line="${index}" data-field="modelNo" value="${escapeHtml(line.modelNo)}"></td><td contenteditable="true" data-supplier-line="${index}" data-field="description">${escapeHtml(line.description)}</td><td>${line.detectedQty}</td><td><input type="number" min="0" data-supplier-line="${index}" data-field="finalQty" value="${line.finalQty}"></td><td data-supplier-status="${index}">${statusPill(line.status)}</td><td><button class="danger-button" data-remove-supplier-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="6">No detected rows. Add manually.</td></tr>`}
     </tbody></table>
     <div class="inventory-actions"><button class="ghost-button" id="addSupplierLineBtn">Add Row</button><button class="ghost-button" id="saveSupplierDnBtn">Save Review</button><button class="danger-button" id="cancelSupplierDnBtn">Cancel DN</button><button class="primary-button" id="confirmSupplierDnBtn">Confirm Stock In</button></div>
   `;
@@ -7507,6 +7772,239 @@ function handleInventoryClick(event) {
   if (target.dataset.editStockModel) return openStockModelModal(target.dataset.editStockModel);
 }
 
+function areaValue(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  return Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, "")) || 0;
+}
+
+function areaDrawingLength(value) {
+  const text = String(value || "");
+  const explicit = text.match(/(?:L|LEN|LENGTH)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+  if (explicit) return Number(explicit[1]) || 0;
+  const plain = text.match(/\b(\d{2,5})(?:\.\d+)?\b/);
+  return plain ? Number(plain[1]) || 0 : 0;
+}
+
+function areaNormalizeRow(row = {}, index = 0) {
+  const type = String(row.type || "OTHER").trim().toUpperCase();
+  const drawingLengthAngle = String(row.drawingLengthAngle || "").trim();
+  const next = {
+    id: row.id || `area-row-${Date.now()}-${index}`,
+    item: String(row.item ?? index + 1),
+    section: String(row.section || ""),
+    type,
+    connection: String(row.connection || ""),
+    w1: areaValue(row.w1),
+    h1: areaValue(row.h1),
+    w2: areaValue(row.w2),
+    h2: areaValue(row.h2),
+    qty: areaValue(row.qty) || 1,
+    drawingLengthAngle,
+    offset: areaValue(row.offset) || 20,
+    calculatedLength: areaValue(row.calculatedLength),
+    areaM2: areaValue(row.areaM2),
+    areaFt2: areaValue(row.areaFt2),
+    status: String(row.status || ""),
+    remarks: String(row.remarks || "")
+  };
+  if (["STR", "ELB", "END", "BEND"].includes(next.type)) {
+    if (!next.w2) next.w2 = next.w1;
+    if (!next.h2) next.h2 = next.h1;
+  }
+  const missingDims = !next.w1 || !next.h1 || !next.w2 || !next.h2;
+  const isEnd = next.type === "END" || /end\s*cap/i.test(drawingLengthAngle);
+  const isElbow = next.type === "ELB" || next.type === "BEND" || /elb|elbow|90\s*[°deg]|45\s*[°deg]/i.test(drawingLengthAngle);
+  const isTwo45 = /45\s*[°deg].*(x|×|\*)\s*2|2\s*(nos|pcs)?.*45\s*[°deg]/i.test(drawingLengthAngle);
+  const is45 = /45\s*[°deg]/i.test(drawingLengthAngle);
+  const is90 = /90\s*[°deg]/i.test(drawingLengthAngle);
+  const drawingLength = areaDrawingLength(drawingLengthAngle);
+  if (isEnd) {
+    next.offset = 20;
+    next.calculatedLength = 70;
+  } else if (isElbow && (is90 || isTwo45 || !drawingLength)) {
+    next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
+  } else if (drawingLength) {
+    next.calculatedLength = drawingLength + next.offset;
+  }
+  if (missingDims || !next.calculatedLength) {
+    next.areaM2 = 0;
+    next.areaFt2 = 0;
+    next.status = missingDims ? "Missing Dim." : "Review";
+  } else {
+    const perimeter = (next.w1 + 20) + (next.h1 + 20) + (next.w2 + 20) + (next.h2 + 20);
+    next.areaM2 = Number(((perimeter * next.calculatedLength * next.qty) / 1000000).toFixed(4));
+    next.areaFt2 = Number((next.areaM2 * 10.764).toFixed(2));
+    if (!next.status || !["Review", "Missing Dim."].includes(next.status)) next.status = next.remarks ? "Review" : "Clear";
+  }
+  return next;
+}
+
+function areaRecalculateCalculation(calc) {
+  calc.rows = (calc.rows || []).map(areaNormalizeRow);
+  const totalM2 = calc.rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
+  const totalFt2 = calc.rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
+  calc.totals = {
+    totalItems: calc.rows.length,
+    totalM2: Number(totalM2.toFixed(4)),
+    totalFt2: Number(totalFt2.toFixed(2))
+  };
+  return calc;
+}
+
+function scheduleAreaCalculationSave() {
+  clearTimeout(areaCalculationSaveTimer);
+  areaCalculationSaveTimer = setTimeout(saveActiveAreaCalculation, 450);
+}
+
+async function saveActiveAreaCalculation() {
+  const calc = activeAreaCalculation();
+  if (!calc) return;
+  areaRecalculateCalculation(calc);
+  areaCalculationState = await api("/api/area-calculations", { method: "POST", body: JSON.stringify(calc) });
+  areaCalculationLoadedAt = Date.now();
+}
+
+function handleAreaCalculationClick(event) {
+  const target = event.target.closest("button");
+  if (!target || !$("#areaCalculationRoot").contains(target)) return;
+  if (target.dataset.areaUpload !== undefined) return $("#areaDrawingInput").click();
+  if (target.dataset.areaFiles !== undefined) {
+    areaCalculationMode = "files";
+    return renderAreaCalculation();
+  }
+  if (target.dataset.areaBack !== undefined) {
+    areaCalculationMode = "detail";
+    return renderAreaCalculation();
+  }
+  if (target.dataset.areaOpen) {
+    areaCalculationActiveId = target.dataset.areaOpen;
+    areaCalculationMode = "detail";
+    return renderAreaCalculation();
+  }
+  if (target.dataset.areaDelete) return deleteAreaCalculation(target.dataset.areaDelete);
+  if (target.dataset.areaAddRow !== undefined) return addAreaCalculationRow();
+  if (target.dataset.areaExport !== undefined) return exportAreaCalculationExcel();
+  if (target.dataset.areaFocusRow !== undefined) {
+    const input = document.querySelector(`[data-area-row="${target.dataset.areaFocusRow}"][data-area-field="item"]`);
+    input?.focus();
+  }
+}
+
+function handleAreaCalculationInput(event) {
+  const calc = activeAreaCalculation();
+  if (!calc) return;
+  if (event.target.dataset.areaTitle !== undefined) {
+    calc.title = event.target.value;
+    scheduleAreaCalculationSave();
+    return;
+  }
+  const rowIndex = event.target.dataset.areaRow;
+  const field = event.target.dataset.areaField;
+  if (rowIndex === undefined || !field) return;
+  const row = calc.rows[Number(rowIndex)];
+  if (!row) return;
+  row[field] = event.target.value;
+  const next = areaNormalizeRow(row, Number(rowIndex));
+  calc.rows[Number(rowIndex)] = next;
+  areaRecalculateCalculation(calc);
+  refreshAreaRowDisplays(Number(rowIndex), next, calc.totals);
+  scheduleAreaCalculationSave();
+}
+
+function refreshAreaRowDisplays(index, row, totals) {
+  const m2 = document.querySelector(`[data-area-display="${index}:areaM2"]`);
+  const ft2 = document.querySelector(`[data-area-display="${index}:areaFt2"]`);
+  const status = document.querySelector(`[data-area-display="${index}:status"]`);
+  if (m2) m2.textContent = Number(row.areaM2 || 0).toFixed(4);
+  if (ft2) ft2.textContent = Number(row.areaFt2 || 0).toFixed(2);
+  if (status) status.innerHTML = areaStatusPill(row.status);
+  const summary = document.querySelector(".area-summary-bar");
+  if (summary) {
+    summary.innerHTML = `<span>Total Items: <strong>${totals.totalItems}</strong></span><span>Grand Total:</span><strong>${Number(totals.totalM2 || 0).toFixed(4)} m²</strong><i></i><strong>${Number(totals.totalFt2 || 0).toFixed(2)} ft²</strong>`;
+  }
+}
+
+async function uploadAreaDrawing() {
+  const input = $("#areaDrawingInput");
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  areaCalculationUploadLoading = true;
+  refreshAreaTitleSpinner();
+  renderAreaCalculation();
+  try {
+    const form = new FormData();
+    files.forEach(file => form.append("file", file));
+    const active = activeAreaCalculation();
+    form.append("title", active?.title || files[0].name.replace(/\.[^.]+$/, ""));
+    const response = await api("/api/area-calculations/upload", { method: "POST", body: form });
+    areaCalculationState = response;
+    areaCalculationActiveId = response.activeCalculationId || response.calculations?.[0]?.id || "";
+    areaCalculationMode = "detail";
+    renderAreaCalculation();
+    toast("Area calculation ready");
+  } catch (error) {
+    toast(error.message || "Drawing upload failed");
+  } finally {
+    areaCalculationUploadLoading = false;
+    refreshAreaTitleSpinner();
+    input.value = "";
+    renderAreaCalculation();
+  }
+}
+
+function addAreaCalculationRow() {
+  const calc = activeAreaCalculation();
+  if (!calc) return;
+  calc.rows.push(areaNormalizeRow({ item: calc.rows.length + 1, type: "STR", qty: 1, offset: 20 }, calc.rows.length));
+  areaRecalculateCalculation(calc);
+  renderAreaCalculation();
+  scheduleAreaCalculationSave();
+}
+
+async function deleteAreaCalculation(calculationId) {
+  if (!confirm("Delete this area calculation file?")) return;
+  areaCalculationState = await api(`/api/area-calculations/${encodeURIComponent(calculationId)}`, { method: "DELETE" });
+  if (areaCalculationActiveId === calculationId) areaCalculationActiveId = areaCalculationState.calculations?.[0]?.id || "";
+  renderAreaCalculation();
+  toast("Area calculation deleted");
+}
+
+function exportAreaCalculationExcel() {
+  const calc = activeAreaCalculation();
+  if (!calc) return toast("No area calculation to export");
+  areaRecalculateCalculation(calc);
+  const columns = areaCalculationColumns.map(([, label]) => label);
+  const rows = (calc.rows || []).map(row => ({
+    "Item": row.item,
+    "Section": row.section,
+    "Type": row.type,
+    "Connection": row.connection,
+    "W1 (mm)": row.w1,
+    "H1 (mm)": row.h1,
+    "W2 (mm)": row.w2,
+    "H2 (mm)": row.h2,
+    "Qty": row.qty,
+    "Drawing Length / Angle": row.drawingLengthAngle,
+    "Offset (mm)": row.offset,
+    "Calculated Length (mm)": row.calculatedLength,
+    "Area (m²)": Number(row.areaM2 || 0).toFixed(4),
+    "Area (ft²)": Number(row.areaFt2 || 0).toFixed(2),
+    "Status": row.status,
+    "Action": ""
+  }));
+  const blob = buildTableWorkbookBlob({
+    title: calc.title || "Area Calculation",
+    columns,
+    rows,
+    summaryRows: [
+      { label: "Total Items", value: calc.totals.totalItems },
+      { label: "Grand Total m²", value: Number(calc.totals.totalM2 || 0).toFixed(4) },
+      { label: "Grand Total ft²", value: Number(calc.totals.totalFt2 || 0).toFixed(2) }
+    ]
+  });
+  downloadBlob(blob, `${safeFile(calc.title || "Area Calculation")}.xlsx`);
+}
+
 function handlePurchaseClick(event) {
   const target = event.target.closest("button");
   if (!target || !$("#purchaseOrdersRoot").contains(target)) return;
@@ -7750,6 +8248,22 @@ function handleInventoryInput(event) {
     const line = dn?.lines?.[Number(input.dataset.supplierLine)];
     if (!line) return;
     line[input.dataset.field] = input.dataset.field.includes("Qty") ? Number(input.value || 0) : input.textContent || input.value;
+    if (input.dataset.field === "modelNo") {
+      line.modelNo = String(input.value || "").trim().toUpperCase();
+      const stockInfo = findStockModelInfo(line.modelNo);
+      if (stockInfo) {
+        line.modelNo = stockInfo.modelNo || line.modelNo;
+        input.value = line.modelNo;
+        line.description = stockInfo.description || line.description || "";
+        line.status = "Detected";
+        const row = input.closest("tr");
+        const descriptionCell = row?.querySelector('[data-field="description"]');
+        if (descriptionCell) descriptionCell.textContent = line.description;
+      } else {
+        line.status = line.modelNo ? "Not in Stock" : "Check Needed";
+      }
+      refreshSupplierLineStatus(input.dataset.supplierLine, line.status);
+    }
     if (input.dataset.field === "finalQty") line.status = Number(line.finalQty) === Number(line.detectedQty) ? "Ready" : "Edited";
   }
   if (input.dataset.deliveryLine) {
@@ -7761,6 +8275,11 @@ function handleInventoryInput(event) {
   if (input.dataset.deliveryModelLine) {
     updateDeliveryLineModel(Number(input.dataset.deliveryModelLine), input.value);
   }
+}
+
+function refreshSupplierLineStatus(index, status) {
+  const cell = document.querySelector(`[data-supplier-status="${CSS.escape(String(index))}"]`);
+  if (cell) cell.innerHTML = statusPill(status);
 }
 
 function bindDeliveryResizer() {
@@ -7822,11 +8341,20 @@ async function uploadSupplierDn() {
     if (!input.files[0]) return;
     const form = new FormData();
     form.append("file", input.files[0]);
-    const result = await api("/api/inventory/supplier-dns/upload", { method: "POST", body: form });
-    inventoryState = result;
-    activeSupplierDnId = result.activeSupplierDnId;
-    inventoryScreen = "supplier";
-    renderInventory();
+    supplierDnUploadLoading = true;
+    refreshSupplierDnTitleSpinner();
+    try {
+      const result = await api("/api/inventory/supplier-dns/upload", { method: "POST", body: form });
+      inventoryState = result;
+      activeSupplierDnId = result.activeSupplierDnId;
+      inventoryScreen = "supplier";
+      renderInventory();
+    } catch (error) {
+      toast(error.message || "Supplier DN upload failed");
+    } finally {
+      supplierDnUploadLoading = false;
+      refreshSupplierDnTitleSpinner();
+    }
   });
   input.click();
 }
@@ -8126,7 +8654,6 @@ async function saveStockModel() {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
     description: $("#stockDescription")?.value.trim(),
     brand: $("#stockBrand")?.value.trim() || "Daikin",
-    reservedQty: findStockModelInfo($("#stockModelNo")?.value)?.reservedQty || 0,
     quantity: Number($("#stockQuantity")?.value || 0)
   };
   if (!payload.modelNo) return alert("Model No. is required.");
@@ -8179,8 +8706,9 @@ function filterScopedTable(selector, query) {
 
 function statusPill(status) {
   const s = status || "Draft";
-  const color = s === "Confirmed" || s === "Issued" || s === "Delivered" || s === "Ready" || s === "Created" ? "green" : s === "Cancelled" ? "red" : s === "Review Needed" || s === "Check Needed" ? "orange" : "gray";
-  return `<span class="pill ${color}">${escapeHtml(s)}</span>`;
+  const label = String(s).toLowerCase() === "detected" ? "Detected" : s;
+  const color = label === "Confirmed" || label === "Issued" || label === "Delivered" || label === "Ready" || label === "Detected" || label === "Created" ? "green" : label === "Cancelled" || label === "Not in Stock" ? "red" : label === "Review Needed" || label === "Check Needed" ? "orange" : "gray";
+  return `<span class="pill ${color}">${escapeHtml(label)}</span>`;
 }
 
 function sumSupplierQty(dn) {

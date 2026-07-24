@@ -30,6 +30,7 @@ const VRV_SCHEDULE_TEMPLATE = path.join(DATA, "vrv-schedule-template.xlsx");
 const INVENTORY_FILE = path.join(DATA, "inventory.json");
 const DELIVERY_NOTE_PDF_SCRIPT = path.join(ROOT, "scripts", "delivery_note_pdf.py");
 const PURCHASE_ORDERS_FILE = path.join(DATA, "purchase-orders.json");
+const AREA_CALCULATIONS_FILE = path.join(DATA, "area-calculations.json");
 const PURCHASE_ORDER_PDF_SCRIPT = path.join(ROOT, "scripts", "purchase_order_pdf.py");
 const SALES_CRM_FILE = path.join(DATA, "sales-crm.json");
 const SALES_QUOTATION_PDF_SCRIPT = path.join(ROOT, "scripts", "sales_quotation_pdf.py");
@@ -370,6 +371,7 @@ function canPoOnlyAccessPath(req, pathname) {
   if (req.method === "GET" && pathname === "/api/settings") return true;
   if (req.method === "GET" && pathname.startsWith("/api/settings/uploads/")) return true;
   if (pathname.startsWith("/api/purchase-orders")) return true;
+  if (pathname.startsWith("/api/area-calculations")) return true;
   return false;
 }
 
@@ -457,6 +459,128 @@ async function readPurchaseOrders() {
 
 async function writePurchaseOrders(store) {
   await writeStore("purchase-orders", PURCHASE_ORDERS_FILE, store);
+}
+
+function defaultAreaCalculations() {
+  return {
+    calculations: [],
+    uploads: []
+  };
+}
+
+function normalizeAreaCalculations(parsed = {}) {
+  const store = {
+    ...defaultAreaCalculations(),
+    ...parsed,
+    calculations: Array.isArray(parsed.calculations) ? parsed.calculations.map(normalizeAreaCalculation) : [],
+    uploads: Array.isArray(parsed.uploads) ? parsed.uploads : []
+  };
+  store.calculations.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+  return store;
+}
+
+async function readAreaCalculations() {
+  return readStore("area-calculations", AREA_CALCULATIONS_FILE, defaultAreaCalculations, normalizeAreaCalculations);
+}
+
+async function writeAreaCalculations(store) {
+  await writeStore("area-calculations", AREA_CALCULATIONS_FILE, normalizeAreaCalculations(store));
+}
+
+function areaNumber(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  return Number(String(value).replace(/,/g, "").replace(/[^\d.-]/g, "")) || 0;
+}
+
+function areaDrawingLength(value) {
+  const text = String(value || "");
+  const explicit = text.match(/(?:L|LEN|LENGTH)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
+  if (explicit) return Number(explicit[1]) || 0;
+  const plain = text.match(/\b(\d{2,5})(?:\.\d+)?\b/);
+  return plain ? Number(plain[1]) || 0 : 0;
+}
+
+function normalizeAreaRow(row = {}, index = 0) {
+  const type = cleanCell(row.type || row.Type || "OTHER").toUpperCase();
+  const drawingLengthAngle = cleanCell(row.drawingLengthAngle || row["Drawing Length / Angle"] || row.drawingLength || row.length || "");
+  let next = {
+    id: cleanCell(row.id || "") || id(),
+    item: cleanCell(row.item || row.Item || row.no || (index + 1)),
+    section: cleanCell(row.section || row.Section || ""),
+    type,
+    connection: cleanCell(row.connection || row.Connection || ""),
+    w1: areaNumber(row.w1 ?? row.W1),
+    h1: areaNumber(row.h1 ?? row.H1),
+    w2: areaNumber(row.w2 ?? row.W2),
+    h2: areaNumber(row.h2 ?? row.H2),
+    qty: areaNumber(row.qty ?? row.Qty) || 1,
+    drawingLengthAngle,
+    offset: areaNumber(row.offset ?? row.Offset) || 20,
+    calculatedLength: areaNumber(row.calculatedLength ?? row["Calculated Length"]),
+    areaM2: areaNumber(row.areaM2 ?? row["Area m²"]),
+    areaFt2: areaNumber(row.areaFt2 ?? row["Area ft²"]),
+    status: cleanCell(row.status || row.Status || ""),
+    remarks: cleanCell(row.remarks || row.Remarks || "")
+  };
+
+  if (["STR", "ELB", "END", "BEND"].includes(next.type)) {
+    if (!next.w2) next.w2 = next.w1;
+    if (!next.h2) next.h2 = next.h1;
+  }
+
+  const missingDims = !next.w1 || !next.h1 || !next.w2 || !next.h2;
+  const isEnd = next.type === "END" || /end\s*cap/i.test(drawingLengthAngle);
+  const isElbow = next.type === "ELB" || next.type === "BEND" || /elb|elbow|90\s*[°deg]|45\s*[°deg]/i.test(drawingLengthAngle);
+  const isTwo45 = /45\s*[°deg].*(x|×|\*)\s*2|2\s*(nos|pcs)?.*45\s*[°deg]/i.test(drawingLengthAngle);
+  const is45 = /45\s*[°deg]/i.test(drawingLengthAngle);
+  const is90 = /90\s*[°deg]/i.test(drawingLengthAngle);
+  const drawingLength = areaDrawingLength(drawingLengthAngle);
+
+  if (isEnd) {
+    next.offset = 20;
+    next.calculatedLength = 70;
+  } else if (isElbow && (is90 || isTwo45 || !drawingLength)) {
+    next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
+  } else {
+    next.calculatedLength = drawingLength ? drawingLength + next.offset : next.calculatedLength;
+  }
+
+  if (missingDims || !next.calculatedLength) {
+    next.areaM2 = 0;
+    next.areaFt2 = 0;
+    next.status = missingDims ? "Missing Dim." : "Review";
+  } else {
+    const perimeter = (next.w1 + 20) + (next.h1 + 20) + (next.w2 + 20) + (next.h2 + 20);
+    next.areaM2 = Number(((perimeter * next.calculatedLength * next.qty) / 1000000).toFixed(4));
+    next.areaFt2 = Number((next.areaM2 * 10.764).toFixed(2));
+    if (!next.status || !["Review", "Missing Dim."].includes(next.status)) next.status = next.remarks ? "Review" : "Clear";
+  }
+  return next;
+}
+
+function areaTotals(rows = []) {
+  const totalM2 = rows.reduce((sum, row) => sum + areaNumber(row.areaM2), 0);
+  const totalFt2 = rows.reduce((sum, row) => sum + areaNumber(row.areaFt2), 0);
+  return {
+    totalItems: rows.length,
+    totalM2: Number(totalM2.toFixed(4)),
+    totalFt2: Number(totalFt2.toFixed(2))
+  };
+}
+
+function normalizeAreaCalculation(input = {}) {
+  const rows = Array.isArray(input.rows) ? input.rows.map(normalizeAreaRow) : [];
+  const now = new Date().toISOString();
+  return {
+    id: cleanCell(input.id || "") || id(),
+    title: cleanCell(input.title || "") || "Untitled Area Calculation",
+    uploadIds: Array.isArray(input.uploadIds) ? input.uploadIds.filter(Boolean) : [],
+    rows,
+    totals: areaTotals(rows),
+    message: cleanCell(input.message || ""),
+    createdAt: input.createdAt || now,
+    updatedAt: input.updatedAt || now
+  };
 }
 
 function defaultSalesCrm() {
@@ -1732,15 +1856,86 @@ async function handleApi(req, res) {
     return res.end(pdf);
   }
 
+  if (req.method === "GET" && url.pathname === "/api/area-calculations") {
+    const store = await readAreaCalculations();
+    return send(res, 200, store);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/area-calculations/upload") {
+    const store = await readAreaCalculations();
+    const buffer = await collect(req);
+    const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+    const fileParts = multipart.filter(part => part.filename);
+    if (!fileParts.length) return send(res, 400, { error: "No drawing uploaded" });
+    const titlePart = multipart.find(part => part.name === "title");
+    const title = cleanCell(titlePart?.body.toString("utf8") || fileParts[0].filename.replace(/\.[^.]+$/, "")) || "Untitled Area Calculation";
+    const uploadIds = [];
+    const now = new Date().toISOString();
+    for (const filePart of fileParts) {
+      const uploadId = id();
+      const storedName = `${uploadId}-${safeName(filePart.filename)}`;
+      await saveUpload("area-calculations", storedName, filePart.body, filePart.mimeType);
+      store.uploads.unshift({ id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: now });
+      uploadIds.push(uploadId);
+    }
+    const extracted = await extractAreaCalculationWithOpenAI(fileParts).catch(error => ({ rows: [], message: error.message || "Area extraction failed." }));
+    const calculation = normalizeAreaCalculation({
+      title,
+      uploadIds,
+      rows: extracted.rows || [],
+      message: extracted.message || "Drawing scanned. Review highlighted rows before export.",
+      createdAt: now,
+      updatedAt: now
+    });
+    store.calculations.unshift(calculation);
+    await writeAreaCalculations(store);
+    return send(res, 200, { ...store, activeCalculationId: calculation.id });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/area-calculations") {
+    const store = await readAreaCalculations();
+    const body = await readJson(req);
+    const calculation = normalizeAreaCalculation(body.calculation || body);
+    const existingIndex = store.calculations.findIndex(item => item.id === calculation.id);
+    calculation.updatedAt = new Date().toISOString();
+    if (existingIndex >= 0) {
+      calculation.createdAt = store.calculations[existingIndex].createdAt || calculation.createdAt;
+      store.calculations[existingIndex] = calculation;
+    } else {
+      store.calculations.unshift(calculation);
+    }
+    await writeAreaCalculations(store);
+    return send(res, 200, store);
+  }
+
+  if (req.method === "GET" && url.pathname.match(/^\/api\/area-calculations\/uploads\/[^/]+$/)) {
+    const store = await readAreaCalculations();
+    const uploadId = decodeURIComponent(url.pathname.split("/").pop());
+    const upload = (store.uploads || []).find(item => item.id === uploadId);
+    if (!upload) return notFound(res);
+    return sendStoredUpload(res, upload, "area-calculations");
+  }
+
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/area-calculations\/[^/]+$/)) {
+    const store = await readAreaCalculations();
+    const calculationId = decodeURIComponent(url.pathname.split("/").pop());
+    store.calculations = (store.calculations || []).filter(item => item.id !== calculationId);
+    await writeAreaCalculations(store);
+    return send(res, 200, store);
+  }
+
     if (req.method === "POST" && url.pathname === "/api/inventory/models") {
     const inventory = await readInventory();
     const body = await readJson(req);
     const modelNo = cleanCell(body.modelNo || body.model || "").toUpperCase();
     if (!modelNo) return send(res, 400, { error: "Model No. is required" });
     const existing = inventory.models.find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
-    const reservedQty = Math.max(0, Number(body.reservedQty || 0));
-    if (existing) Object.assign(existing, { modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "", reservedQty });
-    else inventory.models.push({ id: id(), modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "", reservedQty });
+    const hasReservedQty = Object.prototype.hasOwnProperty.call(body, "reservedQty");
+    const reservedQty = hasReservedQty ? Math.max(0, Number(body.reservedQty || 0)) : Number(existing?.reservedQty || 0);
+    const modelUpdate = { modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "" };
+    if (hasReservedQty) modelUpdate.reservedQty = reservedQty;
+    if (existing) Object.assign(existing, modelUpdate);
+    else inventory.models.push({ id: id(), ...modelUpdate, reservedQty });
     if (body.quantity !== undefined && body.quantity !== "") {
       const current = computeInventory(inventory).stockByModel[inventoryNorm(modelNo)]?.qty || 0;
       const target = Number(body.quantity || 0);
@@ -1851,7 +2046,7 @@ async function handleApi(req, res) {
       supplierDnNo: body.supplierDnNo || "",
       projectName: body.projectName || "",
       status: body.status || "Review Needed",
-      lines: (body.lines || []).map(line => normalizeSupplierLine(line)),
+      lines: enrichSupplierLinesFromStock(inventory, body.lines || []),
       uploadId: body.uploadId || "",
       isManualAdjustment: !!body.isManualAdjustment,
       duplicateWarning: !!body.supplierDnNo && inventory.supplierDns.some(dn => dn.id !== body.id && dn.supplierDnNo && inventoryNorm(dn.supplierDnNo) === inventoryNorm(body.supplierDnNo))
@@ -1872,14 +2067,14 @@ async function handleApi(req, res) {
     const uploadId = id();
     const storedName = `${uploadId}-${safeName(filePart.filename)}`;
     await saveUpload("inventory", storedName, filePart.body, filePart.mimeType);
-    const extracted = await extractSupplierDnWithOpenAI(filePart, uploadId).catch(error => ({ supplierDnNo: "", projectName: "", lines: [], message: error.message }));
+    const extracted = await extractSupplierDnWithOpenAI(filePart, uploadId, inventory).catch(error => ({ supplierDnNo: "", projectName: "", lines: [], message: error.message }));
     const supplierDn = {
       id: id(),
       uploadedDate: todayISO(),
       supplierDnNo: extracted.supplierDnNo || "",
       projectName: extracted.projectName || "",
       status: "Review Needed",
-      lines: combineSupplierLines(extracted.lines || []),
+      lines: enrichSupplierLinesFromStock(inventory, combineSupplierLines(extracted.lines || [])),
       uploadId,
       message: extracted.message || "",
       duplicateWarning: false
@@ -2718,6 +2913,80 @@ function findModel(inventory, modelNo) {
   return inventory.models.find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
 }
 
+function stockModelMatchKey(value) {
+  return inventoryNorm(value).replace(/[OQ]/g, "0").replace(/[IL]/g, "1");
+}
+
+function supplierModelCorrectionCandidates(value) {
+  const cleaned = inventoryNorm(value);
+  const candidates = new Set([cleaned]);
+  if (cleaned.startsWith("FXQA")) candidates.add(`FXAQ${cleaned.slice(4)}`);
+  if (cleaned.startsWith("FX0A")) candidates.add(`FXOA${cleaned.slice(4)}`);
+  return [...candidates].filter(Boolean);
+}
+
+function isSingleAdjacentSwap(a, b) {
+  if (!a || !b || a.length !== b.length) return false;
+  const mismatch = [];
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) mismatch.push(index);
+    if (mismatch.length > 2) return false;
+  }
+  return mismatch.length === 2
+    && mismatch[1] === mismatch[0] + 1
+    && a[mismatch[0]] === b[mismatch[1]]
+    && a[mismatch[1]] === b[mismatch[0]];
+}
+
+function levenshteinDistance(a, b) {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+  const previous = Array.from({ length: b.length + 1 }, (_, index) => index);
+  const current = Array(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i++) {
+    current[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      current[j] = Math.min(
+        previous[j] + 1,
+        current[j - 1] + 1,
+        previous[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    for (let j = 0; j <= b.length; j++) previous[j] = current[j];
+  }
+  return previous[b.length];
+}
+
+function resolveSupplierStockModel(inventory, modelNo) {
+  const cleaned = cleanCell(modelNo || "").toUpperCase();
+  if (!cleaned) return null;
+  const candidates = supplierModelCorrectionCandidates(cleaned);
+  const models = inventory.models || [];
+  for (const candidate of candidates) {
+    const exact = findModel(inventory, candidate);
+    if (exact) return exact;
+  }
+  for (const candidate of candidates) {
+    const target = stockModelMatchKey(candidate);
+    const loose = models.find(model => stockModelMatchKey(model.modelNo) === target);
+    if (loose) return loose;
+  }
+  let best = null;
+  for (const candidate of candidates) {
+    const target = stockModelMatchKey(candidate);
+    const rawTarget = inventoryNorm(candidate);
+    for (const model of models) {
+      const modelKey = stockModelMatchKey(model.modelNo);
+      const rawModel = inventoryNorm(model.modelNo);
+      if (Math.abs(modelKey.length - target.length) > 1) continue;
+      const distance = isSingleAdjacentSwap(rawTarget, rawModel) ? 0.5 : levenshteinDistance(target, modelKey);
+      if (distance <= 1 && (!best || distance < best.distance)) best = { model, distance };
+    }
+  }
+  return best?.model || null;
+}
+
 function normalizeSupplierLine(line) {
   const detectedQty = Number(line.detectedQty ?? line.quantity ?? line.qty ?? 0) || 0;
   const finalQty = Number(line.finalQty ?? detectedQty) || 0;
@@ -2729,6 +2998,22 @@ function normalizeSupplierLine(line) {
     finalQty,
     status: line.status || (line.modelNo ? "Ready" : "Check Needed")
   };
+}
+
+function enrichSupplierLinesFromStock(inventory, lines = []) {
+  return lines.map(line => {
+    const next = normalizeSupplierLine(line);
+    if (!next.modelNo) return { ...next, status: "Check Needed" };
+    const model = resolveSupplierStockModel(inventory, next.modelNo);
+    if (model) {
+      next.modelNo = model.modelNo || next.modelNo;
+      next.description = model.description || next.description || "";
+      if (next.status === "Not in Stock" || next.status === "Ready" || !next.status) next.status = "Detected";
+    } else {
+      next.status = "Not in Stock";
+    }
+    return next;
+  });
 }
 
 function combineSupplierLines(lines) {
@@ -3106,13 +3391,21 @@ async function inventoryView(inventory) {
   };
 }
 
-async function extractSupplierDnWithOpenAI(filePart, uploadId) {
+async function extractSupplierDnWithOpenAI(filePart, uploadId, inventory = null) {
   if (!process.env.OPENAI_API_KEY) {
     return { supplierDnNo: "", projectName: "", lines: [], message: "OpenAI API key is missing. Add rows manually or configure OPENAI_API_KEY." };
   }
   const mime = filePart.mimeType || "application/octet-stream";
   const base64 = filePart.body.toString("base64");
-  const content = [{ type: "input_text", text: "Extract supplier delivery note data for AC unit stock only. Return JSON with supplierDnNo, projectName, lines [{modelNo, description, detectedQty, finalQty, status}]. Combine duplicate models. No prices." }];
+  const stockModels = (inventory?.models || [])
+    .map(model => cleanCell(model.modelNo || ""))
+    .filter(Boolean)
+    .slice(0, 700)
+    .join(", ");
+  const modelListRule = stockModels
+    ? `Known stock model numbers are: ${stockModels}. Compare every detected model against this list and output the exact known stock model spelling when it clearly matches.`
+    : "";
+  const content = [{ type: "input_text", text: `Extract supplier delivery note data for AC unit stock only. Return JSON with supplierDnNo, projectName, lines [{modelNo, description, detectedQty, finalQty, status}]. Combine duplicate models. No prices. ${modelListRule} Be extra careful with Daikin model letter order: FXAQ is a valid family and must not be transposed as FXQA. If a model is unclear, keep the closest text you can read and mark it for review instead of inventing a model.` }];
   if (mime.includes("pdf")) content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
   else if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
   else return { supplierDnNo: "", projectName: "", lines: [], message: "Unsupported file type for OCR. Add rows manually." };
@@ -3161,6 +3454,73 @@ function supplierDnSchema() {
       message: { type: "string" }
     },
     required: ["supplierDnNo", "projectName", "lines", "message"]
+  };
+}
+
+async function extractAreaCalculationWithOpenAI(fileParts) {
+  if (!process.env.OPENAI_API_KEY) {
+    return { rows: [], message: "OpenAI API key is missing. The drawing is saved; add rows manually or configure OPENAI_API_KEY." };
+  }
+  const content = [{
+    type: "input_text",
+    text: `Read every uploaded HVAC duct drawing page/image and extract duct fabrication area calculation rows.
+Return JSON only. Preserve item order and section headings.
+Supported types: STR, RED, ELB, SHOENECK, END, Y-PIECE, PLENUM, OFF, TEE, BEND, OTHER.
+Columns to extract per row: item, section, type, connection, w1, h1, w2, h2, qty, drawingLengthAngle, offset, status, remarks.
+Use millimetres for dimensions. For straight ducts repeat W1/H1 into W2/H2. Default qty is 1. Default offset is 20.
+Do not silently guess unclear dimensions. If unclear, leave numeric fields 0, set status to Review or Missing Dim., and explain in remarks.
+For attached end caps without separate item numbers, add a separate row immediately after the related item and label like "2-END".
+For elbows, keep original angle/radius text such as "90° R=100" in drawingLengthAngle.`
+  }];
+  for (const filePart of fileParts) {
+    const mime = filePart.mimeType || mimeTypes[path.extname(filePart.filename).toLowerCase()] || "application/octet-stream";
+    const base64 = filePart.body.toString("base64");
+    if (mime.startsWith("image/")) {
+      content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+    } else if (mime.includes("pdf")) {
+      const pageInputs = pdfPageImageInputs(filePart, "Duct drawing PDF page");
+      if (pageInputs.length) content.push(...pageInputs);
+      else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+    }
+  }
+  const parsed = await callOpenAIJson("duct_area_calculation_extract", areaCalculationExtractSchema(), content);
+  return {
+    rows: Array.isArray(parsed.rows) ? parsed.rows : [],
+    message: cleanCell(parsed.message || "Drawing scanned. Review highlighted rows before export.")
+  };
+}
+
+function areaCalculationExtractSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      rows: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            item: { type: "string" },
+            section: { type: "string" },
+            type: { type: "string" },
+            connection: { type: "string" },
+            w1: { type: "number" },
+            h1: { type: "number" },
+            w2: { type: "number" },
+            h2: { type: "number" },
+            qty: { type: "number" },
+            drawingLengthAngle: { type: "string" },
+            offset: { type: "number" },
+            status: { type: "string" },
+            remarks: { type: "string" }
+          },
+          required: ["item", "section", "type", "connection", "w1", "h1", "w2", "h2", "qty", "drawingLengthAngle", "offset", "status", "remarks"]
+        }
+      },
+      message: { type: "string" }
+    },
+    required: ["rows", "message"]
   };
 }
 

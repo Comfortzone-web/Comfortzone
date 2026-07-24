@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HVAC Workflow App</title>
-  <link rel="stylesheet" href="/styles.css?v=20260722-auth-flash">
+  <link rel="stylesheet" href="/styles.css?v=20260723-area-calculation">
 </head>
 <body class="auth-pending">
   <aside class="sidebar">
@@ -36,6 +36,7 @@
       <button data-inventory-view="stock">Stock</button>
     </div>
     <button id="purchaseOrdersBtn" class="nav-button">Purchase Orders</button>
+    <button id="areaCalculationBtn" class="nav-button">Area Calculation</button>
     <div class="sidebar-footer">
       <button id="settingsBtn" class="nav-button">Settings</button>
       <button id="logoutBtn" class="nav-button">Logout</button>
@@ -71,6 +72,11 @@
 
     <section id="purchaseOrdersView" class="purchase-orders-view hidden">
       <div id="purchaseOrdersRoot"></div>
+    </section>
+
+    <section id="areaCalculationView" class="area-calculation-view hidden">
+      <div id="areaCalculationRoot"></div>
+      <input id="areaDrawingInput" class="hidden" type="file" accept=".pdf,.png,.jpg,.jpeg" multiple>
     </section>
 
     <section id="salesDeskView" class="inventory-view hidden">
@@ -133,6 +139,6 @@
     </article>
   </template>
 
-  <script src="/app.js?v=20260722-auth-flash"></script>
+  <script src="/app.js?v=20260723-area-calculation"></script>
 </body>
 </html>
