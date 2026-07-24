@@ -6547,6 +6547,7 @@ function scheduleWorkflowRender(options = {}) {
 }
 
 function render() {
+  captureWorkflowNodeSizes();
   captureWorkflowTableScrollState();
   if (state.tables?.costing?.rows?.length) {
     recalcCosting();
@@ -6570,6 +6571,33 @@ function captureWorkflowTableScrollState() {
       top: scroll.scrollTop
     };
   });
+}
+
+function captureWorkflowNodeSizes() {
+  if (!canvas || !state?.nodes) return;
+  canvas.querySelectorAll(".node[data-node-id]").forEach(el => {
+    const node = state.nodes.find(item => item.id === el.dataset.nodeId);
+    if (node) persistWorkflowNodeSize(el, node);
+  });
+}
+
+function persistWorkflowNodeSize(el, node, options = {}) {
+  if (!tableKeys[node.type]) return false;
+  const rect = el.getBoundingClientRect();
+  const minSize = workflowNodeDefaultSize(node.id) || [0, 0];
+  const width = Math.max(minSize[0], Math.round(rect.width / canvasZoom));
+  const fittedHeight = workflowTableFittedHeight(el);
+  const measuredHeight = Math.round(rect.height / canvasZoom);
+  const height = Math.max(minSize[1], fittedHeight || measuredHeight);
+  const changed = Math.abs((node.width || 0) - width) > 2 || Math.abs((node.height || 0) - height) > 2;
+  if (!changed) return false;
+  node.width = width;
+  node.height = height;
+  if (options.save) {
+    projectTouched = true;
+    debounceSaveProject();
+  }
+  return true;
 }
 
 function restoreWorkflowTableScrollState() {
@@ -6796,14 +6824,18 @@ function bindNode(el, node) {
       if (nearResizeHandle) {
         el.dataset.userResizing = "1";
         const stopResizeTracking = () => {
+          persistWorkflowNodeSize(el, node, { save: true });
           delete el.dataset.userResizing;
           window.removeEventListener("pointerup", stopResizeTracking);
           window.removeEventListener("pointercancel", stopResizeTracking);
+          window.removeEventListener("mouseup", stopResizeTracking);
         };
         window.addEventListener("pointerup", stopResizeTracking);
         window.addEventListener("pointercancel", stopResizeTracking);
+        window.addEventListener("mouseup", stopResizeTracking);
       }
     });
+    el.addEventListener("focusin", () => persistWorkflowNodeSize(el, node, { save: true }));
   }
   header.addEventListener("pointerdown", event => {
     if (node.locked || event.target.closest("button")) return;
