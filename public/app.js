@@ -741,7 +741,7 @@ async function showAreaCalculation(mode = "detail") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
-  $("#pageTitle").innerHTML = `Area Calculation <span class="po-upload-spinner area-title-spinner ${areaCalculationUploadLoading ? "" : "hidden"}" aria-label="Uploading drawing"></span>`;
+  $("#pageTitle").innerHTML = `<span>Area Calculation</span><b>&lt;</b><strong>Duct Area Calculator <span class="po-upload-spinner area-title-spinner ${areaCalculationUploadLoading ? "" : "hidden"}" aria-label="Uploading drawing"></span></strong>`;
   $("#projectMeta").textContent = "Upload duct drawings and review editable fabrication area calculations.";
   const needsInitialArea = !areaCalculationState;
   if (needsInitialArea) await loadAreaCalculations().catch(() => {});
@@ -5722,7 +5722,7 @@ function renderViewActions() {
   if (!actions) return;
   const salesTopbar = salesDeskTopbarConfig();
   const inventoryTopbar = inventoryTopbarConfig();
-  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar);
+  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar || activeView === "areaCalculation");
   actions.classList.add("hidden");
   actions.innerHTML = "";
   if (salesTopbar) {
@@ -5766,6 +5766,19 @@ function renderViewActions() {
       purchaseDraft = newPurchaseDraft();
       showPurchaseOrders("form");
     });
+    return;
+  }
+  if (activeView === "areaCalculation") {
+    actions.classList.remove("hidden");
+    actions.innerHTML = `
+      <button class="ghost-button area-top-button" id="headerAreaFilesBtn">${poIcon("folder")}<span>All Files</span></button>
+      <button class="primary-button area-top-button" id="headerAreaUploadBtn">${poIcon("upload")}<span>${areaCalculationUploadLoading ? "Uploading..." : "Upload Drawing"}</span></button>
+    `;
+    $("#headerAreaFilesBtn").addEventListener("click", () => {
+      areaCalculationMode = "files";
+      renderAreaCalculation();
+    });
+    $("#headerAreaUploadBtn").addEventListener("click", () => $("#areaDrawingInput").click());
     return;
   }
   if (activeView !== "inventory") return;
@@ -5859,30 +5872,39 @@ function activeAreaCalculation() {
   return (areaCalculationState?.calculations || []).find(item => item.id === areaCalculationActiveId) || null;
 }
 
+function ensureActiveAreaCalculation() {
+  let calc = activeAreaCalculation();
+  if (calc) return calc;
+  calc = {
+    id: `area-${Date.now()}`,
+    title: "",
+    uploadIds: [],
+    rows: [],
+    totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
+    message: "",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  areaCalculationState = areaCalculationState || { calculations: [], uploads: [] };
+  areaCalculationState.calculations.unshift(calc);
+  areaCalculationActiveId = calc.id;
+  return calc;
+}
+
 function areaCalculationDetailHtml() {
-  const calc = activeAreaCalculation();
+  const calc = activeAreaCalculation() || emptyAreaCalculationDraft();
   return `
     <div class="area-page">
       ${areaCalculationToolbarHtml(calc)}
-      ${calc ? areaCalculationTableHtml(calc) : areaCalculationEmptyHtml()}
+      ${areaCalculationTableHtml(calc)}
     </div>
   `;
 }
 
 function areaCalculationToolbarHtml(calc) {
   return `
-    <div class="area-header">
-      <div>
-        <h2>Duct Area Calculator</h2>
-        <p>Upload duct drawings and review editable fabrication area calculations.</p>
-      </div>
-      <div class="area-header-actions">
-        <button class="ghost-button area-toolbar-button" data-area-files>${poIcon("folder")}<span>All Files</span></button>
-        <button class="primary-button area-toolbar-button" data-area-upload>${poIcon("upload")}<span>${areaCalculationUploadLoading ? "Uploading..." : "Upload Drawing"}</span></button>
-      </div>
-    </div>
     <div class="area-control-row">
-      <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}" placeholder="Calculation title"></label>
+      <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}"></label>
       <div class="area-control-actions">
         <button class="ghost-button area-toolbar-button" data-area-add-row>${poIcon("plus")}<span>Add Row</span></button>
         <button class="ghost-button area-toolbar-button" data-area-export>${poIcon("excel")}<span>Excel Export</span></button>
@@ -5891,26 +5913,23 @@ function areaCalculationToolbarHtml(calc) {
   `;
 }
 
-function areaCalculationEmptyHtml() {
-  return `
-    <section class="area-empty">
-      <h3>No area calculation yet</h3>
-      <p>Upload a duct drawing to create the first saved calculation file.</p>
-      <button class="primary-button" data-area-upload>${poIcon("upload")}<span>Upload Drawing</span></button>
-    </section>
-  `;
+function emptyAreaCalculationDraft() {
+  return {
+    id: "",
+    title: "",
+    rows: [],
+    totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
+    message: ""
+  };
 }
 
 function areaCalculationFilesHtml() {
   const calculations = areaCalculationState?.calculations || [];
   return `
     <div class="area-page">
-      <div class="area-header">
+      <div class="area-files-heading">
         <div><h2>All Files</h2><p>Saved duct area calculations by title.</p></div>
-        <div class="area-header-actions">
-          <button class="ghost-button area-toolbar-button" data-area-back>${poIcon("document")}<span>Current Table</span></button>
-          <button class="primary-button area-toolbar-button" data-area-upload>${poIcon("upload")}<span>Upload Drawing</span></button>
-        </div>
+        <button class="ghost-button area-toolbar-button" data-area-back>${poIcon("document")}<span>Current Table</span></button>
       </div>
       <div class="area-files-list">
         ${calculations.map(calc => `
@@ -5938,7 +5957,7 @@ function areaCalculationTableHtml(calc) {
       <table class="area-table">
         <thead><tr>${areaCalculationColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead>
         <tbody>
-          ${rows.map((row, index) => areaCalculationRowHtml(row, index)).join("") || `<tr><td colspan="${areaCalculationColumns.length}">No rows extracted. Add rows manually or upload a clearer drawing.</td></tr>`}
+          ${rows.map((row, index) => areaCalculationRowHtml(row, index)).join("") || areaCalculationBlankRowsHtml()}
         </tbody>
       </table>
     </div>
@@ -5951,6 +5970,14 @@ function areaCalculationTableHtml(calc) {
     </div>
     ${calc.message ? `<p class="area-message">${escapeHtml(calc.message)}</p>` : ""}
   `;
+}
+
+function areaCalculationBlankRowsHtml() {
+  return Array.from({ length: 6 }, () => `
+    <tr class="area-blank-row">
+      ${areaCalculationColumns.map(() => `<td>&nbsp;</td>`).join("")}
+    </tr>
+  `).join("");
 }
 
 function areaCalculationRowHtml(row, index) {
@@ -7891,8 +7918,7 @@ function handleAreaCalculationClick(event) {
 }
 
 function handleAreaCalculationInput(event) {
-  const calc = activeAreaCalculation();
-  if (!calc) return;
+  const calc = ensureActiveAreaCalculation();
   if (event.target.dataset.areaTitle !== undefined) {
     calc.title = event.target.value;
     scheduleAreaCalculationSave();
@@ -7953,8 +7979,7 @@ async function uploadAreaDrawing() {
 }
 
 function addAreaCalculationRow() {
-  const calc = activeAreaCalculation();
-  if (!calc) return;
+  const calc = ensureActiveAreaCalculation();
   calc.rows.push(areaNormalizeRow({ item: calc.rows.length + 1, type: "STR", qty: 1, offset: 20 }, calc.rows.length));
   areaRecalculateCalculation(calc);
   renderAreaCalculation();

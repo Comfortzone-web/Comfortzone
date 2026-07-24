@@ -2335,18 +2335,6 @@ async function extractThermalWithOpenAI(project, options) {
     return { status: "no_files", rows: [], unclearFields: [], message: "Upload the thermal sheet PDF or screenshots first." };
   }
 
-  let detectedStructure = { rowCount: 0, columns: [], notes: "" };
-  try {
-    detectedStructure = await callOpenAIJson(
-      "thermal_structure_detection",
-      thermalStructureJsonSchema(),
-      await thermalOpenAIContent(project, uploads, thermalStructurePrompt(options))
-    );
-  } catch (error) {
-    detectedStructure = { rowCount: 0, columns: [], notes: "Structure pass failed." };
-  }
-  options = { ...options, detectedStructure };
-
   let parsed;
   try {
     parsed = await callOpenAIJson(
@@ -2382,22 +2370,34 @@ async function extractThermalWithOpenAI(project, options) {
   let numericMismatchCount = 0;
   let customMismatchCount = 0;
 
-  const expectedRowCount = Number(detectedStructure.rowCount || 0);
-  if (!options.customExtraction && expectedRowCount > 0 && rows.length !== expectedRowCount) {
-    parsed.unclearFields.push(`Row count mismatch: detected ${expectedRowCount}, extracted ${rows.length}`);
-  }
-
   if (!options.customExtraction && rows.length) {
     try {
       const numericVerification = await callOpenAIJson(
         "thermal_numeric_verification",
         thermalNumericVerificationJsonSchema(),
-        await thermalOpenAIContent(project, uploads, thermalNumericVerificationPrompt(options))
+        await thermalOpenAIContent(project, uploads, thermalNumericVerificationPrompt(options, rows))
       );
       verifiedRows = Array.isArray(numericVerification.rows) ? numericVerification.rows : [];
       numericMismatchCount = applyThermalNumericVerification(rows, verifiedRows, reviewCells);
-      for (const field of numericVerification.unclearFields || []) {
-        if (!parsed.unclearFields.includes(field)) parsed.unclearFields.push(field);
+      const retryCells = Object.values(reviewCells);
+      if (retryCells.length) {
+        try {
+          const numericRetry = await callOpenAIJson(
+            "thermal_targeted_retry",
+            thermalNumericVerificationJsonSchema(),
+            await thermalOpenAIContent(project, uploads, thermalTargetedRetryPrompt(options, retryCells))
+          );
+          const retryRows = Array.isArray(numericRetry.rows) ? numericRetry.rows : [];
+          applyThermalTargetedRetry(rows, retryRows, reviewCells);
+          numericMismatchCount = Object.keys(reviewCells).length;
+          if (numericMismatchCount) {
+            for (const field of numericRetry.unclearFields || []) {
+              if (!parsed.unclearFields.includes(field)) parsed.unclearFields.push(field);
+            }
+          }
+        } catch (error) {
+          parsed.unclearFields.push("Targeted numeric retry failed");
+        }
       }
     } catch (error) {
       parsed.unclearFields.push("Numeric verification pass failed");
@@ -2421,23 +2421,36 @@ async function extractThermalWithOpenAI(project, options) {
       parsed.unclearFields.push("Custom column verification pass failed");
     }
   }
+  const filteredReviewCells = {};
+  const filteredCustomReviewCells = {};
+  const finalRows = options.customExtraction ? [] : highConfidenceThermalRows(rows, reviewCells, filteredReviewCells);
+  customRows = options.customExtraction ? highConfidenceCustomThermalRows(customRows, customColumns, customReviewCells, filteredCustomReviewCells) : customRows;
+  if (!options.customExtraction) {
+    Object.keys(reviewCells).forEach(key => delete reviewCells[key]);
+    Object.assign(reviewCells, filteredReviewCells);
+  } else {
+    Object.keys(customReviewCells).forEach(key => delete customReviewCells[key]);
+    Object.assign(customReviewCells, filteredCustomReviewCells);
+  }
+  numericMismatchCount = Object.keys(reviewCells).length;
+  customMismatchCount = Object.keys(customReviewCells).length;
 
   return {
     status: (parsed.unclearFields && parsed.unclearFields.length) || numericMismatchCount || customMismatchCount ? "needs_verification" : "ok",
     capacitySources: parsed.capacitySources || [],
     selectedCapacitySource: options.capacitySource || parsed.selectedCapacitySource || "",
     familyModel: options.familyModel || parsed.familyModel || "",
-    rows,
+    rows: finalRows,
     customColumns,
     customRows,
     unclearFields: parsed.unclearFields || [],
     reviewCells,
     customReviewCells,
-    detectedStructure,
+    detectedStructure: { rowCount: 0, columns: [], notes: "" },
     numericVerificationRows: verifiedRows,
     message: numericMismatchCount || customMismatchCount
-      ? `${numericMismatchCount + customMismatchCount} cell(s) were unclear or did not match the independent reading. They were left blank and highlighted for review.`
-      : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : rows.length ? "Thermal values extracted into the Export File table." : "No rows were detected.")
+      ? `${numericMismatchCount + customMismatchCount} cell(s) need review. Rows with missing required values were excluded.`
+      : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : finalRows.length ? "Thermal values extracted into the Export File table." : "No high-confidence rows were detected.")
   };
 }
 
@@ -2528,22 +2541,55 @@ function applyThermalNumericVerification(rows, verifiedRows, reviewCells) {
     ["Air Flow Rate", "airFlowRate"]
   ];
   let mismatchCount = 0;
+  const verifiedByIdentity = new Map();
+  const verifiedByIndoor = new Map();
+  for (const verify of verifiedRows || []) {
+    const key = thermalRowIdentityKey(verify.indoor, verify.room);
+    if (key && !verifiedByIdentity.has(key)) verifiedByIdentity.set(key, verify);
+    const indoorKey = thermalIdentityText(verify.indoor);
+    if (indoorKey && !verifiedByIndoor.has(indoorKey)) verifiedByIndoor.set(indoorKey, verify);
+  }
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const verify = verifiedRows[index] || {};
+    const indexedVerify = verifiedRows[index] || {};
+    const verify = thermalRowIdentityMatches(row, indexedVerify)
+      ? indexedVerify
+      : verifiedByIdentity.get(thermalRowIdentityKey(row.Indoor, row.Room)) ||
+        verifiedByIndoor.get(thermalIdentityText(row.Indoor));
+    if (!verify) continue;
+    const firstRoom = safeExtract(row.Room);
+    const secondRoom = safeExtract(verify.room);
+    const rowLabel = safeExtract(row.Indoor || verify.indoor || `Row ${index + 1}`);
+    if (firstRoom && secondRoom && !sameThermalLocation(firstRoom, secondRoom)) {
+      const review = {
+        row: index,
+        column: "Room",
+        first: firstRoom,
+        second: secondRoom,
+        reason: "Location verification mismatch",
+        rowLabel
+      };
+      reviewCells[`${index}:Room`] = review;
+      row.__reviewCells = {
+        ...(row.__reviewCells || {}),
+        Room: {
+          reason: review.reason,
+          first: firstRoom,
+          second: secondRoom
+        }
+      };
+      mismatchCount += 1;
+    }
     for (const [column, key] of numericColumns) {
       const first = safeExtract(row[column]);
       const second = safeExtract(verify[key]);
-      const rowLabel = safeExtract(row.Indoor || verify.indoor || `Row ${index + 1}`);
-      if (!first && !second) continue;
-      if (!second || first !== second) {
-        row[column] = "";
+      if (!isThermalNumber(first) || !isThermalNumber(second) || !sameThermalNumber(first, second)) {
         const review = {
           row: index,
           column,
           first,
           second,
-          reason: second ? "Numeric verification mismatch" : "Numeric verification unclear",
+          reason: thermalReviewReason(first, second),
           rowLabel
         };
         reviewCells[`${index}:${column}`] = review;
@@ -2562,29 +2608,297 @@ function applyThermalNumericVerification(rows, verifiedRows, reviewCells) {
   return mismatchCount;
 }
 
+function applyThermalTargetedRetry(rows, retryRows, reviewCells) {
+  const verificationColumns = new Map([
+    ["Room", "room"],
+    ["Tot Cool Cap", "totCoolCap"],
+    ["Sens Cool Cap", "sensCoolCap"],
+    ["Air Flow Rate", "airFlowRate"]
+  ]);
+  for (const key of Object.keys(reviewCells)) {
+    const review = reviewCells[key];
+    const row = rows[review.row];
+    if (!row) {
+      delete reviewCells[key];
+      continue;
+    }
+    const retry = retryRows[review.row] || {};
+    if (!thermalRowIdentityMatches(row, retry)) continue;
+    const field = verificationColumns.get(review.column);
+    if (!field) continue;
+    const retryValue = safeExtract(retry?.[field]);
+    const currentValue = safeExtract(row[review.column]);
+    const firstValue = safeExtract(review.first);
+    const secondValue = safeExtract(review.second);
+    const sameAsCurrent = review.column === "Room"
+      ? sameThermalLocation(retryValue, currentValue)
+      : sameThermalNumber(retryValue, currentValue);
+    const sameAsFirst = review.column === "Room"
+      ? sameThermalLocation(retryValue, firstValue)
+      : sameThermalNumber(retryValue, firstValue);
+    const sameAsSecond = review.column === "Room"
+      ? sameThermalLocation(retryValue, secondValue)
+      : sameThermalNumber(retryValue, secondValue);
+    if (review.column === "Room" ? !retryValue : !isThermalNumber(retryValue)) continue;
+
+    if (sameAsCurrent || sameAsFirst) {
+      delete reviewCells[key];
+      if (row.__reviewCells) {
+        delete row.__reviewCells[review.column];
+        if (!Object.keys(row.__reviewCells).length) delete row.__reviewCells;
+      }
+      continue;
+    }
+
+    review.retry = retryValue;
+    review.reason = sameAsSecond
+      ? "Second pass and retry disagree with first read"
+      : "Targeted retry mismatch";
+    row.__reviewCells = {
+      ...(row.__reviewCells || {}),
+      [review.column]: {
+        reason: review.reason,
+        first: firstValue,
+        second: secondValue,
+        retry: retryValue
+      }
+    };
+  }
+}
+
+function thermalRowIdentityMatches(row, verify) {
+  if (!row || !verify) return false;
+  const rowIndoor = thermalIdentityText(row.Indoor || row.indoor);
+  const verifyIndoor = thermalIdentityText(verify.indoor || verify.Indoor);
+  return !!rowIndoor && !!verifyIndoor && rowIndoor === verifyIndoor;
+}
+
+function thermalRowIdentityKey(indoor, room) {
+  const indoorKey = thermalIdentityText(indoor);
+  if (!indoorKey) return "";
+  return `${indoorKey}|${thermalIdentityText(room)}`;
+}
+
+function thermalIdentityText(value) {
+  return safeExtract(value).toUpperCase().replace(/[^A-Z0-9]+/g, "");
+}
+
 function applyThermalCustomVerification(customRows, verifiedRows, customColumns, customReviewCells) {
   let mismatchCount = 0;
+  const numericIndexes = thermalCustomNumericColumnIndexes(customColumns);
+  const locationIndexes = thermalCustomLocationColumnIndexes(customColumns);
+  if (!numericIndexes.length && !locationIndexes.length) return 0;
+  const identityIndexes = thermalCustomIdentityColumnIndexes(customColumns);
   for (let rowIndex = 0; rowIndex < customRows.length; rowIndex += 1) {
     const row = customRows[rowIndex] || [];
     const verify = verifiedRows[rowIndex] || [];
-    for (let columnIndex = 0; columnIndex < customColumns.length; columnIndex += 1) {
+    if (identityIndexes.length && !thermalCustomRowIdentityMatches(row, verify, identityIndexes, customColumns)) continue;
+    for (const columnIndex of locationIndexes) {
       const first = safeExtract(row[columnIndex]);
       const second = safeExtract(verify[columnIndex]);
-      if (!first && !second) continue;
-      if (!second || first !== second) {
-        row[columnIndex] = "";
+      if (first && second && !sameThermalLocation(first, second)) {
         customReviewCells[`${rowIndex}:${customColumns[columnIndex]}`] = {
           row: rowIndex,
           column: customColumns[columnIndex],
           first,
           second,
-          reason: second ? "Independent verification mismatch" : "Independent verification unclear"
+          reason: "Location verification mismatch"
+        };
+        mismatchCount += 1;
+      }
+    }
+    for (const columnIndex of numericIndexes) {
+      const first = safeExtract(row[columnIndex]);
+      const second = safeExtract(verify[columnIndex]);
+      if (!isThermalNumber(first) || !isThermalNumber(second) || !sameThermalNumber(first, second)) {
+        customReviewCells[`${rowIndex}:${customColumns[columnIndex]}`] = {
+          row: rowIndex,
+          column: customColumns[columnIndex],
+          first,
+          second,
+          reason: thermalReviewReason(first, second)
         };
         mismatchCount += 1;
       }
     }
   }
   return mismatchCount;
+}
+
+function thermalCustomIdentityColumnIndexes(columns) {
+  const indexes = [];
+  (columns || []).forEach((column, index) => {
+    const label = String(column || "").toLowerCase();
+    if ((label.includes("unit") && label.includes("reference")) ||
+      label.includes("reference no") ||
+      label.includes("location") ||
+      label === "indoor" ||
+      label === "room") {
+      indexes.push(index);
+    }
+  });
+  return indexes;
+}
+
+function thermalCustomRowIdentityMatches(row, verify, identityIndexes, columns = []) {
+  const unitIndexes = identityIndexes.filter(index => {
+    const label = String(columns[index] || "").toLowerCase();
+    return label.includes("unit") || label.includes("reference") || label === "indoor";
+  });
+  const indexesToUse = unitIndexes.length ? unitIndexes : identityIndexes;
+  return indexesToUse.some(index => {
+    const first = thermalIdentityText(row?.[index]);
+    const second = thermalIdentityText(verify?.[index]);
+    return first && second && first === second;
+  });
+}
+
+function thermalCustomLocationColumnIndexes(columns) {
+  const indexes = [];
+  (columns || []).forEach((column, index) => {
+    const label = String(column || "").toLowerCase();
+    if (label.includes("location") || label === "room") indexes.push(index);
+  });
+  return indexes;
+}
+
+function highConfidenceThermalRows(rows, reviewCells, filteredReviewCells = {}) {
+  const reviewsByRow = new Map();
+  for (const review of Object.values(reviewCells || {})) {
+    const rowIndex = Number(review.row);
+    if (!reviewsByRow.has(rowIndex)) reviewsByRow.set(rowIndex, []);
+    reviewsByRow.get(rowIndex).push(review);
+  }
+  const keptRows = [];
+  (rows || []).forEach((row, index) => {
+    if (!safeExtract(row.Indoor)) return false;
+    const total = safeExtract(row["Tot Cool Cap"]);
+    const sensible = safeExtract(row["Sens Cool Cap"]);
+    const flow = safeExtract(row["Air Flow Rate"]);
+    if (!isThermalNumber(total) || !isThermalNumber(sensible) || !isThermalNumber(flow)) return false;
+    if (thermalNumericValue(sensible) > thermalNumericValue(total)) {
+      row.__reviewCells = {
+        ...(row.__reviewCells || {}),
+        "Sens Cool Cap": {
+          reason: "Sensible kW greater than Total kW",
+          first: sensible,
+          second: total
+        }
+      };
+    }
+    const { __reviewCells, ...cleanRow } = row;
+    const nextIndex = keptRows.length;
+    if (__reviewCells) cleanRow.__reviewCells = __reviewCells;
+    for (const review of reviewsByRow.get(index) || []) {
+      filteredReviewCells[`${nextIndex}:${review.column}`] = {
+        ...review,
+        row: nextIndex
+      };
+    }
+    if (row.__reviewCells?.["Sens Cool Cap"]) {
+      filteredReviewCells[`${nextIndex}:Sens Cool Cap`] = {
+        row: nextIndex,
+        column: "Sens Cool Cap",
+        first: sensible,
+        second: total,
+        reason: "Sensible kW greater than Total kW",
+        rowLabel: safeExtract(row.Indoor || `Row ${index + 1}`)
+      };
+    }
+    keptRows.push(cleanRow);
+  });
+  return keptRows;
+}
+
+function highConfidenceCustomThermalRows(customRows, customColumns, customReviewCells, filteredCustomReviewCells = {}) {
+  const requiredIndexes = thermalCustomNumericColumnIndexes(customColumns);
+  if (!requiredIndexes.length) return customRows;
+  const reviewsByRow = new Map();
+  for (const review of Object.values(customReviewCells || {})) {
+    const rowIndex = Number(review.row);
+    if (!reviewsByRow.has(rowIndex)) reviewsByRow.set(rowIndex, []);
+    reviewsByRow.get(rowIndex).push(review);
+  }
+  const totalIndex = customColumns.findIndex(column => /total/i.test(column) && /kw|load|capacity|cap/i.test(column));
+  const sensibleIndex = customColumns.findIndex(column => /sens/i.test(column) && /kw|load|capacity|cap/i.test(column));
+  const keptRows = [];
+  (customRows || []).forEach((row, rowIndex) => {
+    for (const columnIndex of requiredIndexes) {
+      if (!isThermalNumber(row[columnIndex])) return false;
+    }
+    const nextIndex = keptRows.length;
+    for (const review of reviewsByRow.get(rowIndex) || []) {
+      filteredCustomReviewCells[`${nextIndex}:${review.column}`] = {
+        ...review,
+        row: nextIndex
+      };
+    }
+    if (totalIndex >= 0 && sensibleIndex >= 0) {
+      const sensible = row[sensibleIndex];
+      const total = row[totalIndex];
+      if (thermalNumericValue(sensible) > thermalNumericValue(total)) {
+        filteredCustomReviewCells[`${nextIndex}:${customColumns[sensibleIndex]}`] = {
+          row: nextIndex,
+          column: customColumns[sensibleIndex],
+          first: safeExtract(sensible),
+          second: safeExtract(total),
+          reason: "Sensible kW greater than Total kW"
+        };
+      }
+    }
+    keptRows.push(row);
+  });
+  return keptRows;
+}
+
+function thermalCustomNumericColumnIndexes(columns) {
+  const indexes = [];
+  (columns || []).forEach((column, index) => {
+    const label = String(column || "").toLowerCase();
+    if ((label.includes("total") && (label.includes("kw") || label.includes("load") || label.includes("cap"))) ||
+      label.includes("sensible") ||
+      label.includes("sens") ||
+      label.includes("flow")) {
+      indexes.push(index);
+    }
+  });
+  return indexes;
+}
+
+function thermalNumericValue(value) {
+  const cleaned = safeExtract(value).replace(/,/g, "").trim();
+  return /^-?\d+(?:\.\d+)?$/.test(cleaned) ? Number(cleaned) : NaN;
+}
+
+function isThermalNumber(value) {
+  return Number.isFinite(thermalNumericValue(value));
+}
+
+function sameThermalNumber(a, b) {
+  const first = thermalNumericValue(a);
+  const second = thermalNumericValue(b);
+  return Number.isFinite(first) && Number.isFinite(second) && Math.abs(first - second) < 0.005;
+}
+
+function sameThermalLocation(a, b) {
+  const first = thermalLocationText(a);
+  const second = thermalLocationText(b);
+  if (!first || !second) return false;
+  return first === second;
+}
+
+function thermalLocationText(value) {
+  return safeExtract(value)
+    .toUpperCase()
+    .replace(/\bAND\b/g, "")
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
+function thermalReviewReason(first, second) {
+  if (!isThermalNumber(first) && !isThermalNumber(second)) return "Both extraction passes unclear";
+  if (!isThermalNumber(first)) return "First pass unclear";
+  if (!isThermalNumber(second)) return "Second pass unclear";
+  return "Independent verification mismatch";
 }
 
 function thermalStructurePrompt(options) {
@@ -2605,12 +2919,6 @@ Return JSON only.`;
 }
 
 function thermalPrompt(options) {
-  const structure = options.detectedStructure || {};
-  const structureNote = `
-Detected structure from first pass:
-- Expected data row count: ${Number(structure.rowCount || 0) || "unknown"}
-- Visible columns: ${(structure.columns || []).join(", ") || "unknown"}
-- Notes: ${structure.notes || "-"}`;
   if (options.customExtraction) {
     return `
 You are an accurate table extraction assistant for scanned PDFs and screenshots.
@@ -2618,14 +2926,13 @@ You are an accurate table extraction assistant for scanned PDFs and screenshots.
 The user wants a custom table extraction, not the regular VRV thermal export template.
 User request:
 ${options.customInstruction || "Extract the requested table and columns."}
-${structureNote}
 
 Rules:
 - Extract only the table(s), columns, and rows requested by the user.
 - If the user asks for specific columns, return only those columns in customColumns, in the requested order.
 - If the user asks for a particular table but not exact columns, return the visible table columns.
-- Extract column by column, not row by row, then assemble rows by the same row order.
-- Keep the final row count aligned with the detected table row count when it is visible.
+- If extracting thermal load columns such as Units Reference No., Location, Total kW, Sensible kW, and Flow Rate, include only rows where Total kW, Sensible kW, and Flow Rate are all visible.
+- Ignore section/header rows and rows where Total kW, Sensible kW, or Flow Rate is blank.
 - Preserve row order exactly.
 - Transcribe values exactly as visible.
 - Do not calculate, infer, auto-correct, or guess.
@@ -2633,6 +2940,8 @@ Rules:
 - Preserve values as strings exactly as shown; do not round, correct, merge, or deduplicate.
 - If OCR confidence is uncertain, leave that cell as an empty string and list it in unclearFields.
 - Never guess, infer, or hallucinate unclear values.
+- Do not use values from Area, No. of People, Outdoor Air, Occupant Density, or DCV columns as Total/Sensible/Flow values.
+- If Sensible kW is greater than Total kW, keep the visible values and mark that cell for review; do not blank or discard the row only for that reason.
 - Leave the regular rows array empty for custom extraction.
 - Set capacitySources to [], selectedCapacitySource to "", and familyModel to "".
 - Return JSON only.`;
@@ -2640,14 +2949,14 @@ Rules:
   return `
 You are an HVAC Schedule Extractor specialized in scanned Thermal Load Sheets.
 Priority is extraction accuracy, especially for numeric values.
-${structureNote}
 
 Follow this workflow:
-- Use the detected table structure first; then extract each required column independently.
 - Detect multi-row, merged, and hierarchical headers.
 - Use lowest-level child headers as extractable columns.
 - Preserve all rows exactly; never merge, deduplicate, or remove rows.
-- Keep extracted row count aligned with the detected row count when visible.
+- Read every visible row continuously from top to bottom. Do not stop after the first few rows.
+- Include only rows where Unit Reference No., Total kW, Sensible kW, and Flow Rate are all visible.
+- Ignore rows where Total kW, Sensible kW, or Flow Rate is blank.
 - Include all units.
 - Detect capacity sources containing both Total kW and Sensible kW.
 - Capacity source selected by user: ${options.capacitySource || "auto if only one exists"}.
@@ -2681,27 +2990,38 @@ Numeric accuracy rules:
 - Do not infer missing digits.
 - If OCR confidence is uncertain, leave that cell as an empty string and list it in unclearFields.
 - Never guess, infer, or hallucinate unclear values.
+- Do not use values from Area, No. of People, Outdoor Air, Occupant Density, or DCV columns as load values.
+- If Sensible kW is greater than Total kW, keep the visible values and mark that cell for review; do not blank or discard the row only for that reason.
+- Flow Rate must come from the Flow Rate L/s column only.
 
 If screenshots are uploaded with the PDF, use screenshots to clarify unreadable values.
 Return JSON only.`;
 }
 
-function thermalNumericVerificationPrompt(options) {
-  const structure = options.detectedStructure || {};
+function thermalNumericVerificationPrompt(options, rows = []) {
+  const rowAnchors = rows
+    .map((row, index) => `${index + 1}. Unit Reference: "${safeExtract(row.Indoor)}"; Location: "${safeExtract(row.Room)}"`)
+    .join("\n");
   return `
 You are doing a second independent verification pass for a scanned HVAC Thermal Load Sheet.
 
 Important:
 - Do not use or infer from any previous extraction.
 - Read directly from the uploaded PDF/image again.
-- Verify numeric values only.
+- Verify Location and numeric values only after matching the same row identity.
+- Use the first-pass row list below as row anchors. Match by Unit Reference No. first, then Location.
+- If you cannot confidently find the same Unit Reference No. row, return empty numeric values for that row.
+- Do not read a nearby row or nearby column if the row identity is uncertain.
 - Use OCR text and visual inspection together. If they disagree or a digit is unclear, return an empty string.
 
 Selected capacity source: ${options.capacitySource || "auto if only one exists"}.
-Expected data row count from structure pass: ${Number(structure.rowCount || 0) || "unknown"}.
 
-For each visible schedule row, return:
+First-pass row anchors to verify:
+${rowAnchors || "- No rows"}
+
+For each row anchor above, return one row in the same order:
 - indoor = Unit Reference No. exactly as visible.
+- room = Location exactly as visible.
 - totCoolCap = selected source Total kW exactly as visible.
 - sensCoolCap = selected source Sensible kW exactly as visible.
 - airFlowRate = Air Flow Rate exactly as visible.
@@ -2712,14 +3032,44 @@ Rules:
 - Do not auto-correct.
 - Read decimal values digit by digit.
 - Preserve exact decimal places. Return "1.0" as "1.0", not "1" or "1.1".
-- Preserve row order exactly.
-- If any numeric cell is not clearly readable, return "" for that cell and list it in unclearFields.
+- Preserve the row anchor order exactly.
+- If Location or any numeric cell is not clearly readable, return "" for that cell and list it in unclearFields.
+
+Return JSON only.`;
+}
+
+function thermalTargetedRetryPrompt(options, retryCells) {
+  const lines = retryCells
+    .map(cell => `- Visible table row ${Number(cell.row) + 1} (${cell.rowLabel}), column "${cell.column}"`)
+    .join("\n");
+  return `
+You are doing a targeted retry for unclear thermal sheet cells.
+
+Read the uploaded image/PDF again and inspect only these cells:
+${lines}
+
+Rules:
+- Use the target row number/order from the visible table.
+- Verify the same row before reading the requested numeric column.
+- Use OCR text and visual inspection together. If they disagree or a digit is unclear, return an empty string.
+- Return the exact visible value with the same decimal places.
+- If Location was requested, return the exact visible Location text for the same row.
+- Do not calculate or infer values from other columns.
+- If the target cell is truly unreadable or blank, return "" and list it in unclearFields.
+
+Selected capacity source: ${options.capacitySource || "auto if only one exists"}.
+
+Return rows with:
+- indoor = the visible Unit Reference No. for that row, if present.
+- room = the visible Location for that row, if present.
+- totCoolCap only when Total kW was requested.
+- sensCoolCap only when Sensible kW was requested.
+- airFlowRate only when Air Flow Rate was requested.
 
 Return JSON only.`;
 }
 
 function thermalCustomVerificationPrompt(options, customColumns) {
-  const structure = options.detectedStructure || {};
   return `
 You are doing a second independent verification pass for a scanned table extraction.
 
@@ -2728,16 +3078,15 @@ Important:
 - Read directly from the uploaded PDF/image again.
 - Verify only these requested columns, in this exact order:
 ${customColumns.map(column => `- ${column}`).join("\n")}
-- Expected data row count from structure pass: ${Number(structure.rowCount || 0) || "unknown"}.
 
 Rules:
-- Extract column by column, then assemble rows by the same row order.
 - Transcribe values exactly as visible.
 - Do not calculate.
 - Do not guess.
 - Do not auto-correct.
 - Preserve exact decimal places and trailing zeros.
-- If any cell is not clearly readable, return "" for that cell and list it in unclearFields.
+- If OCR text is weak but the image is clear, trust the image.
+- If any cell is not visible/readable, return "" for that cell and list it in unclearFields.
 
 Return JSON only.`;
 }
@@ -2832,11 +3181,12 @@ function thermalNumericVerificationJsonSchema() {
           additionalProperties: false,
           properties: {
             indoor: { type: "string" },
+            room: { type: "string" },
             totCoolCap: { type: "string" },
             sensCoolCap: { type: "string" },
             airFlowRate: { type: "string" }
           },
-          required: ["indoor", "totCoolCap", "sensCoolCap", "airFlowRate"]
+          required: ["indoor", "room", "totCoolCap", "sensCoolCap", "airFlowRate"]
         }
       },
       unclearFields: { type: "array", items: { type: "string" } },
