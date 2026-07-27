@@ -39,6 +39,7 @@ let areaCalculationUploadLoading = false;
 let areaCalculationLoadedAt = 0;
 let areaCalculationLoadPromise = null;
 let areaCalculationSaveTimer = null;
+let areaCalculationDraggedRowIndex = null;
 let salesDeskScreen = "dashboard";
 let salesQuotationMode = "list";
 let salesProjectMode = "list";
@@ -338,6 +339,11 @@ function bindShell() {
   $("#purchaseOrdersRoot").addEventListener("input", handlePurchaseInput);
   $("#areaCalculationRoot").addEventListener("click", handleAreaCalculationClick);
   $("#areaCalculationRoot").addEventListener("input", handleAreaCalculationInput);
+  $("#areaCalculationRoot").addEventListener("dragstart", handleAreaCalculationDragStart);
+  $("#areaCalculationRoot").addEventListener("dragover", handleAreaCalculationDragOver);
+  $("#areaCalculationRoot").addEventListener("dragleave", handleAreaCalculationDragLeave);
+  $("#areaCalculationRoot").addEventListener("drop", handleAreaCalculationDrop);
+  $("#areaCalculationRoot").addEventListener("dragend", clearAreaCalculationDragState);
   $("#areaDrawingInput").addEventListener("change", uploadAreaDrawing);
   $("#salesDeskRoot").addEventListener("click", handleSalesClick);
   $("#salesDeskRoot").addEventListener("input", handleSalesInput);
@@ -5771,9 +5777,13 @@ function renderViewActions() {
   if (activeView === "areaCalculation") {
     actions.classList.remove("hidden");
     actions.innerHTML = `
+      <button class="ghost-button area-top-button" id="headerAreaNewFileBtn">${poIcon("plus")}<span>New File</span></button>
       <button class="ghost-button area-top-button" id="headerAreaFilesBtn">${poIcon("folder")}<span>All Files</span></button>
       <button class="primary-button area-top-button" id="headerAreaUploadBtn">${poIcon("upload")}<span>${areaCalculationUploadLoading ? "Uploading..." : "Upload Drawing"}</span></button>
     `;
+    $("#headerAreaNewFileBtn").addEventListener("click", () => {
+      createNewAreaCalculationFile();
+    });
     $("#headerAreaFilesBtn").addEventListener("click", () => {
       areaCalculationMode = "files";
       renderAreaCalculation();
@@ -5850,13 +5860,12 @@ const areaCalculationColumns = [
   ["w2", "W2 (mm)"],
   ["h2", "H2 (mm)"],
   ["qty", "Qty"],
-  ["drawingLengthAngle", "Drawing Length / Angle"],
+  ["drawingLengthAngle", "Length / Angle"],
   ["offset", "Offset (mm)"],
-  ["calculatedLength", "Calculated Length (mm)"],
+  ["calculatedLength", "Calc. Length (mm)"],
   ["areaM2", "Area (m²)"],
   ["areaFt2", "Area (ft²)"],
-  ["status", "Status"],
-  ["action", "Action"]
+  ["status", "Status"]
 ];
 
 function renderAreaCalculation() {
@@ -5882,6 +5891,7 @@ function ensureActiveAreaCalculation() {
     rows: [],
     totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
     message: "",
+    isDraft: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -5889,6 +5899,26 @@ function ensureActiveAreaCalculation() {
   areaCalculationState.calculations.unshift(calc);
   areaCalculationActiveId = calc.id;
   return calc;
+}
+
+function createNewAreaCalculationFile() {
+  areaCalculationState = areaCalculationState || { calculations: [], uploads: [] };
+  const calc = {
+    id: `area-${Date.now()}`,
+    title: "",
+    uploadIds: [],
+    rows: [],
+    totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
+    message: "",
+    showTagList: false,
+    isDraft: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  areaCalculationState.calculations.unshift(calc);
+  areaCalculationActiveId = calc.id;
+  areaCalculationMode = "detail";
+  renderAreaCalculation();
 }
 
 function areaCalculationDetailHtml() {
@@ -5907,6 +5937,10 @@ function areaCalculationToolbarHtml(calc) {
       <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}"></label>
       <div class="area-control-actions">
         <button class="ghost-button area-toolbar-button" data-area-add-row>${poIcon("plus")}<span>Add Row</span></button>
+        <div class="area-tag-menu">
+          <button class="ghost-button area-toolbar-button" data-area-tag-list>${poIcon("list")}<span>TagList</span>${poIcon("chevronDown")}</button>
+          ${areaCalculationTagListHtml(calc)}
+        </div>
         <button class="ghost-button area-toolbar-button" data-area-export>${poIcon("excel")}<span>Excel Export</span></button>
       </div>
     </div>
@@ -5924,7 +5958,7 @@ function emptyAreaCalculationDraft() {
 }
 
 function areaCalculationFilesHtml() {
-  const calculations = areaCalculationState?.calculations || [];
+  const calculations = (areaCalculationState?.calculations || []).filter(calc => !calc.isDraft && (calc.uploadIds || []).length);
   return `
     <div class="area-page">
       <div class="area-files-heading">
@@ -5953,13 +5987,19 @@ function areaCalculationTableHtml(calc) {
   const rows = calc.rows || [];
   const totals = areaRecalculateCalculation(calc).totals;
   return `
-    <div class="area-table-wrap">
-      <table class="area-table">
-        <thead><tr>${areaCalculationColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead>
-        <tbody>
-          ${rows.map((row, index) => areaCalculationRowHtml(row, index)).join("") || areaCalculationBlankRowsHtml()}
-        </tbody>
-      </table>
+    <div class="area-table-shell">
+      <div class="area-table-wrap">
+        <table class="area-table">
+          <thead><tr>${areaCalculationColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead>
+          <tbody>
+            ${rows.map((row, index) => areaCalculationRowHtml(row, index)).join("") || areaCalculationBlankRowsHtml()}
+          </tbody>
+        </table>
+      </div>
+      <div class="area-row-delete-rail" aria-label="Delete rows">
+        <span class="area-delete-rail-head"></span>
+        ${rows.map((row, index) => `<button class="area-row-delete-button" data-area-delete-row="${index}" title="Delete row ${escapeHtml(row.item || index + 1)}">x</button>`).join("")}
+      </div>
     </div>
     <div class="area-summary-bar">
       <span>Total Items: <strong>${totals.totalItems}</strong></span>
@@ -5969,6 +6009,26 @@ function areaCalculationTableHtml(calc) {
       <strong>${Number(totals.totalFt2 || 0).toFixed(2)} ft²</strong>
     </div>
     ${calc.message ? `<p class="area-message">${escapeHtml(calc.message)}</p>` : ""}
+  `;
+}
+
+function areaCalculationTagListHtml(calc) {
+  if (!calc?.showTagList) return "";
+  const uploads = (calc.uploadIds || [])
+    .map((uploadId, index) => ({ upload: (areaCalculationState?.uploads || []).find(item => item.id === uploadId), index }))
+    .filter(item => item.upload);
+  return `
+    <div class="area-tag-list">
+      <div class="area-tag-list-title">Uploaded scan files</div>
+      ${uploads.length ? uploads.map(({ upload, index }) => `
+        <div class="area-tag-file">
+          <span class="area-tag-pdf">${poIcon("document")}</span>
+          <strong>${escapeHtml(upload.originalName || `TagList-${String(index + 1).padStart(2, "0")}.pdf`)}</strong>
+          <a href="/api/area-calculations/uploads/${encodeURIComponent(upload.id)}" target="_blank" rel="noopener">${poIcon("view")}<span>View</span></a>
+          <a href="/api/area-calculations/uploads/${encodeURIComponent(upload.id)}" download="${escapeHtml(upload.originalName || "drawing")}" rel="noopener">${poIcon("download")}<span>Download</span></a>
+        </div>
+      `).join("") : `<p>No uploaded drawings yet.</p>`}
+    </div>
   `;
 }
 
@@ -5985,7 +6045,7 @@ function areaCalculationRowHtml(row, index) {
   const reviewClass = status === "Review" ? "review" : status === "Missing Dim." ? "missing" : "";
   const input = (key, type = "text") => `<input ${type === "number" ? `type="number" step="any"` : `type="text"`} data-area-row="${index}" data-area-field="${key}" value="${escapeHtml(row[key] ?? "")}">`;
   return `
-    <tr class="${reviewClass}">
+    <tr class="${reviewClass}" draggable="true" data-area-drag-row="${index}">
       <td>${input("item")}</td>
       <td>${input("section")}</td>
       <td>${input("type")}</td>
@@ -5999,9 +6059,8 @@ function areaCalculationRowHtml(row, index) {
       <td>${input("offset", "number")}</td>
       <td>${input("calculatedLength", "number")}</td>
       <td><span data-area-display="${index}:areaM2">${Number(row.areaM2 || 0).toFixed(4)}</span></td>
-      <td><span data-area-display="${index}:areaFt2">${Number(row.areaFt2 || 0).toFixed(2)}</span></td>
+      <td><span data-area-display="${index}:areaFt2">${areaFt2Display(row)}</span></td>
       <td><span data-area-display="${index}:status">${areaStatusPill(status)}</span></td>
-      <td><button class="area-action-button" title="${escapeHtml(row.remarks || "Edit row")}" data-area-focus-row="${index}">${poIcon("edit")}</button></td>
     </tr>
   `;
 }
@@ -6010,6 +6069,11 @@ function areaStatusPill(status) {
   const key = String(status || "Clear").toLowerCase();
   const cls = key.includes("missing") ? "missing" : key.includes("review") ? "review" : "clear";
   return `<span class="area-status ${cls}">${escapeHtml(status || "Clear")}</span>`;
+}
+
+function areaFt2Display(row) {
+  const value = Number(row?.areaFt2 || 0);
+  return String(row?.type || "").toUpperCase() === "END" ? value.toFixed(6) : value.toFixed(2);
 }
 
 function renderPurchaseOrders() {
@@ -6264,11 +6328,14 @@ function poIcon(name) {
     clipboard: `<svg viewBox="0 0 24 24"><path d="M9 4h6l1 2h3v15H5V6h3z"/><path d="M9 4h6v4H9z"/><path d="M9 13h6M9 17h4"/></svg>`,
     download: `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>`,
     paperclip: `<svg viewBox="0 0 24 24"><path d="M21 8.5 10.5 19a5 5 0 0 1-7-7L14 1.5a3.5 3.5 0 0 1 5 5L8.5 17a2 2 0 0 1-3-3L16 3.5"/></svg>`,
+    list: `<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
+    chevronDown: `<svg class="area-chevron-icon" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>`,
     plus: `<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>`,
     trash: `<svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 14h10l1-14"/><path d="M9 7V4h6v3"/></svg>`,
     folder: `<svg viewBox="0 0 24 24"><path d="M3 6h7l2 2h9v11H3z"/><path d="M3 10h18"/></svg>`,
     upload: `<svg viewBox="0 0 24 24"><path d="M12 17V5"/><path d="M7 10l5-5 5 5"/><path d="M5 19h14"/></svg>`,
     excel: `<svg viewBox="0 0 24 24"><path d="M5 4h10l4 4v12H5z"/><path d="M15 4v5h5"/><path d="m8 10 5 6M13 10l-5 6"/></svg>`,
+    view: `<svg viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
     edit: `<svg viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/><path d="m14 6 4 4"/></svg>`
   };
   return icons[name] || "";
@@ -7837,15 +7904,43 @@ function areaValue(value) {
 }
 
 function areaDrawingLength(value) {
-  const text = String(value || "");
+  const text = String(value || "").replace(/,/g, " ");
+  if (areaRadiusOnlyText(text)) return 0;
   const explicit = text.match(/(?:L|LEN|LENGTH)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
   if (explicit) return Number(explicit[1]) || 0;
-  const plain = text.match(/\b(\d{2,5})(?:\.\d+)?\b/);
-  return plain ? Number(plain[1]) || 0 : 0;
+  const suffix = text.match(/\b(\d+(?:\.\d+)?)\s*(?:L|LEN|LENGTH)\b/i);
+  if (suffix) return Number(suffix[1]) || 0;
+  const metric = text.match(/\b(\d+(?:\.\d+)?)\s*(?:MM|MTR|M)\b/i);
+  if (metric) {
+    const amount = Number(metric[1]) || 0;
+    return /(?:MTR|M)\b/i.test(metric[0]) && !/MM\b/i.test(metric[0]) ? amount * 1000 : amount;
+  }
+  const plain = text.match(/(^|[^\d.])(\d{2,5})(?:\.\d+)?(?=$|[^\d.])/);
+  return plain ? Number(plain[2]) || 0 : 0;
+}
+
+function areaRadiusOnlyText(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (/\bR\s*=?\s*\d+(?:\.\d+)?\b/i.test(text)) return !/\b(?:L|LEN|LENGTH|MM|MTR)\b/i.test(text);
+  if (/\b\d+(?:\.\d+)?\s*R\b/i.test(text)) return !/\b(?:L|LEN|LENGTH|MM|MTR)\b/i.test(text);
+  return false;
+}
+
+function areaNormalizeType(value) {
+  const text = String(value || "OTHER").trim().toUpperCase();
+  if (/^SHOE\s*NEC?K?|^SHOENEC|^SHOE/i.test(text)) return "SHOENECK";
+  if (/^RED|REDUC/i.test(text)) return "RED";
+  if (/^STR|STRAIGHT/i.test(text)) return "STR";
+  if (/^ELB|ELBOW/i.test(text)) return "ELB";
+  if (/^END|END\s*CAP/i.test(text)) return "END";
+  if (/^OFF|OFFSET/i.test(text)) return "OFF";
+  if (/^Y[\s-]*PIECE|^Y[\s-]*BRANCH/i.test(text)) return "Y Piece";
+  return text || "OTHER";
 }
 
 function areaNormalizeRow(row = {}, index = 0) {
-  const type = String(row.type || "OTHER").trim().toUpperCase();
+  const type = areaNormalizeType(row.type || "OTHER");
   const drawingLengthAngle = String(row.drawingLengthAngle || "").trim();
   const next = {
     id: row.id || `area-row-${Date.now()}-${index}`,
@@ -7864,38 +7959,56 @@ function areaNormalizeRow(row = {}, index = 0) {
     areaM2: areaValue(row.areaM2),
     areaFt2: areaValue(row.areaFt2),
     status: String(row.status || ""),
-    remarks: String(row.remarks || "")
+    remarks: String(row.remarks || ""),
+    calculatedLengthManual: Boolean(row.calculatedLengthManual)
   };
-  if (["STR", "ELB", "END", "BEND"].includes(next.type)) {
+  if (["STR", "ELB", "END", "BEND", "SHOENECK", "SHOE NECK", "OFF", "OFFSET"].includes(next.type)) {
     if (!next.w2) next.w2 = next.w1;
     if (!next.h2) next.h2 = next.h1;
   }
+  if (next.type === "SHOENECK" && next.w1 && next.w2 === next.w1) {
+    next.w2 = next.w1 + 100;
+  }
   const missingDims = !next.w1 || !next.h1 || !next.w2 || !next.h2;
   const isEnd = next.type === "END" || /end\s*cap/i.test(drawingLengthAngle);
+  const isYPiece = /^Y[\s-]*PIECE$/i.test(next.type);
   const isElbow = next.type === "ELB" || next.type === "BEND" || /elb|elbow|90\s*[°deg]|45\s*[°deg]/i.test(drawingLengthAngle);
   const isTwo45 = /45\s*[°deg].*(x|×|\*)\s*2|2\s*(nos|pcs)?.*45\s*[°deg]/i.test(drawingLengthAngle);
   const is45 = /45\s*[°deg]/i.test(drawingLengthAngle);
   const is90 = /90\s*[°deg]/i.test(drawingLengthAngle);
+  const isRadiusOnly = areaRadiusOnlyText(drawingLengthAngle);
   const drawingLength = areaDrawingLength(drawingLengthAngle);
   if (isEnd) {
     next.offset = 20;
-    next.calculatedLength = 70;
-  } else if (isElbow && (is90 || isTwo45 || !drawingLength)) {
-    next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
+    next.drawingLengthAngle = drawingLength ? next.drawingLengthAngle : "50L";
+    if (!next.calculatedLengthManual) next.calculatedLength = 70;
+  } else if (isYPiece && (isRadiusOnly || !drawingLength)) {
+    if (!next.calculatedLengthManual) next.calculatedLength = 1500;
+  } else if (isElbow && (is90 || isTwo45 || isRadiusOnly || !drawingLength)) {
+    if (!next.calculatedLengthManual) next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
   } else if (drawingLength) {
-    next.calculatedLength = drawingLength + next.offset;
+    if (!next.calculatedLengthManual) next.calculatedLength = drawingLength + next.offset;
   }
   if (missingDims || !next.calculatedLength) {
     next.areaM2 = 0;
     next.areaFt2 = 0;
     next.status = missingDims ? "Missing Dim." : "Review";
   } else {
-    const perimeter = (next.w1 + 20) + (next.h1 + 20) + (next.w2 + 20) + (next.h2 + 20);
-    next.areaM2 = Number(((perimeter * next.calculatedLength * next.qty) / 1000000).toFixed(4));
-    next.areaFt2 = Number((next.areaM2 * 10.764).toFixed(2));
+    const computed = areaFabricationArea(next);
+    next.areaM2 = computed.areaM2;
+    next.areaFt2 = computed.areaFt2;
     if (!next.status || !["Review", "Missing Dim."].includes(next.status)) next.status = next.remarks ? "Review" : "Clear";
   }
   return next;
+}
+
+function areaFabricationArea(row) {
+  const perimeter = (areaValue(row.w1) + 20) + (areaValue(row.h1) + 20) + (areaValue(row.w2) + 20) + (areaValue(row.h2) + 20);
+  const areaM2 = Number(((perimeter * areaValue(row.calculatedLength) * (areaValue(row.qty) || 1)) / 1000000).toFixed(4));
+  return {
+    areaM2,
+    areaFt2: Number((areaM2 * 10.764).toFixed(6))
+  };
 }
 
 function areaRecalculateCalculation(calc) {
@@ -7918,6 +8031,7 @@ function scheduleAreaCalculationSave() {
 async function saveActiveAreaCalculation() {
   const calc = activeAreaCalculation();
   if (!calc) return;
+  if (calc.isDraft || !(calc.uploadIds || []).length) return;
   areaRecalculateCalculation(calc);
   areaCalculationState = await api("/api/area-calculations", { method: "POST", body: JSON.stringify(calc) });
   areaCalculationLoadedAt = Date.now();
@@ -7942,11 +8056,9 @@ function handleAreaCalculationClick(event) {
   }
   if (target.dataset.areaDelete) return deleteAreaCalculation(target.dataset.areaDelete);
   if (target.dataset.areaAddRow !== undefined) return addAreaCalculationRow();
+  if (target.dataset.areaTagList !== undefined) return toggleAreaCalculationTagList();
+  if (target.dataset.areaDeleteRow !== undefined) return deleteAreaCalculationRow(Number(target.dataset.areaDeleteRow));
   if (target.dataset.areaExport !== undefined) return exportAreaCalculationExcel();
-  if (target.dataset.areaFocusRow !== undefined) {
-    const input = document.querySelector(`[data-area-row="${target.dataset.areaFocusRow}"][data-area-field="item"]`);
-    input?.focus();
-  }
 }
 
 function handleAreaCalculationInput(event) {
@@ -7962,6 +8074,11 @@ function handleAreaCalculationInput(event) {
   const row = calc.rows[Number(rowIndex)];
   if (!row) return;
   row[field] = event.target.value;
+  if (field === "calculatedLength") {
+    row.calculatedLengthManual = true;
+  } else if (["type", "drawingLengthAngle", "offset"].includes(field)) {
+    row.calculatedLengthManual = false;
+  }
   const next = areaNormalizeRow(row, Number(rowIndex));
   calc.rows[Number(rowIndex)] = next;
   areaRecalculateCalculation(calc);
@@ -7969,12 +8086,81 @@ function handleAreaCalculationInput(event) {
   scheduleAreaCalculationSave();
 }
 
+function handleAreaCalculationDragStart(event) {
+  const row = event.target.closest("[data-area-drag-row]");
+  if (!row || !$("#areaCalculationRoot").contains(row)) return;
+  if (event.target.closest("input, button, a, textarea, select")) {
+    event.preventDefault();
+    return;
+  }
+  areaCalculationDraggedRowIndex = Number(row.dataset.areaDragRow);
+  row.classList.add("area-row-dragging");
+  event.dataTransfer.effectAllowed = "move";
+  event.dataTransfer.setData("text/plain", String(areaCalculationDraggedRowIndex));
+}
+
+function handleAreaCalculationDragOver(event) {
+  const row = event.target.closest("[data-area-drag-row]");
+  if (areaCalculationDraggedRowIndex === null || !row) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  const rect = row.getBoundingClientRect();
+  const isAfter = event.clientY > rect.top + rect.height / 2;
+  clearAreaCalculationDropMarkers(row);
+  row.classList.toggle("area-row-drop-before", !isAfter);
+  row.classList.toggle("area-row-drop-after", isAfter);
+}
+
+function handleAreaCalculationDragLeave(event) {
+  const row = event.target.closest("[data-area-drag-row]");
+  if (!row || row.contains(event.relatedTarget)) return;
+  row.classList.remove("area-row-drop-before", "area-row-drop-after");
+}
+
+function handleAreaCalculationDrop(event) {
+  const row = event.target.closest("[data-area-drag-row]");
+  if (areaCalculationDraggedRowIndex === null || !row) return;
+  event.preventDefault();
+  const calc = activeAreaCalculation();
+  if (!calc?.rows?.length) return clearAreaCalculationDragState();
+  const fromIndex = areaCalculationDraggedRowIndex;
+  const targetIndex = Number(row.dataset.areaDragRow);
+  const rect = row.getBoundingClientRect();
+  let insertIndex = targetIndex + (event.clientY > rect.top + rect.height / 2 ? 1 : 0);
+  if (fromIndex < insertIndex) insertIndex -= 1;
+  if (fromIndex !== insertIndex && fromIndex >= 0 && fromIndex < calc.rows.length) {
+    const [moved] = calc.rows.splice(fromIndex, 1);
+    calc.rows.splice(Math.max(0, Math.min(insertIndex, calc.rows.length)), 0, moved);
+    areaRecalculateCalculation(calc);
+    renderAreaCalculation();
+    scheduleAreaCalculationSave();
+  }
+  clearAreaCalculationDragState();
+}
+
+function clearAreaCalculationDropMarkers(except = null) {
+  document.querySelectorAll(".area-row-drop-before, .area-row-drop-after").forEach(row => {
+    if (row !== except) row.classList.remove("area-row-drop-before", "area-row-drop-after");
+  });
+}
+
+function clearAreaCalculationDragState() {
+  areaCalculationDraggedRowIndex = null;
+  document.querySelectorAll(".area-row-dragging, .area-row-drop-before, .area-row-drop-after").forEach(row => {
+    row.classList.remove("area-row-dragging", "area-row-drop-before", "area-row-drop-after");
+  });
+}
+
 function refreshAreaRowDisplays(index, row, totals) {
+  ["type", "w2", "h2", "offset", "calculatedLength"].forEach(field => {
+    const input = document.querySelector(`[data-area-row="${index}"][data-area-field="${field}"]`);
+    if (input && document.activeElement !== input) input.value = row[field] ?? "";
+  });
   const m2 = document.querySelector(`[data-area-display="${index}:areaM2"]`);
   const ft2 = document.querySelector(`[data-area-display="${index}:areaFt2"]`);
   const status = document.querySelector(`[data-area-display="${index}:status"]`);
   if (m2) m2.textContent = Number(row.areaM2 || 0).toFixed(4);
-  if (ft2) ft2.textContent = Number(row.areaFt2 || 0).toFixed(2);
+  if (ft2) ft2.textContent = areaFt2Display(row);
   if (status) status.innerHTML = areaStatusPill(row.status);
   const summary = document.querySelector(".area-summary-bar");
   if (summary) {
@@ -7992,8 +8178,9 @@ async function uploadAreaDrawing() {
   try {
     const form = new FormData();
     files.forEach(file => form.append("file", file));
-    const active = activeAreaCalculation();
+    const active = ensureActiveAreaCalculation();
     form.append("title", active?.title || files[0].name.replace(/\.[^.]+$/, ""));
+    if (!active.isDraft) form.append("calculationId", active.id || "");
     const response = await api("/api/area-calculations/upload", { method: "POST", body: form });
     areaCalculationState = response;
     areaCalculationActiveId = response.activeCalculationId || response.calculations?.[0]?.id || "";
@@ -8010,9 +8197,43 @@ async function uploadAreaDrawing() {
   }
 }
 
+function toggleAreaCalculationTagList() {
+  const calc = ensureActiveAreaCalculation();
+  calc.showTagList = !calc.showTagList;
+  renderAreaCalculation();
+}
+
 function addAreaCalculationRow() {
   const calc = ensureActiveAreaCalculation();
-  calc.rows.push(areaNormalizeRow({ item: calc.rows.length + 1, type: "STR", qty: 1, offset: 20 }, calc.rows.length));
+  const rows = calc.rows || [];
+  const lastItemNumber = rows.reduce((max, row) => {
+    const value = Number(String(row.item || "").match(/\d+/)?.[0] || 0);
+    return Math.max(max, value);
+  }, 0);
+  calc.rows = rows;
+  calc.rows.push(areaNormalizeRow({
+    item: String(lastItemNumber + 1 || rows.length + 1),
+    section: rows.at(-1)?.section || "",
+    type: "",
+    connection: "",
+    qty: 1,
+    offset: 20,
+    status: "Review",
+    remarks: "Manual row"
+  }, rows.length));
+  areaRecalculateCalculation(calc);
+  renderAreaCalculation();
+  scheduleAreaCalculationSave();
+  requestAnimationFrame(() => {
+    const next = document.querySelector(`[data-area-row="${calc.rows.length - 1}"][data-area-field="section"]`);
+    next?.focus();
+  });
+}
+
+function deleteAreaCalculationRow(rowIndex) {
+  const calc = activeAreaCalculation();
+  if (!calc || !calc.rows?.[rowIndex]) return;
+  calc.rows.splice(rowIndex, 1);
   areaRecalculateCalculation(calc);
   renderAreaCalculation();
   scheduleAreaCalculationSave();
@@ -8041,13 +8262,12 @@ function exportAreaCalculationExcel() {
     "W2 (mm)": row.w2,
     "H2 (mm)": row.h2,
     "Qty": row.qty,
-    "Drawing Length / Angle": row.drawingLengthAngle,
+    "Length / Angle": row.drawingLengthAngle,
     "Offset (mm)": row.offset,
-    "Calculated Length (mm)": row.calculatedLength,
+    "Calc. Length (mm)": row.calculatedLength,
     "Area (m²)": Number(row.areaM2 || 0).toFixed(4),
-    "Area (ft²)": Number(row.areaFt2 || 0).toFixed(2),
-    "Status": row.status,
-    "Action": ""
+    "Area (ft²)": String(row.type || "").toUpperCase() === "END" ? Number(row.areaFt2 || 0).toFixed(6) : Number(row.areaFt2 || 0).toFixed(2),
+    "Status": row.status
   }));
   const blob = buildTableWorkbookBlob({
     title: calc.title || "Area Calculation",

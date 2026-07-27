@@ -493,15 +493,119 @@ function areaNumber(value) {
 }
 
 function areaDrawingLength(value) {
-  const text = String(value || "");
+  const text = String(value || "").replace(/,/g, " ");
+  if (areaRadiusOnlyText(text)) return 0;
   const explicit = text.match(/(?:L|LEN|LENGTH)\s*[:=]?\s*(\d+(?:\.\d+)?)/i);
   if (explicit) return Number(explicit[1]) || 0;
-  const plain = text.match(/\b(\d{2,5})(?:\.\d+)?\b/);
-  return plain ? Number(plain[1]) || 0 : 0;
+  const suffix = text.match(/\b(\d+(?:\.\d+)?)\s*(?:L|LEN|LENGTH)\b/i);
+  if (suffix) return Number(suffix[1]) || 0;
+  const metric = text.match(/\b(\d+(?:\.\d+)?)\s*(?:MM|MTR|M)\b/i);
+  if (metric) {
+    const amount = Number(metric[1]) || 0;
+    return /(?:MTR|M)\b/i.test(metric[0]) && !/MM\b/i.test(metric[0]) ? amount * 1000 : amount;
+  }
+  const plain = text.match(/(^|[^\d.])(\d{2,5})(?:\.\d+)?(?=$|[^\d.])/);
+  return plain ? Number(plain[2]) || 0 : 0;
+}
+
+function areaRadiusOnlyText(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  if (/\bR\s*=?\s*\d+(?:\.\d+)?\b/i.test(text)) return !/\b(?:L|LEN|LENGTH|MM|MTR)\b/i.test(text);
+  if (/\b\d+(?:\.\d+)?\s*R\b/i.test(text)) return !/\b(?:L|LEN|LENGTH|MM|MTR)\b/i.test(text);
+  return false;
+}
+
+function normalizeAreaType(value) {
+  const text = cleanCell(value || "OTHER").toUpperCase();
+  if (/^SHOE\s*NEC?K?|^SHOENEC|^SHOE/i.test(text)) return "SHOENECK";
+  if (/^RED|REDUC/i.test(text)) return "RED";
+  if (/^STR|STRAIGHT/i.test(text)) return "STR";
+  if (/^ELB|ELBOW/i.test(text)) return "ELB";
+  if (/^END|END\s*CAP/i.test(text)) return "END";
+  if (/^OFF|OFFSET/i.test(text)) return "OFF";
+  if (/^Y[\s-]*PIECE|^Y[\s-]*BRANCH/i.test(text)) return "Y Piece";
+  return text || "OTHER";
+}
+
+function areaEndcapMention(value) {
+  return /\bend\s*cap\b|\bendcap\b/i.test(cleanCell(value || ""));
+}
+
+function cleanAreaEndcapText(value) {
+  return cleanCell(value || "")
+    .replace(/\bend\s*cap\b|\bendcap\b/ig, "")
+    .replace(/^[\s,;/|-]+|[\s,;/|-]+$/g, "")
+    .replace(/\s*([,;/|])\s*/g, "$1 ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function areaEndcapItemLabel(value) {
+  const item = cleanCell(value || "");
+  return item ? `${item}-END` : "END";
+}
+
+function areaExpandEndcapRows(rows = []) {
+  const expanded = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") continue;
+    const type = normalizeAreaType(row.type || row.Type || "OTHER");
+    const textFields = [
+      row.connection,
+      row.Connection,
+      row.remarks,
+      row.Remarks,
+      row.drawingLengthAngle,
+      row["Drawing Length / Angle"]
+    ];
+    const hasEndcapNote = type !== "END" && textFields.some(areaEndcapMention);
+    if (!hasEndcapNote) {
+      expanded.push(row);
+      continue;
+    }
+
+    const rawConnection = row.connection ?? row.Connection ?? "";
+    const cleanConnection = cleanAreaEndcapText(rawConnection);
+    const cleanRemarks = cleanAreaEndcapText(row.remarks || row.Remarks || "");
+    const originalRow = {
+      ...row,
+      connection: cleanConnection || cleanCell(rawConnection),
+      Connection: cleanConnection || cleanCell(rawConnection),
+      remarks: cleanRemarks,
+      Remarks: cleanRemarks
+    };
+    expanded.push(originalRow);
+
+    const endItem = areaEndcapItemLabel(row.item || row.Item || row.no);
+    const hasMatchingEnd = rows.some((candidate) => {
+      const candidateType = normalizeAreaType(candidate?.type || candidate?.Type || "");
+      const candidateItem = cleanCell(candidate?.item || candidate?.Item || candidate?.no || "");
+      return candidateType === "END" && candidateItem === endItem;
+    });
+    if (!hasMatchingEnd) {
+      expanded.push({
+        item: endItem,
+        section: row.section || row.Section || "",
+        type: "END",
+        connection: cleanConnection || cleanCell(rawConnection),
+        w1: row.w1 ?? row.W1,
+        h1: row.h1 ?? row.H1,
+        w2: row.w2 ?? row.W2 ?? row.w1 ?? row.W1,
+        h2: row.h2 ?? row.H2 ?? row.h1 ?? row.H1,
+        qty: 1,
+        drawingLengthAngle: "50L",
+        offset: 20,
+        status: "Review",
+        remarks: "End cap split from scanned row"
+      });
+    }
+  }
+  return expanded;
 }
 
 function normalizeAreaRow(row = {}, index = 0) {
-  const type = cleanCell(row.type || row.Type || "OTHER").toUpperCase();
+  const type = normalizeAreaType(row.type || row.Type || "OTHER");
   const drawingLengthAngle = cleanCell(row.drawingLengthAngle || row["Drawing Length / Angle"] || row.drawingLength || row.length || "");
   let next = {
     id: cleanCell(row.id || "") || id(),
@@ -520,29 +624,38 @@ function normalizeAreaRow(row = {}, index = 0) {
     areaM2: areaNumber(row.areaM2 ?? row["Area m²"]),
     areaFt2: areaNumber(row.areaFt2 ?? row["Area ft²"]),
     status: cleanCell(row.status || row.Status || ""),
-    remarks: cleanCell(row.remarks || row.Remarks || "")
+    remarks: cleanCell(row.remarks || row.Remarks || ""),
+    calculatedLengthManual: Boolean(row.calculatedLengthManual)
   };
 
-  if (["STR", "ELB", "END", "BEND"].includes(next.type)) {
+  if (["STR", "ELB", "END", "BEND", "SHOENECK", "SHOE NECK", "OFF", "OFFSET"].includes(next.type)) {
     if (!next.w2) next.w2 = next.w1;
     if (!next.h2) next.h2 = next.h1;
+  }
+  if (next.type === "SHOENECK" && next.w1 && next.w2 === next.w1) {
+    next.w2 = next.w1 + 100;
   }
 
   const missingDims = !next.w1 || !next.h1 || !next.w2 || !next.h2;
   const isEnd = next.type === "END" || /end\s*cap/i.test(drawingLengthAngle);
+  const isYPiece = /^Y[\s-]*PIECE$/i.test(next.type);
   const isElbow = next.type === "ELB" || next.type === "BEND" || /elb|elbow|90\s*[°deg]|45\s*[°deg]/i.test(drawingLengthAngle);
   const isTwo45 = /45\s*[°deg].*(x|×|\*)\s*2|2\s*(nos|pcs)?.*45\s*[°deg]/i.test(drawingLengthAngle);
   const is45 = /45\s*[°deg]/i.test(drawingLengthAngle);
   const is90 = /90\s*[°deg]/i.test(drawingLengthAngle);
+  const isRadiusOnly = areaRadiusOnlyText(drawingLengthAngle);
   const drawingLength = areaDrawingLength(drawingLengthAngle);
 
   if (isEnd) {
     next.offset = 20;
-    next.calculatedLength = 70;
-  } else if (isElbow && (is90 || isTwo45 || !drawingLength)) {
-    next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
+    next.drawingLengthAngle = areaDrawingLength(next.drawingLengthAngle) ? next.drawingLengthAngle : "50L";
+    if (!next.calculatedLengthManual) next.calculatedLength = 70;
+  } else if (isYPiece && (isRadiusOnly || !drawingLength)) {
+    if (!next.calculatedLengthManual) next.calculatedLength = 1500;
+  } else if (isElbow && (is90 || isTwo45 || isRadiusOnly || !drawingLength)) {
+    if (!next.calculatedLengthManual) next.calculatedLength = is45 && !isTwo45 && !is90 ? 500 : 1000;
   } else {
-    next.calculatedLength = drawingLength ? drawingLength + next.offset : next.calculatedLength;
+    if (!next.calculatedLengthManual) next.calculatedLength = drawingLength ? drawingLength + next.offset : next.calculatedLength;
   }
 
   if (missingDims || !next.calculatedLength) {
@@ -550,12 +663,21 @@ function normalizeAreaRow(row = {}, index = 0) {
     next.areaFt2 = 0;
     next.status = missingDims ? "Missing Dim." : "Review";
   } else {
-    const perimeter = (next.w1 + 20) + (next.h1 + 20) + (next.w2 + 20) + (next.h2 + 20);
-    next.areaM2 = Number(((perimeter * next.calculatedLength * next.qty) / 1000000).toFixed(4));
-    next.areaFt2 = Number((next.areaM2 * 10.764).toFixed(2));
+    const computed = areaFabricationArea(next);
+    next.areaM2 = computed.areaM2;
+    next.areaFt2 = computed.areaFt2;
     if (!next.status || !["Review", "Missing Dim."].includes(next.status)) next.status = next.remarks ? "Review" : "Clear";
   }
   return next;
+}
+
+function areaFabricationArea(row) {
+  const perimeter = (areaNumber(row.w1) + 20) + (areaNumber(row.h1) + 20) + (areaNumber(row.w2) + 20) + (areaNumber(row.h2) + 20);
+  const areaM2 = Number(((perimeter * areaNumber(row.calculatedLength) * (areaNumber(row.qty) || 1)) / 1000000).toFixed(4));
+  return {
+    areaM2,
+    areaFt2: Number((areaM2 * 10.764).toFixed(6))
+  };
 }
 
 function areaTotals(rows = []) {
@@ -569,7 +691,8 @@ function areaTotals(rows = []) {
 }
 
 function normalizeAreaCalculation(input = {}) {
-  const rows = Array.isArray(input.rows) ? input.rows.map(normalizeAreaRow) : [];
+  const sourceRows = Array.isArray(input.rows) ? areaExpandEndcapRows(input.rows) : [];
+  const rows = sourceRows.map(normalizeAreaRow);
   const now = new Date().toISOString();
   return {
     id: cleanCell(input.id || "") || id(),
@@ -1868,7 +1991,9 @@ async function handleApi(req, res) {
     const fileParts = multipart.filter(part => part.filename);
     if (!fileParts.length) return send(res, 400, { error: "No drawing uploaded" });
     const titlePart = multipart.find(part => part.name === "title");
+    const calculationIdPart = multipart.find(part => part.name === "calculationId");
     const title = cleanCell(titlePart?.body.toString("utf8") || fileParts[0].filename.replace(/\.[^.]+$/, "")) || "Untitled Area Calculation";
+    const calculationId = cleanCell(calculationIdPart?.body.toString("utf8") || "");
     const uploadIds = [];
     const now = new Date().toISOString();
     for (const filePart of fileParts) {
@@ -1878,7 +2003,32 @@ async function handleApi(req, res) {
       store.uploads.unshift({ id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: now });
       uploadIds.push(uploadId);
     }
-    const extracted = await extractAreaCalculationWithOpenAI(fileParts).catch(error => ({ rows: [], message: error.message || "Area extraction failed." }));
+    let extracted;
+    try {
+      extracted = await extractAreaCalculationWithOpenAI(fileParts);
+    } catch (error) {
+      return send(res, 502, { error: error.message || "Area extraction failed. The drawing was not scanned." });
+    }
+    if (!Array.isArray(extracted.rows) || !extracted.rows.length) {
+      return send(res, 422, { error: extracted.message || "No duct area rows were detected from this upload." });
+    }
+    const existingIndex = calculationId ? store.calculations.findIndex(item => item.id === calculationId) : -1;
+    if (existingIndex >= 0) {
+      const existing = store.calculations[existingIndex];
+      const calculation = normalizeAreaCalculation({
+        ...existing,
+        title: existing.title || title,
+        uploadIds: [...(existing.uploadIds || []), ...uploadIds],
+        rows: [...(existing.rows || []), ...(extracted.rows || [])],
+        message: extracted.message || "Drawing scanned. Review highlighted rows before export.",
+        updatedAt: now
+      });
+      calculation.createdAt = existing.createdAt || calculation.createdAt;
+      calculation.updatedAt = now;
+      store.calculations[existingIndex] = calculation;
+      await writeAreaCalculations(store);
+      return send(res, 200, { ...store, activeCalculationId: calculation.id });
+    }
     const calculation = normalizeAreaCalculation({
       title,
       uploadIds,
@@ -3811,32 +3961,278 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
   if (!process.env.OPENAI_API_KEY) {
     return { rows: [], message: "OpenAI API key is missing. The drawing is saved; add rows manually or configure OPENAI_API_KEY." };
   }
+  const fileInputs = areaCalculationFileInputs(fileParts);
+  const layoutMap = await callOpenAIJson("duct_area_layout_map", areaCalculationLayoutSchema(), [
+    {
+      type: "input_text",
+      text: areaCalculationLayoutPrompt()
+    },
+    ...fileInputs
+  ]);
   const content = [{
     type: "input_text",
     text: `Read every uploaded HVAC duct drawing page/image and extract duct fabrication area calculation rows.
 Return JSON only. Preserve item order and section headings.
+Use this verified layout map from the first vision pass as your primary guide for item grouping and sketch association:
+${JSON.stringify(layoutMap)}
+
+Do not jump directly to OCR. For each final row, use the layout map's item cluster, sketch type, dimensions, and uncertainty notes before deciding the row values.
+Important: read the Section and Connection columns directly from the uploaded drawing in this final pass, the same way as the older one-pass extractor. Use the layout map only as a hint for where to look. If the layout map conflicts with the visible section marker or visible connection label, trust the visible drawing for Section and Connection.
 Supported types: STR, RED, ELB, SHOENECK, END, Y-PIECE, PLENUM, OFF, TEE, BEND, OTHER.
 Columns to extract per row: item, section, type, connection, w1, h1, w2, h2, qty, drawingLengthAngle, offset, status, remarks.
 Use millimetres for dimensions. For straight ducts repeat W1/H1 into W2/H2. Default qty is 1. Default offset is 20.
 Do not silently guess unclear dimensions. If unclear, leave numeric fields 0, set status to Review or Missing Dim., and explain in remarks.
-For attached end caps without separate item numbers, add a separate row immediately after the related item and label like "2-END".
-For elbows, keep original angle/radius text such as "90° R=100" in drawingLengthAngle.`
+For attached end caps, create an END row only when the drawing clearly makes it a duct item or the corrected table convention requires a separate END row. If "End cap" is written directly under/attached to a numbered straight duct item, add the END row immediately after it using the next item number. Do not create an extra END row from a nearby unrelated sketch/note alone. For every actual END/end cap row, set drawingLengthAngle exactly to "50L" unless another explicit end cap length is printed.
+If Endcap/End cap appears inside the connection or label text of a non-END row, do not keep "Endcap" in Connection. Keep the original row as its actual fitting type, clean the connection text, and add a separate END row immediately after it using the same section, connection, and duct size.
+For elbows, keep original angle/radius text such as "90° R=100" in drawingLengthAngle. If the sketch says 90° Elbow and includes radius R, output "90° R=<radius>"; do not treat notes like "100+150-R" as straight duct length.
+For Y Piece/Y-PIECE rows, radius text such as "150R" is the Length / Angle value, not the drawing length. When no explicit L length is printed, use calculatedLength 1500.
+Ignore folding/fold notes such as "25mm folding" when choosing connection, dimensions, or Length / Angle.
+
+Training example from a handwritten duct sheet:
+- Header/section text "G1+5P+27 Floor+Roof JVC Unit Mouth" means every listed item section is "G1+5P+27".
+- A handwritten result like "= 420L", "= 540L", "= 700L", "= 500L" is the row Length / Angle value. Output drawingLengthAngle as the number only if the target table shows it that way, or keep the L suffix if it is explicitly written in the corrected value. Do not use plan view dimension text as length when an "= ...L" result exists.
+- Item 1: 820x150 plan to 400x200, connection "B/F, S.C", type RED, drawingLengthAngle 420.
+- Item 2: 820x150 plan to 400x200, connection "S.C", type RED, drawingLengthAngle 540.
+- Item 3: 1050x250 plan to 700x250, connection "TDC Flange", type RED, drawingLengthAngle 700.
+- Items marked shoe-neck/shoe neck are type SHOENECK. Example: 500x200 = 200L with TDC flange uses w1=500,h1=200,w2=600,h2=200,type SHOENECK,drawingLengthAngle 200.
+- If a row says 500x200 = 740L and TDC both end, use w1=500,h1=200,w2=500,h2=200,type SHOENECK,connection "TDC (both end)",drawingLengthAngle "740L".
+- Rows with taper sketches and bottom-to-bottom notes are RED when sizes change, e.g. 900x160 to 500x200 with =500L is RED/TDC Flange/500.
+
+Second corrected example from same handwritten style:
+- Section text such as "L-21" applies to nearby item numbers until a new section marker appears. In this example items 8 and 9 are section "L-21"; items 10 to 16 are section "L-19".
+- Items can continue from earlier pages; preserve visible item numbers like 8, 9, 10, 11, 12, 13, 14, 15, 16.
+- Type OFF means offset piece; use OFF when the corrected output calls it OFF even if the sketch also tapers. RED is used for clear reduction rows in the corrected output.
+- Item 8: section L-21,type OFF,connection "B/F, S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "430L".
+- Item 9: section L-21,type OFF,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "590L".
+- Item 10: section L-19,type RED,connection "TDC Flange",w1=1600,h1=150,w2=700,h2=200,qty=1,drawingLengthAngle "320L".
+- Item 11: section L-19,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "540L".
+- Item 12: section L-19,type OFF,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "550L".
+- Item 13: section L-19,type RED,connection "TDC Flange",w1=780,h1=200,w2=550,h2=200,qty=1,drawingLengthAngle "450L".
+- Item 14: section L-19,type OFF,connection "S.C",w1=200,h1=100,w2=200,h2=100,qty=1,drawingLengthAngle "430L".
+- Straight duct notes like "200x150 = 1200L" with "ST = 2 Nos" mean type STR,w1=200,h1=150,w2=200,h2=150,qty=2,drawingLengthAngle "1200L",connection "S.C".
+- Straight duct notes like "250x150 = 1200L" with "ST = 3 Nos" mean type STR,w1=250,h1=150,w2=250,h2=150,qty=3,drawingLengthAngle "1200L",connection "S.C".
+
+Third corrected example from same handwritten style:
+- Section marker "L=15" applies to items 17, 18, and 19 exactly as "L=15".
+- Item 17: section L=15,type STR,connection "S.C",w1=400,h1=200,w2=400,h2=200,qty=1,drawingLengthAngle "950L". The nearby "Endcap" sketch/note does not become a separate END row in this corrected output.
+- Item 18: section L=15,type STR,connection "S.C",w1=450,h1=150,w2=450,h2=150,qty=1,drawingLengthAngle "500L".
+- Item 19: section L=15,type ELB,connection "S.C",w1=150,h1=450,w2=150,h2=450,qty=1,drawingLengthAngle "90° R=150". The handwritten "100+150-R" and "25mm folding" notes are references only; do not output them as length or connection.
+
+Fourth corrected example from a PDF drawing named Eqbal Unit Mouth:
+- Preserve sections from the drawing markers exactly: items 1 to 3 are section L-13, item 4 is L-14, items 5 to 7 are L-18, items 8 and 9 are L-20, items 10 and 11 are L-22.
+- Item 1: section L-13,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "420L".
+- Item 2: section L-13,type RED,connection "S.C",w1=400,h1=200,w2=820,h2=150,qty=1,drawingLengthAngle "580L".
+- Item 3: section L-13,type ELB,connection "S.C",w1=150,h1=150,w2=200,h2=150,qty=1,drawingLengthAngle "90°".
+- Item 4: section L-14,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "410L".
+- Item 5: section L-18,type RED,connection "S.C",w1=400,h1=200,w2=820,h2=150,qty=1,drawingLengthAngle "540L".
+- Item 6: section L-18,type PLENUM,connection "S.C",w1=200,h1=200,w2=200,h2=200,qty=1,drawingLengthAngle "1000L".
+- Item 7: section L-18,type STR,connection "S.C",w1=650,h1=200,w2=650,h2=200,qty=3,drawingLengthAngle "1200L".
+- Item 8: section L-20,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "450L".
+- Item 9: section L-20,type RED,connection "S.C",w1=400,h1=200,w2=820,h2=150,qty=1,drawingLengthAngle "550L".
+- Item 10: section L-22,type RED,connection "S.C",w1=400,h1=200,w2=820,h2=150,qty=1,drawingLengthAngle "570L".
+- Item 11: section L-22,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "380L".
+
+Fifth corrected example from handwritten section 25F-01B:
+- Section marker "25F-01B" applies to items 6 through 14.
+- Item 6: section 25F-01B,type RED,connection "B/F",w1=800,h1=200,w2=650,h2=150,qty=1,drawingLengthAngle "400L".
+- Item 7: section 25F-01B,type ELB,connection "S.C",w1=650,h1=150,w2=650,h2=150,qty=1,drawingLengthAngle "90° R=200".
+- Item 8: section 25F-01B,type SHOENECK,connection "TDC Flange",w1=600,h1=150,w2=700,h2=150,qty=1,drawingLengthAngle "150L".
+- Item 9: section 25F-01B,type STR,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=1,drawingLengthAngle "450L".
+- Item 10: section 25F-01B,type ELB,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=1,drawingLengthAngle "90° R".
+- Item 11: section 25F-01B,type STR,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=1,drawingLengthAngle "1300L".
+- Item 12: section 25F-01B,type STR,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=2,drawingLengthAngle "1200L".
+- Item 13: section 25F-01B,type STR,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=1,drawingLengthAngle "1200L".
+- Because "End cap" is written directly below item 13, add item 14: section 25F-01B,type END,connection "S.C",w1=600,h1=150,w2=600,h2=150,qty=1,drawingLengthAngle "50L". Its calculatedLength is 70, areaM2 is 0.1106, and areaFt2 is 1.190498.
+
+Sixth corrected example from handwritten section 25F-02 K.L:
+- Section marker "25F-02 K.L" applies to visible items 24 through 32.
+- Item 24: section 25F-02 K.L,type STR,connection "ST",w1=750,h1=200,w2=750,h2=200,qty=1,drawingLengthAngle "1100L".
+- Item 25: section 25F-02 K.L,type RED,connection "B/F",w1=750,h1=200,w2=650,h2=200,qty=1,drawingLengthAngle "500L".
+- Item 26: section 25F-02 K.L,type STR,connection "ST",w1=650,h1=200,w2=650,h2=200,qty=1,drawingLengthAngle "1400L".
+- Item 27: section 25F-02 K.L,type RED,connection "B/F",w1=650,h1=200,w2=250,h2=150,qty=1,drawingLengthAngle "500L".
+- Item 28: section 25F-02 K.L,type STR,connection "ST",w1=250,h1=150,w2=250,h2=150,qty=1,drawingLengthAngle "1200L".
+- Item 29: section 25F-02 K.L,type ELB,connection "ST",w1=250,h1=150,w2=250,h2=150,qty=1,drawingLengthAngle "90°".
+- Item 30: section 25F-02 K.L,type STR,connection "ST",w1=250,h1=150,w2=250,h2=150,qty=1,drawingLengthAngle "400L".
+- Because "Endcap" is written directly below item 30 and item 31 is already a visible shoe neck item, add item 30-END: section 25F-02 K.L,type END,connection "ST",w1=250,h1=150,w2=250,h2=150,qty=1,drawingLengthAngle "50L". Its calculatedLength is 70, areaM2 is 0.0616, and areaFt2 is 0.663062.
+- Item 31: section 25F-02 K.L,type SHOENECK,connection "TDC",w1=1100,h1=150,w2=1200,h2=150,qty=1,drawingLengthAngle "150L". For SHOENECK, W2 is W1 + 100 when the sketch only writes one size at the inlet.
+- Item 32: section 25F-02 K.L,type STR,connection "ST",w1=1100,h1=150,w2=1100,h2=150,qty=1,drawingLengthAngle "150L".
+
+Seventh corrected example for Y Piece:
+- A handwritten item showing "650x300" above two branch sizes "250x400" and "250x400", with "= 150R" and a Y-shaped sketch labeled B/F and TDC, is type Y Piece.
+- Output: type Y Piece,connection "B/F, TDC",w1=650,h1=300,w2=250,h2=400,qty=2,drawingLengthAngle "150R",offset=20,calculatedLength=1500,areaM2=5.0400,areaFt2=54.25.
+
+Eighth corrected example from handwritten sections 25F-03 B.R. and 25F-LK:
+- Item 38 appears before the visible section marker; keep section blank when no section marker is clearly attached. It is a shoe neck: item 38,type SHOENECK,connection "S & C",w1=750,h1=210,w2=850,h2=210,qty=1,drawingLengthAngle "250L".
+- Section marker "25F-03 B.R." applies to the two item 39 rows and items 40 to 42.
+- The drawing can contain the same item number twice for different fittings. Preserve both item 39 rows in order; do not merge them.
+- First item 39 is a 90° elbow with radius text: section 25F-03 B.R.,type ELB,connection "ST",w1=350,h1=400,w2=750,h2=400,qty=1,drawingLengthAngle "150R". Radius-only elbow normalizes to calculatedLength 1000.
+- Second item 39 is straight duct: section 25F-03 B.R.,type STR,connection "ST",w1=350,h1=400,w2=350,h2=400,qty=1,drawingLengthAngle "1600L".
+- Item 40: section 25F-03 B.R.,type RED,connection "BIF",w1=350,h1=400,w2=350,h2=250,qty=1,drawingLengthAngle "500L".
+- Item 41: section 25F-03 B.R.,type STR,connection "S & C",w1=350,h1=250,w2=350,h2=250,qty=1,drawingLengthAngle "3600L".
+- Because "Endcap" is written directly below item 41, add item 41-END: section 25F-03 B.R.,type END,connection "S & C",w1=350,h1=250,w2=350,h2=250,qty=1,drawingLengthAngle "50L".
+- Item 42 says shoe neck = 2 Nos: section 25F-03 B.R.,type SHOENECK,connection "S & C",w1=600,h1=210,w2=700,h2=210,qty=2,drawingLengthAngle "170L".
+- Section marker "25F-LK" applies to items 43 to 47.
+- Item 43: section 25F-LK,type STR,connection "ST",w1=700,h1=300,w2=700,h2=300,qty=1,drawingLengthAngle "400L".
+- Item 44: section 25F-LK,type RED,connection "S & C",w1=700,h1=300,w2=650,h2=300,qty=1,drawingLengthAngle "500L".
+- Item 45: section 25F-LK,type ELB,connection "S & C",w1=650,h1=300,w2=650,h2=300,qty=1,drawingLengthAngle "150R".
+- Item 46: section 25F-LK,type STR,connection "ST",w1=650,h1=300,w2=650,h2=300,qty=1,drawingLengthAngle "775L".
+- Item 47: section 25F-LK,type Y Piece,connection "B/F, TDC, TDC",w1=650,h1=300,w2=250,h2=400,qty=2,drawingLengthAngle "150R". Y Piece radius-only normalizes to calculatedLength 1500.
+
+Ninth corrected example from handwritten sections 25F-01 B-R, 25F-04 B-R, and 25F-04 K-L:
+- Section marker "25F-01 B-R" applies to items 53, 54, and 56.
+- Item 53: section 25F-01 B-R,type STR,connection "ST",w1=400,h1=250,w2=400,h2=250,qty=1,drawingLengthAngle "400L".
+- Item 54 says 90° elbow = 2 Nos: section 25F-01 B-R,type ELB,connection "Elbow",w1=400,h1=250,w2=400,h2=250,qty=2,drawingLengthAngle "90° R=150".
+- Item 56: section 25F-01 B-R,type STR,connection "S & C",w1=400,h1=250,w2=400,h2=250,qty=1,drawingLengthAngle "300L".
+- Section marker "25F-04 B-R" applies to items 57 to 61.
+- Item 57: section 25F-04 B-R,type ELB,connection "90° Elbow",w1=750,h1=400,w2=350,h2=400,qty=1,drawingLengthAngle "90° R=150".
+- Item 58: section 25F-04 B-R,type STR,connection "ST",w1=350,h1=400,w2=350,h2=400,qty=1,drawingLengthAngle "1550L".
+- Item 59: section 25F-04 B-R,type RED,connection "B/F, Reductor",w1=350,h1=400,w2=350,h2=250,qty=1,drawingLengthAngle "400L".
+- Item 60: section 25F-04 B-R,type STR,connection "ST",w1=350,h1=250,w2=350,h2=250,qty=1,drawingLengthAngle "1000L".
+- Because "Endcap" is written directly below item 60, add item 60-END: section 25F-04 B-R,type END,connection "Endcap",w1=350,h1=250,w2=350,h2=250,qty=1,drawingLengthAngle "50L". Do not use 70L as the drawing length; the normalized calculated length is 70.
+- Item 61 says shoe neck = 2 Nos beside 600x210 plan: section 25F-04 B-R,type SHOENECK,connection "ST",w1=600,h1=210,w2=600,h2=210,qty=1,drawingLengthAngle "250L" in this corrected output.
+- Section marker "25F-04 K-L" applies to item 62.
+- Item 62 is a Y Piece with main 650x350, one visible 650x350 side and 200x150 branch notes, TDC labels, and multiple angle/radius notes. Corrected table output is: section 25F-04 K-L,type Y Piece,connection "",w1=650,h1=350,w2=650,h2=350,qty=1,drawingLengthAngle "150R, 250R, 90°",calculatedLength 1500.`
   }];
+  content.push(...fileInputs);
+  const parsed = await callOpenAIJson("duct_area_calculation_extract", areaCalculationExtractSchema(), content);
+  const audited = await callOpenAIJson("duct_area_calculation_audit", areaCalculationExtractSchema(), [
+    {
+      type: "input_text",
+      text: areaCalculationAuditPrompt(layoutMap, parsed)
+    },
+    ...fileInputs
+  ]);
+  return {
+    rows: Array.isArray(audited.rows) && audited.rows.length ? audited.rows : (Array.isArray(parsed.rows) ? parsed.rows : []),
+    message: cleanCell(audited.message || parsed.message || `Drawing scanned using ${Array.isArray(layoutMap.items) ? layoutMap.items.length : 0} mapped item cluster(s). Review highlighted rows before export.`)
+  };
+}
+
+function areaCalculationFileInputs(fileParts) {
+  const inputs = [];
   for (const filePart of fileParts) {
     const mime = filePart.mimeType || mimeTypes[path.extname(filePart.filename).toLowerCase()] || "application/octet-stream";
     const base64 = filePart.body.toString("base64");
     if (mime.startsWith("image/")) {
-      content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+      inputs.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
     } else if (mime.includes("pdf")) {
       const pageInputs = pdfPageImageInputs(filePart, "Duct drawing PDF page");
-      if (pageInputs.length) content.push(...pageInputs);
-      else content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
+      if (pageInputs.length) inputs.push(...pageInputs);
+      else inputs.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
     }
   }
-  const parsed = await callOpenAIJson("duct_area_calculation_extract", areaCalculationExtractSchema(), content);
+  return inputs;
+}
+
+function areaCalculationLayoutPrompt() {
+  return `You are reading handwritten HVAC duct fabrication drawings. Do not create the final area table yet.
+Return JSON only.
+
+First build a visual layout map:
+1. Identify every circled or visible item number and its section marker. If the same item number appears twice for separate sketches, keep both clusters in visual order.
+2. For each item, describe the page/region and which sketch/labels belong to it.
+3. Identify the fitting type from the sketch shape before reading dimensions: STR, RED, ELB, SHOENECK, END, Y Piece, PLENUM, OFF, TEE, BEND, OTHER.
+4. Capture raw dimensions and length/angle text exactly as written, including L and R suffixes.
+5. Use repeated handwriting labels as anchors: B/F, S.C, ST, TDC, TDC Flange, Endcap.
+6. Add explicit uncertainty notes when a number or label is unclear or does not match the fitting shape.
+
+Domain checks:
+- STR usually repeats W1/H1 into W2/H2.
+- Repeated item numbers can be valid when the drawing shows separate fittings; preserve them instead of merging.
+- RED has different opening sizes.
+- ELB uses angle/radius text such as 90°, 90° R=200, or 150R; radius text is not duct length.
+- SHOENECK often has W2 = W1 + 100 when only one size is written beside the sketch.
+- END/Endcap should become a separate row when the note is directly attached to a numbered straight duct item.
+- Y Piece has a main size plus branch size(s), often quantity 2, and radius text such as 150R.
+
+Your job is to map visual clusters accurately, not to calculate area.`;
+}
+
+function areaCalculationAuditPrompt(layoutMap, extracted) {
+  return `You are the final audit pass for HVAC duct area extraction. Return JSON only using the same final table schema.
+
+Compare the visual drawing against:
+LAYOUT MAP:
+${JSON.stringify(layoutMap)}
+
+EXTRACTED TABLE:
+${JSON.stringify(extracted)}
+
+Your task:
+1. Check every mapped item cluster and every createsAdditionalRows note against the extracted table.
+2. If an item, attached Endcap/END row, Y Piece branch, elbow, shoe neck, reduction, or straight row is missing, add it.
+3. If a row exists but its type/dimensions/qty/length-angle clearly contradict the drawing, correct it.
+4. Preserve all correctly extracted rows and their order.
+5. Do not duplicate rows already present.
+6. Read Section and Connection directly from the drawing in this audit pass. Use the layout map only to locate where to look.
+7. Keep uncertain rows with status "Review" and explain the reason in remarks.
+
+Domain defaults:
+- END/Endcap: drawingLengthAngle "50L", calculated length will be normalized to 70.
+- If Endcap/End cap is present only inside a non-END row connection/label, split it into a separate END row and remove Endcap from that original row's connection.
+- ELB/BEND with radius or angle but no L length: calculated length will be normalized to 1000.
+- Y Piece with radius text such as 150R and no L length: calculated length will be normalized to 1500.
+- SHOENECK: if only one width is visible and W2 is missing/equal to W1, use W2 = W1 + 100.
+
+Return the complete corrected rows array, not only changes.`;
+}
+
+function areaCalculationLayoutSchema() {
   return {
-    rows: Array.isArray(parsed.rows) ? parsed.rows : [],
-    message: cleanCell(parsed.message || "Drawing scanned. Review highlighted rows before export.")
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      sections: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            section: { type: "string" },
+            appliesToItems: { type: "string" },
+            confidence: { type: "string" }
+          },
+          required: ["section", "appliesToItems", "confidence"]
+        }
+      },
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            item: { type: "string" },
+            section: { type: "string" },
+            region: { type: "string" },
+            sketchType: { type: "string" },
+            shapeDescription: { type: "string" },
+            rawDimensions: { type: "array", items: { type: "string" } },
+            rawLengthAngle: { type: "string" },
+            rawConnectionLabels: { type: "array", items: { type: "string" } },
+            associatedNotes: { type: "array", items: { type: "string" } },
+            createsAdditionalRows: { type: "array", items: { type: "string" } },
+            confidence: { type: "string" },
+            uncertainty: { type: "string" }
+          },
+          required: ["item", "section", "region", "sketchType", "shapeDescription", "rawDimensions", "rawLengthAngle", "rawConnectionLabels", "associatedNotes", "createsAdditionalRows", "confidence", "uncertainty"]
+        }
+      },
+      repeatedLabelAnchors: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            label: { type: "string" },
+            seenAtItems: { type: "string" },
+            visualCue: { type: "string" }
+          },
+          required: ["label", "seenAtItems", "visualCue"]
+        }
+      },
+      notes: { type: "string" }
+    },
+    required: ["sections", "items", "repeatedLabelAnchors", "notes"]
   };
 }
 
