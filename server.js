@@ -3957,6 +3957,54 @@ function supplierDnSchema() {
   };
 }
 
+function areaCalculationVisionWorkflowPrompt() {
+  return `Vision reading workflow:
+1. Build a page layout map before extracting numbers. List every circled/numbered item in visual reading order, including small, edge, partial, repeated, or crowded items.
+2. Identify fitting type from the sketch shape before trusting OCR text: STR, RED, ELB, SHOENECK, END, Y Piece, PLENUM, OFF, TEE, BEND, OTHER.
+3. Extract raw values literally: dimensions, lengths, radii, angles, connection labels, UP/DN arrows, quantities, crossed-out replacements, and endcap notes.
+4. Sanity-check values against the sketch type before finalizing. Do not silently fix unclear numbers; use status Review or Missing Dim. and explain in remarks.
+5. Cross-reference repeated handwriting on the same page. If a label such as S & C, TDC, B/F, ST, or Endcap is clear in one place, use that visual pattern to read messy repeats.
+6. Preserve original item order and visible repeated item numbers. Do not merge separate sketches only because the same item number appears twice.`;
+}
+
+function areaCalculationShapeRulesPrompt() {
+  return `Shape and value rules:
+- STR: straight rectangular duct, same size both ends. Repeat W1/H1 into W2/H2.
+- RED: reducer/transition, two different rectangular sizes joined by a sloped line. Use the written transition length.
+- ELB: L-shaped or curved elbow with angle/radius. 90° elbows and radius-only elbows normalize to calculatedLength 1000; one 45° elbow is 500; two 45° elbows are 1000.
+- SHOENECK: neck opening tapering into a wider body. If only one width is visible and W2 is missing/equal to W1, use W2 = W1 + 100 and same height, with Review/remarks if uncertain.
+- END: one opening only/closed end. Add as a separate row immediately after the parent item. Use drawingLengthAngle "50L" and calculatedLength 70.
+- Y Piece: one main body splitting into two branches. Read main size, branch sizes, radius/angle notes, and connection labels. Default calculatedLength is 1500 unless a specific value is shown. A double-curved branch sketch with one main size and two branch sizes is Y Piece even if it resembles two elbows joined together.
+- PLENUM/OFF/TEE/BEND: classify by visible shape first, then dimensions.
+- If a fitting's dimensions contradict its shape, keep the row but mark Review and explain the uncertainty.`;
+}
+
+function areaCalculationConnectionGlossaryPrompt() {
+  return `Connection glossary:
+- S & C / S.C / S&C = Slip & Clamp joint.
+- TDC = Transverse Duct Connection / flange joint.
+- TDF = Transverse Duct Flange.
+- B/F / BIF = Bar Flange / Break Flange.
+- D/M = Damper Mount when written near an opening.
+- SELF-F = Self Flange.
+- ST usually means straight duct connection/straight item label when written beside STR sketches.
+- Bottom to Bottom is an alignment note, usually for reducers/offset/shoe necks, not a drawing length.
+Use exactly what is visible when it is clearer than the glossary. Read Section and Connection directly from the drawing, not from examples.`;
+}
+
+function areaCalculationValidationPrompt() {
+  return `Validation checklist before final rows:
+1. Every visible drawing item is included in order.
+2. Every section heading is applied only to the items it visually governs.
+3. Quantities such as 2 Nos or 3 Nos are captured.
+4. End caps become separate rows attached to the correct parent, with no duplicates.
+5. Radius text such as 150R is not treated as duct length.
+6. Y Piece rows are not missed when the branch sketch is compact or looks like joined elbows.
+7. Missing or extra zeros are re-checked, especially 200 vs 2000 and 150 vs 1500.
+8. Unclear values are not guessed silently; mark Review or Missing Dim. and write remarks.
+9. Area values will be normalized by the application formula, so focus on accurate row fields.`;
+}
+
 async function extractAreaCalculationWithOpenAI(fileParts) {
   if (!process.env.OPENAI_API_KEY) {
     return { rows: [], message: "OpenAI API key is missing. The drawing is saved; add rows manually or configure OPENAI_API_KEY." };
@@ -3975,6 +4023,14 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
 Return JSON only. Preserve item order and section headings.
 Use this verified layout map from the first vision pass as your primary guide for item grouping and sketch association:
 ${JSON.stringify(layoutMap)}
+
+${areaCalculationVisionWorkflowPrompt()}
+
+${areaCalculationShapeRulesPrompt()}
+
+${areaCalculationConnectionGlossaryPrompt()}
+
+${areaCalculationValidationPrompt()}
 
 Do not jump directly to OCR. For each final row, use the layout map's item cluster, sketch type, dimensions, and uncertainty notes before deciding the row values.
 Important: read the Section and Connection columns directly from the uploaded drawing in this final pass, the same way as the older one-pass extractor. Use the layout map only as a hint for where to look. If the layout map conflicts with the visible section marker or visible connection label, trust the visible drawing for Section and Connection.
@@ -4091,7 +4147,13 @@ Ninth corrected example from handwritten sections 25F-01 B-R, 25F-04 B-R, and 25
 - Because "Endcap" is written directly below item 60, add item 60-END: section 25F-04 B-R,type END,connection "Endcap",w1=350,h1=250,w2=350,h2=250,qty=1,drawingLengthAngle "50L". Do not use 70L as the drawing length; the normalized calculated length is 70.
 - Item 61 says shoe neck = 2 Nos beside 600x210 plan: section 25F-04 B-R,type SHOENECK,connection "ST",w1=600,h1=210,w2=600,h2=210,qty=1,drawingLengthAngle "250L" in this corrected output.
 - Section marker "25F-04 K-L" applies to item 62.
-- Item 62 is a Y Piece with main 650x350, one visible 650x350 side and 200x150 branch notes, TDC labels, and multiple angle/radius notes. Corrected table output is: section 25F-04 K-L,type Y Piece,connection "",w1=650,h1=350,w2=650,h2=350,qty=1,drawingLengthAngle "150R, 250R, 90°",calculatedLength 1500.`
+- Item 62 is a Y Piece with main 650x350, one visible 650x350 side and 200x150 branch notes, TDC labels, and multiple angle/radius notes. Corrected table output is: section 25F-04 K-L,type Y Piece,connection "",w1=650,h1=350,w2=650,h2=350,qty=1,drawingLengthAngle "150R, 250R, 90°",calculatedLength 1500.
+
+Tenth corrected example for a compact Y Piece and following endcap row:
+- A circled item 72 showing "250x250" above two branch sizes "(200x200)(200x200)" and "=150R" beside a double-curved/Y-shaped sketch must be read as Y Piece. Do not miss this row just because it looks like two elbows joined together.
+- Item 72 corrected output: item 72,section 72,type Y Piece,connection "S & C",w1=250,h1=250,w2=200,h2=200,qty=1,drawingLengthAngle "90° R=150",offset=20,calculatedLength 1500.
+- Item 73 below it is a straight duct with an endcap note: item 73,section 73,type STR,connection "S & C",w1=200,h1=200,w2=200,h2=200,qty=1,drawingLengthAngle "900L".
+- Because "Endcap = 2 Nos" is written directly with item 73, add the END row immediately after it: item 74,section 73,type END,connection "S & C",w1=200,h1=200,w2=200,h2=200,qty=2,drawingLengthAngle "50L".`
   }];
   content.push(...fileInputs);
   const parsed = await callOpenAIJson("duct_area_calculation_extract", areaCalculationExtractSchema(), content);
@@ -4128,6 +4190,12 @@ function areaCalculationLayoutPrompt() {
   return `You are reading handwritten HVAC duct fabrication drawings. Do not create the final area table yet.
 Return JSON only.
 
+${areaCalculationVisionWorkflowPrompt()}
+
+${areaCalculationShapeRulesPrompt()}
+
+${areaCalculationConnectionGlossaryPrompt()}
+
 First build a visual layout map:
 1. Identify every circled or visible item number and its section marker. If the same item number appears twice for separate sketches, keep both clusters in visual order.
 2. For each item, describe the page/region and which sketch/labels belong to it.
@@ -4143,13 +4211,21 @@ Domain checks:
 - ELB uses angle/radius text such as 90°, 90° R=200, or 150R; radius text is not duct length.
 - SHOENECK often has W2 = W1 + 100 when only one size is written beside the sketch.
 - END/Endcap should become a separate row when the note is directly attached to a numbered straight duct item.
-- Y Piece has a main size plus branch size(s), often quantity 2, and radius text such as 150R.
+- Y Piece has a main size plus branch size(s), often quantity 2, and radius text such as 150R. A double-curved branch sketch with one top/main size and two bottom branch sizes is Y Piece, even if it resembles two elbows joined together.
 
 Your job is to map visual clusters accurately, not to calculate area.`;
 }
 
 function areaCalculationAuditPrompt(layoutMap, extracted) {
   return `You are the final audit pass for HVAC duct area extraction. Return JSON only using the same final table schema.
+
+${areaCalculationVisionWorkflowPrompt()}
+
+${areaCalculationShapeRulesPrompt()}
+
+${areaCalculationConnectionGlossaryPrompt()}
+
+${areaCalculationValidationPrompt()}
 
 Compare the visual drawing against:
 LAYOUT MAP:

@@ -8251,6 +8251,9 @@ function exportAreaCalculationExcel() {
   const calc = activeAreaCalculation();
   if (!calc) return toast("No area calculation to export");
   areaRecalculateCalculation(calc);
+  const areaBlob = buildAreaCalculationWorkbookBlob(calc);
+  downloadBlob(areaBlob, `${safeFile(calc.title || "Area Calculation")}.xlsx`);
+  return;
   const columns = areaCalculationColumns.map(([, label]) => label);
   const rows = (calc.rows || []).map(row => ({
     "Item": row.item,
@@ -10252,6 +10255,94 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function buildAreaCalculationWorkbookBlob(calc = {}) {
+  const columns = [
+    "Item", "Section", "Type", "Connection", "W1 (mm)", "H1 (mm)", "W2 (mm)", "H2 (mm)",
+    "Qty", "Length / Angle", "Offset (mm)", "Calc. Length (mm)", "Area (m²)", "Area (ft²)"
+  ];
+  const rows = calc.rows || [];
+  const sheetRows = [
+    workbookRowXml(1, columns.map((column, index) => ({ column: index + 1, value: column, style: 1 })))
+  ];
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const areaM2 = Number(row.areaM2 || 0);
+    const areaFt2 = Number(row.areaFt2 || 0);
+    sheetRows.push(workbookRowXml(rowNumber, [
+      { column: 1, value: workbookNumberOrText(row.item), style: 5 },
+      { column: 2, value: row.section || "no explicit section" },
+      { column: 3, value: row.type || "" },
+      { column: 4, value: row.connection || "" },
+      { column: 5, value: Number(row.w1 || 0), style: 5 },
+      { column: 6, value: Number(row.h1 || 0), style: 5 },
+      { column: 7, value: Number(row.w2 || 0), style: 5 },
+      { column: 8, value: Number(row.h2 || 0), style: 5 },
+      { column: 9, value: Number(row.qty || 0), style: 5 },
+      { column: 10, value: row.drawingLengthAngle || "" },
+      { column: 11, value: Number(row.offset || 0), style: 5 },
+      { column: 12, value: Number(row.calculatedLength || 0), style: 5 },
+      { column: 13, formula: `((E${rowNumber}+20)+(F${rowNumber}+20)+(G${rowNumber}+20)+(H${rowNumber}+20))*L${rowNumber}*I${rowNumber}/1000000`, value: areaM2, style: 3 },
+      { column: 14, formula: `M${rowNumber}*10.764`, value: areaFt2, style: 2 }
+    ]));
+  });
+
+  const dataStart = 2;
+  const dataEnd = Math.max(dataStart, rows.length + 1);
+  const totalRow = rows.length + 2;
+  const rateRow = totalRow + 2;
+  const amountRow = rateRow + 1;
+  const vatRow = rateRow + 2;
+  const netRow = rateRow + 3;
+  const totalQty = rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const totalM2 = rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
+  const totalFt2 = rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
+  const rate = 3.3;
+  const amount = totalFt2 * rate;
+  const vat = amount * 0.05;
+  sheetRows.push(workbookRowXml(totalRow, [
+    { column: 9, formula: `SUM(I${dataStart}:I${dataEnd})`, value: totalQty, style: 4 },
+    { column: 13, formula: `SUM(M${dataStart}:M${dataEnd})`, value: totalM2, style: 4 },
+    { column: 14, formula: `SUM(N${dataStart}:N${dataEnd})`, value: totalFt2, style: 4 }
+  ]));
+  sheetRows.push(workbookRowXml(rateRow, [
+    { column: 12, value: "GI 0.56mm Duct with S & C sqft /AED", style: 6 },
+    { column: 14, value: rate, style: 4 }
+  ]));
+  sheetRows.push(workbookRowXml(amountRow, [
+    { column: 12, value: "Total Amount in AED", style: 6 },
+    { column: 14, formula: `N${totalRow}*N${rateRow}`, value: amount, style: 2 }
+  ]));
+  sheetRows.push(workbookRowXml(vatRow, [
+    { column: 12, value: "VAT", style: 6 },
+    { column: 14, formula: `N${amountRow}*0.05`, value: vat, style: 2 }
+  ]));
+  sheetRows.push(workbookRowXml(netRow, [
+    { column: 12, value: " Net Amount in AED", style: 7 },
+    { column: 14, formula: `N${amountRow}+N${vatRow}`, value: amount + vat, style: 8 }
+  ]));
+
+  const columnWidths = [10, 22, 10, 13, 11, 10, 11, 10, 10, 17, 13, 20, 11, 12];
+  const colsXml = columnWidths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
+  const mergeXml = `<mergeCells count="4"><mergeCell ref="L${rateRow}:M${rateRow}"/><mergeCell ref="L${amountRow}:M${amountRow}"/><mergeCell ref="L${vatRow}:M${vatRow}"/><mergeCell ref="L${netRow}:M${netRow}"/></mergeCells>`;
+  const sheetName = workbookSheetName(calc.title || "Area Calculation");
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="A1:N${netRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${colsXml}</cols><sheetData>${sheetRows.join("")}</sheetData>${mergeXml}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`;
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets><calcPr calcMode="auto"/></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": areaCalculationWorkbookStylesXml(),
+    "xl/worksheets/sheet1.xml": sheetXml
+  };
+  return new Blob([workbookZip(files)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+function areaCalculationWorkbookStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="0.0000"/><numFmt numFmtId="165" formatCode="0.00"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="12"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="165" fontId="2" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/></cellXfs></styleSheet>`;
+}
+
 function buildTableWorkbookBlob(payload = {}) {
   const columns = Array.isArray(payload.columns) ? payload.columns.map(workbookCleanCell).filter(Boolean) : [];
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
@@ -10316,6 +10407,10 @@ function workbookRowXml(rowNumber, cells) {
 function workbookCellXml(rowNumber, cell) {
   const ref = `${workbookColumnName(cell.column)}${rowNumber}`;
   const style = cell.style ? ` s="${cell.style}"` : "";
+  if (cell.formula) {
+    const cached = typeof cell.value === "number" && Number.isFinite(cell.value) ? `<v>${cell.value}</v>` : "";
+    return `<c r="${ref}"${style}><f>${workbookEscapeXml(cell.formula)}</f>${cached}</c>`;
+  }
   if (typeof cell.value === "number" && Number.isFinite(cell.value)) {
     return `<c r="${ref}"${style}><v>${cell.value}</v></c>`;
   }
