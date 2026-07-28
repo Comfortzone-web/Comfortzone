@@ -5770,6 +5770,7 @@ function renderViewActions() {
     $("#headerPoUploadBtn").addEventListener("click", () => uploadPurchaseQuotation());
     $("#headerPoManualBtn").addEventListener("click", () => {
       purchaseDraft = newPurchaseDraft();
+      applyNextPurchasePoNoToDraft(true);
       showPurchaseOrders("form");
     });
     return;
@@ -6111,7 +6112,7 @@ function purchaseOrderShell(inner) {
 
 function purchaseOrderFormPageHtml() {
   purchaseDraft = purchaseDraft || newPurchaseDraft();
-  if (!purchaseDraft.poNo && purchaseState?.settings?.nextPoNo) purchaseDraft.poNo = purchaseState.settings.nextPoNo;
+  applyNextPurchasePoNoToDraft();
   if (!String(purchaseDraft.purchaseRepresentative || "").trim()) purchaseDraft.purchaseRepresentative = String(currentUser?.name || "").trim();
   recalcPurchaseOrder(purchaseDraft);
   return purchaseOrderShell(`
@@ -6361,6 +6362,20 @@ function newPurchaseDraft() {
     notes: defaultPurchaseNotes,
     items: [newPurchaseItem()]
   };
+}
+
+function isLegacyPurchasePoNo(value) {
+  return /^PO-\d{4}-\d+$/i.test(String(value || "").trim());
+}
+
+function applyNextPurchasePoNoToDraft(force = false) {
+  if (!purchaseDraft || purchaseDraft.id) return;
+  const nextPoNo = String(purchaseState?.settings?.nextPoNo || "").trim();
+  if (!nextPoNo) return;
+  const currentPoNo = String(purchaseDraft.poNo || "").trim();
+  if (force || !currentPoNo || isLegacyPurchasePoNo(currentPoNo)) {
+    purchaseDraft.poNo = nextPoNo;
+  }
 }
 
 function newPurchaseItem() {
@@ -8426,16 +8441,23 @@ async function savePurchaseDraft(createOfficial) {
   if (!purchaseDraft.supplierName.trim()) return alert("Supplier Name is required.");
   purchaseDraft.items = (purchaseDraft.items || []).filter(item => item.description || item.modelNo || Number(item.qty || 0) || Number(item.unitPrice || 0));
   if (!purchaseDraft.items.length) return alert("Add at least one item.");
+  const previousStatus = purchaseDraft.status || "Draft";
   purchaseDraft.status = createOfficial ? "Created" : "Draft";
   recalcPurchaseOrder(purchaseDraft);
-  const result = await api("/api/purchase-orders", {
-    method: "POST",
-    body: JSON.stringify({ order: purchaseDraft, createOfficial })
-  });
-  purchaseState = result.state;
-  purchaseDraft = result.order;
-  renderPurchaseOrders();
-  toast(createOfficial ? "Purchase Order created" : "Draft saved");
+  try {
+    const result = await api("/api/purchase-orders", {
+      method: "POST",
+      body: JSON.stringify({ order: purchaseDraft, createOfficial })
+    });
+    purchaseState = result.state;
+    purchaseDraft = result.order;
+    renderPurchaseOrders();
+    toast(createOfficial ? "Purchase Order created" : "Draft saved");
+  } catch (error) {
+    purchaseDraft.status = previousStatus;
+    renderPurchaseOrders();
+    toast(error.message || "Purchase Order save failed.");
+  }
 }
 
 async function deletePurchaseOrder(orderId) {

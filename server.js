@@ -433,7 +433,7 @@ async function writeInventory(inventory) {
 
 function defaultPurchaseOrders() {
   return {
-    settings: { nextPoNo: `PO-${new Date().getFullYear()}-0001` },
+    settings: { nextPoNo: defaultPurchasePoNo() },
     orders: [],
     suppliers: [],
     uploads: []
@@ -449,7 +449,7 @@ function normalizePurchaseOrders(parsed = {}) {
     suppliers: Array.isArray(parsed.suppliers) ? parsed.suppliers : [],
     uploads: Array.isArray(parsed.uploads) ? parsed.uploads : []
   };
-  store.settings.nextPoNo = nextPurchaseNoFromOrders(store.orders);
+  store.settings.nextPoNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
   return store;
 }
 
@@ -1937,15 +1937,19 @@ async function handleApi(req, res) {
       status: body.createOfficial ? "Created" : "Draft"
     }, store, !!body.createOfficial);
     const existingIndex = store.orders.findIndex(item => item.id === order.id);
-    if (body.createOfficial && !order.poNo) {
-      order.poNo = store.settings.nextPoNo || defaultPurchaseOrders().settings.nextPoNo;
-      store.settings.nextPoNo = nextPoNoFrom(order.poNo);
-    } else if (body.createOfficial && order.poNo) {
-      store.settings.nextPoNo = nextPoNoFrom(order.poNo);
+    if (body.createOfficial) {
+      if (!purchaseNoParts(order.poNo)) order.poNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
+      const duplicatePo = store.orders.find(item =>
+        item.id !== order.id &&
+        item.status === "Created" &&
+        inventoryNorm(item.poNo) === inventoryNorm(order.poNo)
+      );
+      if (duplicatePo) return send(res, 409, { error: `Purchase Order No. ${order.poNo} already exists.` });
     }
     if (body.createOfficial) order.status = "Created";
     if (existingIndex >= 0) store.orders[existingIndex] = order;
     else store.orders.unshift(order);
+    store.settings.nextPoNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
     await writePurchaseOrders(store);
     return send(res, 200, { state: purchaseOrderView(store), order });
   }
@@ -3566,7 +3570,7 @@ function nextDeliveryNoFrom(current) {
 }
 
 function nextPoNoFrom(current) {
-  const fallback = `PO-${new Date().getFullYear()}-0001`;
+  const fallback = defaultPurchasePoNo();
   const match = String(current || fallback).match(/^(.*?)(\d+)$/);
   if (!match) return fallback;
   const prefix = match[1];
@@ -3574,15 +3578,40 @@ function nextPoNoFrom(current) {
   return `${prefix}${String(Number(number) + 1).padStart(number.length, "0")}`;
 }
 
-function nextPurchaseNoFromOrders(orders = []) {
-  const year = new Date().getFullYear();
-  let max = 0;
+function purchasePoYearPrefix(year = new Date().getFullYear()) {
+  return `AMTS-${String(year).slice(-2)}-LPO-`;
+}
+
+function defaultPurchasePoNo(year = new Date().getFullYear()) {
+  return `${purchasePoYearPrefix(year)}001`;
+}
+
+function purchaseNoParts(value, year = new Date().getFullYear()) {
+  const expectedPrefix = purchasePoYearPrefix(year);
+  const match = String(value || "").trim().match(/^AMTS-(\d{2})-LPO-(\d+)$/i);
+  if (!match) return null;
+  if (match[1] !== String(year).slice(-2)) return null;
+  return {
+    prefix: expectedPrefix,
+    number: Number(match[2]) || 0,
+    width: match[2].length
+  };
+}
+
+function nextPurchaseNoFromOrders(orders = [], current = "") {
+  const fallback = defaultPurchasePoNo();
+  const currentParts = purchaseNoParts(current);
+  let max = currentParts ? currentParts.number - 1 : 0;
+  let width = Math.max(3, currentParts?.width || 0);
   for (const order of orders) {
     if (order.status !== "Created") continue;
-    const match = String(order.poNo || "").match(/^PO-(\d{4})-(\d+)$/i);
-    if (match && Number(match[1]) === year) max = Math.max(max, Number(match[2]));
+    const parts = purchaseNoParts(order.poNo);
+    if (!parts) continue;
+    max = Math.max(max, parts.number);
+    width = Math.max(width, parts.width);
   }
-  return `PO-${year}-${String(max + 1).padStart(4, "0")}`;
+  if (!max) return fallback;
+  return `${purchasePoYearPrefix()}${String(max + 1).padStart(width, "0")}`;
 }
 
 function purchaseOrderView(store) {
@@ -5033,9 +5062,11 @@ async function purchaseOrderPdfBuffer(order) {
     };
 
     const drawDetails = y => {
-      const supplierLines = [order.supplierName, ...pdfWrapWords(doc, order.supplierAddress || "", 210, sansFont, 11).slice(0, 4), order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
+      const supplierNameLines = pdfWrapWords(doc, order.supplierName || "", 205, sansFont, 11).slice(0, 3);
+      const supplierAddressLines = pdfWrapWords(doc, order.supplierAddress || "", 205, sansFont, 11).slice(0, 4);
+      const supplierLines = [...supplierNameLines, ...supplierAddressLines, order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
       doc.fillColor("#000000").font(sansFont).fontSize(11);
-      supplierLines.slice(0, 7).forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230 }));
+      supplierLines.slice(0, 7).forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230, height: 13, lineBreak: false }));
       const details = [
         ["PO No:", order.poNo],
         ["PO Date:", formatPdfDate(order.poDate)],
