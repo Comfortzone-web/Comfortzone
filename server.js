@@ -4992,6 +4992,8 @@ async function purchaseOrderPdfBuffer(order) {
     const sealImage = path.join(PUBLIC, "assets", "seal-al-mahira-square.png");
     const fallbackSealImage = path.join(PUBLIC, "assets", "seal-al-mahira.png");
     const signImage = path.join(PUBLIC, "assets", "sign-2.jpg");
+    const sansFont = "Helvetica";
+    const sansBoldFont = "Helvetica-Bold";
     const green = "#00572e";
     const line = "#949494";
     const tableW = pageWidth - left * 2;
@@ -5001,7 +5003,7 @@ async function purchaseOrderPdfBuffer(order) {
     const nextTableY = 170;
     const tableBottomY = 765;
 
-    const rowHeight = item => Math.max(28, 12 + Math.min(8, pdfWrapWords(doc, item.description || "", col[1] - 18, "Helvetica", 9.2).length) * 13);
+    const rowHeight = item => Math.max(28, 12 + Math.min(8, pdfWrapWords(doc, item.description || "", col[1] - 18, sansFont, 9.2).length) * 13);
     const paginate = items => {
       const pages = [];
       let current = [];
@@ -5027,12 +5029,12 @@ async function purchaseOrderPdfBuffer(order) {
     };
 
     const drawTitle = y => {
-      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(20).text("PURCHASE ORDER", 0, py(y, 20), { width: pageWidth, align: "center" });
+      doc.fillColor("#000000").font(sansBoldFont).fontSize(20).text("PURCHASE ORDER", 0, py(y, 20), { width: pageWidth, align: "center" });
     };
 
     const drawDetails = y => {
-      const supplierLines = [order.supplierName, ...pdfWrapWords(doc, order.supplierAddress || "", 210, "Helvetica", 11).slice(0, 4), order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
-      doc.fillColor("#000000").font("Helvetica").fontSize(11);
+      const supplierLines = [order.supplierName, ...pdfWrapWords(doc, order.supplierAddress || "", 210, sansFont, 11).slice(0, 4), order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
+      doc.fillColor("#000000").font(sansFont).fontSize(11);
       supplierLines.slice(0, 7).forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230 }));
       const details = [
         ["PO No:", order.poNo],
@@ -5043,8 +5045,8 @@ async function purchaseOrderPdfBuffer(order) {
       ].filter(([, value]) => String(value || "").trim());
       details.forEach(([label, value], index) => {
         const rowY = y - index * 18;
-        doc.font("Helvetica-Bold").fontSize(11).text(label, pageWidth - 262, py(rowY, 11), { width: 100 });
-        doc.font("Helvetica").fontSize(10.5).text(String(value || ""), pageWidth - 180, py(rowY, 10.5), { width: 122, align: "right" });
+        doc.font(sansBoldFont).fontSize(11).text(label, pageWidth - 262, py(rowY, 11), { width: 100 });
+        doc.font(sansFont).fontSize(10.5).text(String(value || ""), pageWidth - 180, py(rowY, 10.5), { width: 122, align: "right" });
       });
     };
 
@@ -5055,7 +5057,7 @@ async function purchaseOrderPdfBuffer(order) {
       let x = left;
       headers.forEach((header, index) => {
         doc.moveTo(x, top).lineTo(x, top + 30).strokeColor("#bfbfbf").lineWidth(0.45).stroke();
-        doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(10.5);
+        doc.fillColor("#ffffff").font(sansBoldFont).fontSize(10.5);
         doc.text(header, x + (index === 1 ? 10 : 0), top + 10, { width: col[index], align: index === 1 ? "left" : "center" });
         x += col[index];
       });
@@ -5072,17 +5074,17 @@ async function purchaseOrderPdfBuffer(order) {
         doc.moveTo(x, top).lineTo(x, top + h).stroke();
       }
       const midY = top + h / 2 - 5;
-      doc.fillColor("#000000").font("Helvetica").fontSize(10.2);
+      doc.fillColor("#000000").font(sansFont).fontSize(10.2);
       doc.text(String(serial), left, midY, { width: col[0], align: "center" });
-      const descLines = pdfWrapWords(doc, item.description || "", col[1] - 18, "Helvetica", 9.2).slice(0, 8);
+      const descLines = pdfWrapWords(doc, item.description || "", col[1] - 18, sansFont, 9.2).slice(0, 8);
       let descY = top + (h - descLines.length * 13) / 2;
-      doc.font("Helvetica").fontSize(9.2);
+      doc.font(sansFont).fontSize(9.2);
       descLines.forEach(lineText => {
         doc.text(lineText, left + col[0] + 10, descY, { width: col[1] - 18 });
         descY += 13;
       });
       const qtyX = left + col[0] + col[1];
-      doc.font("Helvetica").fontSize(10.2);
+      doc.font(sansFont).fontSize(10.2);
       doc.text(`${money(item.qty)} Nos`, qtyX, midY, { width: col[2], align: "center" });
       doc.text(money(item.unitPrice), qtyX + col[2], midY, { width: col[3], align: "center" });
       doc.text(`${String(money(item.vatPercent || 5)).replace(/\.00$/, "")}%`, qtyX + col[2] + col[3], midY, { width: col[4], align: "center" });
@@ -5119,11 +5121,13 @@ async function purchaseOrderPdfBuffer(order) {
       rows.push(["VAT Total", amountAed(vatTotal)], ["Grand Total", amountAed(grandTotal)]);
       rows.forEach(([label, value], index) => {
         const isLast = index === rows.length - 1;
+        const boldSummaryLabel = ["Subtotal", "VAT Total", "Grand Total"].includes(label);
         const rowTop = top + index * 34;
         doc.rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? green : "#ffffff", line);
         doc.moveTo(x + labelW, rowTop).lineTo(x + labelW, rowTop + 34).stroke();
-        doc.fillColor(isLast ? "#ffffff" : "#000000").font(isLast ? "Helvetica-Bold" : "Helvetica").fontSize(10.5);
+        doc.fillColor(isLast ? "#ffffff" : "#000000").font(boldSummaryLabel ? sansBoldFont : sansFont).fontSize(10.5);
         doc.text(label, x + 8, rowTop + 11, { width: labelW - 14 });
+        doc.font(isLast ? sansBoldFont : sansFont);
         doc.text(value, x + labelW + 8, rowTop + 11, { width: valueW - 16, align: "right" });
       });
       return top + rows.length * 34;
@@ -5149,12 +5153,12 @@ async function purchaseOrderPdfBuffer(order) {
     };
 
     const drawNotes = (x, top, width, maxLines = 12) => {
-      doc.fillColor("#000000").font("Helvetica-Bold").fontSize(10).text("Note:", x, top);
+      doc.fillColor("#000000").font(sansBoldFont).fontSize(10).text("Note:", x, top);
       top += 22;
-      doc.font("Helvetica").fontSize(9.8);
+      doc.font(sansFont).fontSize(9.8);
       const lines = String(order.notes || DEFAULT_PURCHASE_NOTES).replace(/\r/g, "\n").split("\n");
       for (const lineText of lines.slice(0, maxLines)) {
-        const wrapped = pdfWrapWords(doc, lineText, width, "Helvetica", 9.8).slice(0, 4);
+        const wrapped = pdfWrapWords(doc, lineText, width, sansFont, 9.8).slice(0, 4);
         wrapped.forEach(w => {
           doc.text(w, x, top, { width });
           top += 15;
