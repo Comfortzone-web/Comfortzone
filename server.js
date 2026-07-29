@@ -5499,29 +5499,46 @@ function salesQuotationPdfKitBuffer(payload) {
       const valueW = 168;
       const label2W = 96;
       const value2W = width - labelW - valueW - label2W;
-      const rowH = 25;
+      const minRowH = 25;
       const rows = [
         ["Customer:", quote.customer, "Date:", formatPdfDate(quote.date)],
         ["Contact Person:", customer.contact, "Quotation No:", quote.no],
         ["Email:", customer.email, "Salesperson:", quote.salesperson],
         ["Payment Terms:", quote.paymentTerms, "Availability:", quote.deliveryTime]
       ];
-      const height = rowH * (rows.length + 1);
+      const rowHeights = rows.map(row => Math.max(
+        minRowH,
+        textHeight(row[0], labelW - 10, 8.6) + 12,
+        textHeight(row[1], valueW - 10, 8.6) + 12,
+        textHeight(row[2], label2W - 10, 8.6) + 12,
+        textHeight(row[3], value2W - 10, 8.6) + 12
+      ));
+      const projectRowH = Math.max(
+        minRowH,
+        textHeight("Project:", labelW - 10, 8.6) + 12,
+        textHeight(quote.project, width - labelW - 10, 8.6) + 12
+      );
+      const height = rowHeights.reduce((sum, rowHeight) => sum + rowHeight, 0) + projectRowH;
+      const centeredY = (value, cellY, cellH, cellW, size = 8.6) => {
+        const height = textHeight(value, cellW, size);
+        return cellY + Math.max(6, (cellH - height) / 2);
+      };
       doc.rect(x, y, width, height).stroke("#000000");
       let rowY = y;
-      for (const row of rows) {
+      rows.forEach((row, index) => {
+        const rowH = rowHeights[index];
         doc.moveTo(x, rowY + rowH).lineTo(x + width, rowY + rowH).stroke();
         const colX = [x + labelW, x + labelW + valueW, x + labelW + valueW + label2W];
         for (const lineX of colX) doc.moveTo(lineX, rowY).lineTo(lineX, rowY + rowH).stroke();
-        writeWrapped(row[0], x + 6, rowY + 8, labelW - 10, { bold: true });
-        writeWrapped(row[1], x + labelW + 6, rowY + 8, valueW - 10);
-        writeWrapped(row[2], x + labelW + valueW + 6, rowY + 8, label2W - 10, { bold: true });
-        writeWrapped(row[3], x + labelW + valueW + label2W + 6, rowY + 8, value2W - 10);
+        writeWrapped(row[0], x + 6, centeredY(row[0], rowY, rowH, labelW - 10), labelW - 10, { bold: true });
+        writeWrapped(row[1], x + labelW + 6, centeredY(row[1], rowY, rowH, valueW - 10), valueW - 10);
+        writeWrapped(row[2], x + labelW + valueW + 6, centeredY(row[2], rowY, rowH, label2W - 10), label2W - 10, { bold: true });
+        writeWrapped(row[3], x + labelW + valueW + label2W + 6, centeredY(row[3], rowY, rowH, value2W - 10), value2W - 10);
         rowY += rowH;
-      }
-      doc.moveTo(x + labelW, rowY).lineTo(x + labelW, rowY + rowH).stroke();
-      writeWrapped("Project:", x + 6, rowY + 8, labelW - 10, { bold: true });
-      writeWrapped(quote.project, x + labelW + 6, rowY + 8, width - labelW - 10);
+      });
+      doc.moveTo(x + labelW, rowY).lineTo(x + labelW, rowY + projectRowH).stroke();
+      writeWrapped("Project:", x + 6, centeredY("Project:", rowY, projectRowH, labelW - 10), labelW - 10, { bold: true });
+      writeWrapped(quote.project, x + labelW + 6, centeredY(quote.project, rowY, projectRowH, width - labelW - 10), width - labelW - 10);
       return y + height;
     };
 
