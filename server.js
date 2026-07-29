@@ -4173,9 +4173,10 @@ function areaCalculationVisionWorkflowPrompt() {
 1. Build a page layout map before extracting numbers. List every circled/numbered item in visual reading order, including small, edge, partial, repeated, or crowded items.
 2. Identify fitting type from the sketch shape before trusting OCR text: STR, RED, ELB, SHOENECK, END, Y Piece, PLENUM, OFF, TEE, BEND, OTHER.
 3. Extract raw values literally: dimensions, lengths, radii, angles, connection labels, UP/DN arrows, quantities, crossed-out replacements, and endcap notes.
-4. Sanity-check values against the sketch type before finalizing. Do not silently fix unclear numbers; use status Review or Missing Dim. and explain in remarks.
-5. Cross-reference repeated handwriting on the same page. If a label such as S & C, TDC, B/F, ST, or Endcap is clear in one place, use that visual pattern to read messy repeats.
-6. Preserve original item order and visible repeated item numbers. Do not merge separate sketches only because the same item number appears twice.`;
+4. Assign W1/H1 and W2/H2 by visual reading order, not by size. W1/H1 is the opening drawn or written at the top of the sketch, first encountered reading top-to-bottom. W2/H2 is the opening drawn or written at the bottom of the sketch, second encountered. Apply this even when the bottom opening is larger or the top opening looks like the neck.
+5. Sanity-check values against the sketch type before finalizing. Do not silently fix unclear numbers; use status Review or Missing Dim. and explain in remarks.
+6. Cross-reference repeated handwriting on the same page. If a label such as S & C, TDC, B/F, ST, or Endcap is clear in one place, use that visual pattern to read messy repeats.
+7. Preserve original item order and visible repeated item numbers. Do not merge separate sketches only because the same item number appears twice.`;
 }
 
 function areaCalculationShapeRulesPrompt() {
@@ -4183,7 +4184,7 @@ function areaCalculationShapeRulesPrompt() {
 - STR: straight rectangular duct, same size both ends. Repeat W1/H1 into W2/H2.
 - RED: reducer/transition, two different rectangular sizes joined by a sloped line. Use the written transition length.
 - ELB: L-shaped or curved elbow with angle/radius. 90° elbows and radius-only elbows normalize to calculatedLength 1000; one 45° elbow is 500; two 45° elbows are 1000.
-- SHOENECK: neck opening tapering into a wider body. If only one width is visible and W2 is missing/equal to W1, use W2 = W1 + 100 and same height, with Review/remarks if uncertain.
+- SHOENECK: neck opening tapering into a wider body. Still assign W1/H1 from the top opening and W2/H2 from the bottom opening; do not reorder by which opening is smaller or looks like the neck. If only one width is visible and W2 is missing/equal to W1, use W2 = W1 + 100 and same height, with Review/remarks if uncertain.
 - END: one opening only/closed end. Add as a separate row immediately after the parent item. Use drawingLengthAngle "50L" and calculatedLength 70.
 - Y Piece: one main body splitting into two branches. Read main size, branch sizes, radius/angle notes, and connection labels. Default calculatedLength is 1500 unless a specific value is shown. A double-curved branch sketch with one main size and two branch sizes is Y Piece even if it resembles two elbows joined together.
 - PLENUM/OFF/TEE/BEND: classify by visible shape first, then dimensions.
@@ -4287,6 +4288,7 @@ Third corrected example from same handwritten style:
 
 Fourth corrected example from a PDF drawing named Eqbal Unit Mouth:
 - Preserve sections from the drawing markers exactly: items 1 to 3 are section L-13, item 4 is L-14, items 5 to 7 are L-18, items 8 and 9 are L-20, items 10 and 11 are L-22.
+- For top-to-bottom opening order, if item 5 shows 400x200 S.C at the top, then UP/150/DN, then 820x150 plan at the bottom, output w1=400,h1=200,w2=820,h2=150. Do not swap the openings based on which size looks like the neck.
 - Item 1: section L-13,type RED,connection "S.C",w1=820,h1=150,w2=400,h2=200,qty=1,drawingLengthAngle "420L".
 - Item 2: section L-13,type RED,connection "S.C",w1=400,h1=200,w2=820,h2=150,qty=1,drawingLengthAngle "580L".
 - Item 3: section L-13,type ELB,connection "S.C",w1=150,h1=150,w2=200,h2=150,qty=1,drawingLengthAngle "90°".
@@ -4412,8 +4414,9 @@ First build a visual layout map:
 2. For each item, describe the page/region and which sketch/labels belong to it.
 3. Identify the fitting type from the sketch shape before reading dimensions: STR, RED, ELB, SHOENECK, END, Y Piece, PLENUM, OFF, TEE, BEND, OTHER.
 4. Capture raw dimensions and length/angle text exactly as written, including L and R suffixes.
-5. Use repeated handwriting labels as anchors: B/F, S.C, ST, TDC, TDC Flange, Endcap.
-6. Add explicit uncertainty notes when a number or label is unclear or does not match the fitting shape.
+5. For every sketch with two openings, identify which dimension is visually top/first and which is visually bottom/second; this becomes W1/H1 then W2/H2 in the final table.
+6. Use repeated handwriting labels as anchors: B/F, S.C, ST, TDC, TDC Flange, Endcap.
+7. Add explicit uncertainty notes when a number or label is unclear or does not match the fitting shape.
 
 Domain checks:
 - STR usually repeats W1/H1 into W2/H2.
