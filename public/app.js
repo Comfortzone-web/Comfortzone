@@ -25,6 +25,7 @@ let deliveryResize = null;
 let purchaseState = null;
 let purchaseScreen = "form";
 let purchaseDraft = null;
+let purchaseRevisionPoNoLock = "";
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
 let purchaseUploadLoading = false;
@@ -164,7 +165,7 @@ Units offered are covered under a standard warranty of 12 months from the date o
 Exclusions:
 Installation of AC units, unloading of units at site & supply of items other than mentioned.`;
 const salesCrmData = {
-  settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
+  settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `EN${String(new Date().getFullYear()).slice(-2)}-1001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
   leads: [
     { id: "L-1001", avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
     { id: "L-1002", avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -1137,6 +1138,20 @@ function refreshSalesCrmInBackground() {
 
 function salesData() {
   return salesCrmState || salesCrmData;
+}
+
+function nextSalesEnquiryNoDefault() {
+  const year = String(new Date().getFullYear()).slice(-2);
+  let maxNumber = 1000;
+  let width = 4;
+  (salesData().leads || []).forEach(lead => {
+    const match = String(lead.enquiryNo || "").trim().match(new RegExp(`^EN${year}-(\\d+)$`, "i"));
+    if (!match) return;
+    const number = Number(match[1]) || 0;
+    if (number > maxNumber) maxNumber = number;
+    if (match[1].length > width) width = match[1].length;
+  });
+  return `EN${year}-${String(maxNumber + 1).padStart(width, "0")}`;
 }
 
 function salesDeskTopbarConfig() {
@@ -5113,7 +5128,8 @@ function openSalesLeadDrawer(itemId = "") {
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
     if (!payload.customer || !payload.projectDescription || !payload.enquiryNo) return alert("Customer, project description and enquiry number are required.");
     salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
-    const savedLead = (salesData().leads || []).find(lead => norm(lead.enquiryNo) === norm(payload.enquiryNo));
+    const savedLead = (salesData().leads || []).find(lead => payload.id && lead.id === payload.id) ||
+      (salesData().leads || []).find(lead => norm(lead.enquiryNo) === norm(payload.enquiryNo));
     salesLeadDetailId = savedLead?.id || payload.id || salesLeadDetailId;
     modal.remove();
     renderSalesDesk();
@@ -5128,7 +5144,7 @@ function blankSalesLead() {
     sNo: String((salesData().leads || []).length + 1),
     customer: "",
     projectDescription: "",
-    enquiryNo: salesData().settings?.nextEnquiryNo || `ENQ-${new Date().getFullYear()}-0001`,
+    enquiryNo: nextSalesEnquiryNoDefault(),
     receivedDate: todaySalesDateInput(),
     productType: "",
     status: "New Enquiry",
@@ -5329,7 +5345,7 @@ function salesFormConfig(collection) {
       title: "Enquiry",
       requiredMessage: "Customer name is required.",
       required: item => !!item.customer,
-      blank: () => ({ enquiryNo: salesData().settings?.nextEnquiryNo || `ENQ-${new Date().getFullYear()}-0001`, customer: "", phone: "", requirement: "", projectType: "Villa Project", location: "", source: "WhatsApp", status: "New Lead", followUp: "", priority: "Planned" }),
+      blank: () => ({ enquiryNo: nextSalesEnquiryNoDefault(), customer: "", phone: "", requirement: "", projectType: "Villa Project", location: "", source: "WhatsApp", status: "New Lead", followUp: "", priority: "Planned" }),
       fields: [
         { key: "enquiryNo", label: "Enquiry No." },
         { key: "customer", label: "Customer / Contact" },
@@ -5769,6 +5785,7 @@ function renderViewActions() {
     $("#headerPoSuppliersBtn").addEventListener("click", () => showPurchaseOrders("suppliers"));
     $("#headerPoUploadBtn").addEventListener("click", () => uploadPurchaseQuotation());
     $("#headerPoManualBtn").addEventListener("click", () => {
+      purchaseRevisionPoNoLock = "";
       purchaseDraft = newPurchaseDraft();
       applyNextPurchasePoNoToDraft(true);
       showPurchaseOrders("form");
@@ -6161,7 +6178,7 @@ function purchaseOrderListHtml() {
         </colgroup>
         <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Items</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${(order.items || []).length}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
+          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${(order.items || []).length}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -6220,7 +6237,7 @@ function poInputAttrs(field) {
 }
 
 function purchaseFilteredOrders() {
-  const orders = purchaseState?.orders || [];
+  const orders = purchaseOrdersForDisplay(purchaseState?.orders || []);
   const q = purchaseSearchQuery.trim().toLowerCase();
   if (!q) return orders;
   return orders.filter(order => [
@@ -6231,6 +6248,81 @@ function purchaseFilteredOrders() {
     order.status,
     ...(order.items || []).flatMap(item => [item.description, item.modelNo])
   ].join(" ").toLowerCase().includes(q));
+}
+
+function purchasePoBaseNo(value = "") {
+  return String(value || "").trim().replace(/-R\d+$/i, "");
+}
+
+function syncPurchaseRevisionFields(order = {}) {
+  const poNo = String(order.poNo || "").trim();
+  const revisionMatch = poNo.match(/-R(\d+)$/i);
+  order.basePoNo = poNo ? purchasePoBaseNo(poNo) : "";
+  order.revisionNo = revisionMatch ? Number(revisionMatch[1]) || 0 : 0;
+  order.revision = order.revisionNo ? `Revision R${order.revisionNo}` : "";
+  return order;
+}
+
+function purchasePoRevisionNo(order = {}) {
+  const explicitRevision = Number(order.revisionNo);
+  if (explicitRevision) return explicitRevision;
+  const match = String(order.poNo || "").trim().match(/-R(\d+)$/i);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
+function nextPurchaseRevisionNo(order = {}) {
+  const baseNo = purchasePoBaseNo(order.basePoNo || order.poNo || "");
+  if (!baseNo) return 1;
+  return (purchaseState?.orders || []).reduce((max, item) => {
+    const itemBaseNo = purchasePoBaseNo(item.basePoNo || item.poNo || "");
+    return itemBaseNo === baseNo ? Math.max(max, purchasePoRevisionNo(item)) : max;
+  }, 0) + 1;
+}
+
+function purchaseOrdersForDisplay(orders = []) {
+  const indexed = orders.map((order, index) => ({
+    order,
+    index,
+    baseNo: purchasePoBaseNo(order.basePoNo || order.poNo || ""),
+    revisionNo: purchasePoRevisionNo(order)
+  }));
+  const baseRank = new Map();
+  indexed.forEach(item => {
+    if (item.baseNo && item.revisionNo === 0 && !baseRank.has(item.baseNo)) baseRank.set(item.baseNo, item.index);
+  });
+  indexed.forEach(item => {
+    if (item.baseNo && !baseRank.has(item.baseNo)) baseRank.set(item.baseNo, item.index);
+  });
+  return indexed
+    .sort((a, b) => {
+      const rankA = baseRank.has(a.baseNo) ? baseRank.get(a.baseNo) : a.index;
+      const rankB = baseRank.has(b.baseNo) ? baseRank.get(b.baseNo) : b.index;
+      return rankA - rankB || a.revisionNo - b.revisionNo || a.index - b.index;
+    })
+    .map(item => item.order);
+}
+
+function createPurchaseOrderRevision(orderId) {
+  const order = (purchaseState.orders || []).find(item => item.id === orderId);
+  if (!order) return;
+  const baseNo = purchasePoBaseNo(order.basePoNo || order.poNo || "");
+  if (!baseNo) return toast("Cannot create revision without a PO number");
+  const revisionNo = nextPurchaseRevisionNo(order);
+  const revisionPoNo = `${baseNo}-R${revisionNo}`;
+  purchaseRevisionPoNoLock = revisionPoNo;
+  purchaseDraft = {
+    ...structuredClone(order),
+    id: "",
+    poNo: revisionPoNo,
+    basePoNo: baseNo,
+    revisionNo,
+    revision: `Revision R${revisionNo}`,
+    status: "Draft",
+    poDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-")
+  };
+  recalcPurchaseOrder(purchaseDraft);
+  showPurchaseOrders("form");
+  toast(`Revision ${revisionPoNo} ready to edit`);
 }
 
 function purchaseOrderFormHtml(po) {
@@ -8343,9 +8435,11 @@ function handlePurchaseMenuAction(action, idValue) {
   if (action === "edit-po") {
     const order = (purchaseState.orders || []).find(item => item.id === idValue);
     if (!order) return;
+    purchaseRevisionPoNoLock = "";
     purchaseDraft = structuredClone(order);
     return showPurchaseOrders("form");
   }
+  if (action === "revision-po") return createPurchaseOrderRevision(idValue);
   if (action === "download-po") {
     const order = (purchaseState.orders || []).find(item => item.id === idValue);
     if (order) return downloadPurchasePdf(order);
@@ -8441,16 +8535,38 @@ async function savePurchaseDraft(createOfficial) {
   if (!purchaseDraft.supplierName.trim()) return alert("Supplier Name is required.");
   purchaseDraft.items = (purchaseDraft.items || []).filter(item => item.description || item.modelNo || Number(item.qty || 0) || Number(item.unitPrice || 0));
   if (!purchaseDraft.items.length) return alert("Add at least one item.");
+  const visiblePoNoInput = document.querySelector('[data-po-field="poNo"]');
+  const visiblePoNo = visiblePoNoInput ? visiblePoNoInput.value.trim() : "";
+  const lockedRevisionPoNo = String(purchaseRevisionPoNoLock || "").trim();
+  if (lockedRevisionPoNo && /-R\d+$/i.test(lockedRevisionPoNo) && !/-R\d+$/i.test(visiblePoNo)) {
+    purchaseDraft.poNo = lockedRevisionPoNo;
+  } else if (visiblePoNo) {
+    purchaseDraft.poNo = visiblePoNo;
+  }
   const previousStatus = purchaseDraft.status || "Draft";
   purchaseDraft.status = createOfficial ? "Created" : "Draft";
+  syncPurchaseRevisionFields(purchaseDraft);
   recalcPurchaseOrder(purchaseDraft);
   try {
+    const requestedPoNo = String(purchaseDraft.poNo || "").trim();
     const result = await api("/api/purchase-orders", {
       method: "POST",
-      body: JSON.stringify({ order: purchaseDraft, createOfficial })
+      body: JSON.stringify({ order: purchaseDraft, createOfficial, requestedPoNo })
     });
     purchaseState = result.state;
     purchaseDraft = result.order;
+    if (requestedPoNo && purchaseDraft && norm(purchaseDraft.poNo) !== norm(requestedPoNo)) {
+      purchaseDraft.poNo = requestedPoNo;
+      syncPurchaseRevisionFields(purchaseDraft);
+    }
+    if (requestedPoNo && purchaseState?.orders?.length) {
+      const savedIndex = purchaseState.orders.findIndex(order => order.id === purchaseDraft?.id);
+      if (savedIndex >= 0) {
+        purchaseState.orders[savedIndex].poNo = requestedPoNo;
+        syncPurchaseRevisionFields(purchaseState.orders[savedIndex]);
+      }
+    }
+    if (createOfficial) purchaseRevisionPoNoLock = "";
     renderPurchaseOrders();
     toast(createOfficial ? "Purchase Order created" : "Draft saved");
   } catch (error) {

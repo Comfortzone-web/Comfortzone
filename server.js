@@ -707,8 +707,9 @@ function normalizeAreaCalculation(input = {}) {
 }
 
 function defaultSalesCrm() {
+  const defaultEnquiryNo = `EN${String(new Date().getFullYear()).slice(-2)}-1001`;
   return {
-    settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `ENQ-${new Date().getFullYear()}-0001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
+    settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: defaultEnquiryNo, lastCreatedEnquiryNo: "", nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
     leads: [
       { id: id(), avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
       { id: id(), avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -753,6 +754,7 @@ function normalizeSalesCrm(parsed = {}) {
   };
   store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo || fallback.settings.nextQuotationNo, store.quotations);
   store.settings.nextProjectNo = nextAvailableSalesProjectNo(store.settings.nextProjectNo || fallback.settings.nextProjectNo, store.projects);
+  store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo || fallback.settings.nextEnquiryNo, store.leads);
   return store;
 }
 
@@ -1151,7 +1153,7 @@ function normalizeSalesItem(collection, input, store) {
     const status = cleanCell(base.status || "New Enquiry");
     return {
       id: base.id,
-      enquiryNo: cleanCell(base.enquiryNo || store.settings.nextEnquiryNo || `ENQ-${new Date().getFullYear()}-0001`),
+      enquiryNo: cleanCell(base.enquiryNo || store.settings.nextEnquiryNo || `EN${String(new Date().getFullYear()).slice(-2)}-1001`),
       avatar: initials(customer),
       salesPerson: cleanCell(base.salesPerson || ""),
       sNo: cleanCell(base.sNo || base.serialNo || ""),
@@ -1192,6 +1194,8 @@ function normalizeSalesItem(collection, input, store) {
         updatedBy: cleanCell(item.updatedBy || "")
       })) : [],
       priority: cleanCell(base.priority || "Planned"),
+      createdAt: cleanCell(base.createdAt || ""),
+      updatedAt: cleanCell(base.updatedAt || ""),
       lastUpdated: cleanCell(base.lastUpdated || ""),
       updatedBy: cleanCell(base.updatedBy || "")
     };
@@ -1414,8 +1418,43 @@ function nextAvailableSalesProjectNo(current, projects = []) {
 function nextSalesEnquiryNoFrom(current) {
   const text = String(current || "");
   const match = text.match(/^(.*?)(\d+)$/);
-  if (!match) return `ENQ-${new Date().getFullYear()}-0001`;
+  if (!match) return `EN${String(new Date().getFullYear()).slice(-2)}-1001`;
   return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function cleanSalesEnquiryNo(value) {
+  const year = String(new Date().getFullYear()).slice(-2);
+  const match = cleanCell(value).match(new RegExp(`^EN${year}-(\\d+)$`, "i"));
+  return match ? `EN${year}-${match[1]}` : "";
+}
+
+function salesEnquiryNumberParts(value) {
+  const year = String(new Date().getFullYear()).slice(-2);
+  const match = cleanCell(value).match(new RegExp(`^EN${year}-(\\d+)$`, "i"));
+  if (!match) return null;
+  return { number: Number(match[1]) || 0, width: Math.max(4, match[1].length) };
+}
+
+function nextAvailableSalesEnquiryNo(current, leads = []) {
+  const year = String(new Date().getFullYear()).slice(-2);
+  let maxNumber = 1000;
+  let width = 4;
+  for (const lead of leads || []) {
+    const parts = salesEnquiryNumberParts(lead.enquiryNo);
+    if (!parts) continue;
+    if (parts.number > maxNumber) maxNumber = parts.number;
+    if (parts.width > width) width = parts.width;
+  }
+  const currentParts = salesEnquiryNumberParts(current);
+  if (currentParts && currentParts.number > maxNumber) maxNumber = currentParts.number - 1;
+  let next = `EN${year}-${String(maxNumber + 1).padStart(width, "0")}`;
+  const used = new Set((leads || []).map(lead => inventoryNorm(cleanSalesEnquiryNo(lead.enquiryNo) || lead.enquiryNo)).filter(Boolean));
+  let guard = 0;
+  while (used.has(inventoryNorm(next)) && guard < 10000) {
+    next = nextSalesEnquiryNoFrom(next);
+    guard += 1;
+  }
+  return next;
 }
 
 function normalizeSalesProjectBoqItem(item = {}) {
@@ -1820,25 +1859,43 @@ async function handleApi(req, res) {
     const store = await readSalesCrm();
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
-    const item = normalizeSalesItem(collection, body.item || body, store);
-    const existingIndex = store[collection].findIndex(entry => (
+    const rawItem = body.item || body;
+    const hadIncomingId = !!cleanCell(rawItem.id || "");
+    const item = normalizeSalesItem(collection, rawItem, store);
+    const nowIso = new Date().toISOString();
+    let existingIndex = store[collection].findIndex(entry => (
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
+    if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo) {
+      existingIndex = store.leads.findIndex(entry => inventoryNorm(entry.enquiryNo) === inventoryNorm(item.enquiryNo));
+    }
+    if (collection === "leads" && existingIndex < 0) {
+      const isDuplicateEnquiryNo = store.leads.some(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(item.enquiryNo));
+      if (!cleanSalesEnquiryNo(item.enquiryNo) || isDuplicateEnquiryNo) item.enquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
+      item.createdAt = item.createdAt || nowIso;
+      item.updatedAt = nowIso;
+    }
     if (existingIndex >= 0) {
       if (collection === "customers") item.id = store[collection][existingIndex].id || item.id;
+      if (collection === "leads") {
+        item.createdAt = store[collection][existingIndex].createdAt || item.createdAt || "";
+        item.updatedAt = nowIso;
+      }
       store[collection][existingIndex] = item;
     }
-    else store[collection].unshift(item);
+    else {
+      store[collection].unshift(item);
+      if (collection === "leads") {
+        store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
+      }
+    }
     if (collection === "customers") store.customers = mergeDuplicateSalesCustomers(store.customers);
     if (collection === "quotations") {
       store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
     }
     if (collection === "projects") {
       store.settings.nextProjectNo = nextAvailableSalesProjectNo(store.settings.nextProjectNo, store.projects);
-    }
-    if (collection === "leads" && item.enquiryNo) {
-      store.settings.nextEnquiryNo = nextSalesEnquiryNoFrom(item.enquiryNo);
     }
     await writeSalesCrm(store);
     if (collection === "customers") await syncSalesCustomerToInventory(item);
@@ -1932,13 +1989,22 @@ async function handleApi(req, res) {
     const store = await readPurchaseOrders();
     const body = await readJson(req);
     const sourceOrder = body.order || body;
+    const requestedPoNo = cleanCell(body.requestedPoNo || sourceOrder.poNo);
     const order = normalizePurchaseOrder({
       ...sourceOrder,
+      poNo: requestedPoNo || sourceOrder.poNo,
       status: body.createOfficial ? "Created" : "Draft"
     }, store, !!body.createOfficial);
+    if (requestedPoNo) {
+      order.poNo = requestedPoNo;
+      const revisionMatch = requestedPoNo.match(/-R(\d+)$/i);
+      order.basePoNo = requestedPoNo.replace(/-R\d+$/i, "");
+      order.revisionNo = revisionMatch ? Number(revisionMatch[1]) || 0 : 0;
+      order.revision = order.revisionNo ? `Revision R${order.revisionNo}` : "";
+    }
     const existingIndex = store.orders.findIndex(item => item.id === order.id);
     if (body.createOfficial) {
-      if (!purchaseNoParts(order.poNo)) order.poNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
+      if (!order.poNo) order.poNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
       const duplicatePo = store.orders.find(item =>
         item.id !== order.id &&
         item.status === "Created" &&
@@ -3588,7 +3654,7 @@ function defaultPurchasePoNo(year = new Date().getFullYear()) {
 
 function purchaseNoParts(value, year = new Date().getFullYear()) {
   const expectedPrefix = purchasePoYearPrefix(year);
-  const match = String(value || "").trim().match(/^AMTS-(\d{2})-LPO-(\d+)$/i);
+  const match = String(value || "").trim().match(/^AMTS-(\d{2})-LPO-(\d+)(?:-R\d+)?$/i);
   if (!match) return null;
   if (match[1] !== String(year).slice(-2)) return null;
   return {
@@ -3679,9 +3745,15 @@ function mergeScannedPurchaseSupplierDetails(extracted = {}, store = {}) {
 
 function normalizePurchaseOrder(input = {}, store = defaultPurchaseOrders(), createOfficial = false) {
   const now = new Date().toISOString();
+  const poNo = cleanCell(input.poNo);
+  const revisionMatch = poNo.match(/-R(\d+)$/i);
+  const revisionNo = Number(input.revisionNo || (revisionMatch ? revisionMatch[1] : 0)) || 0;
   const order = {
     id: input.id || id(),
-    poNo: input.poNo || "",
+    poNo,
+    basePoNo: cleanCell(input.basePoNo || poNo.replace(/-R\d+$/i, "")),
+    revisionNo,
+    revision: cleanCell(input.revision || (revisionNo ? `Revision R${revisionNo}` : "")),
     status: createOfficial ? "Created" : cleanCell(input.status || "Draft"),
     supplierName: cleanCell(input.supplierName),
     supplierAddress: cleanCell(input.supplierAddress || input.address),
