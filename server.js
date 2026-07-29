@@ -709,7 +709,7 @@ function normalizeAreaCalculation(input = {}) {
 function defaultSalesCrm() {
   const defaultEnquiryNo = `EN${String(new Date().getFullYear()).slice(-2)}-1001`;
   return {
-    settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: defaultEnquiryNo, lastCreatedEnquiryNo: "", nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
+    settings: { nextQuotationNo: defaultSalesQuotationNo(), nextEnquiryNo: defaultEnquiryNo, lastCreatedEnquiryNo: "", nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
     leads: [
       { id: id(), avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
       { id: id(), avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -1263,7 +1263,7 @@ function normalizeSalesItem(collection, input, store) {
     };
   }
   if (collection === "quotations") {
-    const quoteNo = cleanCell(base.no || base.quotationNo || store.settings.nextQuotationNo || `CZ-QTN-${new Date().getFullYear()}-0001`);
+    const quoteNo = cleanCell(base.no || base.quotationNo || store.settings.nextQuotationNo || defaultSalesQuotationNo());
     const revisionMatch = quoteNo.match(/-R(\d+)$/i);
     const revisionNo = Number(base.revisionNo || (revisionMatch ? revisionMatch[1] : 0)) || 0;
     const baseQuotationNo = cleanCell(base.baseQuotationNo || quoteNo.replace(/-R\d+$/i, ""));
@@ -1289,7 +1289,9 @@ function normalizeSalesItem(collection, input, store) {
       manualSubtotal: cleanCell(base.manualSubtotal || ""),
       discount: Number(base.discount || 0),
       sourceLeadId: cleanCell(base.sourceLeadId || ""),
-      status: cleanCell(base.status || "Draft")
+      status: cleanCell(base.status || "Draft"),
+      createdAt: cleanCell(base.createdAt || ""),
+      updatedAt: cleanCell(base.updatedAt || "")
     };
     quote.amount = salesQuotationTotal(quote);
     return quote;
@@ -1368,8 +1370,12 @@ function salesQuotationTotal(quote) {
 function nextSalesQuotationNoFrom(current) {
   const text = cleanSalesQuotationBaseNo(current);
   const match = text.match(/^(.*?)(\d+)$/);
-  if (!match) return `CZ-QTN-${new Date().getFullYear()}-0001`;
+  if (!match) return defaultSalesQuotationNo();
   return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function defaultSalesQuotationNo() {
+  return `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}`;
 }
 
 function cleanSalesQuotationBaseNo(value) {
@@ -1381,21 +1387,64 @@ function quotationNoSequenceValue(value) {
   return match ? Number(match[1]) || 0 : 0;
 }
 
-function nextAvailableSalesQuotationNo(current, quotations = []) {
-  let next = cleanSalesQuotationBaseNo(current || `CZ-QTN-${new Date().getFullYear()}-0001`);
-  for (const quote of quotations || []) {
-    const quoteNo = cleanSalesQuotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
-    if (!quoteNo) continue;
-    const candidate = nextSalesQuotationNoFrom(quoteNo);
-    if (quotationNoSequenceValue(candidate) > quotationNoSequenceValue(next)) next = candidate;
-  }
-  return next;
+function quotationNoPatternKey(value) {
+  const match = cleanSalesQuotationBaseNo(value).match(/^(.*?)(\d+)$/);
+  return match ? inventoryNorm(match[1]) : inventoryNorm(value);
+}
+
+function isLegacyDefaultSalesQuotationNo(value) {
+  return /^CZ-QTN-\d{4}-\d+$/i.test(cleanSalesQuotationBaseNo(value));
 }
 
 function quotationRevisionNo(quote = {}) {
   const match = cleanCell(quote.no || quote.quotationNo || "").match(/-R(\d+)$/i);
   if (match) return Number(match[1]) || 0;
   return Number(quote.revisionNo || 0) || 0;
+}
+
+function nextAvailableSalesQuotationNo(current, quotations = []) {
+  const freshQuotes = (quotations || []).filter(quote => !quotationRevisionNo(quote) && cleanSalesQuotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
+  const currentNext = cleanSalesQuotationBaseNo(current || "");
+  const hasCurrentPattern = currentNext && !isLegacyDefaultSalesQuotationNo(currentNext);
+  const hasFreshCustomPattern = freshQuotes.some(quote => !isLegacyDefaultSalesQuotationNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
+  if (!hasFreshCustomPattern) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
+  const latestFreshQuote = latestSalesQuotationForNumbering(freshQuotes);
+  if (!latestFreshQuote) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
+  const latestBase = cleanSalesQuotationBaseNo(latestFreshQuote.baseQuotationNo || latestFreshQuote.no || latestFreshQuote.quotationNo || "");
+  const patternKey = quotationNoPatternKey(latestBase);
+  let next = nextSalesQuotationNoFrom(latestBase);
+  for (const quote of quotations || []) {
+    const quoteNo = cleanSalesQuotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
+    if (!quoteNo || quotationRevisionNo(quote) || quotationNoPatternKey(quoteNo) !== patternKey) continue;
+    const candidate = nextSalesQuotationNoFrom(quoteNo);
+    if (quotationNoSequenceValue(candidate) > quotationNoSequenceValue(next)) next = candidate;
+  }
+  return next;
+}
+
+function latestSalesQuotationForNumbering(quotes = []) {
+  return quotes.reduce((latest, quote, index) => {
+    const score = salesQuotationNumberingScore(quote, index);
+    return !latest || score > latest.score ? { quote, score } : latest;
+  }, null)?.quote || null;
+}
+
+function salesQuotationNumberingScore(quote = {}, index = 0) {
+  const quoteNo = quote.baseQuotationNo || quote.no || quote.quotationNo || "";
+  const patternPriority = isLegacyDefaultSalesQuotationNo(quoteNo) ? 0 : 1000000000000000;
+  return patternPriority + salesQuotationCreatedSortValue(quote, index);
+}
+
+function salesQuotationCreatedSortValue(quote = {}, index = 0) {
+  const raw = cleanCell(quote.createdAt || quote.createdDate || quote.savedAt || quote.date || quote.quotationDate || "");
+  const parsed = Date.parse(raw);
+  if (Number.isFinite(parsed)) return parsed;
+  const dateMatch = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (dateMatch) {
+    const year = dateMatch[3].length === 2 ? Number(`20${dateMatch[3]}`) : Number(dateMatch[3]);
+    return new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1])).getTime();
+  }
+  return -index;
 }
 
 function nextAvailableSalesQuotationRevisionNo(baseNo, quotations = []) {
@@ -1903,6 +1952,7 @@ async function handleApi(req, res) {
       ));
       const nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
       const submittedIsBehind = !submittedIsRevision && quotationNoSequenceValue(submittedQuoteNo) < quotationNoSequenceValue(nextQuotationNo);
+      const submittedPatternDiffers = !submittedIsRevision && submittedQuoteNo && quotationNoPatternKey(submittedQuoteNo) !== quotationNoPatternKey(nextQuotationNo);
       if (submittedIsRevision && exactQuotationExists) {
         const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
         const revisionNo = nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations);
@@ -1911,7 +1961,7 @@ async function handleApi(req, res) {
         item.baseQuotationNo = baseNo;
         item.revisionNo = revisionNo;
         item.revision = `Revision R${revisionNo}`;
-      } else if (!submittedIsRevision && (exactQuotationExists || submittedIsBehind)) {
+      } else if (!submittedIsRevision && (exactQuotationExists || submittedIsBehind || submittedPatternDiffers)) {
         item.no = nextQuotationNo;
         item.quotationNo = item.no;
         item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
@@ -1934,9 +1984,17 @@ async function handleApi(req, res) {
         item.createdAt = store[collection][existingIndex].createdAt || item.createdAt || "";
         item.updatedAt = nowIso;
       }
+      if (collection === "quotations") {
+        item.createdAt = store[collection][existingIndex].createdAt || item.createdAt || nowIso;
+        item.updatedAt = nowIso;
+      }
       store[collection][existingIndex] = item;
     }
     else {
+      if (collection === "quotations") {
+        item.createdAt = item.createdAt || nowIso;
+        item.updatedAt = nowIso;
+      }
       store[collection].unshift(item);
       if (collection === "leads") {
         store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);

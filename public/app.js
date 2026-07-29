@@ -167,7 +167,7 @@ Units offered are covered under a standard warranty of 12 months from the date o
 Exclusions:
 Installation of AC units, unloading of units at site & supply of items other than mentioned.`;
 const salesCrmData = {
-  settings: { nextQuotationNo: `CZ-QTN-${new Date().getFullYear()}-0416`, nextEnquiryNo: `EN${String(new Date().getFullYear()).slice(-2)}-1001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
+  settings: { nextQuotationNo: defaultSalesQuotationNo(), nextEnquiryNo: `EN${String(new Date().getFullYear()).slice(-2)}-1001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
   leads: [
     { id: "L-1001", avatar: "AM", customer: "Mr. Ahmed Mansoor", phone: "+971 50 123 4567", requirement: "Daikin AC Supply & Install", projectType: "Villa Project", location: "Jumeirah 1, Dubai", source: "WhatsApp", status: "New Lead", followUp: "22 Jun 2026", priority: "Overdue" },
     { id: "L-1002", avatar: "SL", customer: "Skyline Logistics", phone: "+971 4 445 2190", requirement: "Warehouse VRV Replacement", projectType: "Commercial", location: "Dubai Investment Park", source: "Website", status: "Contacted", followUp: "24 Jun 2026", priority: "Today" },
@@ -3055,10 +3055,20 @@ function syncSalesQuotationRevisionFields(quote = {}) {
 }
 
 function cleanNextSalesQuotationNo() {
-  let nextNo = quotationBaseNo(salesData().settings?.nextQuotationNo || `CZ-QTN-${new Date().getFullYear()}-0001`);
-  for (const quote of salesData().quotations || []) {
+  const quotations = salesData().quotations || [];
+  const freshQuotes = quotations.filter(quote => !quotationRevisionNo(quote) && quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
+  const currentNext = quotationBaseNo(salesData().settings?.nextQuotationNo || "");
+  const hasCurrentPattern = currentNext && !isLegacyDefaultSalesQuotationNo(currentNext);
+  const hasFreshCustomPattern = freshQuotes.some(quote => !isLegacyDefaultSalesQuotationNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
+  if (!hasFreshCustomPattern) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
+  const latestFreshQuote = latestSalesQuotationForNumbering(freshQuotes);
+  if (!latestFreshQuote) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
+  const latestBase = quotationBaseNo(latestFreshQuote.baseQuotationNo || latestFreshQuote.no || latestFreshQuote.quotationNo || "");
+  let nextNo = nextSalesQuotationNoFromBase(latestBase);
+  const patternKey = quotationNoPatternKey(latestBase);
+  for (const quote of quotations) {
     const quoteNo = quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
-    if (!quoteNo) continue;
+    if (!quoteNo || quotationRevisionNo(quote) || quotationNoPatternKey(quoteNo) !== patternKey) continue;
     const candidate = nextSalesQuotationNoFromBase(quoteNo);
     if (quotationNoSequenceValue(candidate) > quotationNoSequenceValue(nextNo)) nextNo = candidate;
   }
@@ -3068,13 +3078,51 @@ function cleanNextSalesQuotationNo() {
 function nextSalesQuotationNoFromBase(value) {
   const text = quotationBaseNo(value);
   const match = text.match(/^(.*?)(\d+)$/);
-  if (!match) return `CZ-QTN-${new Date().getFullYear()}-0001`;
+  if (!match) return defaultSalesQuotationNo();
   return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+}
+
+function defaultSalesQuotationNo() {
+  return `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}`;
 }
 
 function quotationNoSequenceValue(value) {
   const match = quotationBaseNo(value).match(/(\d+)$/);
   return match ? Number(match[1]) || 0 : 0;
+}
+
+function latestSalesQuotationForNumbering(quotes = []) {
+  return quotes.reduce((latest, quote, index) => {
+    const score = salesQuotationNumberingScore(quote, index);
+    return !latest || score > latest.score ? { quote, score } : latest;
+  }, null)?.quote || null;
+}
+
+function salesQuotationNumberingScore(quote = {}, index = 0) {
+  const quoteNo = quote.baseQuotationNo || quote.no || quote.quotationNo || "";
+  const patternPriority = isLegacyDefaultSalesQuotationNo(quoteNo) ? 0 : 1_000_000_000_000_000;
+  return patternPriority + salesQuotationCreatedSortValue(quote, index);
+}
+
+function salesQuotationCreatedSortValue(quote = {}, index = 0) {
+  const raw = String(quote.createdAt || quote.createdDate || quote.savedAt || quote.date || quote.quotationDate || "").trim();
+  const parsed = Date.parse(raw);
+  if (Number.isFinite(parsed)) return parsed;
+  const dateMatch = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+  if (dateMatch) {
+    const year = dateMatch[3].length === 2 ? Number(`20${dateMatch[3]}`) : Number(dateMatch[3]);
+    return new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1])).getTime();
+  }
+  return -index;
+}
+
+function quotationNoPatternKey(value) {
+  const match = quotationBaseNo(value).match(/^(.*?)(\d+)$/);
+  return match ? norm(match[1]) : norm(value);
+}
+
+function isLegacyDefaultSalesQuotationNo(value) {
+  return /^CZ-QTN-\d{4}-\d+$/i.test(quotationBaseNo(value));
 }
 
 function quotationRevisionNo(quote = {}) {
