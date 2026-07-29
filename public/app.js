@@ -6302,6 +6302,23 @@ function purchaseOrdersForDisplay(orders = []) {
     .map(item => item.order);
 }
 
+function applyPurchaseSaveResult(result = {}) {
+  if (result.state) {
+    purchaseState = result.state;
+    purchaseLoadedAt = Date.now();
+    return;
+  }
+  purchaseState = purchaseState || { settings: {}, orders: [], suppliers: [], uploads: [] };
+  if (result.settings) purchaseState.settings = { ...(purchaseState.settings || {}), ...result.settings };
+  if (!result.order) return;
+  purchaseState.orders = purchaseState.orders || [];
+  const order = result.order;
+  const existingIndex = purchaseState.orders.findIndex(item => item.id === order.id);
+  if (existingIndex >= 0) purchaseState.orders[existingIndex] = order;
+  else purchaseState.orders.unshift(order);
+  purchaseLoadedAt = Date.now();
+}
+
 function createPurchaseOrderRevision(orderId) {
   const order = (purchaseState.orders || []).find(item => item.id === orderId);
   if (!order) return;
@@ -8553,7 +8570,7 @@ async function savePurchaseDraft(createOfficial) {
       method: "POST",
       body: JSON.stringify({ order: purchaseDraft, createOfficial, requestedPoNo })
     });
-    purchaseState = result.state;
+    applyPurchaseSaveResult(result);
     purchaseDraft = result.order;
     if (requestedPoNo && purchaseDraft && norm(purchaseDraft.poNo) !== norm(requestedPoNo)) {
       purchaseDraft.poNo = requestedPoNo;

@@ -2017,7 +2017,7 @@ async function handleApi(req, res) {
     else store.orders.unshift(order);
     store.settings.nextPoNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
     await writePurchaseOrders(store);
-    return send(res, 200, { state: purchaseOrderView(store), order });
+    return send(res, 200, { settings: store.settings, order });
   }
 
   if (req.method === "GET" && url.pathname.match(/^\/api\/purchase-orders\/uploads\/[^/]+$/)) {
