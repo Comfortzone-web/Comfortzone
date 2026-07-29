@@ -1896,25 +1896,27 @@ async function handleApi(req, res) {
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
     if (collection === "quotations" && existingIndex < 0) {
+      const submittedQuoteNo = cleanCell(item.no || item.quotationNo || "");
+      const submittedIsRevision = /-R\d+$/i.test(submittedQuoteNo);
       const exactQuotationExists = (store.quotations || []).some(quote => (
-        inventoryNorm(quote.no || quote.quotationNo || "") === inventoryNorm(item.no || item.quotationNo || "")
+        inventoryNorm(quote.no || quote.quotationNo || "") === inventoryNorm(submittedQuoteNo)
       ));
-      if (exactQuotationExists) {
+      const nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
+      const submittedIsBehind = !submittedIsRevision && quotationNoSequenceValue(submittedQuoteNo) < quotationNoSequenceValue(nextQuotationNo);
+      if (submittedIsRevision && exactQuotationExists) {
         const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
-        if (/-R\d+$/i.test(item.no || item.quotationNo || "")) {
-          const revisionNo = nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations);
-          item.no = `${baseNo}-R${revisionNo}`;
-          item.quotationNo = item.no;
-          item.baseQuotationNo = baseNo;
-          item.revisionNo = revisionNo;
-          item.revision = `Revision R${revisionNo}`;
-        } else {
-          item.no = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
-          item.quotationNo = item.no;
-          item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
-          item.revisionNo = 0;
-          item.revision = item.revision || "Fresh Quote";
-        }
+        const revisionNo = nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations);
+        item.no = `${baseNo}-R${revisionNo}`;
+        item.quotationNo = item.no;
+        item.baseQuotationNo = baseNo;
+        item.revisionNo = revisionNo;
+        item.revision = `Revision R${revisionNo}`;
+      } else if (!submittedIsRevision && (exactQuotationExists || submittedIsBehind)) {
+        item.no = nextQuotationNo;
+        item.quotationNo = item.no;
+        item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
+        item.revisionNo = 0;
+        item.revision = item.revision || "Fresh Quote";
       }
     }
     if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo) {

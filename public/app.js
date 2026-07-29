@@ -83,6 +83,7 @@ let salesOrderBookFilters = {
 };
 let salesQuotationDraft = null;
 let salesQuotationRevisionNoLock = "";
+let salesQuotationSaving = false;
 let salesCrmState = null;
 let salesCrmLoadedAt = 0;
 let salesCrmLoadPromise = null;
@@ -4393,7 +4394,7 @@ function handleSalesLeadBoardDragEnd() {
   clearSalesLeadBoardDragState();
 }
 
-function handleSalesClick(event) {
+async function handleSalesClick(event) {
   const target = event.target.closest("button");
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
@@ -4519,10 +4520,7 @@ function handleSalesClick(event) {
   }
   const action = target.dataset.salesAction;
   if (action === "create-quotation") {
-    salesQuotationDraft = null;
-    salesQuotationRevisionNoLock = "";
-    salesQuotationMode = "create";
-    showSalesDesk("quotation");
+    return startSalesQuotationDraft();
   }
   if (action === "import-leads") toast("Excel import for enquiry pipeline will be mapped in the next step");
   if (action === "view-lead") {
@@ -4540,17 +4538,11 @@ function handleSalesClick(event) {
   }
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === target.dataset.salesId) || {});
-    salesQuotationRevisionNoLock = "";
-    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || target.dataset.salesId || "" });
-    salesQuotationMode = "create";
-    showSalesDesk("quotation");
+    return startSalesQuotationDraft({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || target.dataset.salesId || "" });
   }
   if (action === "project-quote") {
     const project = salesData().projects.find(item => item.id === target.dataset.salesId);
-    salesQuotationRevisionNoLock = "";
-    salesQuotationDraft = quoteDraftFromSource({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
-    salesQuotationMode = "create";
-    showSalesDesk("quotation");
+    return startSalesQuotationDraft({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
   }
   if (action === "quotation-list") {
     salesQuotationMode = "list";
@@ -4560,11 +4552,11 @@ function handleSalesClick(event) {
     salesQuotationDraft.items.push({ description: "", qty: 1, unit: "Nos", unitPrice: 0 });
     renderSalesDesk();
   }
-  if (action === "save-quote") saveSalesQuotation("Draft");
-  if (action === "send-quote") saveSalesQuotation("Sent");
+  if (action === "save-quote") return saveSalesQuotation("Draft", target);
+  if (action === "send-quote") return saveSalesQuotation("Sent", target);
   if (action === "preview-quote") previewSalesQuotation(target.dataset.salesId);
   if (action === "pdf-quote") downloadSalesQuotationPdf(target.dataset.salesId);
-  if (action === "copy-quote" || action === "revision-quote") createSalesQuotationRevision(target.dataset.salesId);
+  if (action === "copy-quote" || action === "revision-quote") return createSalesQuotationRevision(target.dataset.salesId);
   if (action === "create-project-from-quote") createProjectFromQuotation(target.dataset.salesId);
   if (action === "create-order-book-from-quote") createOrderBookFromQuotation(target.dataset.salesId);
   if (action === "edit-quote") editSalesQuotation(target.dataset.salesId);
@@ -4610,7 +4602,7 @@ function handleSalesClick(event) {
   if (action === "order-book-import") toast("Excel import mapping for Order Book can be added in the next step");
 }
 
-function handleSalesMenuAction(action, itemId, meta = {}) {
+async function handleSalesMenuAction(action, itemId, meta = {}) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
   const quote = ["preview-quote", "pdf-quote", "copy-quote", "revision-quote", "create-project-from-quote", "create-order-book-from-quote", "edit-quote", "delete-quote"].includes(action) ? findSalesQuotation(itemId) : null;
   const quoteId = quote?.id || itemId;
@@ -4619,10 +4611,7 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "lead-create-workflow") return createWorkflowFromLead(itemId);
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === itemId) || {});
-    salesQuotationRevisionNoLock = "";
-    salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || itemId || "" });
-    salesQuotationMode = "create";
-    return showSalesDesk("quotation");
+    return startSalesQuotationDraft({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || itemId || "" });
   }
   if (action === "view-lead") {
     salesLeadDetailId = itemId;
@@ -4641,10 +4630,7 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "delete-customer") return deleteSalesItem("customers", itemId);
   if (action === "project-quote") {
     const project = salesData().projects.find(item => item.id === itemId);
-    salesQuotationRevisionNoLock = "";
-    salesQuotationDraft = quoteDraftFromSource({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
-    salesQuotationMode = "create";
-    return showSalesDesk("quotation");
+    return startSalesQuotationDraft({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
   }
   if (action === "view-project") {
     salesProjectDetailId = itemId;
@@ -4870,10 +4856,25 @@ function quoteDraftFromSource(source = {}) {
   };
 }
 
-async function saveSalesQuotation(status = "Draft") {
-  if (!salesQuotationDraft) return;
+async function startSalesQuotationDraft(source = {}) {
+  salesQuotationDraft = null;
+  salesQuotationRevisionNoLock = "";
+  await loadSalesCrm({ force: true }).catch(error => console.warn(error));
+  salesQuotationDraft = quoteDraftFromSource(source);
+  salesQuotationMode = "create";
+  showSalesDesk("quotation");
+}
+
+async function saveSalesQuotation(status = "Draft", triggerButton = null) {
+  if (!salesQuotationDraft || salesQuotationSaving) return;
   const savedCustomer = requireSavedSalesCustomer(salesQuotationDraft.customer, "Quotation customer");
   if (!savedCustomer) return;
+  salesQuotationSaving = true;
+  const originalButtonText = triggerButton?.textContent || "";
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.textContent = status === "Sent" ? "Sending..." : "Saving...";
+  }
   const quotationNoInput = document.querySelector('[data-sales-quote-field="quotationNo"]');
   const visibleQuotationNo = String(quotationNoInput?.value || "").trim();
   const lockedRevisionNo = String(salesQuotationRevisionNoLock || "").trim();
@@ -4893,13 +4894,23 @@ async function saveSalesQuotation(status = "Draft") {
     status,
     requestedQuotationNo
   };
-  salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
-  await markLeadQuoteSentFromQuotation(quote);
-  salesQuotationMode = "list";
-  salesQuotationDraft = null;
-  salesQuotationRevisionNoLock = "";
-  renderSalesDesk();
-  toast(status === "Sent" ? "Quotation marked as sent" : "Quotation saved");
+  try {
+    salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
+    markLeadQuoteSentFromQuotation(quote).catch(error => console.warn(error));
+    salesQuotationMode = "list";
+    salesQuotationDraft = null;
+    salesQuotationRevisionNoLock = "";
+    renderSalesDesk();
+    toast(status === "Sent" ? "Quotation marked as sent" : "Quotation saved");
+  } catch (error) {
+    toast(error.message || "Could not save quotation");
+    if (triggerButton) {
+      triggerButton.disabled = false;
+      triggerButton.textContent = originalButtonText;
+    }
+  } finally {
+    salesQuotationSaving = false;
+  }
 }
 
 async function markLeadQuoteSentFromQuotation(quote) {
