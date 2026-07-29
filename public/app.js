@@ -5475,8 +5475,11 @@ function nextQuotationRevisionNo(quote) {
   }, 0) + 1;
 }
 
-function createSalesQuotationRevision(quoteId) {
-  const quote = findSalesQuotation(quoteId);
+async function createSalesQuotationRevision(quoteId) {
+  const currentQuote = findSalesQuotation(quoteId);
+  if (!currentQuote) return;
+  await loadSalesCrm({ force: true }).catch(error => console.warn(error));
+  const quote = findSalesQuotation(quoteId) || currentQuote;
   if (!quote) return;
   const baseNo = quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
   const revisionNo = nextQuotationRevisionNo(quote);

@@ -1392,6 +1392,20 @@ function nextAvailableSalesQuotationNo(current, quotations = []) {
   return next;
 }
 
+function quotationRevisionNo(quote = {}) {
+  const match = cleanCell(quote.no || quote.quotationNo || "").match(/-R(\d+)$/i);
+  if (match) return Number(match[1]) || 0;
+  return Number(quote.revisionNo || 0) || 0;
+}
+
+function nextAvailableSalesQuotationRevisionNo(baseNo, quotations = []) {
+  const cleanBase = cleanSalesQuotationBaseNo(baseNo);
+  return (quotations || []).reduce((max, quote) => {
+    const quoteBaseNo = cleanSalesQuotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
+    return inventoryNorm(quoteBaseNo) === inventoryNorm(cleanBase) ? Math.max(max, quotationRevisionNo(quote)) : max;
+  }, 0) + 1;
+}
+
 function nextSalesProjectNoFrom(current) {
   const text = cleanCell(current || "");
   const match = text.match(/^(.*?)(\d+)$/);
@@ -1881,6 +1895,28 @@ async function handleApi(req, res) {
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
+    if (collection === "quotations" && existingIndex < 0) {
+      const exactQuotationExists = (store.quotations || []).some(quote => (
+        inventoryNorm(quote.no || quote.quotationNo || "") === inventoryNorm(item.no || item.quotationNo || "")
+      ));
+      if (exactQuotationExists) {
+        const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
+        if (/-R\d+$/i.test(item.no || item.quotationNo || "")) {
+          const revisionNo = nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations);
+          item.no = `${baseNo}-R${revisionNo}`;
+          item.quotationNo = item.no;
+          item.baseQuotationNo = baseNo;
+          item.revisionNo = revisionNo;
+          item.revision = `Revision R${revisionNo}`;
+        } else {
+          item.no = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
+          item.quotationNo = item.no;
+          item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
+          item.revisionNo = 0;
+          item.revision = item.revision || "Fresh Quote";
+        }
+      }
+    }
     if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo) {
       existingIndex = store.leads.findIndex(entry => inventoryNorm(entry.enquiryNo) === inventoryNorm(item.enquiryNo));
     }
