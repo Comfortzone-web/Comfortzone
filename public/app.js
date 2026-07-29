@@ -6172,13 +6172,14 @@ function purchaseOrderListHtml() {
           <col class="po-list-col-supplier">
           <col class="po-list-col-project">
           <col class="po-list-col-items">
+          <col class="po-list-col-rep">
           <col class="po-list-col-total">
           <col class="po-list-col-status">
           <col class="po-list-col-action">
         </colgroup>
-        <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Items</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
+        <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Items</th><th>Purchase Rep</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${(order.items || []).length}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
+          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${(order.items || []).length}</td><td>${escapeHtml(order.purchaseRepresentative || "-")}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="8">No purchase orders saved.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -6244,6 +6245,7 @@ function purchaseFilteredOrders() {
     order.poNo,
     order.supplierName,
     order.projectName,
+    order.purchaseRepresentative,
     order.quotationNo,
     order.status,
     ...(order.items || []).flatMap(item => [item.description, item.modelNo])

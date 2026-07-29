@@ -4210,13 +4210,14 @@ td[contenteditable="true"]:focus {
   vertical-align: middle;
 }
 
-.po-list-table .po-list-col-no { width: 145px; }
-.po-list-table .po-list-col-supplier { width: 34%; }
-.po-list-table .po-list-col-project { width: 22%; }
-.po-list-table .po-list-col-items { width: 74px; }
-.po-list-table .po-list-col-total { width: 126px; }
+.po-list-table .po-list-col-no { width: 140px; }
+.po-list-table .po-list-col-supplier { width: 31%; }
+.po-list-table .po-list-col-project { width: 20%; }
+.po-list-table .po-list-col-items { width: 58px; }
+.po-list-table .po-list-col-rep { width: 120px; }
+.po-list-table .po-list-col-total { width: 110px; }
 .po-list-table .po-list-col-status { width: 92px; }
-.po-list-table .po-list-col-action { width: 78px; }
+.po-list-table .po-list-col-action { width: 64px; }
 
 .po-list-table td {
   overflow-wrap: anywhere;
