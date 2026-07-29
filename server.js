@@ -1861,7 +1861,21 @@ async function handleApi(req, res) {
     const body = await readJson(req);
     const rawItem = body.item || body;
     const hadIncomingId = !!cleanCell(rawItem.id || "");
-    const item = normalizeSalesItem(collection, rawItem, store);
+    const requestedQuotationNo = collection === "quotations"
+      ? cleanCell(body.requestedQuotationNo || rawItem.requestedQuotationNo || rawItem.quotationNo || rawItem.no)
+      : "";
+    const item = normalizeSalesItem(collection, requestedQuotationNo
+      ? { ...rawItem, no: requestedQuotationNo, quotationNo: requestedQuotationNo }
+      : rawItem, store);
+    if (collection === "quotations" && requestedQuotationNo) {
+      const revisionMatch = requestedQuotationNo.match(/-R(\d+)$/i);
+      const revisionNo = revisionMatch ? Number(revisionMatch[1]) || 0 : 0;
+      item.no = requestedQuotationNo;
+      item.quotationNo = requestedQuotationNo;
+      item.baseQuotationNo = cleanCell(rawItem.baseQuotationNo || requestedQuotationNo.replace(/-R\d+$/i, ""));
+      item.revisionNo = revisionNo;
+      item.revision = revisionNo ? `Revision R${revisionNo}` : (item.revision || "Fresh Quote");
+    }
     const nowIso = new Date().toISOString();
     let existingIndex = store[collection].findIndex(entry => (
       entry.id === item.id ||

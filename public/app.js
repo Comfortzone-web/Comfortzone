@@ -82,6 +82,7 @@ let salesOrderBookFilters = {
   balancePending: ""
 };
 let salesQuotationDraft = null;
+let salesQuotationRevisionNoLock = "";
 let salesCrmState = null;
 let salesCrmLoadedAt = 0;
 let salesCrmLoadPromise = null;
@@ -3041,6 +3042,17 @@ function quotationBaseNo(no = "") {
   return String(no || "").replace(/-R\d+$/i, "");
 }
 
+function syncSalesQuotationRevisionFields(quote = {}) {
+  const quotationNo = String(quote.quotationNo || quote.no || "").trim();
+  const revisionMatch = quotationNo.match(/-R(\d+)$/i);
+  quote.quotationNo = quotationNo;
+  quote.no = quotationNo;
+  quote.baseQuotationNo = quotationNo ? quotationBaseNo(quotationNo) : "";
+  quote.revisionNo = revisionMatch ? Number(revisionMatch[1]) || 0 : 0;
+  quote.revision = quote.revisionNo ? `Revision R${quote.revisionNo}` : (quote.revision || "Fresh Quote");
+  return quote;
+}
+
 function cleanNextSalesQuotationNo() {
   let nextNo = quotationBaseNo(salesData().settings?.nextQuotationNo || `CZ-QTN-${new Date().getFullYear()}-0001`);
   for (const quote of salesData().quotations || []) {
@@ -4508,6 +4520,7 @@ function handleSalesClick(event) {
   const action = target.dataset.salesAction;
   if (action === "create-quotation") {
     salesQuotationDraft = null;
+    salesQuotationRevisionNoLock = "";
     salesQuotationMode = "create";
     showSalesDesk("quotation");
   }
@@ -4527,12 +4540,14 @@ function handleSalesClick(event) {
   }
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === target.dataset.salesId) || {});
+    salesQuotationRevisionNoLock = "";
     salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || target.dataset.salesId || "" });
     salesQuotationMode = "create";
     showSalesDesk("quotation");
   }
   if (action === "project-quote") {
     const project = salesData().projects.find(item => item.id === target.dataset.salesId);
+    salesQuotationRevisionNoLock = "";
     salesQuotationDraft = quoteDraftFromSource({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
     salesQuotationMode = "create";
     showSalesDesk("quotation");
@@ -4604,6 +4619,7 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "lead-create-workflow") return createWorkflowFromLead(itemId);
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === itemId) || {});
+    salesQuotationRevisionNoLock = "";
     salesQuotationDraft = quoteDraftFromSource({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || itemId || "" });
     salesQuotationMode = "create";
     return showSalesDesk("quotation");
@@ -4625,6 +4641,7 @@ function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "delete-customer") return deleteSalesItem("customers", itemId);
   if (action === "project-quote") {
     const project = salesData().projects.find(item => item.id === itemId);
+    salesQuotationRevisionNoLock = "";
     salesQuotationDraft = quoteDraftFromSource({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
     salesQuotationMode = "create";
     return showSalesDesk("quotation");
@@ -4857,17 +4874,30 @@ async function saveSalesQuotation(status = "Draft") {
   if (!salesQuotationDraft) return;
   const savedCustomer = requireSavedSalesCustomer(salesQuotationDraft.customer, "Quotation customer");
   if (!savedCustomer) return;
+  const quotationNoInput = document.querySelector('[data-sales-quote-field="quotationNo"]');
+  const visibleQuotationNo = String(quotationNoInput?.value || "").trim();
+  const lockedRevisionNo = String(salesQuotationRevisionNoLock || "").trim();
+  if (lockedRevisionNo && /-R\d+$/i.test(lockedRevisionNo) && !/-R\d+$/i.test(visibleQuotationNo)) {
+    salesQuotationDraft.quotationNo = lockedRevisionNo;
+  } else if (visibleQuotationNo) {
+    salesQuotationDraft.quotationNo = visibleQuotationNo;
+  }
+  syncSalesQuotationRevisionFields(salesQuotationDraft);
   salesQuotationDraft.customer = savedCustomer.name;
+  const requestedQuotationNo = String(salesQuotationDraft.quotationNo || "").trim();
   const quote = {
     ...salesQuotationDraft,
-    no: salesQuotationDraft.quotationNo,
+    no: requestedQuotationNo,
+    quotationNo: requestedQuotationNo,
     date: salesQuotationDraft.quotationDate,
-    status
+    status,
+    requestedQuotationNo
   };
   salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
   await markLeadQuoteSentFromQuotation(quote);
   salesQuotationMode = "list";
   salesQuotationDraft = null;
+  salesQuotationRevisionNoLock = "";
   renderSalesDesk();
   toast(status === "Sent" ? "Quotation marked as sent" : "Quotation saved");
 }
@@ -4933,6 +4963,7 @@ async function deleteLeadFollowUp(leadId, followIndex) {
 function editSalesQuotation(quoteId) {
   const quote = findSalesQuotation(quoteId);
   if (!quote) return;
+  salesQuotationRevisionNoLock = "";
   salesQuotationDraft = {
     ...structuredClone(quote),
     quotationNo: quote.no || "",
@@ -5450,6 +5481,7 @@ function createSalesQuotationRevision(quoteId) {
   const baseNo = quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
   const revisionNo = nextQuotationRevisionNo(quote);
   const revisionQuoteNo = `${baseNo}-R${revisionNo}`;
+  salesQuotationRevisionNoLock = revisionQuoteNo;
   salesQuotationDraft = {
     ...structuredClone(quote),
     id: "",
@@ -7506,6 +7538,7 @@ async function createSalesQuotationFromWorkflow() {
     items: workflowBoqQuoteItems(),
     manualSubtotal: money(state.tables.boq.summary?.total || state.tables.costing.summary?.sellingPrice || 0)
   });
+  salesQuotationRevisionNoLock = "";
   salesQuotationMode = "create";
   showSalesDesk("quotation");
   toast("Quotation draft prepared from workflow");
