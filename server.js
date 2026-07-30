@@ -701,6 +701,9 @@ function normalizeAreaCalculation(input = {}) {
     rows,
     totals: areaTotals(rows),
     message: cleanCell(input.message || ""),
+    splitLargeW1: Boolean(input.splitLargeW1),
+    sqftAedRate: areaNumber(input.sqftAedRate) || 3.3,
+    splitSqftAedRate: areaNumber(input.splitSqftAedRate) || 5.5,
     createdAt: input.createdAt || now,
     updatedAt: input.updatedAt || now
   };

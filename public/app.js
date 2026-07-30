@@ -6003,6 +6003,9 @@ function ensureActiveAreaCalculation() {
     rows: [],
     totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
     message: "",
+    splitLargeW1: false,
+    sqftAedRate: 3.3,
+    splitSqftAedRate: 5.5,
     isDraft: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -6022,6 +6025,9 @@ function createNewAreaCalculationFile() {
     rows: [],
     totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
     message: "",
+    splitLargeW1: false,
+    sqftAedRate: 3.3,
+    splitSqftAedRate: 5.5,
     showTagList: false,
     isDraft: true,
     createdAt: new Date().toISOString(),
@@ -6046,8 +6052,12 @@ function areaCalculationDetailHtml() {
 function areaCalculationToolbarHtml(calc) {
   return `
     <div class="area-control-row">
-      <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}"></label>
+      <div class="area-title-controls">
+        <label>Title:<input data-area-title value="${escapeHtml(calc?.title || "")}"></label>
+        <label class="area-rate-field">SQFT/AED<input type="number" step="any" min="0" data-area-rate="sqftAedRate" value="${escapeHtml(areaDisplayRate(calc?.sqftAedRate, 3.3))}"></label>
+      </div>
       <div class="area-control-actions">
+        <button class="ghost-button area-toolbar-button area-split-toggle ${calc?.splitLargeW1 ? "active" : ""}" data-area-split-toggle aria-pressed="${calc?.splitLargeW1 ? "true" : "false"}"><span class="area-toggle-dot"></span><span>Split</span></button>
         <button class="ghost-button area-toolbar-button" data-area-add-row>${poIcon("plus")}<span>Add Row</span></button>
         <div class="area-tag-menu">
           <button class="ghost-button area-toolbar-button" data-area-tag-list>${poIcon("list")}<span>TagList</span>${poIcon("chevronDown")}</button>
@@ -6065,7 +6075,9 @@ function emptyAreaCalculationDraft() {
     title: "",
     rows: [],
     totals: { totalItems: 0, totalM2: 0, totalFt2: 0 },
-    message: ""
+    message: "",
+    sqftAedRate: 3.3,
+    splitSqftAedRate: 5.5
   };
 }
 
@@ -6098,6 +6110,7 @@ function areaCalculationFilesHtml() {
 function areaCalculationTableHtml(calc) {
   const rows = calc.rows || [];
   const totals = areaRecalculateCalculation(calc).totals;
+  if (calc.splitLargeW1) return areaCalculationSplitTablesHtml(calc, rows);
   return `
     <div class="area-table-shell">
       <div class="area-table-wrap">
@@ -6121,6 +6134,67 @@ function areaCalculationTableHtml(calc) {
       <strong>${Number(totals.totalFt2 || 0).toFixed(2)} ft²</strong>
     </div>
     ${calc.message ? `<p class="area-message">${escapeHtml(calc.message)}</p>` : ""}
+  `;
+}
+
+function areaCalculationSplitTablesHtml(calc, rows = []) {
+  const regularRows = [];
+  const largeRows = [];
+  rows.forEach((row, index) => {
+    const item = { row, index };
+    if (Number(row.w1 || 0) > 700) largeRows.push(item);
+    else regularRows.push(item);
+  });
+  return `
+    ${areaCalculationTableGroupHtml(regularRows)}
+    ${areaCalculationTableGroupHtml(largeRows, "W1 Above 700 mm", calc)}
+    ${calc.message ? `<p class="area-message">${escapeHtml(calc.message)}</p>` : ""}
+  `;
+}
+
+function areaCalculationTableGroupHtml(items = [], title = "", calc = null) {
+  const totals = areaTotalsFromRows(items.map(item => item.row));
+  return `
+    <section class="area-table-section">
+      ${title ? `<div class="area-split-header"><div class="area-split-heading">${escapeHtml(title)}</div><label class="area-rate-field area-split-rate-field">SQFT/AED<input type="number" step="any" min="0" data-area-rate="splitSqftAedRate" value="${escapeHtml(areaDisplayRate(calc?.splitSqftAedRate, 5.5))}"></label></div>` : ""}
+      <div class="area-table-shell">
+        <div class="area-table-wrap">
+          <table class="area-table">
+            <thead><tr>${areaCalculationColumns.map(([, label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead>
+            <tbody>
+              ${items.length ? items.map(({ row, index }) => areaCalculationRowHtml(row, index)).join("") : areaCalculationBlankRowsHtml()}
+            </tbody>
+          </table>
+        </div>
+        <div class="area-row-delete-rail" aria-label="Delete rows">
+          <span class="area-delete-rail-head"></span>
+          ${items.map(({ row, index }) => `<button class="area-row-delete-button" data-area-delete-row="${index}" title="Delete row ${escapeHtml(row.item || index + 1)}">x</button>`).join("")}
+        </div>
+      </div>
+      ${areaSummaryBarHtml(totals)}
+    </section>
+  `;
+}
+
+function areaTotalsFromRows(rows = []) {
+  const totalM2 = rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
+  const totalFt2 = rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
+  return {
+    totalItems: rows.length,
+    totalM2: Number(totalM2.toFixed(4)),
+    totalFt2: Number(totalFt2.toFixed(2))
+  };
+}
+
+function areaSummaryBarHtml(totals = {}) {
+  return `
+    <div class="area-summary-bar">
+      <span>Total Items: <strong>${totals.totalItems || 0}</strong></span>
+      <span>Grand Total:</span>
+      <strong>${Number(totals.totalM2 || 0).toFixed(4)} m²</strong>
+      <i></i>
+      <strong>${Number(totals.totalFt2 || 0).toFixed(2)} ft²</strong>
+    </div>
   `;
 }
 
@@ -8232,6 +8306,11 @@ function areaFabricationArea(row) {
   };
 }
 
+function areaDisplayRate(value, fallback = 3.3) {
+  const rate = areaValue(value);
+  return String(rate || fallback);
+}
+
 function areaRecalculateCalculation(calc) {
   calc.rows = (calc.rows || []).map(areaNormalizeRow);
   const totalM2 = calc.rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
@@ -8276,6 +8355,7 @@ function handleAreaCalculationClick(event) {
     return renderAreaCalculation();
   }
   if (target.dataset.areaDelete) return deleteAreaCalculation(target.dataset.areaDelete);
+  if (target.dataset.areaSplitToggle !== undefined) return toggleAreaCalculationSplit();
   if (target.dataset.areaAddRow !== undefined) return addAreaCalculationRow();
   if (target.dataset.areaTagList !== undefined) return toggleAreaCalculationTagList();
   if (target.dataset.areaDeleteRow !== undefined) return deleteAreaCalculationRow(Number(target.dataset.areaDeleteRow));
@@ -8286,6 +8366,11 @@ function handleAreaCalculationInput(event) {
   const calc = ensureActiveAreaCalculation();
   if (event.target.dataset.areaTitle !== undefined) {
     calc.title = event.target.value;
+    scheduleAreaCalculationSave();
+    return;
+  }
+  if (event.target.dataset.areaRate) {
+    calc[event.target.dataset.areaRate] = areaValue(event.target.value);
     scheduleAreaCalculationSave();
     return;
   }
@@ -8303,6 +8388,15 @@ function handleAreaCalculationInput(event) {
   const next = areaNormalizeRow(row, Number(rowIndex));
   calc.rows[Number(rowIndex)] = next;
   areaRecalculateCalculation(calc);
+  if (calc.splitLargeW1) {
+    if (field === "w1") renderAreaCalculation();
+    else {
+      refreshAreaRowDisplays(Number(rowIndex), next, calc.totals);
+      refreshAreaSplitSummaries(calc);
+    }
+    scheduleAreaCalculationSave();
+    return;
+  }
   refreshAreaRowDisplays(Number(rowIndex), next, calc.totals);
   scheduleAreaCalculationSave();
 }
@@ -8389,6 +8483,17 @@ function refreshAreaRowDisplays(index, row, totals) {
   }
 }
 
+function refreshAreaSplitSummaries(calc) {
+  const rows = calc?.rows || [];
+  const regularRows = rows.filter(row => Number(row.w1 || 0) <= 700);
+  const largeRows = rows.filter(row => Number(row.w1 || 0) > 700);
+  const summaries = document.querySelectorAll(".area-table-section .area-summary-bar");
+  [regularRows, largeRows].forEach((groupRows, index) => {
+    const summary = summaries[index];
+    if (summary) summary.outerHTML = areaSummaryBarHtml(areaTotalsFromRows(groupRows));
+  });
+}
+
 async function uploadAreaDrawing() {
   const input = $("#areaDrawingInput");
   const files = Array.from(input.files || []);
@@ -8422,6 +8527,14 @@ function toggleAreaCalculationTagList() {
   const calc = ensureActiveAreaCalculation();
   calc.showTagList = !calc.showTagList;
   renderAreaCalculation();
+}
+
+function toggleAreaCalculationSplit() {
+  const calc = ensureActiveAreaCalculation();
+  calc.splitLargeW1 = !calc.splitLargeW1;
+  areaRecalculateCalculation(calc);
+  renderAreaCalculation();
+  scheduleAreaCalculationSave();
 }
 
 function addAreaCalculationRow() {
@@ -10508,6 +10621,7 @@ function downloadBlob(blob, filename) {
 }
 
 function buildAreaCalculationWorkbookBlob(calc = {}) {
+  if (calc.splitLargeW1) return buildSplitAreaCalculationWorkbookBlob(calc);
   const columns = [
     "Item", "Section", "Type", "Connection", "W1 (mm)", "H1 (mm)", "W2 (mm)", "H2 (mm)",
     "Qty", "Length / Angle", "Offset (mm)", "Calc. Length (mm)", "Area (m²)", "Area (ft²)"
@@ -10548,7 +10662,7 @@ function buildAreaCalculationWorkbookBlob(calc = {}) {
   const totalQty = rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
   const totalM2 = rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
   const totalFt2 = rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
-  const rate = 3.3;
+  const rate = areaWorkbookRate(calc.sqftAedRate, 3.3);
   const amount = totalFt2 * rate;
   const vat = amount * 0.05;
   sheetRows.push(workbookRowXml(totalRow, [
@@ -10589,6 +10703,97 @@ function buildAreaCalculationWorkbookBlob(calc = {}) {
   return new Blob([workbookZip(files)], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   });
+}
+
+function buildSplitAreaCalculationWorkbookBlob(calc = {}) {
+  const rows = calc.rows || [];
+  const regularRows = rows.filter(row => Number(row.w1 || 0) <= 700);
+  const largeRows = rows.filter(row => Number(row.w1 || 0) > 700);
+  const sheetRows = [];
+  const merges = [];
+  let nextRow = areaWorkbookAppendSection(sheetRows, merges, regularRows, 1, areaWorkbookRate(calc.sqftAedRate, 3.3));
+  nextRow = areaWorkbookAppendSection(sheetRows, merges, largeRows, nextRow + 5, areaWorkbookRate(calc.splitSqftAedRate, 5.5));
+  const columnWidths = [10, 22, 10, 13, 11, 10, 11, 10, 10, 17, 13, 20, 11, 12];
+  const colsXml = columnWidths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
+  const mergeXml = merges.length ? `<mergeCells count="${merges.length}">${merges.map(ref => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>` : "";
+  const sheetName = workbookSheetName(calc.title || "Area Calculation");
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><dimension ref="A1:N${Math.max(1, nextRow - 1)}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${colsXml}</cols><sheetData>${sheetRows.join("")}</sheetData>${mergeXml}<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>`;
+  const files = {
+    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets><calcPr calcMode="auto"/></workbook>`,
+    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    "xl/styles.xml": areaCalculationWorkbookStylesXml(),
+    "xl/worksheets/sheet1.xml": sheetXml
+  };
+  return new Blob([workbookZip(files)], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  });
+}
+
+function areaWorkbookAppendSection(sheetRows, merges, rows, startRow, rate) {
+  const columns = [
+    "Item", "Section", "Type", "Connection", "W1 (mm)", "H1 (mm)", "W2 (mm)", "H2 (mm)",
+    "Qty", "Length / Angle", "Offset (mm)", "Calc. Length (mm)", "Area (m²)", "Area (ft²)"
+  ];
+  sheetRows.push(workbookRowXml(startRow, columns.map((column, index) => ({ column: index + 1, value: column, style: 1 }))));
+  rows.forEach((row, index) => {
+    const rowNumber = startRow + index + 1;
+    sheetRows.push(workbookRowXml(rowNumber, [
+      { column: 1, value: workbookNumberOrText(row.item), style: 5 },
+      { column: 2, value: row.section || "no explicit section" },
+      { column: 3, value: row.type || "" },
+      { column: 4, value: row.connection || "" },
+      { column: 5, value: Number(row.w1 || 0), style: 5 },
+      { column: 6, value: Number(row.h1 || 0), style: 5 },
+      { column: 7, value: Number(row.w2 || 0), style: 5 },
+      { column: 8, value: Number(row.h2 || 0), style: 5 },
+      { column: 9, value: Number(row.qty || 0), style: 5 },
+      { column: 10, value: row.drawingLengthAngle || "" },
+      { column: 11, value: Number(row.offset || 0), style: 5 },
+      { column: 12, value: Number(row.calculatedLength || 0), style: 5 },
+      { column: 13, formula: `((E${rowNumber}+20)+(F${rowNumber}+20)+(G${rowNumber}+20)+(H${rowNumber}+20))*L${rowNumber}*I${rowNumber}/1000000`, value: Number(row.areaM2 || 0), style: 3 },
+      { column: 14, formula: `M${rowNumber}*10.764`, value: Number(row.areaFt2 || 0), style: 2 }
+    ]));
+  });
+  const dataStart = startRow + 1;
+  const dataEnd = Math.max(dataStart, startRow + rows.length);
+  const totalRow = startRow + rows.length + 1;
+  const rateRow = totalRow + 2;
+  const amountRow = rateRow + 1;
+  const vatRow = rateRow + 2;
+  const netRow = rateRow + 3;
+  const totalQty = rows.reduce((sum, row) => sum + Number(row.qty || 0), 0);
+  const totalM2 = rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
+  const totalFt2 = rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
+  sheetRows.push(workbookRowXml(totalRow, [
+    { column: 9, formula: `SUM(I${dataStart}:I${dataEnd})`, value: totalQty, style: 4 },
+    { column: 13, formula: `SUM(M${dataStart}:M${dataEnd})`, value: totalM2, style: 4 },
+    { column: 14, formula: `SUM(N${dataStart}:N${dataEnd})`, value: totalFt2, style: 4 }
+  ]));
+  sheetRows.push(workbookRowXml(rateRow, [
+    { column: 12, value: "GI 0.56mm Duct with S & C sqft /AED", style: 6 },
+    { column: 14, value: rate, style: 4 }
+  ]));
+  sheetRows.push(workbookRowXml(amountRow, [
+    { column: 12, value: "Total Amount in AED", style: 6 },
+    { column: 14, formula: `N${totalRow}*N${rateRow}`, value: totalFt2 * rate, style: 2 }
+  ]));
+  sheetRows.push(workbookRowXml(vatRow, [
+    { column: 12, value: "VAT", style: 6 },
+    { column: 14, formula: `N${amountRow}*0.05`, value: totalFt2 * rate * 0.05, style: 2 }
+  ]));
+  sheetRows.push(workbookRowXml(netRow, [
+    { column: 12, value: " Net Amount in AED", style: 7 },
+    { column: 14, formula: `N${amountRow}+N${vatRow}`, value: totalFt2 * rate * 1.05, style: 8 }
+  ]));
+  merges.push(`L${rateRow}:M${rateRow}`, `L${amountRow}:M${amountRow}`, `L${vatRow}:M${vatRow}`, `L${netRow}:M${netRow}`);
+  return netRow + 1;
+}
+
+function areaWorkbookRate(value, fallback) {
+  const rate = areaValue(value);
+  return rate || fallback;
 }
 
 function areaCalculationWorkbookStylesXml() {
