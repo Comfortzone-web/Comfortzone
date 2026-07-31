@@ -8311,8 +8311,29 @@ function areaDisplayRate(value, fallback = 3.3) {
   return String(rate || fallback);
 }
 
+function areaEndcapParentKey(row = {}) {
+  if (areaNormalizeType(row.type || "") !== "END") return "";
+  const rawItem = String(row.item || "").trim();
+  return rawItem
+    .replace(/\bend\s*cap\b|\bendcap\b|\bend\b/ig, "")
+    .replace(/[-_\s]+$/g, "")
+    .replace(/[^a-z0-9]+/ig, "")
+    .toUpperCase() || rawItem.replace(/[^a-z0-9]+/ig, "").toUpperCase();
+}
+
+function areaDedupeEndcapRows(rows = []) {
+  const seen = new Set();
+  return rows.filter(row => {
+    const parentKey = areaEndcapParentKey(row);
+    if (!parentKey) return true;
+    if (seen.has(parentKey)) return false;
+    seen.add(parentKey);
+    return true;
+  });
+}
+
 function areaRecalculateCalculation(calc) {
-  calc.rows = (calc.rows || []).map(areaNormalizeRow);
+  calc.rows = areaDedupeEndcapRows(calc.rows || []).map(areaNormalizeRow);
   const totalM2 = calc.rows.reduce((sum, row) => sum + Number(row.areaM2 || 0), 0);
   const totalFt2 = calc.rows.reduce((sum, row) => sum + Number(row.areaFt2 || 0), 0);
   calc.totals = {

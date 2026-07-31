@@ -546,6 +546,31 @@ function areaEndcapItemLabel(value) {
   return item ? `${item}-END` : "END";
 }
 
+function areaEndcapParentKey(row = {}) {
+  const rawItem = cleanCell(row.item || row.Item || row.no || "");
+  const rawType = normalizeAreaType(row.type || row.Type || "");
+  if (rawType !== "END") return "";
+  return rawItem
+    .replace(/\bend\s*cap\b|\bendcap\b|\bend\b/ig, "")
+    .replace(/[-_\s]+$/g, "")
+    .replace(/[^a-z0-9]+/ig, "")
+    .toUpperCase() || rawItem.replace(/[^a-z0-9]+/ig, "").toUpperCase();
+}
+
+function areaDedupeEndcapRows(rows = []) {
+  const seenEndParents = new Set();
+  const deduped = [];
+  for (const row of rows) {
+    const parentKey = areaEndcapParentKey(row);
+    if (parentKey) {
+      if (seenEndParents.has(parentKey)) continue;
+      seenEndParents.add(parentKey);
+    }
+    deduped.push(row);
+  }
+  return deduped;
+}
+
 function areaExpandEndcapRows(rows = []) {
   const expanded = [];
   for (const row of rows) {
@@ -578,10 +603,10 @@ function areaExpandEndcapRows(rows = []) {
     expanded.push(originalRow);
 
     const endItem = areaEndcapItemLabel(row.item || row.Item || row.no);
+    const endParentKey = areaEndcapParentKey({ item: endItem, type: "END" });
     const hasMatchingEnd = rows.some((candidate) => {
       const candidateType = normalizeAreaType(candidate?.type || candidate?.Type || "");
-      const candidateItem = cleanCell(candidate?.item || candidate?.Item || candidate?.no || "");
-      return candidateType === "END" && candidateItem === endItem;
+      return candidateType === "END" && areaEndcapParentKey(candidate) === endParentKey;
     });
     if (!hasMatchingEnd) {
       expanded.push({
@@ -601,7 +626,7 @@ function areaExpandEndcapRows(rows = []) {
       });
     }
   }
-  return expanded;
+  return areaDedupeEndcapRows(expanded);
 }
 
 function normalizeAreaRow(row = {}, index = 0) {
@@ -691,7 +716,7 @@ function areaTotals(rows = []) {
 }
 
 function normalizeAreaCalculation(input = {}) {
-  const sourceRows = Array.isArray(input.rows) ? areaExpandEndcapRows(input.rows) : [];
+  const sourceRows = Array.isArray(input.rows) ? areaDedupeEndcapRows(areaExpandEndcapRows(input.rows)) : [];
   const rows = sourceRows.map(normalizeAreaRow);
   const now = new Date().toISOString();
   return {
@@ -4212,7 +4237,7 @@ function areaCalculationValidationPrompt() {
 1. Every visible drawing item is included in order.
 2. Every section heading is applied only to the items it visually governs.
 3. Quantities such as 2 Nos or 3 Nos are captured.
-4. End caps become separate rows attached to the correct parent, with no duplicates.
+4. End caps become separate rows attached to the correct parent, with no duplicates. Before adding any [Item]-END or End Cap row, check whether the same parent item already has an END row. Each parent item may have at most one end-cap row, regardless of repeated notes, repeated crops, or one-sided end-cap wording.
 5. Radius text such as 150R is not treated as duct length.
 6. Y Piece rows are not missed when the branch sketch is compact or looks like joined elbows.
 7. Missing or extra zeros are re-checked, especially 200 vs 2000 and 150 vs 1500.
@@ -4224,7 +4249,25 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
   if (!process.env.OPENAI_API_KEY) {
     return { rows: [], message: "OpenAI API key is missing. The drawing is saved; add rows manually or configure OPENAI_API_KEY." };
   }
-  const fileInputs = areaCalculationFileInputs(fileParts);
+  const batches = areaCalculationFileInputBatches(fileParts);
+  if (!batches.length) return { rows: [], message: "No readable drawing pages were found in the upload." };
+  if (batches.length > 1) {
+    const rows = [];
+    const messages = [];
+    for (const batch of batches) {
+      const result = await extractAreaCalculationBatchWithOpenAI(batch.inputs);
+      rows.push(...(Array.isArray(result.rows) ? result.rows : []));
+      messages.push(`${batch.label}: ${Array.isArray(result.rows) ? result.rows.length : 0} row(s)`);
+    }
+    return {
+      rows: areaDedupeEndcapRows(rows),
+      message: `Scanned ${batches.length} PDF page batch(es): ${messages.join("; ")}. Review highlighted rows before export.`
+    };
+  }
+  return extractAreaCalculationBatchWithOpenAI(batches[0].inputs);
+}
+
+async function extractAreaCalculationBatchWithOpenAI(fileInputs) {
   const layoutMap = await callOpenAIJson("duct_area_layout_map", areaCalculationLayoutSchema(), [
     {
       type: "input_text",
@@ -4253,7 +4296,7 @@ Supported types: STR, RED, ELB, SHOENECK, END, Y-PIECE, PLENUM, OFF, TEE, BEND, 
 Columns to extract per row: item, section, type, connection, w1, h1, w2, h2, qty, drawingLengthAngle, offset, status, remarks.
 Use millimetres for dimensions. For straight ducts repeat W1/H1 into W2/H2. Default qty is 1. Default offset is 20.
 Do not silently guess unclear dimensions. If unclear, leave numeric fields 0, set status to Review or Missing Dim., and explain in remarks.
-For attached end caps, create an END row only when the drawing clearly makes it a duct item or the corrected table convention requires a separate END row. If "End cap" is written directly under/attached to a numbered straight duct item, add the END row immediately after it using the next item number. Do not create an extra END row from a nearby unrelated sketch/note alone. For every actual END/end cap row, set drawingLengthAngle exactly to "50L" unless another explicit end cap length is printed.
+For attached end caps, create an END row only when the drawing clearly makes it a duct item or the corrected table convention requires a separate END row. If "End cap" is written directly under/attached to a numbered straight duct item, add the END row immediately after it using the next item number. Do not create an extra END row from a nearby unrelated sketch/note alone. Before adding any [Item]-END or End Cap row, check whether a row with the same parent item already exists; each parent item may have at most one end-cap row even when the note says one side end cap or the same end cap is mentioned more than once. For every actual END/end cap row, set drawingLengthAngle exactly to "50L" unless another explicit end cap length is printed.
 If Endcap/End cap appears inside the connection or label text of a non-END row, do not keep "Endcap" in Connection. Keep the original row as its actual fitting type, clean the connection text, and add a separate END row immediately after it using the same section, connection, and duct size.
 For elbows, keep original angle/radius text such as "90° R=100" in drawingLengthAngle. If the sketch says 90° Elbow and includes radius R, output "90° R=<radius>"; do not treat notes like "100+150-R" as straight duct length.
 For Y Piece/Y-PIECE rows, radius text such as "150R" is the Length / Angle value, not the drawing length. When no explicit L length is printed, use calculatedLength 1500.
@@ -4386,6 +4429,44 @@ Tenth corrected example for a compact Y Piece and following endcap row:
   };
 }
 
+function areaCalculationFileInputBatches(fileParts, pageBatchSize = 3) {
+  const batches = [];
+  let currentInputs = [];
+  const flushCurrent = () => {
+    if (!currentInputs.length) return;
+    batches.push({ label: "Uploaded image file(s)", inputs: currentInputs });
+    currentInputs = [];
+  };
+  for (const filePart of fileParts) {
+    const mime = filePart.mimeType || mimeTypes[path.extname(filePart.filename).toLowerCase()] || "application/octet-stream";
+    const base64 = filePart.body.toString("base64");
+    if (mime.startsWith("image/")) {
+      currentInputs.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
+    } else if (mime.includes("pdf")) {
+      flushCurrent();
+      const pageGroups = pdfPageImageGroups(filePart, "Duct drawing PDF page");
+      if (!pageGroups.length) {
+        batches.push({
+          label: filePart.filename || "Uploaded PDF",
+          inputs: [{ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` }]
+        });
+        continue;
+      }
+      for (let index = 0; index < pageGroups.length; index += pageBatchSize) {
+        const group = pageGroups.slice(index, index + pageBatchSize);
+        const firstPage = group[0]?.pageNumber || index + 1;
+        const lastPage = group[group.length - 1]?.pageNumber || firstPage;
+        batches.push({
+          label: `${filePart.filename || "PDF"} pages ${firstPage}-${lastPage}`,
+          inputs: group.flatMap(page => page.inputs)
+        });
+      }
+    }
+  }
+  flushCurrent();
+  return batches;
+}
+
 function areaCalculationFileInputs(fileParts) {
   const inputs = [];
   for (const filePart of fileParts) {
@@ -4394,7 +4475,7 @@ function areaCalculationFileInputs(fileParts) {
     if (mime.startsWith("image/")) {
       inputs.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
     } else if (mime.includes("pdf")) {
-      const pageInputs = pdfPageImageInputs(filePart, "Duct drawing PDF page");
+      const pageInputs = pdfPageImageGroups(filePart, "Duct drawing PDF page").flatMap(page => page.inputs);
       if (pageInputs.length) inputs.push(...pageInputs);
       else inputs.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
     }
@@ -4463,6 +4544,7 @@ Your task:
 Domain defaults:
 - END/Endcap: drawingLengthAngle "50L", calculated length will be normalized to 70.
 - If Endcap/End cap is present only inside a non-END row connection/label, split it into a separate END row and remove Endcap from that original row's connection.
+- Do not duplicate END rows for the same parent item. Treat labels like "5-END", "5 End", and repeated one-side end cap notes as the same parent end cap.
 - ELB/BEND with radius or angle but no L length: calculated length will be normalized to 1000.
 - Y Piece with radius text such as 150R and no L length: calculated length will be normalized to 1500.
 - SHOENECK: if only one width is visible and W2 is missing/equal to W1, use W2 = W1 + 100.
@@ -4623,6 +4705,10 @@ function projectDirectDeliverySchema() {
 }
 
 function pdfPageImageInputs(filePart, label = "PDF page") {
+  return pdfPageImageGroups(filePart, label).flatMap(page => page.inputs);
+}
+
+function pdfPageImageGroups(filePart, label = "PDF page") {
   const mime = filePart.mimeType || "application/octet-stream";
   if (!mime.includes("pdf")) return [];
   const tmpRoot = path.join(DATA, "tmp", `pdf-pages-${id()}`);
@@ -4649,13 +4735,16 @@ function pdfPageImageInputs(filePart, label = "PDF page") {
       .filter(file => /^page-\d+\.png$/i.test(file))
       .sort((a, b) => Number(a.match(/\d+/)?.[0] || 0) - Number(b.match(/\d+/)?.[0] || 0))
       .map((file, index) => {
+        const pageNumber = Number(file.match(/\d+/)?.[0] || index + 1);
         const image = fs.readFileSync(path.join(tmpRoot, file)).toString("base64");
-        return [
-          { type: "input_text", text: `${label} ${index + 1}` },
-          { type: "input_image", image_url: `data:image/png;base64,${image}` }
-        ];
-      })
-      .flat();
+        return {
+          pageNumber,
+          inputs: [
+            { type: "input_text", text: `${label} ${pageNumber}` },
+            { type: "input_image", image_url: `data:image/png;base64,${image}` }
+          ]
+        };
+      });
   } catch {
     return [];
   } finally {
