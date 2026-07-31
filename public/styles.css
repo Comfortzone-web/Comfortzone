@@ -5270,6 +5270,25 @@ td[contenteditable="true"]:focus {
   color: #061e5b;
 }
 
+.area-file-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.area-file-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.area-file-scan-text {
+  color: #0b74ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .area-file-card p {
   margin: 0;
   color: #607087;

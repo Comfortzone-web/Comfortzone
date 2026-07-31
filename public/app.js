@@ -37,6 +37,8 @@ let areaCalculationState = null;
 let areaCalculationActiveId = "";
 let areaCalculationMode = "detail";
 let areaCalculationUploadLoading = false;
+let areaCalculationScanJobId = "";
+const areaCalculationPollingJobs = new Set();
 let areaCalculationLoadedAt = 0;
 let areaCalculationLoadPromise = null;
 let areaCalculationSaveTimer = null;
@@ -5812,12 +5814,20 @@ async function loadAreaCalculations(options = {}) {
     .then(state => {
       areaCalculationState = state;
       areaCalculationLoadedAt = Date.now();
+      resumeAreaScanPollingFromState();
       return state;
     })
     .finally(() => {
       areaCalculationLoadPromise = null;
     });
   return areaCalculationLoadPromise;
+}
+
+function resumeAreaScanPollingFromState() {
+  const jobs = runningAreaScanJobs();
+  areaCalculationUploadLoading = jobs.length > 0;
+  areaCalculationScanJobId = jobs[0]?.id || "";
+  for (const job of jobs) startAreaScanPolling(job.id);
 }
 
 function refreshAreaCalculationsInBackground() {
@@ -5891,7 +5901,7 @@ function renderViewActions() {
     actions.innerHTML = `
       <button class="ghost-button area-top-button" id="headerAreaNewFileBtn">${poIcon("plus")}<span>New File</span></button>
       <button class="ghost-button area-top-button" id="headerAreaFilesBtn">${poIcon("folder")}<span>All Files</span></button>
-      <button class="primary-button area-top-button" id="headerAreaUploadBtn">${poIcon("upload")}<span>${areaCalculationUploadLoading ? "Uploading..." : "Upload Drawing"}</span></button>
+      <button class="primary-button area-top-button" id="headerAreaUploadBtn" ${areaCalculationUploadLoading ? "disabled" : ""}>${poIcon("upload")}<span>${areaCalculationUploadLoading ? (areaCalculationScanJobId ? "Scanning..." : "Uploading...") : "Upload Drawing"}</span></button>
     `;
     $("#headerAreaNewFileBtn").addEventListener("click", () => {
       createNewAreaCalculationFile();
@@ -5900,7 +5910,9 @@ function renderViewActions() {
       areaCalculationMode = "files";
       renderAreaCalculation();
     });
-    $("#headerAreaUploadBtn").addEventListener("click", () => $("#areaDrawingInput").click());
+    $("#headerAreaUploadBtn").addEventListener("click", () => {
+      if (!areaCalculationUploadLoading) $("#areaDrawingInput").click();
+    });
     return;
   }
   if (activeView !== "inventory") return;
@@ -6081,8 +6093,35 @@ function emptyAreaCalculationDraft() {
   };
 }
 
+function runningAreaScanJobs() {
+  return (areaCalculationState?.scanJobs || []).filter(job => job?.status === "running");
+}
+
+function areaCalculationScanningJob(calcId) {
+  return runningAreaScanJobs().find(job => job.calculationId === calcId)
+    || (areaCalculationUploadLoading && areaCalculationActiveId === calcId
+      ? { id: areaCalculationScanJobId, status: "running", calculationId: calcId }
+      : null);
+}
+
 function areaCalculationFilesHtml() {
   const calculations = (areaCalculationState?.calculations || []).filter(calc => !calc.isDraft && (calc.uploadIds || []).length);
+  const fileCards = calculations.map(calc => {
+    const scanJob = areaCalculationScanningJob(calc.id);
+    const scanBadge = scanJob ? ` <span class="po-upload-spinner area-file-spinner" aria-label="Scanning"></span><span class="area-file-scan-text">Scanning...</span>` : "";
+    return `
+      <article class="area-file-card">
+        <div>
+          <h3 class="area-file-title">${escapeHtml(calc.title || "Untitled Area Calculation")}${scanBadge}</h3>
+          <p>${calc.totals?.totalItems || 0} items · ${Number(calc.totals?.totalM2 || 0).toFixed(4)} m² · ${Number(calc.totals?.totalFt2 || 0).toFixed(2)} ft² · ${new Date(calc.updatedAt || calc.createdAt).toLocaleString()}</p>
+        </div>
+        <div class="area-file-actions">
+          <button class="ghost-button" data-area-open="${escapeHtml(calc.id)}">Open</button>
+          <button class="danger-button" data-area-delete="${escapeHtml(calc.id)}">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
   return `
     <div class="area-page">
       <div class="area-files-heading">
@@ -6090,18 +6129,7 @@ function areaCalculationFilesHtml() {
         <button class="ghost-button area-toolbar-button" data-area-back>${poIcon("document")}<span>Current Table</span></button>
       </div>
       <div class="area-files-list">
-        ${calculations.map(calc => `
-          <article class="area-file-card">
-            <div>
-              <h3>${escapeHtml(calc.title || "Untitled Area Calculation")}</h3>
-              <p>${calc.totals?.totalItems || 0} items · ${Number(calc.totals?.totalM2 || 0).toFixed(4)} m² · ${Number(calc.totals?.totalFt2 || 0).toFixed(2)} ft² · ${new Date(calc.updatedAt || calc.createdAt).toLocaleString()}</p>
-            </div>
-            <div class="area-file-actions">
-              <button class="ghost-button" data-area-open="${escapeHtml(calc.id)}">Open</button>
-              <button class="danger-button" data-area-delete="${escapeHtml(calc.id)}">Delete</button>
-            </div>
-          </article>
-        `).join("") || `<section class="area-empty"><h3>No saved files</h3><p>Upload a duct drawing to create a saved calculation.</p></section>`}
+        ${fileCards || `<section class="area-empty"><h3>No saved files</h3><p>Upload a duct drawing to create a saved calculation.</p></section>`}
       </div>
     </div>
   `;
@@ -8533,14 +8561,67 @@ async function uploadAreaDrawing() {
     areaCalculationActiveId = response.activeCalculationId || response.calculations?.[0]?.id || "";
     areaCalculationMode = "detail";
     renderAreaCalculation();
-    toast("Area calculation ready");
+    if (response.scanPending && response.scanJobId) {
+      areaCalculationScanJobId = response.scanJobId;
+      refreshAreaTitleSpinner();
+      renderAreaCalculation();
+      toast("Drawing uploaded. Scanning pages...");
+      startAreaScanPolling(response.scanJobId);
+    } else {
+      areaCalculationScanJobId = "";
+      areaCalculationUploadLoading = false;
+      toast("Area calculation ready");
+    }
   } catch (error) {
+    areaCalculationScanJobId = "";
+    areaCalculationUploadLoading = false;
     toast(error.message || "Drawing upload failed");
   } finally {
-    areaCalculationUploadLoading = false;
     refreshAreaTitleSpinner();
     input.value = "";
     renderAreaCalculation();
+  }
+}
+
+function startAreaScanPolling(scanJobId) {
+  if (!scanJobId || areaCalculationPollingJobs.has(scanJobId)) return;
+  areaCalculationPollingJobs.add(scanJobId);
+  pollAreaCalculationScanJob(scanJobId);
+}
+
+async function pollAreaCalculationScanJob(scanJobId, attempt = 0) {
+  try {
+    const response = await api(`/api/area-calculations/scan-jobs/${encodeURIComponent(scanJobId)}`);
+    const status = response.scanJob?.status || "";
+    areaCalculationState = response;
+    areaCalculationActiveId = response.activeCalculationId || areaCalculationActiveId || response.calculations?.[0]?.id || "";
+    areaCalculationMode = "detail";
+    areaCalculationUploadLoading = status === "running";
+    areaCalculationScanJobId = status === "running" ? scanJobId : "";
+    renderAreaCalculation();
+    if (status === "running" && attempt < 180) {
+      setTimeout(() => pollAreaCalculationScanJob(scanJobId, attempt + 1), 2500);
+      return;
+    }
+    areaCalculationPollingJobs.delete(scanJobId);
+    areaCalculationUploadLoading = false;
+    areaCalculationScanJobId = "";
+    refreshAreaTitleSpinner();
+    renderAreaCalculation();
+    if (status === "complete") toast("Area scan complete");
+    else if (status === "empty") toast(response.scanJob?.message || "Drawing scanned, but no rows were detected");
+    else if (status === "error") toast(response.scanJob?.error || "Area scan failed");
+  } catch (error) {
+    if (attempt < 20) {
+      setTimeout(() => pollAreaCalculationScanJob(scanJobId, attempt + 1), 3000);
+      return;
+    }
+    areaCalculationPollingJobs.delete(scanJobId);
+    areaCalculationUploadLoading = false;
+    areaCalculationScanJobId = "";
+    refreshAreaTitleSpinner();
+    renderAreaCalculation();
+    toast(error.message || "Could not check area scan status");
   }
 }
 

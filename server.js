@@ -78,6 +78,21 @@ if (!USE_SUPABASE) {
 }
 
 const sessions = new Map();
+const areaScanJobs = new Map();
+
+function areaCalculationView(store = {}) {
+  const scanJobs = Array.from(areaScanJobs.values())
+    .filter(job => job && job.status === "running")
+    .map(job => ({
+      id: job.id,
+      status: job.status,
+      calculationId: job.calculationId,
+      message: job.message || "Scanning uploaded drawing...",
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt
+    }));
+  return { ...store, scanJobs };
+}
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -2189,7 +2204,7 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/area-calculations") {
     const store = await readAreaCalculations();
-    return send(res, 200, store);
+    return send(res, 200, areaCalculationView(store));
   }
 
   if (req.method === "POST" && url.pathname === "/api/area-calculations/upload") {
@@ -2211,43 +2226,56 @@ async function handleApi(req, res) {
       store.uploads.unshift({ id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: now });
       uploadIds.push(uploadId);
     }
-    let extracted;
-    try {
-      extracted = await extractAreaCalculationWithOpenAI(fileParts);
-    } catch (error) {
-      return send(res, 502, { error: error.message || "Area extraction failed. The drawing was not scanned." });
-    }
-    if (!Array.isArray(extracted.rows) || !extracted.rows.length) {
-      return send(res, 422, { error: extracted.message || "No duct area rows were detected from this upload." });
-    }
     const existingIndex = calculationId ? store.calculations.findIndex(item => item.id === calculationId) : -1;
+    let calculation;
     if (existingIndex >= 0) {
       const existing = store.calculations[existingIndex];
-      const calculation = normalizeAreaCalculation({
+      calculation = normalizeAreaCalculation({
         ...existing,
         title: existing.title || title,
         uploadIds: [...(existing.uploadIds || []), ...uploadIds],
-        rows: [...(existing.rows || []), ...(extracted.rows || [])],
-        message: extracted.message || "Drawing scanned. Review highlighted rows before export.",
+        rows: existing.rows || [],
+        message: "Drawing uploaded. Scanning pages now...",
         updatedAt: now
       });
       calculation.createdAt = existing.createdAt || calculation.createdAt;
       calculation.updatedAt = now;
       store.calculations[existingIndex] = calculation;
-      await writeAreaCalculations(store);
-      return send(res, 200, { ...store, activeCalculationId: calculation.id });
+    } else {
+      calculation = normalizeAreaCalculation({
+        title,
+        uploadIds,
+        rows: [],
+        message: "Drawing uploaded. Scanning pages now...",
+        createdAt: now,
+        updatedAt: now
+      });
+      store.calculations.unshift(calculation);
     }
-    const calculation = normalizeAreaCalculation({
-      title,
-      uploadIds,
-      rows: extracted.rows || [],
-      message: extracted.message || "Drawing scanned. Review highlighted rows before export.",
-      createdAt: now,
-      updatedAt: now
-    });
-    store.calculations.unshift(calculation);
     await writeAreaCalculations(store);
-    return send(res, 200, { ...store, activeCalculationId: calculation.id });
+    const scanJobId = id();
+    areaScanJobs.set(scanJobId, {
+      id: scanJobId,
+      status: "running",
+      calculationId: calculation.id,
+      createdAt: now,
+      updatedAt: now,
+      message: "Scanning uploaded drawing..."
+    });
+    runAreaCalculationScanJob(scanJobId, {
+      calculationId: calculation.id,
+      fileParts,
+      uploadIds
+    });
+    return send(res, 202, { ...areaCalculationView(store), activeCalculationId: calculation.id, scanJobId, scanPending: true });
+  }
+
+  if (req.method === "GET" && url.pathname.match(/^\/api\/area-calculations\/scan-jobs\/[^/]+$/)) {
+    const scanJobId = decodeURIComponent(url.pathname.split("/").pop());
+    const job = areaScanJobs.get(scanJobId);
+    if (!job) return send(res, 404, { error: "Scan job not found" });
+    const store = await readAreaCalculations();
+    return send(res, 200, { ...areaCalculationView(store), activeCalculationId: job.calculationId, scanJob: job });
   }
 
   if (req.method === "POST" && url.pathname === "/api/area-calculations") {
@@ -2263,7 +2291,7 @@ async function handleApi(req, res) {
       store.calculations.unshift(calculation);
     }
     await writeAreaCalculations(store);
-    return send(res, 200, store);
+    return send(res, 200, areaCalculationView(store));
   }
 
   if (req.method === "GET" && url.pathname.match(/^\/api\/area-calculations\/uploads\/[^/]+$/)) {
@@ -2279,7 +2307,7 @@ async function handleApi(req, res) {
     const calculationId = decodeURIComponent(url.pathname.split("/").pop());
     store.calculations = (store.calculations || []).filter(item => item.id !== calculationId);
     await writeAreaCalculations(store);
-    return send(res, 200, store);
+    return send(res, 200, areaCalculationView(store));
   }
 
     if (req.method === "POST" && url.pathname === "/api/inventory/models") {
@@ -4265,6 +4293,58 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
     };
   }
   return extractAreaCalculationBatchWithOpenAI(batches[0].inputs);
+}
+
+async function runAreaCalculationScanJob(scanJobId, options = {}) {
+  const job = areaScanJobs.get(scanJobId);
+  if (!job) return;
+  try {
+    const extracted = await extractAreaCalculationWithOpenAI(options.fileParts || []);
+    const store = await readAreaCalculations();
+    const index = (store.calculations || []).findIndex(item => item.id === options.calculationId);
+    if (index < 0) throw new Error("Saved area calculation was not found for this scan.");
+    const existing = store.calculations[index];
+    const rows = Array.isArray(extracted.rows) ? extracted.rows : [];
+    const updated = normalizeAreaCalculation({
+      ...existing,
+      rows: [...(existing.rows || []), ...rows],
+      message: rows.length
+        ? (extracted.message || "Drawing scanned. Review highlighted rows before export.")
+        : (extracted.message || "No duct area rows were detected from this upload."),
+      updatedAt: new Date().toISOString()
+    });
+    updated.createdAt = existing.createdAt || updated.createdAt;
+    store.calculations[index] = updated;
+    await writeAreaCalculations(store);
+    areaScanJobs.set(scanJobId, {
+      ...job,
+      status: rows.length ? "complete" : "empty",
+      rowCount: rows.length,
+      message: updated.message,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const message = error?.message || "Area extraction failed. The drawing was saved but not scanned.";
+    areaScanJobs.set(scanJobId, {
+      ...job,
+      status: "error",
+      error: message,
+      message,
+      updatedAt: new Date().toISOString()
+    });
+    try {
+      const store = await readAreaCalculations();
+      const index = (store.calculations || []).findIndex(item => item.id === options.calculationId);
+      if (index >= 0) {
+        store.calculations[index] = normalizeAreaCalculation({
+          ...store.calculations[index],
+          message,
+          updatedAt: new Date().toISOString()
+        });
+        await writeAreaCalculations(store);
+      }
+    } catch {}
+  }
 }
 
 async function extractAreaCalculationBatchWithOpenAI(fileInputs) {
