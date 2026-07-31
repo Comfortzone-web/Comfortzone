@@ -12,6 +12,10 @@ let PDFDocument = null;
 try {
   PDFDocument = require("pdfkit");
 } catch {}
+let PDFLib = null;
+try {
+  PDFLib = require("pdf-lib");
+} catch {}
 
 loadLocalEnv();
 
@@ -78,16 +82,17 @@ if (!USE_SUPABASE) {
 }
 
 const sessions = new Map();
-const areaScanJobs = new Map();
 
 function areaCalculationView(store = {}) {
-  const scanJobs = Array.from(areaScanJobs.values())
+  const scanJobs = (store.scanJobs || [])
     .filter(job => job && job.status === "running")
     .map(job => ({
       id: job.id,
       status: job.status,
       calculationId: job.calculationId,
       message: job.message || "Scanning uploaded drawing...",
+      batchIndex: Number(job.batchIndex || 0),
+      totalBatches: Number(job.totalBatches || 0),
       createdAt: job.createdAt,
       updatedAt: job.updatedAt
     }));
@@ -479,7 +484,8 @@ async function writePurchaseOrders(store) {
 function defaultAreaCalculations() {
   return {
     calculations: [],
-    uploads: []
+    uploads: [],
+    scanJobs: []
   };
 }
 
@@ -488,7 +494,8 @@ function normalizeAreaCalculations(parsed = {}) {
     ...defaultAreaCalculations(),
     ...parsed,
     calculations: Array.isArray(parsed.calculations) ? parsed.calculations.map(normalizeAreaCalculation) : [],
-    uploads: Array.isArray(parsed.uploads) ? parsed.uploads : []
+    uploads: Array.isArray(parsed.uploads) ? parsed.uploads : [],
+    scanJobs: Array.isArray(parsed.scanJobs) ? parsed.scanJobs : []
   };
   store.calculations.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   return store;
@@ -2254,28 +2261,40 @@ async function handleApi(req, res) {
     }
     await writeAreaCalculations(store);
     const scanJobId = id();
-    areaScanJobs.set(scanJobId, {
+    const scanJob = {
       id: scanJobId,
       status: "running",
       calculationId: calculation.id,
+      uploadIds,
+      batchIndex: 0,
+      totalBatches: 0,
       createdAt: now,
       updatedAt: now,
       message: "Scanning uploaded drawing..."
-    });
-    runAreaCalculationScanJob(scanJobId, {
-      calculationId: calculation.id,
-      fileParts,
-      uploadIds
-    });
-    return send(res, 202, { ...areaCalculationView(store), activeCalculationId: calculation.id, scanJobId, scanPending: true });
+    };
+    const freshStore = await readAreaCalculations();
+    freshStore.scanJobs = [...(freshStore.scanJobs || []).filter(job => job.id !== scanJobId), scanJob];
+    await writeAreaCalculations(freshStore);
+    const responseStore = await readAreaCalculations();
+    return send(res, 202, { ...areaCalculationView(responseStore), activeCalculationId: calculation.id, scanJobId, scanPending: true });
   }
 
   if (req.method === "GET" && url.pathname.match(/^\/api\/area-calculations\/scan-jobs\/[^/]+$/)) {
     const scanJobId = decodeURIComponent(url.pathname.split("/").pop());
-    const job = areaScanJobs.get(scanJobId);
-    if (!job) return send(res, 404, { error: "Scan job not found" });
     const store = await readAreaCalculations();
+    const job = (store.scanJobs || []).find(item => item.id === scanJobId);
+    if (!job) return send(res, 404, { error: "Scan job not found" });
     return send(res, 200, { ...areaCalculationView(store), activeCalculationId: job.calculationId, scanJob: job });
+  }
+
+  if (req.method === "POST" && url.pathname.match(/^\/api\/area-calculations\/scan-jobs\/[^/]+$/)) {
+    const scanJobId = decodeURIComponent(url.pathname.split("/").pop());
+    try {
+      const result = await runAreaCalculationScanJobStep(scanJobId);
+      return send(res, 200, result);
+    } catch (error) {
+      return send(res, 502, { error: error.message || "Area scan step failed." });
+    }
   }
 
   if (req.method === "POST" && url.pathname === "/api/area-calculations") {
@@ -4277,7 +4296,7 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
   if (!process.env.OPENAI_API_KEY) {
     return { rows: [], message: "OpenAI API key is missing. The drawing is saved; add rows manually or configure OPENAI_API_KEY." };
   }
-  const batches = areaCalculationFileInputBatches(fileParts);
+  const batches = await areaCalculationFileInputBatches(fileParts);
   if (!batches.length) return { rows: [], message: "No readable drawing pages were found in the upload." };
   if (batches.length > 1) {
     const rows = [];
@@ -4295,55 +4314,87 @@ async function extractAreaCalculationWithOpenAI(fileParts) {
   return extractAreaCalculationBatchWithOpenAI(batches[0].inputs);
 }
 
-async function runAreaCalculationScanJob(scanJobId, options = {}) {
-  const job = areaScanJobs.get(scanJobId);
-  if (!job) return;
+async function runAreaCalculationScanJobStep(scanJobId) {
+  let store = await readAreaCalculations();
+  const jobIndex = (store.scanJobs || []).findIndex(item => item.id === scanJobId);
+  if (jobIndex < 0) throw new Error("Scan job not found.");
+  const job = store.scanJobs[jobIndex];
+  if (job.status !== "running") return { ...areaCalculationView(store), activeCalculationId: job.calculationId, scanJob: job };
   try {
-    const extracted = await extractAreaCalculationWithOpenAI(options.fileParts || []);
-    const store = await readAreaCalculations();
-    const index = (store.calculations || []).findIndex(item => item.id === options.calculationId);
+    const batches = await areaCalculationStoredUploadBatches(store, job.uploadIds || [], 1);
+    const totalBatches = batches.length;
+    const batchIndex = Number(job.batchIndex || 0);
+    if (!totalBatches || batchIndex >= totalBatches) {
+      const completeJob = {
+        ...job,
+        status: "complete",
+        totalBatches,
+        message: "Area scan complete.",
+        updatedAt: new Date().toISOString()
+      };
+      store.scanJobs[jobIndex] = completeJob;
+      await writeAreaCalculations(store);
+      store = await readAreaCalculations();
+      return { ...areaCalculationView(store), activeCalculationId: job.calculationId, scanJob: completeJob };
+    }
+    const batch = batches[batchIndex];
+    const extracted = await extractAreaCalculationBatchWithOpenAI(batch.inputs);
+    store = await readAreaCalculations();
+    const freshJobIndex = (store.scanJobs || []).findIndex(item => item.id === scanJobId);
+    const freshJob = freshJobIndex >= 0 ? store.scanJobs[freshJobIndex] : job;
+    const index = (store.calculations || []).findIndex(item => item.id === freshJob.calculationId);
     if (index < 0) throw new Error("Saved area calculation was not found for this scan.");
     const existing = store.calculations[index];
     const rows = Array.isArray(extracted.rows) ? extracted.rows : [];
+    const nextBatchIndex = batchIndex + 1;
+    const isComplete = nextBatchIndex >= totalBatches;
     const updated = normalizeAreaCalculation({
       ...existing,
       rows: [...(existing.rows || []), ...rows],
-      message: rows.length
-        ? (extracted.message || "Drawing scanned. Review highlighted rows before export.")
-        : (extracted.message || "No duct area rows were detected from this upload."),
+      message: isComplete
+        ? "Area scan complete. Review highlighted rows before export."
+        : `Scanned ${nextBatchIndex} of ${totalBatches} page batch(es)...`,
       updatedAt: new Date().toISOString()
     });
     updated.createdAt = existing.createdAt || updated.createdAt;
     store.calculations[index] = updated;
-    await writeAreaCalculations(store);
-    areaScanJobs.set(scanJobId, {
-      ...job,
-      status: rows.length ? "complete" : "empty",
-      rowCount: rows.length,
-      message: updated.message,
+    const updatedJob = {
+      ...freshJob,
+      status: isComplete ? "complete" : "running",
+      batchIndex: nextBatchIndex,
+      totalBatches,
+      rowCount: Number(freshJob.rowCount || 0) + rows.length,
+      message: isComplete ? "Area scan complete." : `Scanning page batch ${nextBatchIndex + 1} of ${totalBatches}...`,
       updatedAt: new Date().toISOString()
-    });
+    };
+    if (freshJobIndex >= 0) store.scanJobs[freshJobIndex] = updatedJob;
+    await writeAreaCalculations(store);
+    store = await readAreaCalculations();
+    return { ...areaCalculationView(store), activeCalculationId: updatedJob.calculationId, scanJob: updatedJob };
   } catch (error) {
     const message = error?.message || "Area extraction failed. The drawing was saved but not scanned.";
-    areaScanJobs.set(scanJobId, {
+    store = await readAreaCalculations();
+    const latestJobIndex = (store.scanJobs || []).findIndex(item => item.id === scanJobId);
+    const latestJob = latestJobIndex >= 0 ? store.scanJobs[latestJobIndex] : job;
+    const errorJob = {
       ...job,
       status: "error",
       error: message,
       message,
       updatedAt: new Date().toISOString()
-    });
-    try {
-      const store = await readAreaCalculations();
-      const index = (store.calculations || []).findIndex(item => item.id === options.calculationId);
-      if (index >= 0) {
-        store.calculations[index] = normalizeAreaCalculation({
-          ...store.calculations[index],
-          message,
-          updatedAt: new Date().toISOString()
-        });
-        await writeAreaCalculations(store);
-      }
-    } catch {}
+    };
+    if (latestJobIndex >= 0) store.scanJobs[latestJobIndex] = errorJob;
+    const index = (store.calculations || []).findIndex(item => item.id === latestJob.calculationId);
+    if (index >= 0) {
+      store.calculations[index] = normalizeAreaCalculation({
+        ...store.calculations[index],
+        message,
+        updatedAt: new Date().toISOString()
+      });
+    }
+    await writeAreaCalculations(store);
+    store = await readAreaCalculations();
+    return { ...areaCalculationView(store), activeCalculationId: latestJob.calculationId, scanJob: errorJob };
   }
 }
 
@@ -4509,7 +4560,7 @@ Tenth corrected example for a compact Y Piece and following endcap row:
   };
 }
 
-function areaCalculationFileInputBatches(fileParts, pageBatchSize = 3) {
+async function areaCalculationFileInputBatches(fileParts, pageBatchSize = 3) {
   const batches = [];
   let currentInputs = [];
   const flushCurrent = () => {
@@ -4524,7 +4575,8 @@ function areaCalculationFileInputBatches(fileParts, pageBatchSize = 3) {
       currentInputs.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
     } else if (mime.includes("pdf")) {
       flushCurrent();
-      const pageGroups = pdfPageImageGroups(filePart, "Duct drawing PDF page");
+      let pageGroups = pdfPageImageGroups(filePart, "Duct drawing PDF page");
+      if (!pageGroups.length) pageGroups = await pdfPageFileGroups(filePart, "Duct drawing PDF page");
       if (!pageGroups.length) {
         batches.push({
           label: filePart.filename || "Uploaded PDF",
@@ -4545,6 +4597,22 @@ function areaCalculationFileInputBatches(fileParts, pageBatchSize = 3) {
   }
   flushCurrent();
   return batches;
+}
+
+async function areaCalculationStoredUploadBatches(store = {}, uploadIds = [], pageBatchSize = 1) {
+  const fileParts = [];
+  for (const uploadId of uploadIds) {
+    const upload = (store.uploads || []).find(item => item.id === uploadId);
+    if (!upload) continue;
+    const body = await readUpload("area-calculations", upload.storedName);
+    if (!body) continue;
+    fileParts.push({
+      filename: upload.originalName || upload.storedName || "drawing",
+      mimeType: upload.mimeType || mimeTypes[path.extname(upload.originalName || "").toLowerCase()] || "application/octet-stream",
+      body
+    });
+  }
+  return await areaCalculationFileInputBatches(fileParts, pageBatchSize);
 }
 
 function areaCalculationFileInputs(fileParts) {
@@ -4831,6 +4899,38 @@ function pdfPageImageGroups(filePart, label = "PDF page") {
     try {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     } catch {}
+  }
+}
+
+async function pdfPageFileGroups(filePart, label = "PDF page") {
+  const mime = filePart.mimeType || "application/octet-stream";
+  if (!mime.includes("pdf") || !PDFLib?.PDFDocument) return [];
+  try {
+    const sourcePdf = await PDFLib.PDFDocument.load(filePart.body);
+    const pageCount = sourcePdf.getPageCount();
+    const groups = [];
+    for (let index = 0; index < pageCount; index += 1) {
+      const singlePdf = await PDFLib.PDFDocument.create();
+      const [copiedPage] = await singlePdf.copyPages(sourcePdf, [index]);
+      singlePdf.addPage(copiedPage);
+      const bytes = await singlePdf.save();
+      const base64 = Buffer.from(bytes).toString("base64");
+      const pageNumber = index + 1;
+      groups.push({
+        pageNumber,
+        inputs: [
+          { type: "input_text", text: `${label} ${pageNumber}` },
+          {
+            type: "input_file",
+            filename: `${safeName(filePart.filename || "upload.pdf").replace(/\.pdf$/i, "")}-page-${pageNumber}.pdf`,
+            file_data: `data:application/pdf;base64,${base64}`
+          }
+        ]
+      });
+    }
+    return groups;
+  } catch {
+    return [];
   }
 }
 

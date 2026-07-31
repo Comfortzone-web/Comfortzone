@@ -8591,7 +8591,7 @@ function startAreaScanPolling(scanJobId) {
 
 async function pollAreaCalculationScanJob(scanJobId, attempt = 0) {
   try {
-    const response = await api(`/api/area-calculations/scan-jobs/${encodeURIComponent(scanJobId)}`);
+    const response = await api(`/api/area-calculations/scan-jobs/${encodeURIComponent(scanJobId)}`, { method: "POST" });
     const status = response.scanJob?.status || "";
     areaCalculationState = response;
     areaCalculationActiveId = response.activeCalculationId || areaCalculationActiveId || response.calculations?.[0]?.id || "";
