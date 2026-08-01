@@ -5207,10 +5207,13 @@ function deliveryNotePdfHtml(payload) {
     .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 18mm; margin-top: 18mm; font-size: 13px; align-items: start; }
     .deliver-to { line-height: 1.45; }
     .deliver-to .label { margin-bottom: 1mm; }
-    .meta-table { width: 100%; border-collapse: collapse; }
-    .meta-table td { padding: 0 0 4.5mm; border: 0; }
-    .meta-table td:first-child { text-align: right; padding-right: 8mm; width: 45%; }
-    .meta-table td:last-child { text-align: right; font-weight: 500; }
+    .meta-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .meta-table td { padding: 0 0 4.5mm; border: 0; vertical-align: top; }
+    .meta-table td:first-child { text-align: right; padding-right: 5mm; width: 42%; white-space: nowrap; }
+    .meta-table td:last-child { text-align: right; font-weight: 500; overflow-wrap: anywhere; word-break: normal; line-height: 1.25; }
+    .meta-stack { display: grid; grid-template-columns: 42% 58%; column-gap: 2.5mm; row-gap: 3.2mm; line-height: 1.25; }
+    .meta-stack .meta-label { font-weight: 700; white-space: nowrap; text-align: right; }
+    .meta-stack .meta-value { font-size: 12px; font-weight: 500; text-align: left; overflow-wrap: anywhere; }
     .item-table { width: 100%; border-collapse: collapse; margin-top: 6mm; font-size: 13px; }
     .item-table th { background: #363837; color: #fff; padding: 3.3mm 4mm; font-weight: 400; text-align: left; }
     .item-table th.qty, .item-table td.qty { text-align: right; }
@@ -5250,10 +5253,11 @@ function deliveryNotePdfHtml(payload) {
         ${dn.contactPerson ? `Contact: ${esc(dn.contactPerson)}<br>` : ""}
         U.A.E
       </div>
-      <table class="meta-table">
-        <tr><td>Challan Date :</td><td>${esc(challanDate)}</td></tr>
-        <tr><td>Ref :</td><td>${esc(dn.projectName)}</td></tr>
-      </table>
+      <div class="meta-stack">
+        <div class="meta-label">Challan Date :</div><div class="meta-value">${esc(challanDate)}</div>
+        ${dn.projectName ? `<div class="meta-label">Reference :</div><div class="meta-value">${esc(dn.projectName)}</div>` : ""}
+        ${dn.deliveryLocation ? `<div class="meta-label">Delivery Location :</div><div class="meta-value">${esc(dn.deliveryLocation)}</div>` : ""}
+      </div>
     </div>
     <table class="item-table">
       <thead><tr><th style="width:12mm">#</th><th>Item &amp; Description</th><th class="qty">Qty</th></tr></thead>
@@ -5400,20 +5404,25 @@ async function deliveryNotePdfBuffer(payload) {
       ].filter(value => String(value || "").trim());
       doc.font("Helvetica").fontSize(9.7).text(deliverLines.join("\n"), 47, metaTop + 28, { width: 230, lineGap: 1.5 });
 
-      const details = [
-        ["Challan Date :", formatChallanDate(dn.date || todayISO())],
-        ["Reference :", dn.projectName],
-        ["Delivery Location :", dn.deliveryLocation]
-      ].filter(([, value], index) => index === 0 || String(value || "").trim());
-      const labelX = 330;
-      const valueX = pageWidth - 45;
-      doc.font("Helvetica").fontSize(10.5).fillColor("#404040");
-      details.forEach(([label, value], index) => {
-        const y = metaTop + 1 + index * 22;
-        doc.text(label, labelX, y, { width: 110, align: "right" });
-        doc.text(String(value || ""), valueX - 150, y, { width: 150, align: "right" });
-      });
-      return Math.max(350, metaTop + details.length * 22 + 20);
+      const labelX = 312;
+      const labelW = 108;
+      const valueX = 426;
+      const valueW = pageWidth - valueX - 45;
+      let detailY = metaTop + 1;
+      const drawDetailRow = (label, value) => {
+        const valueText = String(value || "").trim();
+        if (!valueText) return;
+        doc.font("Helvetica-Bold").fontSize(9.2).fillColor("#222222")
+          .text(label, labelX, detailY, { width: labelW, align: "right" });
+        doc.font("Helvetica").fontSize(9.7).fillColor("#000000");
+        const valueH = doc.heightOfString(valueText, { width: valueW, align: "left", lineGap: 1.4 });
+        doc.text(valueText, valueX, detailY, { width: valueW, align: "left", lineGap: 1.4 });
+        detailY += Math.max(14, valueH) + 12;
+      };
+      drawDetailRow("Challan Date :", formatChallanDate(dn.date || todayISO()));
+      drawDetailRow("Reference :", dn.projectName);
+      drawDetailRow("Delivery Location :", dn.deliveryLocation);
+      return Math.max(350, detailY + 18);
     };
     const drawTableHeader = y => {
       doc.rect(tableX, y, tableW, 24).fill("#383b39");
