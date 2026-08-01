@@ -4535,6 +4535,32 @@ td[contenteditable="true"]:focus {
 
 .delivery-note-modal .inventory-topbar {
   margin-bottom: 16px;
+  align-items: flex-start;
+}
+
+.delivery-project-no-lookup {
+  width: min(260px, 28vw);
+  margin-left: auto;
+  color: #526384;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.delivery-project-no-lookup input {
+  width: 100%;
+  height: 40px;
+  margin-top: 6px;
+  border: 1px solid #c9daf5;
+  border-radius: 8px;
+  padding: 0 12px;
+  color: #06173b;
+  font: 600 14px Inter, system-ui, sans-serif;
+}
+
+.delivery-project-no-lookup input:focus {
+  border-color: #1677ff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, .12);
+  outline: none;
 }
 
 .delivery-note-modal h3 {

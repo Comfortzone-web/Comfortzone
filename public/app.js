@@ -8017,6 +8017,9 @@ function openDeliveryModal(note = null) {
     <div class="modal delivery-note-modal">
       <div class="inventory-topbar">
         <div><h2>${note ? "Edit Delivery Note" : "Create Delivery Note"}</h2><p class="inventory-muted">Create and issue outbound delivery notes.</p></div>
+        <label class="delivery-project-no-lookup">Project No.
+          <input id="deliveryProjectNoInput" value="${escapeHtml(deliveryDraft.projectNo || "")}" placeholder="Enter project no." autocomplete="off">
+        </label>
         <button class="mini-button" data-close-delivery-modal>Close</button>
       </div>
       <div data-delivery-modal-body>
@@ -8028,6 +8031,7 @@ function openDeliveryModal(note = null) {
   modal.addEventListener("click", handleDeliveryModalClick);
   modal.addEventListener("input", handleDeliveryModalInput);
   modal.addEventListener("change", handleDeliveryModalChange);
+  modal.addEventListener("keydown", handleDeliveryModalKeydown);
   modal.querySelector("#dnNoInput")?.focus();
 }
 
@@ -8079,7 +8083,14 @@ function handleDeliveryModalChange(event) {
     toggleSuggestionList(input);
   }
   if (input.id === "customerNameInput") return fillCustomerDetails();
+  if (input.id === "deliveryProjectNoInput") return fillDeliveryFromProjectNo(input.value);
   if (input.dataset.deliveryModelLine) return updateDeliveryLineModel(Number(input.dataset.deliveryModelLine), input.value);
+}
+
+function handleDeliveryModalKeydown(event) {
+  if (event.key !== "Enter" || event.target.id !== "deliveryProjectNoInput") return;
+  event.preventDefault();
+  fillDeliveryFromProjectNo(event.target.value);
 }
 
 function stockViewHtml() {
@@ -9149,6 +9160,7 @@ function newDeliveryDraft() {
     contactPerson: "",
     phone: "",
     deliveryLocation: "",
+    projectNo: "",
     projectName: "",
     status: "Draft",
     lines: [blankDeliveryLine()]
@@ -9165,6 +9177,7 @@ function collectDeliveryDraft(status) {
     ...deliveryDraft,
     dnNo: $("#dnNoInput")?.value || deliveryDraft.dnNo,
     date: parseInventoryDate($("#dnDateInput")?.value || deliveryDraft.date),
+    projectNo: $("#deliveryProjectNoInput")?.value.trim() || deliveryDraft.projectNo || "",
     customerName: $("#customerNameInput")?.value || deliveryDraft.customerName,
     contactPerson: $("#contactInput")?.value || deliveryDraft.contactPerson,
     phone: $("#phoneInput")?.value || deliveryDraft.phone,
@@ -9202,6 +9215,57 @@ function deliveryProjectsForCustomer(customerName = "") {
     .filter(project => norm(project.status) !== "COMPLETED")
     .map(project => project.name)
     .filter(Boolean));
+}
+
+function findDeliveryProjectByNo(projectNo = "") {
+  const target = norm(projectNo);
+  if (!target) return null;
+  return (salesData().projects || []).find(project => norm(salesProjectNo(project)) === target) || null;
+}
+
+function deliveryLineFromProjectBoq(row = {}, project = {}) {
+  const rawModel = row.model || row.modelNo || row.description || row.boqDescription || "";
+  const modelNo = salesProjectModelNo(rawModel);
+  const stockInfo = salesProjectModelInfo(modelNo);
+  const orderedQty = Number(row.qty || row.quantity || row.totalQty || 0) || 0;
+  const recordedDeliveredQty = Number(row.deliveredQty || row.delivered || 0) || 0;
+  const historyDeliveredQty = modelNo ? salesProjectDeliveredQty(project, modelNo) : 0;
+  const deliveredQty = Math.max(recordedDeliveredQty, historyDeliveredQty);
+  const pendingQty = Math.max(orderedQty - deliveredQty, 0);
+  return {
+    id: String(Date.now() + Math.random()),
+    modelNo,
+    description: stockInfo?.description || row.description || row.boqDescription || "",
+    availableQty: salesProjectStockQty(modelNo),
+    qtyGoingOut: pendingQty || orderedQty || 0
+  };
+}
+
+function fillDeliveryFromProjectNo(projectNo = "") {
+  deliveryDraft = collectDeliveryDraft(deliveryDraft.status || "Draft");
+  const project = findDeliveryProjectByNo(projectNo);
+  if (!project) {
+    toast("Project No. not found");
+    return;
+  }
+  const customer = (inventoryState.customers || []).find(item => norm(item.customerName) === norm(project.customer));
+  const boqLines = salesProjectBoqRows(project)
+    .map(row => deliveryLineFromProjectBoq(row, project))
+    .filter(line => line.modelNo && Number(line.qtyGoingOut || 0) > 0);
+  deliveryDraft = {
+    ...deliveryDraft,
+    projectNo: salesProjectNo(project),
+    customerName: project.customer || deliveryDraft.customerName,
+    contactPerson: project.contactName || project.contactPerson || customer?.contactPerson || deliveryDraft.contactPerson || "",
+    phone: project.contactNumber || project.phone || customer?.phone || deliveryDraft.phone || "",
+    deliveryLocation: project.location || customer?.defaultDeliveryLocation || deliveryDraft.deliveryLocation || "",
+    projectName: project.name || deliveryDraft.projectName,
+    lines: boqLines.length ? boqLines : [blankDeliveryLine()]
+  };
+  const projectNoInput = $("#deliveryProjectNoInput");
+  if (projectNoInput) projectNoInput.value = deliveryDraft.projectNo;
+  refreshDeliveryModalForm();
+  toast("Project details filled");
 }
 
 function updateDeliveryProjectList(customerName = "") {
