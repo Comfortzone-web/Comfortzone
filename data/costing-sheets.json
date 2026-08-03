@@ -1,1718 +1,2013 @@
 {
-  "items": [
+  "priceItems": [
     {
+      "id": "09e51c65-f987-485d-ad7f-84638a93f4fa",
       "model": "RXQ6ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ6ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 21371,
       "multiplier": 0.55,
       "costPrice": 11754.050000000001,
-      "tr": 4.800000000000001,
-      "finalPrice": 9557.63
+      "finalPrice": 9557.63,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "b4f771fe-b6d7-401a-a4d6-1eae2f81b982",
       "model": "RXQ8ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ8ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 23269,
       "multiplier": 0.55,
       "costPrice": 12797.95,
-      "tr": 6.4,
-      "finalPrice": 10406.03
+      "finalPrice": 10406.03,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "52d9da0d-97a2-48b3-8d05-63cfa7c3be5e",
       "model": "RXQ10ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ10ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 31920,
       "multiplier": 0.55,
       "costPrice": 17556,
-      "tr": 8,
-      "finalPrice": 14272.31
+      "finalPrice": 14272.31,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "72f74fbc-0b66-4ffc-a5a9-ff64cef0567b",
       "model": "RXQ12ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ12ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 34955,
       "multiplier": 0.55,
       "costPrice": 19225.25,
-      "tr": 9.600000000000001,
-      "finalPrice": 15498.45
+      "finalPrice": 15498.45,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "48d036a5-3b6c-4c9f-a20f-6d0abfbc2df2",
       "model": "RXQ14ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ14ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 38452,
       "multiplier": 0.55,
       "costPrice": 21148.600000000002,
-      "tr": 11.200000000000001,
-      "finalPrice": 17048.8
+      "finalPrice": 17048.8,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "b0a4b5b7-bd38-4b69-a80d-cddded8a6ccc",
       "model": "RXQ16ARYFK",
       "description": "VRV OUTDOOR UNIT",
       "origin": "INDIA",
-      "boqDescription": "RXQ16ARYFK - DAIKIN VRV OUTDOOR UNIT - INDIA",
       "listPrice": 42299,
       "multiplier": 0.55,
       "costPrice": 23264.45,
-      "tr": 12.8,
-      "finalPrice": 18755.7
+      "finalPrice": 18755.7,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "e5ea9b68-d561-4a42-8072-0da4b1e80281",
       "model": "RXYMQ4AVMK",
       "description": "VRV OUTDOOR UNIT - MINI",
       "origin": "INDIA",
-      "boqDescription": "RXYMQ4AVMK - DAIKIN VRV OUTDOOR UNIT - MINI - INDIA",
       "listPrice": 13893,
       "multiplier": 0.6,
       "costPrice": 8335.8,
-      "tr": 3.2
+      "finalPrice": 8335.8,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "15ff0dbe-0e07-4329-9271-6cbb7c616340",
       "model": "RXYMQ4AYFK",
       "description": "VRV OUTDOOR UNIT - MINI",
       "origin": "INDIA",
-      "boqDescription": "RXYMQ4AYFK - DAIKIN VRV OUTDOOR UNIT - MINI - INDIA",
       "listPrice": 15530,
       "multiplier": 0.6,
       "costPrice": 9318,
-      "tr": 3.2
+      "finalPrice": 9318,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "990376e0-a2a6-4b97-8064-aa71dbf2c781",
       "model": "RXYMQ5AYFK",
       "description": "VRV OUTDOOR UNIT - MINI",
       "origin": "INDIA",
-      "boqDescription": "RXYMQ5AYFK - DAIKIN VRV OUTDOOR UNIT - MINI - INDIA",
       "listPrice": 16043,
       "multiplier": 0.6,
       "costPrice": 9625.8,
-      "tr": 4
+      "finalPrice": 9625.8,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "668e493b-f334-4559-81f7-3f5314afbc03",
       "model": "RXYMQ6AYFK",
       "description": "VRV OUTDOOR UNIT - MINI",
       "origin": "INDIA",
-      "boqDescription": "RXYMQ6AYFK - DAIKIN VRV OUTDOOR UNIT - MINI - INDIA",
       "listPrice": 16559,
       "multiplier": 0.6,
       "costPrice": 9935.4,
-      "tr": 4.800000000000001
+      "finalPrice": 9935.4,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a2b73af4-992c-4053-bb42-88e5ade14b84",
       "model": "RXYTQ8UYF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "BELGIUM",
-      "boqDescription": "RXYTQ8UYF - DAIKIN VRV OUTDOOR UNIT - BELGIUM",
       "listPrice": 30360,
       "multiplier": 0.5,
       "costPrice": 15180,
-      "tr": 6.4
+      "finalPrice": 15180,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "5653f649-d0b4-40b6-81ba-d025c2ed00e1",
       "model": "RXYTQ10UYF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "BELGIUM",
-      "boqDescription": "RXYTQ10UYF - DAIKIN VRV OUTDOOR UNIT - BELGIUM",
       "listPrice": 39826,
       "multiplier": 0.5,
       "costPrice": 19913,
-      "tr": 8
+      "finalPrice": 19913,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "7c573aff-95ad-4150-aa1f-471db61af698",
       "model": "RXYTQ12UYF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "BELGIUM",
-      "boqDescription": "RXYTQ12UYF - DAIKIN VRV OUTDOOR UNIT - BELGIUM",
       "listPrice": 43196,
       "multiplier": 0.5,
       "costPrice": 21598,
-      "tr": 9.600000000000001
+      "finalPrice": 21598,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "d9173a75-fdf3-4436-aa8d-a9faaf8366d4",
       "model": "RXYTQ14UYF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "BELGIUM",
-      "boqDescription": "RXYTQ14UYF - DAIKIN VRV OUTDOOR UNIT - BELGIUM",
       "listPrice": 52544,
       "multiplier": 0.5,
       "costPrice": 26272,
-      "tr": 11.200000000000001
+      "finalPrice": 26272,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "59c0fb70-ec9e-463f-a799-297e83f2b587",
       "model": "RXYTQ16UYF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "BELGIUM",
-      "boqDescription": "RXYTQ16UYF - DAIKIN VRV OUTDOOR UNIT - BELGIUM",
       "listPrice": 54285,
       "multiplier": 0.5,
       "costPrice": 27142.5,
-      "tr": 12.8
+      "finalPrice": 27142.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "e58a2e04-14cf-4710-adec-9c25f2decc0a",
       "model": "RXYTQ8U5YF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "TURKEY",
-      "boqDescription": "RXYTQ8U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
       "listPrice": 30360,
       "multiplier": 0.5,
       "costPrice": 15180,
-      "tr": 6.4,
-      "finalPrice": 12674.49
+      "finalPrice": 12674.49,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "ac2f97a4-3f08-4a55-a76c-f5188babea35",
       "model": "RXYTQ10U5YF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "TURKEY",
-      "boqDescription": "RXYTQ10U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
       "listPrice": 39826,
       "multiplier": 0.5,
       "costPrice": 19913,
-      "tr": 8,
-      "finalPrice": 16665.0
+      "finalPrice": 16665,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "24de6b42-83ec-4805-9605-3579581b9a3f",
       "model": "RXYTQ12U5YF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "TURKEY",
-      "boqDescription": "RXYTQ12U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
       "listPrice": 43196,
       "multiplier": 0.5,
       "costPrice": 21598,
-      "tr": 9.600000000000001,
-      "finalPrice": 17826.5
+      "finalPrice": 17826.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "bac5cc14-852a-4605-a3e5-1fd4e36191ae",
       "model": "RXYTQ14U5YF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "TURKEY",
-      "boqDescription": "RXYTQ14U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
       "listPrice": 52544,
       "multiplier": 0.5,
       "costPrice": 26272,
-      "tr": 11.200000000000001,
-      "finalPrice": 21397.86
+      "finalPrice": 21397.86,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a7159b0a-bffa-4b6e-9c6b-dcd79f6988a1",
       "model": "RXYTQ16U5YF",
       "description": "VRV OUTDOOR UNIT",
       "origin": "TURKEY",
-      "boqDescription": "RXYTQ16U5YF - DAIKIN VRV OUTDOOR UNIT - TURKEY",
       "listPrice": 54285,
       "multiplier": 0.5,
       "costPrice": 27142.5,
-      "tr": 12.8,
-      "finalPrice": 22120.01
+      "finalPrice": 22120.01,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "0d29025a-a17f-4619-8303-c83cb3002e39",
       "model": "FXAQ20ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ20ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2206,
       "multiplier": 0.55,
       "costPrice": 1213.3000000000002,
-      "tr": 0,
-      "finalPrice": 1200.89
+      "finalPrice": 1200.89,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "843a188f-bbd1-40a1-a49c-cf05bf4dcc84",
       "model": "FXAQ25ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ25ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2332,
       "multiplier": 0.55,
       "costPrice": 1282.6000000000001,
-      "tr": 0,
-      "finalPrice": 1235.23
+      "finalPrice": 1235.23,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "df422a5f-36f6-4e07-a392-92e166574aa8",
       "model": "FXAQ32ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ32ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2395,
       "multiplier": 0.55,
       "costPrice": 1317.25,
-      "tr": 0,
-      "finalPrice": 1287.75
+      "finalPrice": 1287.75,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "ed0ded62-1c61-4f86-a8dc-f82f9f63eec1",
       "model": "FXAQ40ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ40ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2552,
       "multiplier": 0.55,
       "costPrice": 1403.6000000000001,
-      "tr": 0,
-      "finalPrice": 1323.1
+      "finalPrice": 1323.1,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "7e6f55e9-10f1-4f4c-9310-2be09c9e10ba",
       "model": "FXAQ50ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ50ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2848,
       "multiplier": 0.55,
       "costPrice": 1566.4,
-      "tr": 0,
-      "finalPrice": 1475.61
+      "finalPrice": 1475.61,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "55ed1daf-02a0-4708-9e6b-476351270593",
       "model": "FXAQ63ARVM",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "INDIA",
-      "boqDescription": "FXAQ63ARVM - DAIKIN VRV INDOOR UNIT-Wall - INDIA",
       "listPrice": 2883,
       "multiplier": 0.55,
       "costPrice": 1585.65,
-      "tr": 0,
-      "finalPrice": 1494.8
+      "finalPrice": 1494.8,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "95f66b62-982d-4e10-9292-6c0f3a7ab300",
       "model": "FXAQ15A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ15A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 5072,
       "multiplier": 0.5,
       "costPrice": 2536,
-      "tr": 0,
-      "finalPrice": 2253.3807
+      "finalPrice": 2253.3807,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "657d3b8c-425f-402d-91ad-8bffc087b4e7",
       "model": "FXAQ20A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ20A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 5218,
       "multiplier": 0.5,
       "costPrice": 2609,
-      "tr": 0,
-      "finalPrice": 2484.6
+      "finalPrice": 2484.6,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "818796b3-1dff-4f54-94ae-49931aa4fc64",
       "model": "FXAQ25A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ25A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 5368,
       "multiplier": 0.5,
       "costPrice": 2684,
-      "tr": 0,
-      "finalPrice": 2555.3
+      "finalPrice": 2555.3,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "28693e40-fd4d-4e02-8ba7-15f04916449b",
       "model": "FXAQ32A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ32A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 5513,
       "multiplier": 0.5,
       "costPrice": 2756.5,
-      "tr": 0,
-      "finalPrice": 2626.0
+      "finalPrice": 2626,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "4e24fc71-0d10-4cf1-84be-85ae7462c8b7",
       "model": "FXAQ40A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ40A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 6057,
       "multiplier": 0.5,
       "costPrice": 3028.5,
-      "tr": 0,
-      "finalPrice": 2911.83
+      "finalPrice": 2911.83,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "b35bf593-5190-4d9c-9457-90f523264a0f",
       "model": "FXAQ50A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ50A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 6254,
       "multiplier": 0.5,
       "costPrice": 3127,
-      "tr": 0,
-      "finalPrice": 3006.77
+      "finalPrice": 3006.77,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "114eedb8-ccbe-462f-bf02-db1339239e0d",
       "model": "FXAQ63A",
       "description": "VRV INDOOR UNIT-Wall",
       "origin": "THAILAND",
-      "boqDescription": "FXAQ63A - DAIKIN VRV INDOOR UNIT-Wall - THAILAND",
       "listPrice": 6450,
       "multiplier": 0.5,
       "costPrice": 3225,
-      "tr": 0,
-      "finalPrice": 3100.7
+      "finalPrice": 3100.7,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "9a040405-4b77-4c20-88b0-7e0e770f0f0f",
       "model": "FXFQ20B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ20B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 3434,
       "multiplier": 0.55,
       "costPrice": 1888.7,
-      "tr": "`"
+      "finalPrice": 1888.7,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "106312f5-ee8a-4c44-ac70-0faa0775b5fe",
       "model": "FXFQ25B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ25B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 3612,
       "multiplier": 0.55,
       "costPrice": 1986.6000000000001,
-      "tr": 0
+      "finalPrice": 1986.6000000000001,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "d62f8030-cd43-44c4-a856-078184123020",
       "model": "FXFQ32B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ32B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 3804,
       "multiplier": 0.55,
       "costPrice": 2092.2000000000003,
-      "tr": 0
+      "finalPrice": 2092.2000000000003,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "7ec76211-b959-483b-af2b-6b6997133c7d",
       "model": "FXFQ40B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ40B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 4006,
       "multiplier": 0.55,
       "costPrice": 2203.3,
-      "tr": 0
+      "finalPrice": 2203.3,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "037e4280-f29b-4251-9017-8a9fe9feb15f",
       "model": "FXFQ50B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ50B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 4214,
       "multiplier": 0.55,
       "costPrice": 2317.7000000000003,
-      "tr": 0
+      "finalPrice": 2317.7000000000003,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a0324262-9f34-4687-9cb3-b66929aaf173",
       "model": "FXFQ63B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ63B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 4435,
       "multiplier": 0.55,
       "costPrice": 2439.25,
-      "tr": 0
+      "finalPrice": 2439.25,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a5e5c570-8a48-45bb-827b-30f44319489f",
       "model": "FXFQ80B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ80B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 4671,
       "multiplier": 0.55,
       "costPrice": 2569.05,
-      "tr": 0
+      "finalPrice": 2569.05,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "7732b0b2-b28d-45d4-939f-583e12edd2c7",
       "model": "FXFQ100B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ100B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 4915,
       "multiplier": 0.55,
       "costPrice": 2703.25,
-      "tr": 0
+      "finalPrice": 2703.25,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "de10b3b2-5a25-4c78-9624-da51188a3afc",
       "model": "FXFQ125B",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXFQ125B - DAIKIN VRV INDOOR UNIT-Cassette - CZECH REPUBLIC",
       "listPrice": 5175,
       "multiplier": 0.55,
       "costPrice": 2846.2500000000005,
-      "tr": 0
+      "finalPrice": 2846.2500000000005,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "1194644d-92a3-4e7c-acfd-5c7989abe094",
       "model": "FXFSQ25ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ25ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 3218,
       "multiplier": 0.55,
       "costPrice": 1769.9,
-      "tr": 0,
-      "finalPrice": 1742.25
+      "finalPrice": 1742.25,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "eb899a82-2f3d-430c-9742-7404442b7383",
       "model": "FXFSQ32ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ32ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 3396,
       "multiplier": 0.55,
       "costPrice": 1867.8000000000002,
-      "tr": 0,
-      "finalPrice": 1763.46
+      "finalPrice": 1763.46,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "af287167-2fed-4aff-ae87-f6042411e881",
       "model": "FXFSQ40ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ40ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 3572,
       "multiplier": 0.55,
       "costPrice": 1964.6000000000001,
-      "tr": 0,
-      "finalPrice": 1856.38
+      "finalPrice": 1856.38,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "8910d595-282a-453c-817a-5408ace296c6",
       "model": "FXFSQ50ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ50ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 3757,
       "multiplier": 0.55,
       "costPrice": 2066.3500000000004,
-      "tr": 0,
-      "finalPrice": 2025.05
+      "finalPrice": 2025.05,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "c48c9a90-ddbb-41a7-adb7-65ba8566cc58",
       "model": "FXFSQ63ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ63ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 3951,
       "multiplier": 0.55,
       "costPrice": 2173.05,
-      "tr": 0,
-      "finalPrice": 2061.1979
+      "finalPrice": 2061.1979,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "4a8007c9-b0d9-4ace-a60e-e2cbb48b52fc",
       "model": "FXFSQ80ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ80ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 4163,
       "multiplier": 0.55,
       "costPrice": 2289.65,
-      "tr": 0,
-      "finalPrice": 2162.41
+      "finalPrice": 2162.41,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "2124e7f5-de87-47ab-9e38-521c77f0b597",
       "model": "FXFSQ100ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ100ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 4383,
       "multiplier": 0.55,
       "costPrice": 2410.65,
-      "tr": 0,
-      "finalPrice": 2276.54
+      "finalPrice": 2276.54,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "c680dd98-d383-408b-97df-6e1d915fd042",
       "model": "FXFSQ125ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ125ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 4612,
       "multiplier": 0.55,
       "costPrice": 2536.6000000000004,
-      "tr": 0,
-      "finalPrice": 2405.8806
+      "finalPrice": 2405.8806,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "12694f1c-c48f-4975-8887-2efd0adc2355",
       "model": "FXFSQ140ARV1",
       "description": "VRV INDOOR UNIT-Cassette",
       "origin": "INDIA",
-      "boqDescription": "FXFSQ140ARV1 - DAIKIN VRV INDOOR UNIT-Cassette - INDIA",
       "listPrice": 4849,
       "multiplier": 0.55,
       "costPrice": 2666.9500000000003,
-      "tr": 0
+      "finalPrice": 2666.9500000000003,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "24cee1d1-c05e-4dae-8dc6-002714a56ee3",
       "model": "FXHQ32A",
       "description": "VRV INDOOR UNIT- Ceiling Susp.",
       "origin": "JAPAN",
-      "boqDescription": "FXHQ32A - DAIKIN VRV INDOOR UNIT- Ceiling Susp. - JAPAN",
       "listPrice": 5623,
       "multiplier": 0.65,
       "costPrice": 3654.9500000000003,
-      "tr": 0
+      "finalPrice": 3654.9500000000003,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "b6fb8a1e-3efe-4213-8ab1-f4dcaf765d86",
       "model": "FXHQ63A",
       "description": "VRV INDOOR UNIT- Ceiling Susp.",
       "origin": "JAPAN",
-      "boqDescription": "FXHQ63A - DAIKIN VRV INDOOR UNIT- Ceiling Susp. - JAPAN",
       "listPrice": 7450,
       "multiplier": 0.65,
       "costPrice": 4842.5,
-      "tr": 0
+      "finalPrice": 4842.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "973a99c5-eaef-4ace-ac5d-13ccf969c37b",
       "model": "FXHQ100A",
       "description": "VRV INDOOR UNIT- Ceiling Susp.",
       "origin": "JAPAN",
-      "boqDescription": "FXHQ100A - DAIKIN VRV INDOOR UNIT- Ceiling Susp. - JAPAN",
       "listPrice": 8694,
       "multiplier": 0.65,
       "costPrice": 5651.1,
-      "tr": 0
+      "finalPrice": 5651.1,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "00c91d2e-71e8-48c4-8973-0553fe4d96ab",
       "model": "FXDQ15A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ15A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 3422,
       "multiplier": 0.55,
       "costPrice": 1882.1000000000001,
-      "tr": 0
+      "finalPrice": 1882.1000000000001,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a5433091-23b5-497f-8a9c-d90a252708f0",
       "model": "FXDQ20A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ20A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 3607,
       "multiplier": 0.55,
       "costPrice": 1983.8500000000001,
-      "tr": 0
+      "finalPrice": 1983.8500000000001,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "73fe65e6-e7a7-4121-a88c-8ff07fad331c",
       "model": "FXDQ25A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ25A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 3757,
       "multiplier": 0.55,
       "costPrice": 2066.3500000000004,
-      "tr": 0
+      "finalPrice": 2066.3500000000004,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "dffe81cf-ab83-40c9-af9e-2b7efc8d8f1a",
       "model": "FXDQ32A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ32A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 3860,
       "multiplier": 0.55,
       "costPrice": 2123,
-      "tr": 0
+      "finalPrice": 2123,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "95ed9657-3f2d-4001-b6b4-8ab844ea918e",
       "model": "FXDQ40A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ40A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 4025,
       "multiplier": 0.55,
       "costPrice": 2213.75,
-      "tr": 0
+      "finalPrice": 2213.75,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "07535611-98c1-4a02-ab89-ab86a84c2680",
       "model": "FXDQ50A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ50A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 4210,
       "multiplier": 0.55,
       "costPrice": 2315.5,
-      "tr": 0
+      "finalPrice": 2315.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "275ef59b-05cd-48e3-a163-6aa2719b1982",
       "model": "FXDQ63A3",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXDQ63A3 - DAIKIN VRV INDOOR UNIT- Ducted (low static) - CZECH REPUBLIC",
       "listPrice": 4690,
       "multiplier": 0.55,
       "costPrice": 2579.5,
-      "tr": 0
+      "finalPrice": 2579.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "58e5e89a-e484-48de-8ab3-2bb4b382c6f4",
       "model": "FXDQ20PDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ20PDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 3396,
       "multiplier": 0.55,
       "costPrice": 1867.8000000000002,
-      "tr": 0
+      "finalPrice": 1867.8000000000002,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "553f9cb6-347b-4b44-86ec-e719350fb704",
       "model": "FXDQ25PDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ25PDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 3533,
       "multiplier": 0.55,
       "costPrice": 1943.15,
-      "tr": 0
+      "finalPrice": 1943.15,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "a101b7bc-635d-4a5c-a49a-f01900214a64",
       "model": "FXDQ32PDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ32PDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 3635,
       "multiplier": 0.55,
       "costPrice": 1999.2500000000002,
-      "tr": 0
+      "finalPrice": 1999.2500000000002,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "ca0354ae-a1f9-42cb-aba8-8d76e46bcc5a",
       "model": "FXDQ40NDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ40NDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 3785,
       "multiplier": 0.55,
       "costPrice": 2081.75,
-      "tr": 0
+      "finalPrice": 2081.75,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "f60adcd6-7a4a-455f-b832-748895c2b062",
       "model": "FXDQ50NDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ50NDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 3963,
       "multiplier": 0.55,
       "costPrice": 2179.65,
-      "tr": 0
+      "finalPrice": 2179.65,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "13e31ce8-e29b-4dd4-9911-a0d87a66e573",
       "model": "FXDQ63NDVM",
       "description": "VRV INDOOR UNIT- Ducted (low static)",
       "origin": "INDIA",
-      "boqDescription": "FXDQ63NDVM - DAIKIN VRV INDOOR UNIT- Ducted (low static) - INDIA",
       "listPrice": 4415,
       "multiplier": 0.55,
       "costPrice": 2428.25,
-      "tr": 0
+      "finalPrice": 2428.25,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "2f458795-ab03-4c38-bfdf-cdfd86c5f400",
       "model": "FXMQ40PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ40PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 4490,
       "multiplier": 0.55,
       "costPrice": 2469.5,
-      "tr": 0,
-      "finalPrice": 2020.0
+      "finalPrice": 2020,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "22e50708-7ea9-410a-a443-5295edfaad4f",
       "model": "FXMQ50PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ50PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 4620,
       "multiplier": 0.55,
       "costPrice": 2541,
-      "tr": 0,
-      "finalPrice": 2115.95
+      "finalPrice": 2115.95,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "8910a771-43ca-49d8-8301-06179b43c902",
       "model": "FXMQ63PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ63PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 5600,
       "multiplier": 0.55,
       "costPrice": 3080.0000000000005,
-      "tr": 0,
-      "finalPrice": 2519.95
+      "finalPrice": 2519.95,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "962fbeea-9d1d-48b8-ad6a-1d00e2c14ed7",
       "model": "FXMQ80PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ80PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 5773,
       "multiplier": 0.55,
       "costPrice": 3175.15,
-      "tr": 0,
-      "finalPrice": 2597.72
+      "finalPrice": 2597.72,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "66db0daf-0e72-4cbc-8385-09c2886d438b",
       "model": "FXMQ100PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ100PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 6581,
       "multiplier": 0.55,
       "costPrice": 3619.55,
-      "tr": 0,
-      "finalPrice": 2979.5
+      "finalPrice": 2979.5,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "37e592e3-5d97-4d70-a997-67f804984e20",
       "model": "FXMQ125PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ125PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 6774,
       "multiplier": 0.55,
       "costPrice": 3725.7000000000003,
-      "tr": 0,
-      "finalPrice": 3048.18
+      "finalPrice": 3048.18,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "d05d1c85-045e-4844-bb97-04b63b2117cb",
       "model": "FXMQ140PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ140PBV1 - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - INDIA",
       "listPrice": 6080,
       "multiplier": 0.55,
       "costPrice": 3344.0000000000005,
-      "tr": 0,
-      "finalPrice": 3189.58
+      "finalPrice": 3189.58,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "2959424a-86c3-4170-91fb-afa0665aa45e",
       "model": "FXSQ15A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ15A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4144,
       "multiplier": 0.55,
       "costPrice": 2279.2000000000003,
-      "tr": 0
+      "finalPrice": 2279.2000000000003,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "3bf842f4-ebc6-46ca-9dbc-1d8e81c92a85",
       "model": "FXSQ20A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ20A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4368,
       "multiplier": 0.55,
       "costPrice": 2402.4,
-      "tr": 0
+      "finalPrice": 2402.4,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "29a39d38-eef7-4261-bf12-ea5c7ef75c4e",
       "model": "FXSQ25A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ25A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4498,
       "multiplier": 0.55,
       "costPrice": 2473.9,
-      "tr": 0,
-      "finalPrice": 1951.32
+      "finalPrice": 1951.32,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "6eef5592-f960-440b-b04a-e88f912c05f2",
       "model": "FXSQ32A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ32A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4636,
       "multiplier": 0.55,
       "costPrice": 2549.8,
-      "tr": 0,
-      "finalPrice": 2090.7
+      "finalPrice": 2090.7,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "3e1ea818-8973-4035-b9d1-45365f5f2fd1",
       "model": "FXSQ40A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ40A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4769,
       "multiplier": 0.55,
       "costPrice": 2622.9500000000003,
-      "tr": 0,
-      "finalPrice": 2239.17
+      "finalPrice": 2239.17,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "1e810456-2091-426d-8f3f-bee27d0c8672",
       "model": "FXSQ50A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ50A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 4915,
       "multiplier": 0.55,
       "costPrice": 2703.25,
-      "tr": 0,
-      "finalPrice": 2305.83
+      "finalPrice": 2305.83,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "dda1fe48-d3cd-4920-b1e3-8b46b54bad7a",
       "model": "FXSQ63A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ63A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 5955,
       "multiplier": 0.55,
       "costPrice": 3275.2500000000005,
-      "tr": 0,
-      "finalPrice": 2617.92
+      "finalPrice": 2617.92,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "542a96f2-d637-4cb8-a200-017ba5a66414",
       "model": "FXSQ80A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ80A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 6136,
       "multiplier": 0.55,
       "costPrice": 3374.8,
-      "tr": 0,
-      "finalPrice": 2695.69
+      "finalPrice": 2695.69,
+      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "history": []
     },
     {
+      "id": "1d67f7e7-6b5f-4501-aace-935a3b431304",
       "model": "FXSQ100A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ100A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 6994,
       "multiplier": 0.55,
       "costPrice": 3846.7000000000003,
-      "tr": 0,
-      "finalPrice": 3074.44
+      "finalPrice": 3074.44,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "24bb9ad4-cfae-4afd-964b-cec506c6300b",
       "model": "FXSQ125A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ125A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 7203,
       "multiplier": 0.55,
       "costPrice": 3961.6500000000005,
-      "tr": 0,
-      "finalPrice": 3166.35
+      "finalPrice": 3166.35,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "52d055f0-127a-4425-9d35-8c20b59dcb72",
       "model": "FXSQ140A",
       "description": "VRV INDOOR UNIT- Ducted (medium static)",
       "origin": "CZECH REPUBLIC",
-      "boqDescription": "FXSQ140A - DAIKIN VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
       "listPrice": 7420,
       "multiplier": 0.55,
       "costPrice": 4081.0000000000005,
-      "tr": 0,
-      "finalPrice": 3260.28
+      "finalPrice": 3260.28,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "02f88a79-0852-40ff-86aa-64abaeeb3118",
       "model": "FXMQ170NVE6",
       "description": "VRV INDOOR UNIT- Ducted (high static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ170NVE6 - DAIKIN VRV INDOOR UNIT- Ducted (high static) - INDIA",
       "listPrice": 10498,
       "multiplier": 0.55,
       "costPrice": 5773.900000000001,
-      "tr": 0,
-      "finalPrice": 4808.61
+      "finalPrice": 4808.61,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "fb66c218-c7e4-4862-b31b-573598c0f6e3",
       "model": "FXMQ200NVE6",
       "description": "VRV INDOOR UNIT- Ducted (high static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ200NVE6 - DAIKIN VRV INDOOR UNIT- Ducted (high static) - INDIA",
       "listPrice": 12720,
       "multiplier": 0.55,
       "costPrice": 6996.000000000001,
-      "tr": 0,
-      "finalPrice": 5397.44
+      "finalPrice": 5397.44,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "8ab47c99-f657-49db-a7d4-f4f0029e816c",
       "model": "FXMQ250NVE6",
       "description": "VRV INDOOR UNIT- Ducted (high static)",
       "origin": "INDIA",
-      "boqDescription": "FXMQ250NVE6 - DAIKIN VRV INDOOR UNIT- Ducted (high static) - INDIA",
       "listPrice": 14027,
       "multiplier": 0.55,
       "costPrice": 7714.85,
-      "tr": 0,
-      "finalPrice": 5753.97
+      "finalPrice": 5753.97,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "885c4f43-7559-478c-b38b-373801c35508",
       "model": "FXMQ200MA",
       "description": "VRV INDOOR UNIT- Ducted (high static)",
       "origin": "JAPAN",
-      "boqDescription": "FXMQ200MA - DAIKIN VRV INDOOR UNIT- Ducted (high static) - JAPAN",
       "listPrice": 25536,
       "multiplier": 0.55,
       "costPrice": 14044.800000000001,
-      "tr": 0
+      "finalPrice": 14044.800000000001,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "f49f9f2c-c1b4-417b-a84f-4322510e0698",
       "model": "FXMQ250MA",
       "description": "VRV INDOOR UNIT- Ducted (high static)",
       "origin": "JAPAN",
-      "boqDescription": "FXMQ250MA - DAIKIN VRV INDOOR UNIT- Ducted (high static) - JAPAN",
       "listPrice": 25285,
       "multiplier": 0.55,
       "costPrice": 13906.750000000002,
-      "tr": 0
+      "finalPrice": 13906.750000000002,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "4e0c7d88-7093-464c-8f6c-28ddca2664dd",
       "model": "KHRP26A22T6",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26A22T6 - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 162,
       "multiplier": 0.65,
       "costPrice": 105.3,
-      "tr": 0,
-      "finalPrice": 83.0
+      "finalPrice": 83,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": [
+        {
+          "date": "2026-08-03T12:23:27.063Z",
+          "costPrice": 105.3,
+          "finalPrice": 84
+        },
+        {
+          "date": "2026-08-03T12:23:04.895Z",
+          "costPrice": 105.3,
+          "finalPrice": 83
+        }
+      ]
     },
     {
+      "id": "bc039ab8-05b9-4da1-9941-6d015fcf64f1",
       "model": "KHRP26A33T6",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26A33T6 - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 194,
       "multiplier": 0.65,
       "costPrice": 126.10000000000001,
-      "tr": 0,
-      "finalPrice": 99.0
+      "finalPrice": 99,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "e329aa4a-4a3b-4c20-94f5-a40e9680e07b",
       "model": "KHRP26A72T6",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26A72T6 - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 320,
       "multiplier": 0.65,
       "costPrice": 208,
-      "tr": 0,
-      "finalPrice": 164.0
+      "finalPrice": 164,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "a8515c95-ecdb-4684-ac2b-3ae4af48a71c",
       "model": "KHRP26A73T6",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26A73T6 - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 477,
       "multiplier": 0.65,
       "costPrice": 310.05,
-      "tr": 0,
-      "finalPrice": 245.0
+      "finalPrice": 245,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "87b37131-bb61-459c-932a-0fb640d8f07a",
       "model": "KHRP26M73TP6",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26M73TP6 - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 162,
       "multiplier": 0.65,
       "costPrice": 105.3,
-      "tr": 0,
-      "finalPrice": 83.0
+      "finalPrice": 83,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "f9081991-7f9b-451d-8059-1e80105a5ee9",
       "model": "KHRP26A73T6 + KHRP26M73TP",
       "description": "REFNETS - IDU",
       "origin": "INDIA",
-      "boqDescription": "KHRP26A73T6 + KHRP26M73TP - DAIKIN REFNETS - IDU - INDIA",
       "listPrice": 639,
       "multiplier": 0.65,
       "costPrice": 415.35,
-      "tr": 0,
-      "finalPrice": 328.0
+      "finalPrice": 328,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "87f92e26-9939-473e-80cf-4a51af5d1ed5",
       "model": "BHFP22P1006",
       "description": "REFNETS - ODU",
       "origin": "INDIA",
-      "boqDescription": "BHFP22P1006 - DAIKIN REFNETS - ODU - INDIA",
       "listPrice": 705,
       "multiplier": 0.65,
       "costPrice": 458.25,
-      "tr": 0,
-      "finalPrice": 413.5
+      "finalPrice": 413.5,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "b8220293-30a8-41f9-8b27-01194290a94e",
       "model": "BHFP22P1516",
       "description": "REFNETS - ODU",
       "origin": "INDIA",
-      "boqDescription": "BHFP22P1516 - DAIKIN REFNETS - ODU - INDIA",
       "listPrice": 1664,
       "multiplier": 0.65,
       "costPrice": 1081.6000000000001,
-      "tr": 0,
-      "finalPrice": 849.0
+      "finalPrice": 849,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "13e3d38f-1b17-4e28-8243-9b5149191a2f",
       "model": "KHRQ22M20T",
       "description": "REFNETS - IDU",
       "origin": "BELGIUM",
-      "boqDescription": "KHRQ22M20T - DAIKIN REFNETS - IDU - BELGIUM",
       "listPrice": 726,
       "multiplier": 0.65,
       "costPrice": 471.90000000000003,
-      "tr": 0,
-      "finalPrice": 370.0
+      "finalPrice": 370,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "4ece5825-4289-47cc-b7cd-622a19587bd6",
       "model": "KHRQ22M29T9",
       "description": "REFNETS - IDU",
       "origin": "BELGIUM",
-      "boqDescription": "KHRQ22M29T9 - DAIKIN REFNETS - IDU - BELGIUM",
       "listPrice": 805,
       "multiplier": 0.65,
       "costPrice": 523.25,
-      "tr": 0,
-      "finalPrice": 412.0
+      "finalPrice": 412,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "ced1688e-62f3-4f0b-bfb0-5b94b19e1795",
       "model": "KHRQ22M64T",
       "description": "REFNETS - IDU",
       "origin": "BELGIUM",
-      "boqDescription": "KHRQ22M64T - DAIKIN REFNETS - IDU - BELGIUM",
       "listPrice": 1061,
       "multiplier": 0.65,
       "costPrice": 689.65,
-      "tr": 0,
-      "finalPrice": 542.0
+      "finalPrice": 542,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "8681c47d-aa21-45d9-8de3-5e6406699778",
       "model": "KHRQ22M75T",
       "description": "REFNETS - IDU",
       "origin": "BELGIUM",
-      "boqDescription": "KHRQ22M75T - DAIKIN REFNETS - IDU - BELGIUM",
       "listPrice": 2223,
       "multiplier": 0.65,
       "costPrice": 1444.95,
-      "tr": 0,
-      "finalPrice": 1134.0
+      "finalPrice": 1134,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "c1f46474-66da-4fe2-af61-a076d4c55ccc",
       "model": "BHFQ22P1007",
       "description": "REFNETS - ODU",
       "origin": "BELGIUM",
-      "boqDescription": "BHFQ22P1007 - DAIKIN REFNETS - ODU - BELGIUM",
       "listPrice": 1124,
       "multiplier": 0.65,
       "costPrice": 730.6,
-      "tr": 0,
-      "finalPrice": 573.0
+      "finalPrice": 573,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "f9f4b8e0-c9ce-4438-9dce-ea79f235c646",
       "model": "BHFQ22P1517",
       "description": "REFNETS - ODU",
       "origin": "BELGIUM",
-      "boqDescription": "BHFQ22P1517 - DAIKIN REFNETS - ODU - BELGIUM",
       "listPrice": 2184,
       "multiplier": 0.65,
       "costPrice": 1419.6000000000001,
-      "tr": 0,
-      "finalPrice": 1115.0
+      "finalPrice": 1115,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "3c04a660-d1d3-4d5c-b0ae-a48f7cd6c889",
       "model": "BRC1H82K",
       "description": "WIRED THERMOSTAT (BLACK)",
       "origin": "CHINA",
-      "boqDescription": "BRC1H82K - DAIKIN WIRED THERMOSTAT (BLACK) - CHINA",
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "tr": 0,
-      "finalPrice": 253.0
+      "finalPrice": 253,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "2179e284-d7e5-4371-975a-39ec44ba1433",
       "model": "BRC1H82S",
       "description": "WIRED THERMOSTAT (SILVER)",
       "origin": "CHINA",
-      "boqDescription": "BRC1H82S - DAIKIN WIRED THERMOSTAT (SILVER) - CHINA",
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "tr": 0,
-      "finalPrice": 253.0
+      "finalPrice": 253,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "cb455b83-5c5d-41d4-9c30-d8182dd72f15",
       "model": "BRC1H82W",
       "description": "WIRED THERMOSTAT (WHITE)",
       "origin": "CHINA",
-      "boqDescription": "BRC1H82W - DAIKIN WIRED THERMOSTAT (WHITE) - CHINA",
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "tr": 0,
-      "finalPrice": 253.0
+      "finalPrice": 253,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "c71badff-97e0-4c4c-910a-7ca844f4c7be",
       "model": "FCA18AVMK - RZCA18AVMK",
       "description": "CASSETTE AC - 1.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FCA18AVMK - RZCA18AVMK - DAIKIN CASSETTE AC - 1.5 TR - INDIA",
       "listPrice": 5813,
       "multiplier": 1,
       "costPrice": 5813,
-      "tr": 1.5
+      "finalPrice": 5813,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "b168de96-1269-4c1d-8718-8fccd387229c",
       "model": "FCA24AVMK - RZCA24AVMK",
       "description": "CASSETTE AC - 2 TR",
       "origin": "INDIA",
-      "boqDescription": "FCA24AVMK - RZCA24AVMK - DAIKIN CASSETTE AC - 2 TR - INDIA",
       "listPrice": 8795,
       "multiplier": 1,
       "costPrice": 8795,
-      "tr": 2
+      "finalPrice": 8795,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "9aac4263-79f0-47b2-ae11-ef3931ad2a2f",
       "model": "FCA30AVMK - RZCA30AVMK",
       "description": "CASSETTE AC - 2.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FCA30AVMK - RZCA30AVMK - DAIKIN CASSETTE AC - 2.5 TR - INDIA",
       "listPrice": 9169,
       "multiplier": 1,
       "costPrice": 9169,
-      "tr": 2.5
+      "finalPrice": 9169,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "0e5396b2-509a-4a39-b45a-c3b8179bd2b3",
       "model": "FCA36AVMK - RZCA36AVMK",
       "description": "CASSETTE AC - 3 TR",
       "origin": "INDIA",
-      "boqDescription": "FCA36AVMK - RZCA36AVMK - DAIKIN CASSETTE AC - 3 TR - INDIA",
       "listPrice": 9562,
       "multiplier": 1,
       "costPrice": 9562,
-      "tr": 3
+      "finalPrice": 9562,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "0cf2d8bd-969d-4846-bf21-24113078c00f",
       "model": "FCA42AVMK - RZCA42AYMK",
       "description": "CASSETTE AC - 3.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FCA42AVMK - RZCA42AYMK - DAIKIN CASSETTE AC - 3.5 TR - INDIA",
       "listPrice": 10188,
       "multiplier": 1,
       "costPrice": 10188,
-      "tr": 3.5
+      "finalPrice": 10188,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "357110d5-5489-4aef-a44f-cd7c5fb68dfc",
       "model": "FDMF18AVMK9 - RZF18AVMK9",
       "description": "DUCTED INVERTER R32 - 1.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF18AVMK9 - RZF18AVMK9 - DAIKIN DUCTED INVERTER R32 - 1.5 TR - INDIA",
       "listPrice": 10264,
       "multiplier": 0.5,
       "costPrice": 5132,
-      "tr": 1.5,
-      "finalPrice": 4606.0
+      "finalPrice": 4606,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "ec0e7005-cbdf-4506-b3f8-943139b0e2c3",
       "model": "FDMF24AVMK9 - RZF24AVMK9",
       "description": "DUCTED INVERTER R32 - 2 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF24AVMK9 - RZF24AVMK9 - DAIKIN DUCTED INVERTER R32 - 2 TR - INDIA",
       "listPrice": 13745,
       "multiplier": 0.5,
       "costPrice": 6872.5,
-      "tr": 2,
-      "finalPrice": 6565.0
+      "finalPrice": 6565,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "d13c1a44-e0a2-4ad3-824a-552695521804",
       "model": "FDMF30AVMK9 - RZF30AVMK9",
       "description": "DUCTED INVERTER R32 - 2.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF30AVMK9 - RZF30AVMK9 - DAIKIN DUCTED INVERTER R32 - 2.5 TR - INDIA",
       "listPrice": 14174,
       "multiplier": 0.5,
       "costPrice": 7087,
-      "tr": 2.5,
-      "finalPrice": 6705.0
+      "finalPrice": 6705,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "4913d590-bafe-4742-a2ac-60c78b85425b",
       "model": "FDMF36AVMK - RZF36AVMK",
       "description": "DUCTED INVERTER R32 - 3 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF36AVMK - RZF36AVMK - DAIKIN DUCTED INVERTER R32 - 3 TR - INDIA",
       "listPrice": 14513,
       "multiplier": 0.5,
       "costPrice": 7256.5,
-      "tr": 3,
-      "finalPrice": 7288.0
+      "finalPrice": 7288,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "c8280755-f6a0-4f88-8663-349a91a3f685",
       "model": "FDMF48AVMK - RZF48AYMK",
       "description": "DUCTED INVERTER R32 - 4 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF48AVMK - RZF48AYMK - DAIKIN DUCTED INVERTER R32 - 4 TR - INDIA",
       "listPrice": 19089,
       "multiplier": 0.5,
       "costPrice": 9544.5,
-      "tr": 4,
-      "finalPrice": 8716.0
+      "finalPrice": 8716,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "0d7a6bfa-5880-48d8-b6a6-cd0b2c98d8d2",
       "model": "FDMF54AVMK - RZF54AYMK",
       "description": "DUCTED INVERTER R32 - 4.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF54AVMK - RZF54AYMK - DAIKIN DUCTED INVERTER R32 - 4.5 TR - INDIA",
       "listPrice": 19970,
       "multiplier": 0.5,
       "costPrice": 9985,
-      "tr": 5,
-      "finalPrice": 9270.0
+      "finalPrice": 9270,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF18AVMK9 - RZF18AVMK9 + Thermostat",
+      "id": "8b00b7bd-be79-4be0-ac6b-f8aecb874b63",
+      "model": "FDMF18AVMK9 - RZF18AVMK9 + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 1.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF18AVMK9 - RZF18AVMK9 + Thermostat - DAIKIN DUCTED INVERTER R32 - 1.5 TR - INDIA",
       "listPrice": 10904.9,
       "multiplier": 0.5,
       "costPrice": 5452.45,
-      "tr": 1.5
+      "finalPrice": 5452.45,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF24AVMK9 - RZF24AVMK9 + Thermostat",
+      "id": "2a246447-7aec-4988-9598-6df1b064a6eb",
+      "model": "FDMF24AVMK9 - RZF24AVMK9 + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 2 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF24AVMK9 - RZF24AVMK9 + Thermostat - DAIKIN DUCTED INVERTER R32 - 2 TR - INDIA",
       "listPrice": 14385.9,
       "multiplier": 0.5,
       "costPrice": 7192.95,
-      "tr": 2
+      "finalPrice": 7192.95,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF30AVMK9 - RZF30AVMK9 + Thermostat",
+      "id": "3c3e61e9-bf2f-4552-9fbe-7b09b4fead1f",
+      "model": "FDMF30AVMK9 - RZF30AVMK9 + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 2.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF30AVMK9 - RZF30AVMK9 + Thermostat - DAIKIN DUCTED INVERTER R32 - 2.5 TR - INDIA",
       "listPrice": 14814.9,
       "multiplier": 0.5,
       "costPrice": 7407.45,
-      "tr": 2.5
+      "finalPrice": 7407.45,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF36AVMK - RZF36AVMK + Thermostat",
+      "id": "0d9a30e9-f464-469a-b416-3680831e3a71",
+      "model": "FDMF36AVMK - RZF36AVMK + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 3 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF36AVMK - RZF36AVMK + Thermostat - DAIKIN DUCTED INVERTER R32 - 3 TR - INDIA",
       "listPrice": 15153.9,
       "multiplier": 0.5,
       "costPrice": 7576.95,
-      "tr": 3
+      "finalPrice": 7576.95,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF48AVMK - RZF48AYMK + Thermostat",
+      "id": "471e51fd-9c2a-4505-8ee5-d0c379470f96",
+      "model": "FDMF48AVMK - RZF48AYMK + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 4 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF48AVMK - RZF48AYMK + Thermostat - DAIKIN DUCTED INVERTER R32 - 4 TR - INDIA",
       "listPrice": 19729.9,
       "multiplier": 0.5,
       "costPrice": 9864.95,
-      "tr": 4
+      "finalPrice": 9864.95,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
-      "model": "FDMF54AVMK - RZF54AYMK + Thermostat",
+      "id": "5f7e8d15-7d8c-4700-93dd-2442200dfa6a",
+      "model": "FDMF54AVMK - RZF54AYMK + THERMOSTAT",
       "description": "DUCTED INVERTER R32 - 4.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FDMF54AVMK - RZF54AYMK + Thermostat - DAIKIN DUCTED INVERTER R32 - 4.5 TR - INDIA",
       "listPrice": 20610.9,
       "multiplier": 0.5,
       "costPrice": 10305.45,
-      "tr": 5
+      "finalPrice": 10305.45,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "b230cdc5-e39e-45b8-a16b-2e4471839f9b",
       "model": "FDMRN20AVKU - RR20AVKU",
       "description": "DUCTED - R410 - 1.5 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN20AVKU - RR20AVKU - DAIKIN DUCTED - R410 - 1.5 TR - MALAYSIA",
       "listPrice": 6732,
       "multiplier": 0.5,
       "costPrice": 3366,
-      "tr": 1.5,
-      "finalPrice": 3413.0
+      "finalPrice": 3413,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "53a79e07-69cd-4bf8-ba4e-6b4ae26b81ce",
       "model": "FDMRN25AVKU - RR25AVKU",
       "description": "DUCTED - R410 - 2 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN25AVKU - RR25AVKU - DAIKIN DUCTED - R410 - 2 TR - MALAYSIA",
       "listPrice": 8038,
       "multiplier": 0.5,
       "costPrice": 4019,
-      "tr": 2,
-      "finalPrice": 3932.0
+      "finalPrice": 3932,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "30ff27e4-f2fb-4d17-8c70-3071bf5e4856",
       "model": "FDMRN30AVKU - RR30AVKU",
-      "description": "DUCTED -  R410 - 2.5 TR",
+      "description": "DUCTED - R410 - 2.5 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN30AVKU - RR30AVKU - DAIKIN DUCTED -  R410 - 2.5 TR - MALAYSIA",
       "listPrice": 9748,
       "multiplier": 0.5,
       "costPrice": 4874,
-      "tr": 2.5,
-      "finalPrice": 4788.0
+      "finalPrice": 4788,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "003f25b5-fbae-4864-913a-f7086e9c4464",
       "model": "FDMRN36AVKU - RR36AVKU",
-      "description": "DUCTED -  R410 - 3 TR",
+      "description": "DUCTED - R410 - 3 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN36AVKU - RR36AVKU - DAIKIN DUCTED -  R410 - 3 TR - MALAYSIA",
       "listPrice": 11747,
       "multiplier": 0.5,
       "costPrice": 5873.5,
-      "tr": 3,
-      "finalPrice": 5944.0
+      "finalPrice": 5944,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "d6a6b4ab-4133-4af0-b7ae-e1e85ef60cbf",
       "model": "FDMRN50AVKU - RR50AYKU",
-      "description": "DUCTED -  R410 - 4 TR",
+      "description": "DUCTED - R410 - 4 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN50AVKU - RR50AYKU - DAIKIN DUCTED -  R410 - 4 TR - MALAYSIA",
       "listPrice": 14083,
       "multiplier": 0.5,
       "costPrice": 7041.5,
-      "tr": 4,
-      "finalPrice": 6848.0
+      "finalPrice": 6848,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "c13aa949-75bf-4da4-8c70-76a40c496e94",
       "model": "FDMRN60AVKU - RR60AYKU",
-      "description": "DUCTED -  R410 - 5 TR",
+      "description": "DUCTED - R410 - 5 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "FDMRN60AVKU - RR60AYKU - DAIKIN DUCTED -  R410 - 5 TR - MALAYSIA",
       "listPrice": 19966,
       "multiplier": 0.5,
       "costPrice": 9983,
-      "tr": 5,
-      "finalPrice": 8600.0
+      "finalPrice": 8600,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "297e4315-c8f7-43e5-8a85-15fc94edef1b",
       "model": "BAG",
       "description": "SKY/PACKAGE ACCESSORY - ADAPTOR",
       "origin": "MALAYSIA",
-      "boqDescription": "BAG - DAIKIN SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
       "listPrice": 694,
       "multiplier": 0.65,
       "costPrice": 451.1,
-      "tr": 0
+      "finalPrice": 451.1,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "caea2771-da6e-4b7c-8718-e8c9562f1676",
       "model": "NETPRODUAL",
       "description": "SKY/PACKAGE ACCESSORY - ADAPTOR",
       "origin": "MALAYSIA",
-      "boqDescription": "NETPRODUAL - DAIKIN SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
       "listPrice": 1006,
       "multiplier": 0.65,
       "costPrice": 653.9,
-      "tr": 0
+      "finalPrice": 653.9,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "07c505fe-1193-43a6-83a7-43203e566b21",
       "model": "FTKF12TVMVZK - RKFG12TVMVZK",
       "description": "WALL SPLIT INVERTER R32 - 1 TR",
       "origin": "INDIA",
-      "boqDescription": "FTKF12TVMVZK - RKFG12TVMVZK - DAIKIN WALL SPLIT INVERTER R32 - 1 TR - INDIA",
       "listPrice": 3826,
       "multiplier": 0.5,
       "costPrice": 1913,
-      "tr": 1,
-      "finalPrice": 1925.0
+      "finalPrice": 1925,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "a99c515e-a7f5-4e41-8fbc-2c704c491fc8",
       "model": "FTKF18TVMUZK - RKFG18TVMUZK",
       "description": "WALL SPLIT INVERTER R32 - 1.5 TR",
       "origin": "INDIA",
-      "boqDescription": "FTKF18TVMUZK - RKFG18TVMUZK - DAIKIN WALL SPLIT INVERTER R32 - 1.5 TR - INDIA",
       "listPrice": 4593,
       "multiplier": 0.5,
       "costPrice": 2296.5,
-      "tr": 1.5,
-      "finalPrice": 2450.0
+      "finalPrice": 2450,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "fc020fe7-8cc0-4c26-ae4c-fa3d7d7ba073",
       "model": "FTKF24TVMTZK - RKFG24TVMTZK",
       "description": "WALL SPLIT INVERTER R32 - 2 TR",
       "origin": "INDIA",
-      "boqDescription": "FTKF24TVMTZK - RKFG24TVMTZK - DAIKIN WALL SPLIT INVERTER R32 - 2 TR - INDIA",
       "listPrice": 6136,
       "multiplier": 0.5,
       "costPrice": 3068,
-      "tr": 2,
-      "finalPrice": 2975.0
+      "finalPrice": 2975,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "d634b8b0-8fa2-42bd-b807-a809e5f7842c",
       "model": "FTKM18PVM - RKM18PVM",
       "description": "WALL SPLIT INVERTER R32 - 1.5 TR",
       "origin": "THAILAND",
-      "boqDescription": "FTKM18PVM - RKM18PVM - DAIKIN WALL SPLIT INVERTER R32 - 1.5 TR - THAILAND",
       "listPrice": 6653,
       "multiplier": 0.5,
       "costPrice": 3326.5,
-      "tr": 1.5
+      "finalPrice": 3326.5,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "2c2811e1-dd7f-4343-aefa-8445397aeb88",
       "model": "FTKM24PVM - RKM24PVM",
       "description": "WALL SPLIT INVERTER R32 - 2 TR",
       "origin": "THAILAND",
-      "boqDescription": "FTKM24PVM - RKM24PVM - DAIKIN WALL SPLIT INVERTER R32 - 2 TR - THAILAND",
       "listPrice": 7282,
       "multiplier": 0.5,
       "costPrice": 3641,
-      "tr": 2
+      "finalPrice": 3641,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "593ba891-6e00-4cc8-951a-ed5e1c77d416",
       "model": "FTKM28PVM - RKM28PVM",
       "description": "WALL SPLIT INVERTER R32 - 2.5 TR",
       "origin": "THAILAND",
-      "boqDescription": "FTKM28PVM - RKM28PVM - DAIKIN WALL SPLIT INVERTER R32 - 2.5 TR - THAILAND",
       "listPrice": 9334,
       "multiplier": 0.5,
       "costPrice": 4667,
-      "tr": 2.5
+      "finalPrice": 4667,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "7cb5d649-36dd-4d39-8771-774e05556b47",
       "model": "UATQ80CGXY1U",
       "description": "PACKAGED UNIT - R410A - 6.4 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ80CGXY1U - DAIKIN PACKAGED UNIT - R410A - 6.4 TR - MALAYSIA",
       "listPrice": 36000,
       "multiplier": 0.5,
       "costPrice": 18000,
-      "tr": 6.4
+      "finalPrice": 18000,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "e6521069-2919-4f5f-b699-f0c18ff63fbe",
       "model": "UATQ160CGXY1U",
       "description": "PACKAGED UNIT - R410A - 13.3 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ160CGXY1U - DAIKIN PACKAGED UNIT - R410A - 13.3 TR - MALAYSIA",
       "listPrice": 55600,
       "multiplier": 0.5,
       "costPrice": 27800,
-      "tr": 13.3
+      "finalPrice": 27800,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "2d87847b-d01b-42b6-a0d9-63b32ca5cacc",
       "model": "UATQ180CGXY1U",
       "description": "PACKAGED UNIT - R410A - 15 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ180CGXY1U - DAIKIN PACKAGED UNIT - R410A - 15 TR - MALAYSIA",
       "listPrice": 70460,
       "multiplier": 0.5,
       "costPrice": 35230,
-      "tr": 15
+      "finalPrice": 35230,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "74ed4087-9a53-4a16-9578-392f3afb2949",
       "model": "UATQ210CGXY1U",
       "description": "PACKAGED UNIT - R410A - 17.5 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ210CGXY1U - DAIKIN PACKAGED UNIT - R410A - 17.5 TR - MALAYSIA",
       "listPrice": 79146,
       "multiplier": 0.5,
       "costPrice": 39573,
-      "tr": 17.5
+      "finalPrice": 39573,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "94e812d2-fe90-444a-ac1c-f3430ad7f929",
       "model": "UATQ240CGXY1U",
       "description": "PACKAGED UNIT - R410A - 20 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ240CGXY1U - DAIKIN PACKAGED UNIT - R410A - 20 TR - MALAYSIA",
       "listPrice": 90861,
       "multiplier": 0.5,
       "costPrice": 45430.5,
-      "tr": 20
+      "finalPrice": 45430.5,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "4fe2d1be-4466-428b-89da-fc37de388865",
       "model": "UATQ300CGXY1U",
       "description": "PACKAGED UNIT - R410A - 25 TR",
       "origin": "MALAYSIA",
-      "boqDescription": "UATQ300CGXY1U - DAIKIN PACKAGED UNIT - R410A - 25 TR - MALAYSIA",
       "listPrice": 103233,
       "multiplier": 0.5,
       "costPrice": 51616.5,
-      "tr": 25
+      "finalPrice": 51616.5,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "23908c19-80c2-44f4-966b-6e5cafe63394",
       "model": "BYCQ125EAF9",
       "description": "Standard panel for cassette AC(Fresh white)",
       "origin": "",
-      "boqDescription": "BYCQ125EAF9 - DAIKIN Standard panel for cassette AC(Fresh white) - ",
       "listPrice": 2500,
       "multiplier": 0.65,
       "costPrice": 1625,
-      "tr": 0,
-      "finalPrice": 460.0
+      "finalPrice": 460,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "e6ca838d-fbee-465a-82ef-d5912b705d28",
       "model": "DCM601A51",
-      "description": "I Touch Manager",
+      "description": "I Touch Manager",
       "origin": "Japan",
-      "boqDescription": "DCM601A51 - DAIKIN I Touch Manager - Japan",
       "listPrice": 20984,
       "multiplier": 0.65,
       "costPrice": 13639.6,
-      "tr": 0
+      "finalPrice": 13639.6,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "9372cc24-79e1-45da-b067-9ceea9cb9b0e",
       "model": "DCM601A52",
-      "description": "Adaptor for ITM",
+      "description": "Adaptor for ITM",
       "origin": "Japan",
-      "boqDescription": "DCM601A52 - DAIKIN Adaptor for ITM - Japan",
       "listPrice": 5742,
       "multiplier": 0.65,
       "costPrice": 3732.3,
-      "tr": 0
+      "finalPrice": 3732.3,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "6d8d9cec-1528-460b-9685-0b0ba67cea83",
       "model": "EKMBDXB",
       "description": "Modbus",
-      "origin": "Czech Republic",
-      "boqDescription": "EKMBDXB - DAIKIN Modbus - Czech Republic",
+      "origin": "Czech Republic",
       "listPrice": 1899,
       "multiplier": 0.65,
       "costPrice": 1234.3500000000001,
-      "tr": 0
+      "finalPrice": 1234.3500000000001,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "93904a0d-e978-4c3f-ad60-60e11079890d",
       "model": "DMS502A51",
-      "description": "Bacnet Gateway",
+      "description": "Bacnet Gateway",
       "origin": "Japan",
-      "boqDescription": "DMS502A51 - DAIKIN Bacnet Gateway - Japan",
       "listPrice": 15689,
       "multiplier": 0.65,
       "costPrice": 10197.85,
-      "tr": 0
+      "finalPrice": 10197.85,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "b1cbc3c2-d5d8-4f87-8aef-575dfbb556dc",
       "model": "EKEXV50",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV50 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1277,
       "multiplier": 0.65,
       "costPrice": 830.0500000000001,
-      "tr": 0
+      "finalPrice": 830.0500000000001,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "dca42098-742a-4d83-a9b1-b1af3819d425",
       "model": "EKEXV63",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV63 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1328,
       "multiplier": 0.65,
       "costPrice": 863.2,
-      "tr": 0
+      "finalPrice": 863.2,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "37d47960-4eb6-471f-9816-5d9f2224181d",
       "model": "EKEXV80",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV80 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1391,
       "multiplier": 0.65,
       "costPrice": 904.15,
-      "tr": 0
+      "finalPrice": 904.15,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "de56d31d-d1f3-4ae9-adbb-4924b3b6377a",
       "model": "EKEXV100",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV100 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1474,
       "multiplier": 0.65,
       "costPrice": 958.1,
-      "tr": 0
+      "finalPrice": 958.1,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "ec7a3660-0a19-4c1e-93e1-9b5824d2534a",
       "model": "EKEXV125",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV125 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1533,
       "multiplier": 0.65,
       "costPrice": 996.45,
-      "tr": 0
+      "finalPrice": 996.45,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "b24ea77e-06be-4931-b2d2-ba32b6a62842",
       "model": "EKEXV140",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV140 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1624,
       "multiplier": 0.65,
       "costPrice": 1055.6000000000001,
-      "tr": 0
+      "finalPrice": 1055.6000000000001,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "072396ef-227e-4eac-a62f-03b5346d1929",
       "model": "EKEXV200",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV200 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1737,
       "multiplier": 0.65,
       "costPrice": 1129.05,
-      "tr": 0
+      "finalPrice": 1129.05,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "621e5f18-65b8-4b87-89fb-ad55cc62b849",
       "model": "EKEXV250",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV250 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1856,
       "multiplier": 0.65,
       "costPrice": 1206.4,
-      "tr": 0
+      "finalPrice": 1206.4,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "97357374-0abb-467a-a5e6-bbc3502c0d7e",
       "model": "EKEXVA250",
-      "description": "Expansion valve VRV-FAHU - New",
+      "description": "Expansion valve VRV-FAHU - New",
       "origin": "",
-      "boqDescription": "EKEXVA250",
       "listPrice": 1856,
       "multiplier": 0.65,
       "costPrice": 1206.4,
-      "tr": 0
+      "finalPrice": 1206.4,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "860ddcce-ca66-41f2-9860-2a1ff63a2f91",
       "model": "EKEXV400",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV400 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1828,
       "multiplier": 0.65,
       "costPrice": 1188.2,
-      "tr": 0
+      "finalPrice": 1188.2,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "94e56987-756d-4543-84d7-aecdf560418c",
       "model": "EKEXV500",
-      "description": "Expansion valve VRV-FAHU",
+      "description": "Expansion valve VRV-FAHU",
       "origin": "Belgium",
-      "boqDescription": "EKEXV500 - DAIKIN Expansion valve VRV-FAHU - Belgium",
       "listPrice": 1903,
       "multiplier": 0.65,
       "costPrice": 1236.95,
-      "tr": 0
+      "finalPrice": 1236.95,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "0ffba444-b863-4b78-9cb7-3848aacb42be",
       "model": "EKEQMCBA",
-      "description": "Control box- Return air temp control",
-      "origin": "Czech Republic",
-      "boqDescription": "EKEQMCBA - DAIKIN Control box- Return air temp control - Czech Republic",
+      "description": "Control box- Return air temp control",
+      "origin": "Czech Republic",
       "listPrice": 2245,
       "multiplier": 0.65,
       "costPrice": 1459.25,
-      "tr": 0
+      "finalPrice": 1459.25,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "631d6fb8-8bc0-47b1-9237-9b0a90b548da",
       "model": "EKEACB",
       "description": "Unified control box",
       "origin": "",
-      "boqDescription": "EKEACB",
       "listPrice": 4908,
       "multiplier": 0.65,
       "costPrice": 3190.2000000000003,
-      "tr": 0
+      "finalPrice": 3190.2000000000003,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     },
     {
+      "id": "be0a238a-3cca-423d-a483-5c1ad4611cf5",
       "model": "EKEQFCBA",
-      "description": "Control box-Fresh air temp control",
+      "description": "Control box-Fresh air temp control",
       "origin": "Ireland",
-      "boqDescription": "EKEQFCBA - DAIKIN Control box-Fresh air temp control - Ireland",
       "listPrice": 4908,
       "multiplier": 0.65,
       "costPrice": 3190.2000000000003,
-      "tr": 0
+      "finalPrice": 3190.2000000000003,
+      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "history": []
     }
-  ]
+  ],
+  "sheets": [
+    {
+      "id": "a265e481-1105-425a-a0cc-ec24cd8d9fa4",
+      "title": "New Costing",
+      "customer": "A & S CONTRACTING L.L.C",
+      "project": "Villa 123",
+      "enquiryNo": "",
+      "defaultMargin": 10,
+      "priceIncrease": 20,
+      "rows": [
+        {
+          "id": "4403bb71-33ad-4335-9abc-2ad877d79fad",
+          "model": "FDMRN20AVKU - RR20AVKU",
+          "qty": 1,
+          "listPrice": 6732,
+          "multiplier": 0.5,
+          "costPrice": 3366,
+          "finalPrice": 3413,
+          "increasedFinalPrice": 4095.6,
+          "sellingPrice": 4550.666666666666,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-03T09:09:05.319Z"
+        },
+        {
+          "id": "2ba9fb94-b903-4f24-835e-0de4fa25025a",
+          "model": "FDMRN25AVKU - RR25AVKU",
+          "qty": 1,
+          "listPrice": 8038,
+          "multiplier": 0.5,
+          "costPrice": 4019,
+          "finalPrice": 3932,
+          "increasedFinalPrice": 4718.4,
+          "sellingPrice": 5242.666666666666,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-03T12:59:24.571Z"
+        }
+      ],
+      "createdAt": "2026-08-03T09:09:05.319Z",
+      "updatedAt": "2026-08-03T12:59:24.571Z"
+    }
+  ],
+  "activeSheetId": "a265e481-1105-425a-a0cc-ec24cd8d9fa4"
 }

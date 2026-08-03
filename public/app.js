@@ -4,6 +4,7 @@ const loginRoles = ["Admin", "Staff", "PO Only"];
 
 let state = null;
 let activeView = "canvas";
+const collapsedSidebarGroups = new Set();
 let drag = null;
 let canvasZoom = 0.72;
 let workflowDraftPromise = null;
@@ -89,6 +90,15 @@ let salesQuotationSaving = false;
 let salesCrmState = null;
 let salesCrmLoadedAt = 0;
 let salesCrmLoadPromise = null;
+let costingState = null;
+let costingLoadedAt = 0;
+let costingLoadPromise = null;
+let costingActiveSheetId = "";
+let costingMode = "sheet";
+let costingSearchQuery = "";
+let costingSelectedModel = "";
+let costingHistoryOpen = false;
+let costingProjectSaved = false;
 let currentUser = null;
 let appSettings = null;
 let settingsDraft = null;
@@ -287,20 +297,24 @@ async function init() {
 function bindShell() {
   $("#newProjectBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
+    if (toggleActiveSidebarGroup("workflow")) return;
     createProject();
   });
   $("#inventoryBtn").addEventListener("click", () => {
     if (!canAccessModule("inventory")) return showLockedModuleToast();
+    if (toggleActiveSidebarGroup("inventory")) return;
     showInventory("dashboard");
   });
   $("#documentsBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
+    collapsedSidebarGroups.delete("workflow");
     showDocuments();
   });
   $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("form"));
   $("#areaCalculationBtn").addEventListener("click", () => showAreaCalculation("detail"));
   $("#salesDeskBtn").addEventListener("click", () => {
     if (!canAccessModule("sales")) return showLockedModuleToast();
+    if (toggleActiveSidebarGroup("sales")) return;
     showSalesDesk("dashboard");
   });
   $("#settingsBtn").addEventListener("click", () => {
@@ -328,12 +342,14 @@ function bindShell() {
   document.querySelectorAll("[data-inventory-view]").forEach(button => {
     button.addEventListener("click", () => {
       if (!canAccessModule("inventory")) return showLockedModuleToast();
+      collapsedSidebarGroups.delete("inventory");
       showInventory(button.dataset.inventoryView);
     });
   });
   document.querySelectorAll("[data-sales-view]").forEach(button => {
     button.addEventListener("click", () => {
       if (!canAccessModule("sales")) return showLockedModuleToast();
+      collapsedSidebarGroups.delete("sales");
       showSalesDesk(button.dataset.salesView);
     });
   });
@@ -455,6 +471,32 @@ function showLockedModuleToast() {
   toast("This login has Purchase Orders and Area Calculation access only.");
 }
 
+function activeSidebarGroup() {
+  if (activeView === "salesDesk") return "sales";
+  if (activeView === "inventory") return "inventory";
+  if (activeView === "canvas" || activeView === "documents") return "workflow";
+  return "";
+}
+
+function toggleActiveSidebarGroup(group) {
+  if (activeSidebarGroup() !== group) {
+    collapsedSidebarGroups.delete(group);
+    return false;
+  }
+  if (collapsedSidebarGroups.has(group)) collapsedSidebarGroups.delete(group);
+  else collapsedSidebarGroups.add(group);
+  applySidebarSubnavVisibility();
+  return true;
+}
+
+function applySidebarSubnavVisibility() {
+  const poOnly = isPoOnlyUser();
+  const activeGroup = activeSidebarGroup();
+  $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "sales" || collapsedSidebarGroups.has("sales"));
+  $("#projectSubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "workflow" || collapsedSidebarGroups.has("workflow"));
+  $("#inventorySubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "inventory" || collapsedSidebarGroups.has("inventory"));
+}
+
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
   const lockIds = ["salesDeskBtn", "newProjectBtn", "documentsBtn", "inventoryBtn", "settingsBtn"];
@@ -466,9 +508,7 @@ function applyRoleAccess() {
     if (poOnly) button.title = "Locked for PO Only users";
     else button.removeAttribute("title");
   });
-  $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeView !== "salesDesk");
-  $("#projectSubnav")?.classList.toggle("hidden", poOnly || !["canvas", "documents"].includes(activeView));
-  $("#inventorySubnav")?.classList.toggle("hidden", poOnly || activeView !== "inventory");
+  applySidebarSubnavVisibility();
   $("#purchaseOrdersBtn")?.classList.toggle("active", activeView === "purchaseOrders");
   $("#areaCalculationBtn")?.classList.toggle("active", activeView === "areaCalculation");
 }
@@ -625,6 +665,7 @@ async function showDocuments() {
   $("#projectSubnav").classList.remove("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
   $("#pageTitle").textContent = "My WorkFlows";
   $("#projectMeta").textContent = "Search and reopen saved workflow canvases.";
   await loadProjectList();
@@ -652,6 +693,7 @@ function showCanvas() {
   $("#projectSubnav").classList.remove("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
 }
 
 async function showInventory(screen = "dashboard") {
@@ -677,6 +719,7 @@ async function showInventory(screen = "dashboard") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.remove("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
   document.querySelectorAll("[data-inventory-view]").forEach(button => {
     const activeScreen = screen === "supplierAll" ? "supplier" : screen;
     button.classList.toggle("active", button.dataset.inventoryView === activeScreen);
@@ -720,6 +763,7 @@ async function showPurchaseOrders(screen = "form") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
   $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
   const needsInitialPurchase = !purchaseState;
@@ -752,6 +796,7 @@ async function showAreaCalculation(mode = "detail") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
   $("#pageTitle").innerHTML = `<span>Area Calculation</span><b>&lt;</b><strong>Duct Area Calculator <span class="po-upload-spinner area-title-spinner ${areaCalculationUploadLoading ? "" : "hidden"}" aria-label="Uploading drawing"></span></strong>`;
   $("#projectMeta").textContent = "Upload duct drawings and review editable fabrication area calculations.";
   const needsInitialArea = !areaCalculationState;
@@ -812,6 +857,7 @@ async function showSalesDesk(screen = "dashboard") {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.remove("hidden");
+  applySidebarSubnavVisibility();
   document.querySelectorAll("[data-sales-view]").forEach(button => {
     button.classList.toggle("active", button.dataset.salesView === screen);
   });
@@ -826,6 +872,7 @@ async function showSalesDesk(screen = "dashboard") {
   }
   const needsInitialSales = !salesCrmState;
   if (needsInitialSales) await loadSalesCrm().catch(() => {});
+  if (screen === "costing" && !costingState) await loadCosting().catch(error => toast(error.message || "Unable to load Costing Sheet"));
   if (screen === "quotation" && salesQuotationMode === "create" && !inventoryState) {
     loadInventory().then(() => activeView === "salesDesk" && renderSalesDesk()).catch(() => {});
   }
@@ -855,6 +902,7 @@ async function showSettings() {
   $("#projectSubnav").classList.add("hidden");
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
+  applySidebarSubnavVisibility();
   $("#pageTitle").textContent = "Settings";
   $("#projectMeta").textContent = "Admin settings, company details, attachments, and login access.";
   await loadSettings();
@@ -1180,6 +1228,16 @@ function salesDeskTopbarConfig() {
       search: "Search CRM...",
       actions: `<button class="sales-secondary" data-sales-export="customers">Export CSV</button><button class="sales-primary" data-sales-action="add-customer">Add Customer</button>`
     },
+    costing: {
+      title: costingMode === "prices" ? "Price List" : costingMode === "all" ? "All Costing Sheets" : "Costing Sheet",
+      subtitle: costingMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
+      search: costingMode === "prices" ? "Search model or brand..." : "",
+      actions: costingMode === "prices"
+        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button><button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price List<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label><button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
+        : costingMode === "all"
+          ? `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button>`
+          : `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><button class="sales-primary" data-costing-action="create-quotation">Create Quotation</button>`
+    },
     projects: {
       title: "Projects",
       subtitle: "Manage active HVAC projects, BOQ delivery, stock reservation, and project progress.",
@@ -1257,12 +1315,24 @@ function renderSalesDesk() {
     dashboard: salesDashboardHtml,
     leads: salesLeadsHtml,
     customers: salesCustomersHtml,
+    costing: costingSheetHtml,
     projects: salesProjectsHtml,
     quotation: salesQuotationHtml,
     orderBook: salesOrderBookHtml,
     followUps: salesFollowUpsHtml
   }[salesDeskScreen];
   root.innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}">${html ? html() : salesDashboardHtml()}</div>`;
+  if (salesDeskScreen === "costing") requestAnimationFrame(syncCostingDeleteRail);
+}
+
+function syncCostingDeleteRail() {
+  document.querySelectorAll(".costing-table-shell").forEach(shell => {
+    const table = shell.querySelector(".costing-table");
+    const rail = shell.querySelector(".costing-row-actions");
+    if (!table || !rail) return;
+    const rows = [...table.querySelectorAll("thead tr, tbody tr")];
+    rail.style.gridTemplateRows = rows.map(row => `${row.getBoundingClientRect().height}px`).join(" ");
+  });
 }
 
 function salesPageHeader(title, subtitle, actions = "") {
@@ -1583,7 +1653,7 @@ function salesLeadRow(lead) {
           <button title="View" data-sales-action="view-lead" data-sales-id="${escapeHtml(lead.id)}">View</button>
           <button title="Edit" data-sales-action="edit-lead" data-sales-id="${escapeHtml(lead.id)}">Edit</button>
           ${rowMenu([
-            { label: "Create Quote", action: "lead-quote", id: lead.id },
+            { label: "Create Costing", action: "lead-costing", id: lead.id },
             { label: "Create Customer", action: "lead-to-customer", id: lead.id },
             { label: "Create Workflow", action: "lead-create-workflow", id: lead.id },
             { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
@@ -1703,7 +1773,7 @@ function salesLeadBoardCard(lead) {
         ${rowMenu([
           { label: "View", action: "view-lead", id: lead.id },
           { label: "Edit", action: "edit-lead", id: lead.id },
-          { label: "Create Quote", action: "lead-quote", id: lead.id },
+          { label: "Create Costing", action: "lead-costing", id: lead.id },
           { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
           { label: "Delete", action: "delete-lead", id: lead.id, danger: true }
         ])}
@@ -1819,7 +1889,7 @@ function salesLeadDetailContent(lead, options = {}) {
           ${rowMenu([
             { label: "View", action: "view-lead", id: lead.id },
             { label: "Edit", action: "edit-lead", id: lead.id },
-            { label: "Create Quote", action: "lead-quote", id: lead.id },
+            { label: "Create Costing", action: "lead-costing", id: lead.id },
             { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
             { label: "More", action: "lead-more", id: lead.id }
           ])}
@@ -3284,12 +3354,14 @@ function salesCreateQuotationHtml() {
         </datalist>
         <div class="sales-card-title"><h3>Item Breakdown</h3></div>
         <table class="sales-table sales-quote-table">
-          <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead>
+          <colgroup><col class="quote-col-description"><col class="quote-col-qty"><col class="quote-col-unit"><col class="quote-col-price"><col class="quote-col-action"></colgroup>
+          <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Price</th><th></th></tr></thead>
           <tbody>${salesQuotationDraft.items.map((item, index) => `
             <tr>
               <td><input data-suggestion-list="salesQuoteModelList" data-sales-quote-line="${index}" data-field="description" placeholder="Type model no..." value="${escapeHtml(item.description)}"></td>
               <td><input type="number" data-sales-quote-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
               <td><select data-sales-quote-line="${index}" data-field="unit">${["Nos", "Sets", "Meters", "Units"].map(unit => `<option ${item.unit === unit ? "selected" : ""}>${unit}</option>`).join("")}</select></td>
+              <td><input type="number" min="0" step="0.01" data-sales-quote-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0).toFixed(2)}"></td>
               <td><button data-sales-delete-quote-line="${index}">Delete</button></td>
             </tr>`).join("")}</tbody>
         </table>
@@ -4449,6 +4521,7 @@ async function handleSalesClick(event) {
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
+  if (target.dataset.costingAction) return handleCostingClick(target.dataset.costingAction, target);
   if (target.dataset.rowMenu !== undefined) {
     toggleSalesFloatingMenu(target);
     return;
@@ -4659,6 +4732,7 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "lead-to-customer") return createCustomerFromLead(itemId);
   if (action === "lead-create-project") return createProjectFromLead(itemId);
   if (action === "lead-create-workflow") return createWorkflowFromLead(itemId);
+  if (action === "lead-costing") return createCostingFromLead(itemId);
   if (action === "lead-quote") {
     const lead = normalizeSalesLead(salesData().leads.find(item => item.id === itemId) || {});
     return startSalesQuotationDraft({ customer: lead.customer || "", project: lead.projectDescription || "", location: lead.location || lead.plotNo || "", enquiryNo: lead.enquiryNo || "", sourceLeadId: lead.id || itemId || "" });
@@ -4712,11 +4786,25 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.costingField || event.target.dataset.costingSearch !== undefined) {
+    handleCostingInput(event);
+    return;
+  }
   if (event.target.dataset.suggestionList) {
     toggleSuggestionList(event.target);
   }
   if (event.target.matches("[data-sales-search]")) {
     const cursor = event.target.selectionStart || 0;
+    if (salesDeskScreen === "costing" && costingMode === "prices") {
+      costingSearchQuery = event.target.value;
+      renderSalesDesk();
+      const input = document.querySelector("[data-sales-search]");
+      if (input) {
+        input.focus();
+        input.setSelectionRange(cursor, cursor);
+      }
+      return;
+    }
     salesSearchQuery = event.target.value;
     renderSalesDesk();
     const input = document.querySelector("[data-sales-search]");
@@ -4755,6 +4843,10 @@ function handleSalesInput(event) {
 }
 
 function handleSalesChange(event) {
+  if (event.target.dataset.costingField || event.target.id === "costingPriceImport") {
+    handleCostingChange(event);
+    return;
+  }
   if (event.target.dataset.suggestionList) {
     toggleSuggestionList(event.target);
   }
@@ -5672,19 +5764,25 @@ function quotationScopeForProject(quote = {}) {
 
 function salesProjectBoqFromQuotation(quote = {}) {
   const rows = Array.isArray(quote.items) ? quote.items : Array.isArray(quote.boq) ? quote.boq : Array.isArray(quote.boqRows) ? quote.boqRows : [];
-  return rows.map((item, index) => {
+  return rows.flatMap((item, index) => {
     const { model, description } = splitQuotationModelDescription(item);
     const qty = salesNumber(item.qty ?? item.quantity ?? item.Qty ?? item.qtyRequired);
     const deliveredQty = salesNumber(item.deliveredQty);
-    return {
-      id: `project-boq-${Date.now()}-${index}`,
-      model,
+    const combinedModelText = String(item.model || item.modelNo || item.item || item.productCode || item.description || "").trim();
+    const modelParts = combinedModelText.split(/\s+-\s+/).slice(0, 2).map(part => part.trim());
+    const isModelCode = value => /^[a-z0-9][a-z0-9._/()]*$/i.test(value) && /\d/.test(value);
+    const models = modelParts.length === 2 && modelParts.every(isModelCode)
+      ? [...new Set(modelParts.map(salesProjectModelNo))]
+      : [model];
+    return models.map((boqModel, modelIndex) => ({
+      id: `project-boq-${Date.now()}-${index}-${modelIndex}`,
+      model: boqModel,
       description,
       qty,
       deliveredQty,
       pendingQty: qty - deliveredQty,
-      stock: model ? salesProjectStockQty(model) : ""
-    };
+      stock: boqModel ? salesProjectStockQty(boqModel) : ""
+    }));
   }).filter(row => row.model || row.description || row.qty || row.deliveredQty);
 }
 
@@ -5857,7 +5955,7 @@ function renderViewActions() {
       actions.innerHTML = `
         ${salesTopbar.search ? `<label class="quotation-search">
           <span></span>
-          <input data-sales-search value="${escapeHtml(salesSearchQuery)}" placeholder="${escapeHtml(salesTopbar.search)}">
+          <input data-sales-search value="${escapeHtml(salesDeskScreen === "costing" && costingMode === "prices" ? costingSearchQuery : salesSearchQuery)}" placeholder="${escapeHtml(salesTopbar.search)}">
         </label>` : ""}
         ${salesTopbar.actions}
       `;
@@ -5952,6 +6050,7 @@ function bindSalesTopbarActions() {
     input.addEventListener("input", handleSalesInput);
     input.addEventListener("change", handleSalesChange);
   });
+  root.querySelectorAll("#costingPriceImport").forEach(input => input.addEventListener("change", handleSalesChange));
 }
 
 function bindInventoryTopbarActions() {
@@ -8106,22 +8205,23 @@ function stockViewHtml() {
         ${stock.map(item => {
           const reservedQty = Number(item.reservedQty || 0);
           const freeStock = Number(item.qty || 0) - reservedQty;
-          return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><input class="stock-reserved-input" type="number" min="0" data-stock-reserved-model="${escapeHtml(item.modelNo)}" value="${reservedQty}"></td><td data-stock-free="${escapeHtml(item.modelNo)}">${freeStock}</td><td>${rowMenu([{label:"Edit",action:"edit-stock-model",id:item.modelNo},{label:"Delete",action:"delete-stock-model",id:item.modelNo,danger:true}])}</td></tr>`;
+          return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><input class="stock-reserved-input" type="number" min="0" data-stock-reserved-model="${escapeHtml(item.modelNo)}" value="${reservedQty}"></td><td data-stock-free="${escapeHtml(item.modelNo)}">${freeStock}</td><td>${rowMenu([{label:"Edit",action:"edit-stock-model",id:item.modelNo},{label:"Return",action:"return-stock-model",id:item.modelNo},{label:"Delete",action:"delete-stock-model",id:item.modelNo,danger:true}])}</td></tr>`;
         }).join("") || `<tr><td colspan="6">No models yet. Add a model manually.</td></tr>`}
       </tbody></table>
     </div>
   `;
 }
 
-function stockModelModalHtml() {
+function stockModelModalHtml(mode = "edit") {
   const stock = inventoryState.dashboard.stock || [];
   const stockModelOptions = Array.from(
     new Map([...(inventoryState.models || []), ...stock].filter(item => item?.modelNo).map(item => [norm(item.modelNo), item])).values()
   );
+  const isReturn = mode === "return";
   return `
     <div class="modal stock-model-modal">
       <div class="inventory-topbar">
-        <div><h2>Stock Adjustment / Edit Model</h2><p class="inventory-muted">Update model details and current available stock.</p></div>
+        <div><h2>${isReturn ? "Return to Warehouse" : "Stock Adjustment / Edit Model"}</h2><p class="inventory-muted">${isReturn ? "Record returned quantity for this model." : "Update model details and current available stock."}</p></div>
         <button class="mini-button" data-close-stock-modal>Close</button>
       </div>
       <div class="form-grid">
@@ -8129,25 +8229,27 @@ function stockModelModalHtml() {
         <datalist id="stockModelOptions">
           ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
         </datalist>
-        <label>Description<input id="stockDescription"></label>
-        <label>Brand<input id="stockBrand" value="Daikin"></label>
-        <label>Quantity<input id="stockQuantity" type="number" min="0" value="0"></label>
+        ${isReturn ? "" : `<label>Description<input id="stockDescription"></label>
+        <label>Brand<input id="stockBrand" value="Daikin"></label>`}
+        <label>${isReturn ? "Returned Qty" : "Quantity"}<input id="stockQuantity" type="number" min="0" value="0"></label>
       </div>
-      <p class="inventory-muted">Quantity sets the current available stock using a manual inventory adjustment.</p>
-      <div class="inventory-actions"><button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button></div>
+      <p class="inventory-muted">${isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
+      <div class="inventory-actions">${isReturn ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockReturnBtn">Save Return</button>` : `<button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button>`}</div>
     </div>
   `;
 }
 
-function openStockModelModal(modelNo = "") {
+function openStockModelModal(modelNo = "", mode = "edit") {
   document.querySelector("[data-stock-model-modal]")?.remove();
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
   modal.dataset.stockModelModal = "true";
-  modal.innerHTML = stockModelModalHtml();
+  modal.dataset.stockMode = mode;
+  modal.innerHTML = stockModelModalHtml(mode);
   $("#inventoryRoot")?.appendChild(modal);
   if (modelNo) fillStockModelForm(modelNo);
   else clearStockModelForm();
+  if (mode === "return") $("#stockQuantity").value = 0;
   modal.querySelector("#stockModelNo")?.focus();
 }
 
@@ -8226,6 +8328,7 @@ function handleInventoryClick(event) {
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
   if (target.id === "saveStockModelBtn") return openStockModelModal();
   if (target.id === "saveStockModelBtn2") return saveStockModel();
+  if (target.id === "saveStockReturnBtn") return saveStockReturn();
   if (target.id === "deleteStockModelBtn") return deleteStockModel();
   if (target.id === "clearStockModelBtn") return clearStockModelForm();
   if (target.dataset.closeStockModal !== undefined) return closeStockModelModal();
@@ -8973,6 +9076,7 @@ function handleInventoryMenuAction(action, idValue) {
   }
   if (action === "delete-customer") return deleteCustomer(idValue);
   if (action === "edit-stock-model") return openStockModelModal(idValue);
+  if (action === "return-stock-model") return openStockModelModal(idValue, "return");
   if (action === "delete-stock-model") {
     return deleteStockModel(idValue);
   }
@@ -9444,8 +9548,10 @@ function autofillStockModelFields(modelNo) {
 function fillStockModelForm(modelNo) {
   const info = findStockModelInfo(modelNo) || {};
   $("#stockModelNo").value = info.modelNo || "";
-  $("#stockDescription").value = info.description || "";
-  $("#stockBrand").value = info.brand || "Daikin";
+  const description = $("#stockDescription");
+  const brand = $("#stockBrand");
+  if (description) description.value = info.description || "";
+  if (brand) brand.value = info.brand || "Daikin";
   $("#stockQuantity").value = info.quantity || 0;
 }
 
@@ -9471,6 +9577,23 @@ async function saveStockModel() {
   inventoryState = await api("/api/inventory/models", { method: "POST", body: JSON.stringify(payload) });
   renderInventory();
   toast("Model saved");
+}
+
+async function saveStockReturn() {
+  const payload = {
+    modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
+    returnQuantity: Number($("#stockQuantity")?.value || 0)
+  };
+  if (!payload.modelNo) return alert("Model No. is required.");
+  if (!(payload.returnQuantity > 0)) return alert("Returned Qty must be greater than 0.");
+  try {
+    inventoryState = await api("/api/inventory/models", { method: "POST", body: JSON.stringify(payload) });
+    closeStockModelModal();
+    renderInventory();
+    toast("Return added to warehouse");
+  } catch (error) {
+    toast(error.message || "Return could not be saved.");
+  }
 }
 
 async function updateStockReservedQty(modelNo, value) {
@@ -11169,4 +11292,483 @@ function debounce(fn, wait) {
     clearTimeout(timer);
     timer = setTimeout(() => fn(...args), wait);
   };
+}
+
+async function loadCosting(options = {}) {
+  const force = !!options.force;
+  if (!force && costingState && Date.now() - costingLoadedAt < viewDataRefreshMs) return costingState;
+  if (costingLoadPromise) return costingLoadPromise;
+  costingLoadPromise = api("/api/costing")
+    .then(next => {
+      costingState = next;
+      costingLoadedAt = Date.now();
+      costingActiveSheetId = costingActiveSheetId || next.activeSheetId || next.sheets?.[0]?.id || "";
+      return next;
+    })
+    .finally(() => { costingLoadPromise = null; });
+  return costingLoadPromise;
+}
+
+function costingNumber(value) {
+  return Number(String(value ?? "").replace(/,/g, "").replace(/[^\d.-]/g, "")) || 0;
+}
+
+function costingMoney(value) {
+  return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function costingId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `cost-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function costingActiveSheet() {
+  return (costingState?.sheets || []).find(sheet => sheet.id === costingActiveSheetId) || null;
+}
+
+function newCostingSheet() {
+  return {
+    id: costingId(),
+    title: "New Costing",
+    customer: "",
+    project: "",
+    enquiryNo: "",
+    defaultMargin: 10,
+    priceIncrease: 20,
+    rows: [{ id: costingId(), model: "", qty: 1, listPrice: 0, multiplier: 1, costPrice: 0, finalPrice: 0, increasedFinalPrice: 0, sellingPrice: 0, priceSource: "Price List" }],
+    isSaved: false
+  };
+}
+
+function activeCostingOrDraft() {
+  const active = costingActiveSheet();
+  if (active) return active;
+  const draft = newCostingSheet();
+  costingState = costingState || { priceItems: [], sheets: [], customers: [], projects: [], stockModels: [] };
+  costingState.sheets.unshift(draft);
+  costingActiveSheetId = draft.id;
+  return draft;
+}
+
+async function createCostingFromLead(leadId) {
+  const lead = normalizeSalesLead(salesData().leads.find(item => item.id === leadId) || {});
+  await loadCosting();
+  const sheet = newCostingSheet();
+  sheet.customer = lead.customer || "";
+  sheet.project = lead.projectDescription || lead.project || "";
+  sheet.title = sheet.project || sheet.title;
+  sheet.enquiryNo = lead.enquiryNo || "";
+  costingState.sheets.unshift(sheet);
+  costingActiveSheetId = sheet.id;
+  costingHistoryOpen = false;
+  costingProjectSaved = false;
+  costingMode = "sheet";
+  return showSalesDesk("costing");
+}
+
+function costingPriceForModel(model = "") {
+  const key = norm(model);
+  return (costingState?.priceItems || []).find(item => norm(item.model) === key) || null;
+}
+
+function costingRowWithPrice(row, sheet) {
+  const price = costingPriceForModel(row.model);
+  if (!price) return { ...row };
+  const margin = costingNumber(sheet.defaultMargin) / 100;
+  const finalPrice = costingNumber(price.finalPrice) || costingNumber(price.costPrice);
+  const increasedFinalPrice = finalPrice * (1 + costingNumber(sheet.priceIncrease ?? 20) / 100);
+  return {
+    ...row,
+    model: price.model,
+    listPrice: costingNumber(price.listPrice),
+    multiplier: costingNumber(price.multiplier) || 1,
+    costPrice: costingNumber(price.costPrice) || costingNumber(price.listPrice) * (costingNumber(price.multiplier) || 1),
+    finalPrice,
+    increasedFinalPrice,
+    sellingPrice: increasedFinalPrice / Math.max(.01, 1 - margin),
+    priceSource: "Price List"
+  };
+}
+
+function costingSheetHtml() {
+  if (costingMode === "prices") return costingPriceListHtml();
+  if (costingMode === "all") return costingAllSheetsHtml();
+  const sheet = activeCostingOrDraft();
+  const rows = sheet.rows || [];
+  const totals = costingTotals(rows);
+  const customers = costingState?.customers || [];
+  const projects = costingState?.projects || [];
+  const revisionSuffix = costingRevisionSuffix(sheet);
+  const history = costingHistoryOpen ? costingPriceForModel(costingSelectedModel) : null;
+  return `
+    <div class="costing-page ${history ? "with-history" : ""}">
+      <section class="costing-main">
+        <div class="costing-details">
+          <label>Customer<select data-costing-field="customer"><option value="">Select customer</option>${sheet.customer && !customers.some(customer => norm(customer.name) === norm(sheet.customer)) ? `<option value="${escapeHtml(sheet.customer)}" selected>${escapeHtml(sheet.customer)}</option>` : ""}${customers.map(customer => `<option value="${escapeHtml(customer.name)}" ${norm(customer.name) === norm(sheet.customer) ? "selected" : ""}>${escapeHtml(customer.name)}</option>`).join("")}</select></label>
+          <label>Project<input data-costing-field="project" value="${escapeHtml(sheet.project)}" placeholder="Enter project name" /></label>
+          <label>Enquiry No.<input data-costing-field="enquiryNo" value="${escapeHtml(sheet.enquiryNo)}" placeholder="CZ-ENQ-..." /></label>
+          <label>Price Increase %<input data-costing-field="priceIncrease" type="number" min="0" step="0.1" value="${costingNumber(sheet.priceIncrease ?? 20)}" /></label>
+          <label>Profit Margin<input data-costing-field="defaultMargin" type="number" min="0" max="95" step="0.1" value="${costingNumber(sheet.defaultMargin)}" /></label>
+        </div>
+        <div class="costing-table-shell">
+          <div class="costing-table-wrap">
+            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-final"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"><col class="costing-col-history"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Price (AED)</th><th>Increased Final Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th><th>History</th></tr></thead>
+            <tbody>${rows.map((row, index) => costingRowHtml(row, index)).join("")}</tbody></table>
+          </div>
+          <aside class="costing-row-actions" aria-label="Remove costing rows">
+            <div class="costing-row-actions-head" aria-hidden="true"></div>
+            ${rows.map((row, index) => `<button class="costing-row-rail-delete" data-costing-action="remove-row" data-costing-row-index="${index}" title="Remove row" aria-label="Remove row ${index + 1}">x</button>`).join("")}
+          </aside>
+        </div>
+        <div class="costing-table-actions"><button class="sales-secondary costing-add-row" data-costing-action="add-row">+ Add Item</button><button class="sales-primary costing-save-button" data-costing-action="save-sheet">Save</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Project Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div>
+        <section class="costing-totals">
+          <div><span>Total Increased Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
+          <div class="good"><span>Margin</span><strong>${totals.margin.toFixed(1)}%</strong></div>
+          <div class="good"><span>Gross Profit</span><strong>AED ${costingMoney(totals.profit)}</strong></div>
+          <div><span>Total Selling</span><strong>AED ${costingMoney(totals.selling)}</strong></div>
+          <div><span>VAT 5%</span><strong>AED ${costingMoney(totals.vat)}</strong></div>
+          <div class="grand"><span>Grand Total</span><strong>AED ${costingMoney(totals.grand)}</strong></div>
+        </section>
+      </section>
+      ${history ? `<aside class="costing-history">
+        <button class="costing-history-close" data-costing-action="close-history" title="Close price history" aria-label="Close price history">x</button>
+        <h3>Price History</h3><p>Historical final prices for the selected model.</p>
+        <strong class="costing-history-model">${escapeHtml(history.model)}</strong><span>${escapeHtml(costingDisplayDescription(history))}</span>
+          <div class="costing-history-row"><b>Current</b><span>Final Price AED ${costingMoney(history.finalPrice)}</span></div>
+          ${(history.history || []).map(item => `<div class="costing-history-row"><b>${escapeHtml(new Date(item.date).toLocaleDateString("en-GB"))}</b><span>Final Price AED ${costingMoney(item.finalPrice)}</span></div>`).join("") || `<div class="costing-history-empty">No earlier price changes.</div>`}
+      </aside>` : ""}
+      <datalist id="costingModelList">${(costingState?.priceItems || []).map(item => `<option value="${escapeHtml(item.model)}">${escapeHtml(costingDisplayDescription(item))}</option>`).join("")}</datalist>
+    </div>`;
+}
+
+function costingAllSheetsHtml() {
+  const sheets = (costingState?.sheets || []).filter(sheet => sheet.isSaved !== false);
+  return `<div class="costing-all-page">
+    ${sheets.map(sheet => {
+      const totals = costingTotals(sheet.rows || []);
+      const name = sheet.project || sheet.title || "Untitled Costing";
+      const details = [sheet.customer, sheet.enquiryNo].filter(Boolean).join(" · ") || "No customer or enquiry selected";
+      const updatedAt = sheet.updatedAt ? new Date(sheet.updatedAt).toLocaleString("en-GB") : "Not saved yet";
+      return `<article class="costing-sheet-card">
+        <div class="costing-sheet-card-main"><h3>${escapeHtml(name)}</h3><p>${escapeHtml(details)}</p><small>${(sheet.rows || []).length} item${(sheet.rows || []).length === 1 ? "" : "s"} · Updated ${escapeHtml(updatedAt)}</small></div>
+        <div class="costing-sheet-card-total"><span>Total Increased Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
+        <div class="costing-sheet-card-total"><span>Grand Total</span><strong>AED ${costingMoney(totals.grand)}</strong></div>
+        <div class="row-menu costing-sheet-menu"><button class="costing-sheet-menu-button" data-row-menu title="Costing sheet actions" aria-label="Costing sheet actions">...</button><div class="row-menu-list hidden"><button data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Open</button><button data-costing-action="revise-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Revision</button><button class="danger" data-costing-action="delete-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Delete</button></div></div>
+      </article>`;
+    }).join("") || `<section class="costing-all-empty"><h3>No costing sheets yet</h3><p>Create a costing sheet to begin saving project prices.</p></section>`}
+  </div>`;
+}
+
+function costingRevisionName(name, sheets = []) {
+  const base = String(name || "New Costing").trim().replace(/\s*-R\d+$/i, "") || "New Costing";
+  const revisionNumbers = sheets.map(sheet => sheet.project || sheet.title || "").map(value => {
+    const match = String(value).trim().match(new RegExp(`^${base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*-R(\\d+)$`, "i"));
+    return match ? Number(match[1]) : 0;
+  });
+  return `${base} -R${Math.max(0, ...revisionNumbers) + 1}`;
+}
+
+function costingRevisionSuffix(sheet = {}) {
+  const match = String(sheet.project || sheet.title || "").trim().match(/-(R\d+)$/i);
+  return match ? `- ${match[1].toUpperCase()}` : "";
+}
+
+function costingRowHtml(row, index) {
+  const amount = costingNumber(row.qty) * costingNumber(row.sellingPrice);
+  const margin = costingNumber(row.sellingPrice) ? ((costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice)) * 100 : 0;
+  return `<tr data-costing-row="${index}">
+    <td>${index + 1}</td><td><input list="costingModelList" data-costing-field="model" value="${escapeHtml(row.model)}" placeholder="Type model..." /></td>
+    <td><input type="number" min="1" data-costing-field="qty" value="${costingNumber(row.qty) || 1}" /></td>
+    <td><input type="number" min="0" step="0.01" data-costing-field="finalPrice" value="${costingNumber(row.finalPrice).toFixed(2)}" /></td>
+    <td><input type="number" min="0" step="0.01" data-costing-field="increasedFinalPrice" value="${costingNumber(row.increasedFinalPrice).toFixed(2)}" /></td>
+    <td><input type="number" min="0" step="0.01" data-costing-field="sellingPrice" value="${costingNumber(row.sellingPrice).toFixed(2)}" /></td>
+    <td class="costing-amount">${costingMoney(amount)}</td><td class="costing-margin">${margin.toFixed(1)}%</td>
+    <td><button class="costing-history-view" data-costing-action="view-history" title="View price history">View</button></td></tr>`;
+}
+
+function costingTotals(rows = []) {
+  const increasedFinalPrice = rows.reduce((sum, row) => sum + costingNumber(row.qty) * costingNumber(row.increasedFinalPrice), 0);
+  const selling = rows.reduce((sum, row) => sum + costingNumber(row.qty) * costingNumber(row.sellingPrice), 0);
+  const profit = selling - increasedFinalPrice;
+  const vat = selling * .05;
+  return { increasedFinalPrice, selling, profit, vat, grand: selling + vat, margin: selling ? profit / selling * 100 : 0 };
+}
+
+function costingDisplayDescription(item = {}) {
+  return [item.description, item.origin].filter(Boolean).join(" - ");
+}
+
+function costingPriceListHtml() {
+  const search = norm(costingSearchQuery);
+  const items = (costingState?.priceItems || []).filter(item => !search || [item.model, item.description, item.origin].some(value => norm(value).includes(search)));
+  return `<div class="costing-price-page"><div class="costing-price-table-wrap"><table class="costing-price-table"><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Final Unit Price (AED)</th><th>Last Updated</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
+    ${items.map((item, index) => `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" /></td><td>${costingMoney(item.costPrice)}</td><td><input type="number" step=".01" data-costing-field="price-finalPrice" value="${costingNumber(item.finalPrice).toFixed(2)}" /></td><td>${escapeHtml(new Date(item.updatedAt).toLocaleDateString("en-GB"))}</td><td class="costing-price-menu-cell"><div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button class="danger" data-costing-action="delete-price">Delete</button></div></div></td></tr>`).join("") || `<tr><td colspan="8" class="costing-empty">No models match this search.</td></tr>`}
+  </tbody></table></div></div>`;
+}
+
+function handleCostingInput(event) {
+  if (event.target.dataset.costingSearch !== undefined) {
+    costingSearchQuery = event.target.value;
+    renderSalesDesk();
+    return;
+  }
+  const field = event.target.dataset.costingField;
+  const rowEl = event.target.closest("[data-costing-row]");
+  const priceEl = event.target.closest("[data-costing-price]");
+  if (priceEl && field?.startsWith("price-")) return;
+  const sheet = activeCostingOrDraft();
+  if (!rowEl) {
+    if (field) sheet[field] = event.target.value;
+    if (field === "defaultMargin" || field === "priceIncrease") {
+      const margin = costingNumber(event.target.value) / 100;
+      sheet.rows.forEach(row => {
+        const finalPrice = costingNumber(row.finalPrice) || costingNumber(costingPriceForModel(row.model)?.finalPrice) || costingNumber(row.costPrice);
+        const priceIncrease = costingNumber(sheet.priceIncrease ?? 20) / 100;
+        const defaultMargin = costingNumber(sheet.defaultMargin) / 100;
+        row.increasedFinalPrice = finalPrice * (1 + priceIncrease);
+        row.sellingPrice = row.increasedFinalPrice / Math.max(.01, 1 - defaultMargin);
+      });
+    }
+  } else {
+    const row = sheet.rows[Number(rowEl.dataset.costingRow)];
+    if (!row || !field) return;
+    row[field] = field === "model" ? event.target.value.toUpperCase() : costingNumber(event.target.value);
+    if (field === "finalPrice") {
+      row.increasedFinalPrice = costingNumber(row.finalPrice) * (1 + costingNumber(sheet.priceIncrease ?? 20) / 100);
+      row.sellingPrice = row.increasedFinalPrice / Math.max(.01, 1 - costingNumber(sheet.defaultMargin) / 100);
+    }
+    if (field === "increasedFinalPrice") {
+      row.sellingPrice = costingNumber(row.increasedFinalPrice) / Math.max(.01, 1 - costingNumber(sheet.defaultMargin) / 100);
+    }
+    if (field === "model" && costingPriceForModel(row.model)) {
+      const index = Number(rowEl.dataset.costingRow);
+      sheet.rows[index] = costingRowWithPrice(sheet.rows[index], sheet);
+      costingSelectedModel = sheet.rows[index].model;
+      scheduleCostingSave();
+      renderSalesDesk();
+      return;
+    }
+  }
+  scheduleCostingSave();
+  if (["qty", "finalPrice", "increasedFinalPrice", "sellingPrice", "defaultMargin", "priceIncrease"].includes(field)) renderCostingLiveValues();
+}
+
+function handleCostingChange(event) {
+  if (event.target.id === "costingPriceImport") return importCostingPriceList(event.target.files?.[0]);
+  const field = event.target.dataset.costingField;
+  const rowEl = event.target.closest("[data-costing-row]");
+  const priceEl = event.target.closest("[data-costing-price]");
+  if (priceEl && field?.startsWith("price-")) return saveCostingPriceFromRow(priceEl, field, event.target.value);
+  if (rowEl && field === "model") {
+    const sheet = activeCostingOrDraft();
+    const index = Number(rowEl.dataset.costingRow);
+    sheet.rows[index] = costingRowWithPrice({ ...sheet.rows[index], model: event.target.value }, sheet);
+    costingSelectedModel = sheet.rows[index].model;
+    scheduleCostingSave();
+    renderSalesDesk();
+  }
+}
+
+function renderCostingLiveValues() {
+  const sheet = activeCostingOrDraft();
+  document.querySelectorAll("[data-costing-row]").forEach(rowEl => {
+    const row = sheet.rows[Number(rowEl.dataset.costingRow)];
+    if (!row) return;
+    const amount = costingNumber(row.qty) * costingNumber(row.sellingPrice);
+    const margin = costingNumber(row.sellingPrice) ? (costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice) * 100 : 0;
+    const increasedInput = rowEl.querySelector('[data-costing-field="increasedFinalPrice"]');
+    if (increasedInput) increasedInput.value = costingNumber(row.increasedFinalPrice).toFixed(2);
+    const sellingInput = rowEl.querySelector('[data-costing-field="sellingPrice"]');
+    if (sellingInput) sellingInput.value = costingNumber(row.sellingPrice).toFixed(2);
+    rowEl.querySelector(".costing-amount").textContent = costingMoney(amount);
+    rowEl.querySelector(".costing-margin").textContent = `${margin.toFixed(1)}%`;
+  });
+  const totals = costingTotals(sheet.rows);
+  const labels = [totals.increasedFinalPrice, `${totals.margin.toFixed(1)}%`, totals.profit, totals.selling, totals.vat, totals.grand];
+  document.querySelectorAll(".costing-totals strong").forEach((element, index) => { element.textContent = index === 1 ? labels[index] : `AED ${costingMoney(labels[index])}`; });
+}
+
+function scheduleCostingSave() {
+  costingProjectSaved = false;
+  document.querySelector(".costing-save-state")?.classList.remove("is-saved");
+}
+
+async function saveCostingSheet() {
+  const sheet = costingActiveSheet();
+  if (!sheet) return;
+  costingState = await api("/api/costing/sheets", { method: "POST", body: JSON.stringify(sheet) });
+  costingLoadedAt = Date.now();
+  costingActiveSheetId = sheet.id;
+  const savedSheet = (costingState.sheets || []).find(item => item.id === sheet.id);
+  if (savedSheet) savedSheet.isSaved = true;
+  costingProjectSaved = true;
+}
+
+async function handleCostingClick(action, target) {
+  if (action === "show-prices") { costingHistoryOpen = false; costingMode = "prices"; return showSalesDesk("costing"); }
+  if (action === "back-to-costing") { costingHistoryOpen = false; costingMode = "sheet"; return showSalesDesk("costing"); }
+  if (action === "show-all-sheets") {
+    costingHistoryOpen = false;
+    costingMode = "all";
+    return renderSalesDesk();
+  }
+  if (action === "open-sheet") {
+    const sheetId = target.dataset.costingSheetId;
+    if (!(costingState?.sheets || []).some(sheet => sheet.id === sheetId)) return;
+    costingActiveSheetId = sheetId;
+    costingHistoryOpen = false;
+    costingProjectSaved = true;
+    costingMode = "sheet";
+    return renderSalesDesk();
+  }
+  if (action === "revise-sheet") {
+    const source = (costingState?.sheets || []).find(sheet => sheet.id === target.dataset.costingSheetId);
+    if (!source) return;
+    const revision = structuredClone(source);
+    const revisionName = costingRevisionName(source.project || source.title, costingState.sheets);
+    revision.id = costingId();
+    revision.project = source.project ? revisionName : source.project;
+    revision.title = source.project ? source.title : revisionName;
+    revision.createdAt = new Date().toISOString();
+    revision.updatedAt = revision.createdAt;
+    revision.isSaved = false;
+    costingState.sheets.unshift(revision);
+    costingActiveSheetId = revision.id;
+    costingHistoryOpen = false;
+    costingProjectSaved = false;
+    costingMode = "sheet";
+    return renderSalesDesk();
+  }
+  if (action === "delete-sheet") {
+    const sheetId = target.dataset.costingSheetId;
+    const sheet = (costingState?.sheets || []).find(item => item.id === sheetId);
+    if (!sheet || !confirm(`Delete ${sheet.project || sheet.title || "this costing sheet"}?`)) return;
+    costingState = await api(`/api/costing/sheets/${encodeURIComponent(sheetId)}`, { method: "DELETE" });
+    costingLoadedAt = Date.now();
+    if (costingActiveSheetId === sheetId) costingActiveSheetId = costingState.activeSheetId || costingState.sheets?.[0]?.id || "";
+    return renderSalesDesk();
+  }
+  if (action === "view-history") {
+    const sheet = activeCostingOrDraft();
+    const rowIndex = Number(target.closest("[data-costing-row]")?.dataset.costingRow);
+    costingSelectedModel = sheet.rows[rowIndex]?.model || "";
+    if (!costingPriceForModel(costingSelectedModel)) return toast("Select a saved Price List model to view its history.");
+    costingHistoryOpen = true;
+    return renderSalesDesk();
+  }
+  if (action === "close-history") { costingHistoryOpen = false; return renderSalesDesk(); }
+  if (action === "save-sheet") {
+    await saveCostingSheet();
+    renderSalesDesk();
+    return toast("Project saved");
+  }
+  if (action === "new-sheet") {
+    const sheet = newCostingSheet();
+    costingHistoryOpen = false;
+    costingProjectSaved = false;
+    costingMode = "sheet";
+    costingState = costingState || { priceItems: [], sheets: [] };
+    costingState.sheets.unshift(sheet); costingActiveSheetId = sheet.id; return renderSalesDesk();
+  }
+  if (action === "add-row") { const sheet = activeCostingOrDraft(); sheet.rows.push({ id: costingId(), model: "", qty: 1, listPrice: 0, multiplier: 1, costPrice: 0, finalPrice: 0, increasedFinalPrice: 0, sellingPrice: 0, priceSource: "Price List" }); scheduleCostingSave(); return renderSalesDesk(); }
+  if (action === "remove-row") {
+    const sheet = activeCostingOrDraft();
+    const rowIndex = Number(target.dataset.costingRowIndex ?? target.closest("[data-costing-row]")?.dataset.costingRow);
+    if (!Number.isInteger(rowIndex) || rowIndex < 0 || rowIndex >= sheet.rows.length) return;
+    sheet.rows.splice(rowIndex, 1); scheduleCostingSave(); return renderSalesDesk();
+  }
+  if (action === "create-quotation") return createQuotationFromCosting();
+  if (action === "export-costing") return exportCostingSheet();
+  if (action === "export-prices") return exportCostingPrices();
+  if (action === "add-price") {
+    const model = prompt("Model number:");
+    if (!model) return;
+    return saveCostingPrice({ model, description: "", origin: "", listPrice: 0, multiplier: 1, finalPrice: 0 });
+  }
+  if (action === "delete-price") {
+    const itemId = target.closest("[data-costing-price]")?.dataset.costingPrice;
+    if (itemId && confirm("Delete this model from the Price List?")) { costingState = await api(`/api/costing/price-items/${encodeURIComponent(itemId)}`, { method: "DELETE" }); costingLoadedAt = Date.now(); renderSalesDesk(); }
+  }
+}
+
+async function saveCostingPriceFromRow(rowEl, field, value) {
+  const item = (costingState?.priceItems || []).find(entry => entry.id === rowEl.dataset.costingPrice);
+  if (!item) return;
+  const key = field.replace(/^price-/, "");
+  const next = { ...item, [key]: key === "model" ? String(value).toUpperCase() : costingNumber(value) };
+  if (key === "listPrice" || key === "multiplier") next.costPrice = costingNumber(next.listPrice) * (costingNumber(next.multiplier) || 1);
+  await saveCostingPrice(next);
+}
+
+async function saveCostingPrice(item) {
+  costingState = await api("/api/costing/price-items", { method: "POST", body: JSON.stringify(item) });
+  costingLoadedAt = Date.now();
+  renderSalesDesk();
+}
+
+async function importCostingPriceList(file) {
+  if (!file) return;
+  const form = new FormData(); form.append("file", file);
+  try {
+    costingState = await api("/api/costing/price-items/import", { method: "POST", body: form });
+    costingLoadedAt = Date.now(); renderSalesDesk(); toast(`${costingState.imported || 0} price list models imported`);
+  } catch (error) { toast(error.message || "Could not import the price list"); }
+}
+
+function costingQuotationDescription(row) {
+  const model = String(row.model || "").trim();
+  const stock = (costingState?.stockModels || []).find(item => norm(item.modelNo) === norm(model));
+  if (stock?.description) return `${model} - ${stock.description}`;
+  const price = costingPriceForModel(model);
+  const description = costingDisplayDescription(price || {});
+  return description ? `${model} - ${description}` : model;
+}
+
+async function createQuotationFromCosting() {
+  const sheet = activeCostingOrDraft();
+  const lines = (sheet.rows || []).filter(row => row.model && costingNumber(row.qty) > 0).map(row => ({ description: costingQuotationDescription(row), qty: costingNumber(row.qty), unit: "Nos", unitPrice: costingNumber(row.sellingPrice) }));
+  if (!lines.length) return toast("Add at least one priced model before creating a quotation.");
+  return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "" });
+}
+
+function exportCostingSheet() {
+  const sheet = activeCostingOrDraft();
+  downloadBlob(buildCostingWorkbookBlob(sheet), `${safeFile(sheet.title || "Costing Sheet")}.xlsx`);
+}
+
+function exportCostingPrices() {
+  downloadBlob(buildCostingPriceListWorkbookBlob(costingState?.priceItems || []), "Price List.xlsx");
+}
+
+function buildCostingWorkbookBlob(sheet = {}) {
+  const headers = ["S.No", "Model", "Qty", "Final Price (AED)", "Increased Final Price (AED)", "Selling Price (AED)", "Amount (AED)", "Margin %"];
+  const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })) )];
+  (sheet.rows || []).forEach((row, index) => {
+    const n = index + 2;
+    rows.push(workbookRowXml(n, [
+      { column: 1, value: index + 1, style: 5 }, { column: 2, value: row.model || "" }, { column: 3, value: costingNumber(row.qty), style: 5 },
+      { column: 4, value: costingNumber(row.finalPrice), style: 2 }, { column: 5, value: costingNumber(row.increasedFinalPrice), style: 2 }, { column: 6, value: costingNumber(row.sellingPrice), style: 2 },
+      { column: 7, formula: `C${n}*F${n}`, value: costingNumber(row.qty) * costingNumber(row.sellingPrice), style: 2 }, { column: 8, formula: `IFERROR((F${n}-E${n})/F${n},0)`, value: costingNumber(row.sellingPrice) ? (costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice) : 0, style: 3 }
+    ]));
+  });
+  const totalRow = (sheet.rows || []).length + 2;
+  const totals = costingTotals(sheet.rows || []);
+  rows.push(workbookRowXml(totalRow, [{ column: 5, value: "Total Increased Final Price", style: 6 }, { column: 6, formula: `SUMPRODUCT(C2:C${Math.max(2, totalRow - 1)},E2:E${Math.max(2, totalRow - 1)})`, value: totals.increasedFinalPrice, style: 4 }, { column: 7, formula: `SUM(G2:G${Math.max(2, totalRow - 1)})`, value: totals.selling, style: 4 }]));
+  rows.push(workbookRowXml(totalRow + 1, [{ column: 6, value: "VAT 5%", style: 6 }, { column: 7, formula: `G${totalRow}*0.05`, value: totals.vat, style: 2 }]));
+  rows.push(workbookRowXml(totalRow + 2, [{ column: 6, value: "Grand Total", style: 7 }, { column: 7, formula: `G${totalRow}+G${totalRow + 1}`, value: totals.grand, style: 8 }]));
+  return costingWorkbookBlob(rows, [8, 28, 8, 18, 22, 19, 17, 12], sheet.title || "Costing Sheet", totalRow + 2);
+}
+
+function buildCostingPriceListWorkbookBlob(items = []) {
+  const headers = ["S.No", "Model", "Description", "Origin", "List Price (AED)", "Multiplier", "Cost Price (AED)", "Final Unit Price (AED)", "Last Updated"];
+  const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })) )];
+  items.forEach((item, index) => rows.push(workbookRowXml(index + 2, [{ column: 1, value: index + 1, style: 5 }, { column: 2, value: item.model }, { column: 3, value: item.description }, { column: 4, value: item.origin }, { column: 5, value: costingNumber(item.listPrice), style: 2 }, { column: 6, value: costingNumber(item.multiplier), style: 5 }, { column: 7, formula: `E${index + 2}*F${index + 2}`, value: costingNumber(item.costPrice), style: 2 }, { column: 8, value: costingNumber(item.finalPrice), style: 2 }, { column: 9, value: new Date(item.updatedAt).toLocaleDateString("en-GB") }])));
+  return costingWorkbookBlob(rows, [8, 24, 38, 18, 17, 12, 17, 21, 16], "Price List", Math.max(2, items.length + 1));
+}
+
+function costingWorkbookBlob(rows, widths, title, lastRow) {
+  const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
+  const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:I${lastRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${rows.join("")}</sheetData></worksheet>`;
+  const sheetName = workbookSheetName(title);
+  const files = { "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`, "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`, "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`, "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`, "xl/styles.xml": areaCalculationWorkbookStylesXml(), "xl/worksheets/sheet1.xml": xml };
+  return new Blob([workbookZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }

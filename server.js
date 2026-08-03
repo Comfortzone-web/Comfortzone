@@ -35,6 +35,8 @@ const INVENTORY_FILE = path.join(DATA, "inventory.json");
 const DELIVERY_NOTE_PDF_SCRIPT = path.join(ROOT, "scripts", "delivery_note_pdf.py");
 const PURCHASE_ORDERS_FILE = path.join(DATA, "purchase-orders.json");
 const AREA_CALCULATIONS_FILE = path.join(DATA, "area-calculations.json");
+const COSTING_SHEETS_FILE = path.join(DATA, "costing-sheets.json");
+const MASTER_PRICE_LIST_FILE = path.join(DATA, "master-price-list.json");
 const PURCHASE_ORDER_PDF_SCRIPT = path.join(ROOT, "scripts", "purchase_order_pdf.py");
 const SALES_CRM_FILE = path.join(DATA, "sales-crm.json");
 const SALES_QUOTATION_PDF_SCRIPT = path.join(ROOT, "scripts", "sales_quotation_pdf.py");
@@ -487,6 +489,123 @@ function defaultAreaCalculations() {
     uploads: [],
     scanJobs: []
   };
+}
+
+function costingNumber(value) {
+  return Number(String(value ?? "").replace(/,/g, "").replace(/[^\d.-]/g, "")) || 0;
+}
+
+function defaultCostingSheets() {
+  let sourceItems = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(MASTER_PRICE_LIST_FILE, "utf8"));
+    sourceItems = Array.isArray(parsed.items) ? parsed.items : [];
+  } catch {}
+  return {
+    priceItems: sourceItems.map(item => normalizeCostingPriceItem(item)),
+    sheets: [],
+    activeSheetId: ""
+  };
+}
+
+function normalizeCostingPriceItem(input = {}) {
+  const model = cleanCell(input.model || input.modelNo || "").toUpperCase();
+  const listPrice = costingNumber(input.listPrice || input.listPriceAed);
+  const multiplier = costingNumber(input.multiplier || 1) || 1;
+  const costPrice = costingNumber(input.costPrice) || listPrice * multiplier;
+  const finalPrice = costingNumber(input.finalPrice || input.olPrice || input.OLPrice) || costPrice;
+  return {
+    id: cleanCell(input.id || id()),
+    model,
+    description: cleanCell(input.description || input.type || ""),
+    origin: cleanCell(input.origin || ""),
+    listPrice,
+    multiplier,
+    costPrice,
+    finalPrice,
+    updatedAt: cleanCell(input.updatedAt || new Date().toISOString()),
+    history: Array.isArray(input.history) ? input.history.slice(0, 12) : []
+  };
+}
+
+function normalizeCostingRow(input = {}, priceItems = []) {
+  const model = cleanCell(input.model || input.modelNo || "").toUpperCase();
+  const price = priceItems.find(item => inventoryNorm(item.model) === inventoryNorm(model));
+  const listPrice = costingNumber(input.listPrice ?? price?.listPrice);
+  const multiplier = costingNumber(input.multiplier ?? price?.multiplier) || 1;
+  const costPrice = costingNumber(input.costPrice) || listPrice * multiplier;
+  const finalPrice = costingNumber(input.finalPrice ?? price?.finalPrice) || costPrice;
+  const priceIncrease = Math.max(0, costingNumber(input.priceIncrease ?? 20));
+  const savedIncreasedFinalPrice = costingNumber(input.increasedFinalPrice);
+  const increasedFinalPrice = savedIncreasedFinalPrice || finalPrice * (1 + priceIncrease / 100);
+  const defaultMargin = Math.min(0.95, Math.max(0, costingNumber(input.defaultMargin ?? 10) / 100));
+  const savedSellingPrice = costingNumber(input.sellingPrice);
+  const legacySellingPrice = finalPrice / Math.max(0.01, 1 - defaultMargin);
+  const sellingPrice = !savedSellingPrice || (!savedIncreasedFinalPrice && Math.abs(savedSellingPrice - legacySellingPrice) < 0.0001)
+    ? increasedFinalPrice / Math.max(0.01, 1 - defaultMargin)
+    : savedSellingPrice;
+  return {
+    id: cleanCell(input.id || id()),
+    model,
+    qty: Math.max(1, costingNumber(input.qty ?? 1)),
+    listPrice,
+    multiplier,
+    costPrice,
+    finalPrice,
+    increasedFinalPrice,
+    sellingPrice,
+    priceSource: cleanCell(input.priceSource || (price ? "Price List" : "Manual")),
+    updatedAt: cleanCell(input.updatedAt || new Date().toISOString())
+  };
+}
+
+function normalizeCostingSheet(input = {}, priceItems = []) {
+  const defaultMargin = Math.min(95, Math.max(0, costingNumber(input.defaultMargin ?? 10)));
+  const priceIncrease = Math.max(0, costingNumber(input.priceIncrease ?? 20));
+  return {
+    id: cleanCell(input.id || id()),
+    title: cleanCell(input.title || "New Costing"),
+    customer: cleanCell(input.customer || ""),
+    project: cleanCell(input.project || ""),
+    enquiryNo: cleanCell(input.enquiryNo || ""),
+    defaultMargin,
+    priceIncrease,
+    rows: Array.isArray(input.rows) ? input.rows.map(row => normalizeCostingRow({ ...row, defaultMargin, priceIncrease }, priceItems)) : [],
+    createdAt: cleanCell(input.createdAt || new Date().toISOString()),
+    updatedAt: cleanCell(input.updatedAt || new Date().toISOString())
+  };
+}
+
+function normalizeCostingSheets(parsed = {}) {
+  const fallback = defaultCostingSheets();
+  const sourcePriceByModel = new Map(
+    fallback.priceItems.map(item => [inventoryNorm(item.model), item])
+  );
+  const priceItems = Array.isArray(parsed.priceItems) && parsed.priceItems.length
+    ? parsed.priceItems.map(rawItem => {
+      const item = normalizeCostingPriceItem(rawItem);
+      const sourceItem = sourcePriceByModel.get(inventoryNorm(item.model));
+      const savedFinalPrice = costingNumber(rawItem.finalPrice ?? rawItem.finalUnitPrice ?? rawItem.olPrice ?? rawItem.OLPrice);
+      if (sourceItem?.finalPrice && (!savedFinalPrice || Math.abs(savedFinalPrice - item.costPrice) < 0.0001)) {
+        item.finalPrice = sourceItem.finalPrice;
+      }
+      return item;
+    }).filter(item => item.model)
+    : fallback.priceItems;
+  const sheets = Array.isArray(parsed.sheets) ? parsed.sheets.map(sheet => normalizeCostingSheet(sheet, priceItems)) : [];
+  return {
+    priceItems,
+    sheets: sheets.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
+    activeSheetId: cleanCell(parsed.activeSheetId || sheets[0]?.id || "")
+  };
+}
+
+async function readCostingSheets() {
+  return readStore("costing-sheets", COSTING_SHEETS_FILE, defaultCostingSheets, normalizeCostingSheets);
+}
+
+async function writeCostingSheets(store) {
+  await writeStore("costing-sheets", COSTING_SHEETS_FILE, normalizeCostingSheets(store));
 }
 
 function normalizeAreaCalculations(parsed = {}) {
@@ -1189,6 +1308,120 @@ function parseMultipart(buffer, contentType) {
   return parts;
 }
 
+async function costingViewResponse(store) {
+  const [inventory, sales] = await Promise.all([readInventory(), readSalesCrm()]);
+  return {
+    ...normalizeCostingSheets(store),
+    stockModels: inventory.models || [],
+    customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []),
+    projects: sales.projects || []
+  };
+}
+
+function decodeXmlText(value = "") {
+  return String(value)
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function xlsxZipEntries(buffer) {
+  const entries = new Map();
+  let eocd = -1;
+  for (let offset = buffer.length - 22; offset >= Math.max(0, buffer.length - 65558); offset--) {
+    if (buffer.readUInt32LE(offset) === 0x06054b50) { eocd = offset; break; }
+  }
+  if (eocd < 0) return entries;
+  let cursor = buffer.readUInt32LE(eocd + 16);
+  const count = buffer.readUInt16LE(eocd + 10);
+  for (let index = 0; index < count && cursor + 46 <= buffer.length; index++) {
+    if (buffer.readUInt32LE(cursor) !== 0x02014b50) break;
+    const compressedSize = buffer.readUInt32LE(cursor + 20);
+    const compression = buffer.readUInt16LE(cursor + 10);
+    const nameLength = buffer.readUInt16LE(cursor + 28);
+    const extraLength = buffer.readUInt16LE(cursor + 30);
+    const commentLength = buffer.readUInt16LE(cursor + 32);
+    const localOffset = buffer.readUInt32LE(cursor + 42);
+    const name = buffer.subarray(cursor + 46, cursor + 46 + nameLength).toString("utf8");
+    if (localOffset + 30 <= buffer.length && buffer.readUInt32LE(localOffset) === 0x04034b50) {
+      const localNameLength = buffer.readUInt16LE(localOffset + 26);
+      const localExtraLength = buffer.readUInt16LE(localOffset + 28);
+      const start = localOffset + 30 + localNameLength + localExtraLength;
+      const data = buffer.subarray(start, start + compressedSize);
+      try {
+        entries.set(name, compression === 8 ? zlib.inflateRawSync(data) : data);
+      } catch {}
+    }
+    cursor += 46 + nameLength + extraLength + commentLength;
+  }
+  return entries;
+}
+
+function xlsxColumnIndex(reference = "") {
+  const letters = String(reference).match(/[A-Z]+/i)?.[0]?.toUpperCase() || "";
+  return [...letters].reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0) - 1;
+}
+
+function xlsxTableRows(buffer) {
+  const entries = xlsxZipEntries(buffer);
+  const sharedXml = entries.get("xl/sharedStrings.xml")?.toString("utf8") || "";
+  const shared = [...sharedXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)].map(match => decodeXmlText(match[1]));
+  const sheet = entries.get("xl/worksheets/sheet1.xml")?.toString("utf8") || "";
+  const rows = [];
+  for (const rowMatch of sheet.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
+    const row = [];
+    for (const cellMatch of rowMatch[1].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
+      const attrs = cellMatch[1];
+      const body = cellMatch[2];
+      const column = xlsxColumnIndex(/\br="([^"]+)"/.exec(attrs)?.[1] || "");
+      const type = /\bt="([^"]+)"/.exec(attrs)?.[1] || "";
+      const raw = /<v[^>]*>([\s\S]*?)<\/v>/.exec(body)?.[1] ?? /<t[^>]*>([\s\S]*?)<\/t>/.exec(body)?.[1] ?? "";
+      row[column] = type === "s" ? (shared[Number(raw)] || "") : decodeXmlText(raw);
+    }
+    if (row.some(value => String(value ?? "").trim())) rows.push(row);
+  }
+  return rows;
+}
+
+function csvTableRows(text = "") {
+  return String(text).replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map(line => {
+    const cells = [];
+    let value = "", quoted = false;
+    for (let index = 0; index < line.length; index++) {
+      const char = line[index];
+      if (char === '"' && line[index + 1] === '"') { value += '"'; index++; }
+      else if (char === '"') quoted = !quoted;
+      else if (char === "," && !quoted) { cells.push(value.trim()); value = ""; }
+      else value += char;
+    }
+    cells.push(value.trim());
+    return cells;
+  });
+}
+
+function parseCostingPriceListUpload(filePart) {
+  const isCsv = /csv|text\//i.test(filePart.mimeType || "") || /\.csv$/i.test(filePart.filename || "");
+  const table = isCsv ? csvTableRows(filePart.body.toString("utf8")) : xlsxTableRows(filePart.body);
+  if (table.length < 2) return [];
+  const headers = table[0].map(value => String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, ""));
+  const valueAt = (row, names) => {
+    const index = headers.findIndex(header => names.includes(header));
+    return index >= 0 ? row[index] : "";
+  };
+  return table.slice(1).map(row => ({
+    model: valueAt(row, ["MODEL", "MODELNO", "MODELNUMBER"]),
+    description: valueAt(row, ["DESCRIPTION", "TYPE", "PRODUCTDESCRIPTION"]),
+    origin: valueAt(row, ["ORIGIN", "COUNTRY"]),
+    listPrice: valueAt(row, ["LISTPRICEAED", "LISTPRICE", "LISTPRICEAED", "LISTPRICEAED"]),
+    multiplier: valueAt(row, ["MULTIPLIER"]),
+    costPrice: valueAt(row, ["COSTPRICEAED", "COSTPRICE"]),
+    finalPrice: valueAt(row, ["FINALPRICEAED", "FINALPRICE", "OLPRICEAED", "OLPRICE"])
+  })).filter(row => cleanCell(row.model));
+}
+
 function safeName(name) {
   return path.basename(name || "upload.bin").replace(/[^\w.\- ]+/g, "_");
 }
@@ -1810,6 +2043,90 @@ async function handleApi(req, res) {
     return send(res, 200, await salesCrmView(await readSalesCrm()));
   }
 
+  if (req.method === "GET" && url.pathname === "/api/costing") {
+    const [store, inventory, sales] = await Promise.all([readCostingSheets(), readInventory(), readSalesCrm()]);
+    return send(res, 200, {
+      ...store,
+      stockModels: inventory.models || [],
+      customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []),
+      projects: sales.projects || []
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/costing/sheets") {
+    const store = await readCostingSheets();
+    const body = await readJson(req);
+    const sheet = normalizeCostingSheet(body.sheet || body, store.priceItems);
+    sheet.updatedAt = new Date().toISOString();
+    const existingIndex = store.sheets.findIndex(item => item.id === sheet.id);
+    if (existingIndex >= 0) store.sheets[existingIndex] = { ...store.sheets[existingIndex], ...sheet };
+    else store.sheets.unshift(sheet);
+    store.activeSheetId = sheet.id;
+    await writeCostingSheets(store);
+    return send(res, 200, await costingViewResponse(store));
+  }
+
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/costing\/sheets\/[^/]+$/)) {
+    const store = await readCostingSheets();
+    const sheetId = decodeURIComponent(url.pathname.split("/").pop());
+    store.sheets = store.sheets.filter(sheet => sheet.id !== sheetId);
+    if (store.activeSheetId === sheetId) store.activeSheetId = store.sheets[0]?.id || "";
+    await writeCostingSheets(store);
+    return send(res, 200, await costingViewResponse(store));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/costing/price-items") {
+    const store = await readCostingSheets();
+    const body = await readJson(req);
+    const item = normalizeCostingPriceItem(body.item || body);
+    if (!item.model) return send(res, 400, { error: "Model is required" });
+    const existingIndex = store.priceItems.findIndex(entry => entry.id === item.id || inventoryNorm(entry.model) === inventoryNorm(item.model));
+    if (existingIndex >= 0) {
+      const existing = store.priceItems[existingIndex];
+      const changed = ["listPrice", "multiplier", "costPrice", "finalPrice"].some(key => Number(existing[key] || 0) !== Number(item[key] || 0));
+      item.id = existing.id;
+      item.history = changed ? [{ date: new Date().toISOString(), costPrice: existing.costPrice, finalPrice: existing.finalPrice }, ...(existing.history || [])].slice(0, 12) : existing.history || [];
+      store.priceItems[existingIndex] = item;
+    } else {
+      store.priceItems.unshift(item);
+    }
+    await writeCostingSheets(store);
+    return send(res, 200, await costingViewResponse(store));
+  }
+
+  if (req.method === "DELETE" && url.pathname.match(/^\/api\/costing\/price-items\/[^/]+$/)) {
+    const store = await readCostingSheets();
+    const itemId = decodeURIComponent(url.pathname.split("/").pop());
+    store.priceItems = store.priceItems.filter(item => item.id !== itemId);
+    await writeCostingSheets(store);
+    return send(res, 200, await costingViewResponse(store));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/costing/price-items/import") {
+    const buffer = await collect(req);
+    const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+    const filePart = multipart.find(part => part.filename);
+    if (!filePart) return send(res, 400, { error: "Choose a price list file first." });
+    const rows = parseCostingPriceListUpload(filePart);
+    if (!rows.length) return send(res, 400, { error: "No valid model rows were found in this file." });
+    const store = await readCostingSheets();
+    let imported = 0;
+    for (const raw of rows) {
+      const item = normalizeCostingPriceItem(raw);
+      if (!item.model) continue;
+      const index = store.priceItems.findIndex(entry => inventoryNorm(entry.model) === inventoryNorm(item.model));
+      if (index >= 0) {
+        const previous = store.priceItems[index];
+        item.id = previous.id;
+        item.history = [{ date: new Date().toISOString(), costPrice: previous.costPrice, finalPrice: previous.finalPrice }, ...(previous.history || [])].slice(0, 12);
+        store.priceItems[index] = item;
+      } else store.priceItems.push(item);
+      imported++;
+    }
+    await writeCostingSheets(store);
+    return send(res, 200, { ...(await costingViewResponse(store)), imported });
+  }
+
   if (req.method === "POST" && url.pathname === "/api/sales-crm/customers/import") {
     const store = await readSalesCrm();
     const inventory = await readInventory();
@@ -2337,10 +2654,29 @@ async function handleApi(req, res) {
     const existing = inventory.models.find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
     const hasReservedQty = Object.prototype.hasOwnProperty.call(body, "reservedQty");
     const reservedQty = hasReservedQty ? Math.max(0, Number(body.reservedQty || 0)) : Number(existing?.reservedQty || 0);
-    const modelUpdate = { modelNo, description: body.description || "", brand: body.brand || "Daikin", type: body.type || "" };
+    const modelUpdate = {
+      modelNo,
+      description: Object.prototype.hasOwnProperty.call(body, "description") ? body.description || "" : existing?.description || "",
+      brand: Object.prototype.hasOwnProperty.call(body, "brand") ? body.brand || "Daikin" : existing?.brand || "Daikin",
+      type: Object.prototype.hasOwnProperty.call(body, "type") ? body.type || "" : existing?.type || ""
+    };
     if (hasReservedQty) modelUpdate.reservedQty = reservedQty;
     if (existing) Object.assign(existing, modelUpdate);
     else inventory.models.push({ id: id(), ...modelUpdate, reservedQty });
+    if (body.returnQuantity !== undefined && body.returnQuantity !== "") {
+      const returnQty = Number(body.returnQuantity || 0);
+      if (returnQty <= 0) return send(res, 400, { error: "Returned Qty must be greater than 0" });
+      inventory.supplierDns.unshift({
+        id: id(),
+        uploadedDate: todayISO(),
+        supplierDnNo: "Return",
+        projectName: "Return to Warehouse",
+        status: "Confirmed",
+        isManualAdjustment: true,
+        isReturn: true,
+        lines: [{ id: id(), modelNo, description: modelUpdate.description || "", detectedQty: returnQty, finalQty: returnQty, status: "Ready" }]
+      });
+    }
     if (body.quantity !== undefined && body.quantity !== "") {
       const current = computeInventory(inventory).stockByModel[inventoryNorm(modelNo)]?.qty || 0;
       const target = Number(body.quantity || 0);
@@ -3647,6 +3983,7 @@ function ensureManualStockNumbers(inventory) {
   let changed = false;
   for (const dn of inventory.supplierDns || []) {
     if (!dn.isManualAdjustment) continue;
+    if (dn.isReturn || inventoryNorm(dn.supplierDnNo) === "RETURN") continue;
     const dateCode = manualStockDateCode(dn.uploadedDate);
     usedByDate[dateCode] = usedByDate[dateCode] || new Set();
     const existing = String(dn.supplierDnNo || "").match(new RegExp(`^Stock ${dateCode}(\\d{2})$`, "i"));
@@ -4054,6 +4391,7 @@ function computeInventory(inventory, projectReservations = {}) {
         projectName: dn.projectName,
         supplierDnNo: dn.supplierDnNo,
         isManualAdjustment: !!dn.isManualAdjustment,
+        isReturn: !!dn.isReturn || inventoryNorm(dn.supplierDnNo) === "RETURN",
         receivedQty: Number(line.finalQty || 0),
         deliveredQty: 0,
         availableQty: Number(line.finalQty || 0)
@@ -4080,7 +4418,12 @@ function computeInventory(inventory, projectReservations = {}) {
     if (dn.status !== "Issued" && dn.status !== "Delivered") continue;
     for (const line of dn.lines || []) {
       let remaining = Number(line.qtyGoingOut || 0);
-      const modelLots = lots.filter(lot => inventoryNorm(lot.modelNo) === inventoryNorm(line.modelNo) && lot.availableQty > 0);
+      const deliveryDate = parseServerDate(dn.date || dn.createdAt || "");
+      const modelLots = lots.filter(lot => {
+        if (inventoryNorm(lot.modelNo) !== inventoryNorm(line.modelNo) || lot.availableQty <= 0) return false;
+        const lotDate = parseServerDate(lot.date || "");
+        return !lot.isReturn || !deliveryDate || !lotDate || lotDate <= deliveryDate;
+      });
       for (const lot of modelLots) {
         if (remaining <= 0) break;
         const used = Math.min(lot.availableQty, remaining);

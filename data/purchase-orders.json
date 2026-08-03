@@ -1,555 +1,46 @@
 {
   "settings": {
-    "nextPoNo": "PO-2026-0005"
+    "nextPoNo": "AMTS-26-LPO-002"
   },
   "orders": [
     {
-      "id": "24bbe3f7-442a-4d7f-b225-e1e54ce06737",
-      "poNo": "PO-2026-0004",
+      "id": "7ab7c252-4150-45c8-94df-58557c074f66",
+      "poNo": "AMTS-26-LPO-001",
+      "basePoNo": "AMTS-26-LPO-001",
+      "revisionNo": 0,
+      "revision": "",
       "status": "Created",
-      "supplierName": "RMCC kale",
-      "supplierAddress": "P.O.BOX : 7325 ,UMM AL QUWAIN, U.A.E. Tel:- 06-7670082 Fax: 06-7641588 E-mail: sales@mmcengco.com",
-      "trn": "100054715600003",
-      "quotationNo": "MMC/602777/26",
+      "supplierName": "Al Samah LLC",
+      "supplierAddress": "PO Box: 35057, Sharjah, UAE",
+      "trn": "",
+      "quotationNo": "",
       "quotationDate": "",
-      "purchaseRepresentative": "zubair",
-      "poDate": "2026-07-15",
-      "projectName": "G+2 School Project",
-      "deliveryTerms": "",
-      "paymentTerms": "CDC",
-      "manualSubtotal": "",
-      "discount": 0,
-      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
-      "sourceUploadId": "cd6d5755-ea1d-4c89-b6ae-538fd5401918",
-      "createdAt": "2026-07-15T10:22:50.770Z",
-      "updatedAt": "2026-07-15T10:22:50.770Z",
-      "items": [
-        {
-          "id": "c738241f-83bd-4cc7-819f-162dff5818d4",
-          "description": "SLBG - 550 x 250",
-          "modelNo": "",
-          "qty": 22,
-          "unitPrice": 72,
-          "vatPercent": 5,
-          "amount": 1584
-        },
-        {
-          "id": "e63e6d92-f72e-4765-8fbc-3c75a53408b2",
-          "description": "SLBG - 500 x 250",
-          "modelNo": "",
-          "qty": 14,
-          "unitPrice": 65,
-          "vatPercent": 5,
-          "amount": 910
-        },
-        {
-          "id": "8f934c4a-5f63-4f33-bd9f-688b2355fc7a",
-          "description": "SLBG - 650 x 250",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 85,
-          "vatPercent": 5,
-          "amount": 170
-        },
-        {
-          "id": "c8f68ec8-bcdb-448f-a2e1-a8a14d50b374",
-          "description": "SLBG - 600 x 150",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 51,
-          "vatPercent": 5,
-          "amount": 153
-        },
-        {
-          "id": "f8db649e-a534-457d-b3d2-e76bbcf774ed",
-          "description": "SLBG - 700 x 250",
-          "modelNo": "",
-          "qty": 8,
-          "unitPrice": 91,
-          "vatPercent": 5,
-          "amount": 728
-        },
-        {
-          "id": "0d12e007-9acb-4e11-ac63-f75d70480945",
-          "description": "SLBG - 750 x 250",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 98,
-          "vatPercent": 5,
-          "amount": 98
-        },
-        {
-          "id": "fcca54af-a7ed-49a8-b5d2-b69bba5de626",
-          "description": "SLBG - 350 x 200",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 40,
-          "vatPercent": 5,
-          "amount": 80
-        },
-        {
-          "id": "c6aa2071-0d76-4838-ac95-164253e0a7f7",
-          "description": "SLBG - 350 x 100",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 33,
-          "vatPercent": 5,
-          "amount": 33
-        },
-        {
-          "id": "3c1baf5e-395b-4bc3-9311-f3bf4b4f0cd3",
-          "description": "SLBG - 300 x 150",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 30,
-          "vatPercent": 5,
-          "amount": 90
-        },
-        {
-          "id": "85fb402f-0e45-4165-bbfb-a26f50db64d8",
-          "description": "SLBG - 150 x 150",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 23,
-          "vatPercent": 5,
-          "amount": 69
-        },
-        {
-          "id": "3e4bd2c4-a165-4f29-8e47-693188c013c1",
-          "description": "SAD - 225 x 225",
-          "modelNo": "",
-          "qty": 30,
-          "unitPrice": 50,
-          "vatPercent": 5,
-          "amount": 1500
-        },
-        {
-          "id": "5278c639-15fb-4465-9bd2-3fd3deadda1a",
-          "description": "SAD - 300 x 300",
-          "modelNo": "",
-          "qty": 10,
-          "unitPrice": 60,
-          "vatPercent": 5,
-          "amount": 600
-        },
-        {
-          "id": "e324a1c2-9b2a-4779-b82c-98f4018716de",
-          "description": "SAD - 450 x 450",
-          "modelNo": "",
-          "qty": 6,
-          "unitPrice": 80,
-          "vatPercent": 5,
-          "amount": 480
-        },
-        {
-          "id": "c42cb672-e4c7-4b57-b609-5887256cb6dd",
-          "description": "RLBG - 850 x 250",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 85,
-          "vatPercent": 5,
-          "amount": 255
-        },
-        {
-          "id": "45452fb6-0e78-4889-a2e0-45acb700840c",
-          "description": "RLBG - 850 x 240",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 85,
-          "vatPercent": 5,
-          "amount": 170
-        },
-        {
-          "id": "31975e39-97bd-438a-b0a3-5bc9a0374f1f",
-          "description": "RLBG - 890 x 250",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 89,
-          "vatPercent": 5,
-          "amount": 89
-        },
-        {
-          "id": "784dc962-8215-4c3c-815a-643a8bee871d",
-          "description": "RLBG - 845 x 250",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 85,
-          "vatPercent": 5,
-          "amount": 85
-        },
-        {
-          "id": "d44f8d8a-3c13-4e8b-a176-ed0141c35e3f",
-          "description": "RLBG - 990 x 240",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 99,
-          "vatPercent": 5,
-          "amount": 99
-        },
-        {
-          "id": "46c0496c-2b1e-4a2f-9b5d-015ebecb60c6",
-          "description": "RLBG - 900 x 250",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 90,
-          "vatPercent": 5,
-          "amount": 90
-        },
-        {
-          "id": "08f6f481-e54a-4e45-acdd-b044d98c68e4",
-          "description": "RLBG - 900 x 245",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 90,
-          "vatPercent": 5,
-          "amount": 90
-        },
-        {
-          "id": "818216c3-3317-4073-bab1-caf852656c94",
-          "description": "RLBG - 1150 x 250",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 115,
-          "vatPercent": 5,
-          "amount": 345
-        },
-        {
-          "id": "575067a0-8def-46a3-9964-fc8efc3881ec",
-          "description": "RLBG - 1200 x 250",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 120,
-          "vatPercent": 5,
-          "amount": 120
-        },
-        {
-          "id": "30ff175a-4f5e-44c0-90c4-2512707e4e18",
-          "description": "RLBG - 895 x 245",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 90,
-          "vatPercent": 5,
-          "amount": 90
-        },
-        {
-          "id": "4d878142-5518-4cea-be71-b7c857a42c33",
-          "description": "RLBG - 950 x 250",
-          "modelNo": "",
-          "qty": 5,
-          "unitPrice": 95,
-          "vatPercent": 5,
-          "amount": 475
-        },
-        {
-          "id": "b5dd4109-5339-4cf5-9ea0-f2316dcfa596",
-          "description": "RLBG - 1050 x 245",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 105,
-          "vatPercent": 5,
-          "amount": 105
-        },
-        {
-          "id": "dced5c65-0170-4d91-89b9-44a5348562bf",
-          "description": "RLBG - 350 x 100",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 30,
-          "vatPercent": 5,
-          "amount": 30
-        },
-        {
-          "id": "803a3dd5-7093-489d-ab27-702a75a96f1d",
-          "description": "RLBG - 300 x 150",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 27,
-          "vatPercent": 5,
-          "amount": 27
-        },
-        {
-          "id": "502e29b7-15e1-4bd1-b99a-11697a54e36f",
-          "description": "RLBG - 150 x 150",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 20,
-          "vatPercent": 5,
-          "amount": 60
-        },
-        {
-          "id": "31292abf-c1e2-48ae-a5c8-1a09b2a39679",
-          "description": "RLBG - 600 x 150",
-          "modelNo": "",
-          "qty": 3,
-          "unitPrice": 45,
-          "vatPercent": 5,
-          "amount": 135
-        },
-        {
-          "id": "1dd8e3bf-62c3-4eb8-9124-ead84b054bd1",
-          "description": "RAD - 450 x 450",
-          "modelNo": "",
-          "qty": 10,
-          "unitPrice": 60,
-          "vatPercent": 5,
-          "amount": 600
-        },
-        {
-          "id": "bee5b0f4-36af-4d6b-a8f3-230de6f08431",
-          "description": "RAD - 225 x 225",
-          "modelNo": "",
-          "qty": 25,
-          "unitPrice": 40,
-          "vatPercent": 5,
-          "amount": 1000
-        },
-        {
-          "id": "9757d55d-3b43-4bf7-be2f-6eab0d392ef9",
-          "description": "RAD - 300 x 300",
-          "modelNo": "",
-          "qty": 10,
-          "unitPrice": 50,
-          "vatPercent": 5,
-          "amount": 500
-        },
-        {
-          "id": "81ae2f95-6760-44e5-afac-fe293450a20e",
-          "description": "RAD - 150 x 150",
-          "modelNo": "",
-          "qty": 35,
-          "unitPrice": 30,
-          "vatPercent": 5,
-          "amount": 1050
-        }
-      ],
-      "subtotal": 11910,
-      "totalAfterDiscount": 11910,
-      "vatTotal": 595.5,
-      "grandTotal": 12505.5
-    },
-    {
-      "id": "f740bbe6-7169-4005-af89-e34e6c4495dd",
-      "poNo": "PO-2026-0003",
-      "status": "Created",
-      "supplierName": "MMC ENGINEERING CO. L.L.C",
-      "supplierAddress": "P.O.BOX : 7325 ,UMM AL QUWAIN, U.A.E.",
-      "trn": "100054715600003",
-      "quotationNo": "MMC/602868/26",
-      "quotationDate": "",
-      "purchaseRepresentative": "Akhil",
-      "poDate": "2026-07-15",
-      "projectName": "Marina 23",
-      "deliveryTerms": "",
-      "paymentTerms": "CDC",
-      "manualSubtotal": "",
-      "discount": 79,
-      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
-      "sourceUploadId": "cc2c0f09-224a-4f80-be43-1596c895ac67",
-      "createdAt": "2026-07-15T07:12:38.096Z",
-      "updatedAt": "2026-07-15T07:12:38.096Z",
-      "items": [
-        {
-          "id": "62af4c35-e1fc-40ab-b565-78a711bc24cb",
-          "description": "FLOWBAR 1SLOT-38MM - 4430 - WITHOUT ENDCAP",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 421,
-          "vatPercent": 5,
-          "amount": 421
-        },
-        {
-          "id": "dd9bafd3-9b55-4f2c-b4a2-04867684a88f",
-          "description": "FLOWBAR 1SLOT-38MM - 2120 - ONESIDE ENDCAP",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 201,
-          "vatPercent": 5,
-          "amount": 402
-        },
-        {
-          "id": "a6b1cfdf-f3d9-49d9-a5c1-a52fa00605e3",
-          "description": "CORNER FLOWBAR 1SLOT-38MM - 300X300 - WITHOUT ENDCAP",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 95,
-          "vatPercent": 5,
-          "amount": 190
-        },
-        {
-          "id": "af6da2d2-8bc7-4098-8072-feabfb5402cc",
-          "description": "FLOWBAR 1SLOT-38MM - 2600",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 247,
-          "vatPercent": 5,
-          "amount": 247
-        },
-        {
-          "id": "850cf1f5-1856-4439-ab0f-2d8bc321b1f6",
-          "description": "FLOWBAR 1SLOT-38MM - 2200",
-          "modelNo": "",
-          "qty": 1,
-          "unitPrice": 209,
-          "vatPercent": 5,
-          "amount": 209
-        },
-        {
-          "id": "4d67f80d-8c6d-42b4-b8c9-bd05fa3758be",
-          "description": "FLOWBAR 1SLOT-38MM - 500",
-          "modelNo": "",
-          "qty": 2,
-          "unitPrice": 55,
-          "vatPercent": 5,
-          "amount": 110
-        }
-      ],
-      "subtotal": 1579,
-      "totalAfterDiscount": 1500,
-      "vatTotal": 75,
-      "grandTotal": 1575
-    },
-    {
-      "id": "d1b58889-9cf2-4907-ab8d-197dd7635698",
-      "poNo": "PO-2026-0002",
-      "status": "Created",
-      "supplierName": "Daikin Air Conditioning",
-      "supplierAddress": "PO Box. 125833, Dubai, UAE",
-      "trn": "100032076000003",
-      "quotationNo": "ghgh45545",
-      "quotationDate": "",
-      "purchaseRepresentative": "man",
-      "poDate": "2026-06-27",
+      "purchaseRepresentative": "Admin User",
+      "poDate": "2026-07-29",
       "projectName": "",
       "deliveryTerms": "",
-      "paymentTerms": "90 Days PDC",
+      "paymentTerms": "",
       "manualSubtotal": "",
       "discount": 0,
       "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
       "sourceUploadId": "",
-      "createdAt": "2026-06-27T09:28:06.710Z",
-      "updatedAt": "2026-06-27T09:28:06.710Z",
+      "createdAt": "2026-07-29T09:25:18.404Z",
+      "updatedAt": "2026-07-29T09:25:18.404Z",
       "items": [
         {
-          "id": "1782552460169.2966",
-          "description": "asdf1234",
+          "id": "1785317107063.7417",
+          "description": "",
           "modelNo": "",
           "qty": 1,
-          "unitPrice": 7099,
+          "unitPrice": 46545,
           "vatPercent": 5,
-          "amount": 7099
+          "amount": 46545
         }
       ],
-      "subtotal": 7099,
-      "totalAfterDiscount": 7099,
-      "vatTotal": 354.95000000000005,
-      "grandTotal": 7453.95
-    },
-    {
-      "id": "7d92c517-6d7a-4719-9f09-9a2f02ad3a49",
-      "poNo": "PO-2026-0001",
-      "status": "Created",
-      "supplierName": "AL MAHIRA TECHNICAL SERVICES L.L.C - DUBAI",
-      "supplierAddress": "",
-      "trn": "100375425400003",
-      "quotationNo": "0233850 [1]",
-      "quotationDate": "2026-06-22",
-      "purchaseRepresentative": "",
-      "poDate": "2026-06-27",
-      "projectName": "G+2+R SCHOOL DUBAI",
-      "deliveryTerms": "",
-      "paymentTerms": "60 Days PDC",
-      "manualSubtotal": "7212",
-      "discount": 2997.9,
-      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
-      "sourceUploadId": "de5ae2b4-f9e2-428c-bd50-32c82d54352b",
-      "createdAt": "2026-06-27T08:45:27.640Z",
-      "updatedAt": "2026-06-27T08:45:27.640Z",
-      "items": [
-        {
-          "id": "c94d6f70-e01e-46e8-965c-c969fb6c46d3",
-          "description": "MOTORIZED VCD - TA`O - 1000 X 600 MM - W/O MOTOR PRICE",
-          "modelNo": "TA`O",
-          "qty": 1,
-          "unitPrice": 714,
-          "vatPercent": 5,
-          "amount": 749.7
-        },
-        {
-          "id": "b4257c08-0843-46b6-b99d-85707aa2d0e7",
-          "description": "LM 230 A BELIMO ACUATOR - M - 1000 X 600 MM - NON SPRING RETURN TYPE",
-          "modelNo": "M",
-          "qty": 1,
-          "unitPrice": 915,
-          "vatPercent": 5,
-          "amount": 960.75
-        },
-        {
-          "id": "e313432c-dedd-4abc-9e02-77441013d756",
-          "description": "MOTORIZED VCD - TA`O - 1000 X 700 MM - W/O MOTOR PRICE",
-          "modelNo": "TA`O",
-          "qty": 1,
-          "unitPrice": 681,
-          "vatPercent": 5,
-          "amount": 715.05
-        },
-        {
-          "id": "862cb0a2-b574-4c8b-9e4f-5cc55f4bb26d",
-          "description": "LM 230 A BELIMO ACUATOR - M - 1000 X 700 MM - NON SPRING RETURN TYPE",
-          "modelNo": "M",
-          "qty": 1,
-          "unitPrice": 915,
-          "vatPercent": 5,
-          "amount": 960.75
-        },
-        {
-          "id": "a6909629-0ad0-44fe-9187-391cd56de525",
-          "description": "MOTORIZED VCD - TA`O - 1200 X 650 MM - W/O MOTOR PRICE",
-          "modelNo": "TA`O",
-          "qty": 1,
-          "unitPrice": 838,
-          "vatPercent": 5,
-          "amount": 879.9
-        },
-        {
-          "id": "ad26b178-6981-4cab-ad11-17a4405ed052",
-          "description": "LM 230 A BELIMO ACUATOR - M - 1200 X 650 MM - NON SPRING RETURN TYPE",
-          "modelNo": "M",
-          "qty": 1,
-          "unitPrice": 915,
-          "vatPercent": 5,
-          "amount": 960.75
-        },
-        {
-          "id": "2a04591a-198d-47dd-ad79-46797ad235d3",
-          "description": "MOTORIZED VCD - TA`O - 1100 X 650 MM - W/O MOTOR PRICE",
-          "modelNo": "TA`O",
-          "qty": 1,
-          "unitPrice": 769,
-          "vatPercent": 5,
-          "amount": 807.45
-        },
-        {
-          "id": "98760a96-4439-453c-be7e-38e3aef2fc7f",
-          "description": "LM 230 A BELIMO ACUATOR - M - 1100 X 650 MM - NON SPRING RETURN TYPE",
-          "modelNo": "M",
-          "qty": 1,
-          "unitPrice": 915,
-          "vatPercent": 5,
-          "amount": 960.75
-        },
-        {
-          "id": "72c8fd83-6b48-45ea-8917-cc2673a09f73",
-          "description": "FIRE DAMPER - BLADE IN AIR STREAM - TFDA - 750 X 250 MM - W/O SLEEVES",
-          "modelNo": "TFDA",
-          "qty": 2,
-          "unitPrice": 275,
-          "vatPercent": 5,
-          "amount": 577.5
-        }
-      ],
-      "subtotal": 7212,
-      "vatTotal": 210.70500000000004,
-      "grandTotal": 4424.805
+      "subtotal": 46545,
+      "totalAfterDiscount": 46545,
+      "vatTotal": 2327.25,
+      "grandTotal": 48872.25
     }
   ],
   "suppliers": [
@@ -768,13 +259,15 @@
     {
       "id": "6b4ad45c-f908-4fa2-afbd-3c70d5bee5e1",
       "supplierName": "Al Ramiz Water Heaters & Elect. Equip Spare Parts Tr",
-      "address": "Sharjah, UAE",
-      "trn": "100025654300003",
       "contactPerson": "",
       "phone": "",
       "email": "",
+      "address": "Sharjah, UAE",
+      "trn": "100025654300003",
+      "deliveryTerms": "",
       "paymentTerms": "",
-      "createdAt": "2026-07-21T06:05:16.981027Z"
+      "createdAt": "2026-07-21T06:05:16.981027Z",
+      "updatedAt": "2026-07-28T13:45:30.877Z"
     },
     {
       "id": "8672a915-fe15-483c-8f07-f997e023068c",
@@ -1107,6 +600,22 @@
     }
   ],
   "uploads": [
+    {
+      "id": "82b9f3e9-7e16-4859-af98-35723e6f5195",
+      "originalName": "WhatsApp Image 2026-07-22 at 10.03.13.jpeg",
+      "storedName": "82b9f3e9-7e16-4859-af98-35723e6f5195-WhatsApp Image 2026-07-22 at 10.03.13.jpeg",
+      "mimeType": "image/jpeg",
+      "size": 113550,
+      "createdAt": "2026-07-22T07:47:59.737Z"
+    },
+    {
+      "id": "44fd66e2-5551-438c-abd7-446732a280b1",
+      "originalName": "WhatsApp Image 2026-07-22 at 10.03.13.jpeg",
+      "storedName": "44fd66e2-5551-438c-abd7-446732a280b1-WhatsApp Image 2026-07-22 at 10.03.13.jpeg",
+      "mimeType": "image/jpeg",
+      "size": 113550,
+      "createdAt": "2026-07-22T07:17:49.213Z"
+    },
     {
       "id": "7b375d10-6ee9-45e9-a835-1e034f285ceb",
       "originalName": "Quotation - QT12_25_5131-R1.pdf",
