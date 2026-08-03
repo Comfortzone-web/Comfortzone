@@ -870,9 +870,13 @@ async function showSalesDesk(screen = "dashboard") {
     $("#pageTitle").textContent = "Sales Desk";
     $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
   }
-  const needsInitialSales = !salesCrmState;
+  // Costing loads its own compact customer/model data, so do not block it on the full CRM payload.
+  const needsInitialSales = !salesCrmState && screen !== "costing";
   if (needsInitialSales) await loadSalesCrm().catch(() => {});
-  if (screen === "costing" && !costingState) await loadCosting().catch(error => toast(error.message || "Unable to load Costing Sheet"));
+  if (screen === "costing" && !costingState) {
+    renderCostingLoading();
+    await loadCosting().catch(error => toast(error.message || "Unable to load Costing Sheet"));
+  }
   if (screen === "quotation" && salesQuotationMode === "create" && !inventoryState) {
     loadInventory().then(() => activeView === "salesDesk" && renderSalesDesk()).catch(() => {});
   }
@@ -1323,6 +1327,18 @@ function renderSalesDesk() {
   }[salesDeskScreen];
   root.innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}">${html ? html() : salesDashboardHtml()}</div>`;
   if (salesDeskScreen === "costing") requestAnimationFrame(syncCostingDeleteRail);
+}
+
+function renderCostingLoading() {
+  const root = $("#salesDeskRoot");
+  if (!root) return;
+  root.innerHTML = `
+    <div class="sales-page sales-screen-costing">
+      <div class="costing-loading" aria-label="Loading Costing Sheet">
+        <div class="costing-loading-details"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="costing-loading-table"><b></b><span></span><span></span><span></span><span></span><span></span></div>
+      </div>
+    </div>`;
 }
 
 function syncCostingDeleteRail() {

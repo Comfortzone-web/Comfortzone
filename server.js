@@ -1312,9 +1312,11 @@ async function costingViewResponse(store) {
   const [inventory, sales] = await Promise.all([readInventory(), readSalesCrm()]);
   return {
     ...normalizeCostingSheets(store),
-    stockModels: inventory.models || [],
-    customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []),
-    projects: sales.projects || []
+    stockModels: (inventory.models || []).map(item => ({
+      modelNo: item.modelNo || item.model || "",
+      description: item.description || ""
+    })),
+    customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []).map(customer => ({ name: customer.name || "" }))
   };
 }
 
@@ -2044,13 +2046,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/costing") {
-    const [store, inventory, sales] = await Promise.all([readCostingSheets(), readInventory(), readSalesCrm()]);
-    return send(res, 200, {
-      ...store,
-      stockModels: inventory.models || [],
-      customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []),
-      projects: sales.projects || []
-    });
+    return send(res, 200, await costingViewResponse(await readCostingSheets()));
   }
 
   if (req.method === "POST" && url.pathname === "/api/costing/sheets") {

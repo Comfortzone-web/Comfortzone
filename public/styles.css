@@ -922,6 +922,38 @@ td[contenteditable="true"]:focus {
   margin-right: -20px;
 }
 
+.costing-loading {
+  padding: 20px;
+  border: 1px solid #d6e3f5;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.costing-loading-details {
+  display: grid;
+  grid-template-columns: 1.15fr 1.25fr .95fr .7fr .7fr;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.costing-loading i,
+.costing-loading b,
+.costing-loading span {
+  display: block;
+  border-radius: 5px;
+  background: #edf3fb;
+  animation: costing-loading-pulse 1.1s ease-in-out infinite alternate;
+}
+
+.costing-loading i { height: 42px; }
+.costing-loading-table { overflow: hidden; border: 1px solid #dce7f5; border-radius: 6px; }
+.costing-loading-table b { height: 46px; border-radius: 0; background: #0a2a63; animation: none; }
+.costing-loading-table span { height: 54px; border-radius: 0; border-top: 1px solid #dce7f5; }
+
+@keyframes costing-loading-pulse {
+  to { opacity: .58; }
+}
+
 .costing-table-wrap,
 .costing-price-table-wrap { overflow: auto; }
 
