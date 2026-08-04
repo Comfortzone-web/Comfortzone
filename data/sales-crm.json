@@ -4680,16 +4680,16 @@
   ],
   "quotations": [
     {
-      "id": "c3fc8cc8-9ffd-4d7c-a15e-e503d4c1605e",
+      "id": "d081a4c0-0eee-48b7-862a-6d2e1a7c48f2",
       "no": "QCZ-26-1004",
       "baseQuotationNo": "QCZ-26-1004",
       "revisionNo": 0,
       "revision": "Fresh Quote",
-      "date": "03-08-2026",
+      "date": "04-08-2026",
       "validity": "7 Days",
       "salesperson": "Admin User",
-      "customer": "A & S CONTRACTING L.L.C",
-      "project": "Villa 123",
+      "customer": "Ahmed",
+      "project": "Ahmed project",
       "location": "",
       "paymentTerms": "30 Days Credit",
       "deliveryTime": "To be discussed",
@@ -4699,38 +4699,36 @@
       "terms": "Warranty:\nUnits offered are covered under a standard warranty of 12 months from the date of purchase for the whole units and a total of 60 months on compressor against manufacturing defects. The warranty covers the replacement of defective parts and does not include labor charges. Defects caused due to improper installation will void the warranty.\n\nCustom Duties & Taxes:\nOnly included if specifically mentioned in the proposal. If included, quoted prices are based on the prevailing rate for Custom duty and Taxes. However, if any variation in custom duty and / or other Taxes are imposed by the Federal Government, such variations will be borne by the purchaser.\n\nInland Freight:\n1. In land Freight is included if units are delivered in one lot.\n2. Offloading & Rigging at site is not included.\n\nCancellation:\n25% of the material value will become payable in the event of cancellation, prior to the start of manufacturing. After manufacturing has started cancellation will be determined based on costs incurred by us.\n\nWarehouse Fee:\nA warehouse fee of 2% will be charged per month for all non-collected and or / non-delivered goods. This charge will become applicable (3) days from the agreed delivery date.\n\nExclusions:\nInstallation of AC units, unloading of units at site & supply of items other than mentioned.",
       "items": [
         {
-          "id": "ca3c7745-7909-4955-ba86-87ac8c0989fc",
-          "description": "FDMRN20AVKU - RR20AVKU - DUCTED - R410 - 1.5 TR - MALAYSIA",
-          "qty": 1,
+          "id": "fb09c4e6-1079-41ee-91cf-c090b61a0382",
+          "description": "FXFSQ100ARV1 - VRV INDOOR UNIT-Cassette - INDIA",
+          "qty": 2,
           "unit": "Nos",
-          "unitPrice": 4550.77
+          "unitPrice": 3035.3866666666668
         },
         {
-          "id": "e82f5102-3083-47b7-9c6a-126e8d2f5bd4",
-          "description": "FDMRN25AVKU - RR25AVKU - DUCTED - R410 - 2 TR - MALAYSIA",
-          "qty": 1,
+          "id": "a66766d6-44ec-49e9-9b36-0ee0e47c78c9",
+          "description": "FXFSQ25ARV1 - VRV INDOOR UNIT-Cassette - INDIA",
+          "qty": 3,
           "unit": "Nos",
-          "unitPrice": 5242.666666666666
+          "unitPrice": 2322.9999999999995
+        },
+        {
+          "id": "de580921-3ed0-4956-ba2f-74c04075b91e",
+          "description": "EKEXV50 - Expansion valve VRV-FAHU - BELGIUM",
+          "qty": 5,
+          "unit": "Nos",
+          "unitPrice": 1106.7333333333333
         }
       ],
       "manualSubtotal": "",
       "discount": 0,
       "sourceLeadId": "",
+      "sourceCostingSheetId": "04be1a35-b5bf-4d0e-ac63-987f78394e23",
       "status": "Sent",
-      "createdAt": "2026-08-03T12:59:56.162Z",
-      "updatedAt": "2026-08-03T13:10:11.830Z",
-      "amount": 10283.11,
-      "quotationNo": "QCZ-26-1004",
-      "pdfUpload": {
-        "id": "5a29f963-bce5-4279-bff0-54958e308642",
-        "originalName": "QCZ-26-1004-A-_-S-CONTRACTING-L.L.C.pdf",
-        "storedName": "1d55d5f2-599f-4dc9-b363-abde0be220cf-QCZ-26-1004-A-_-S-CONTRACTING-L.L.C.pdf",
-        "mimeType": "application/pdf",
-        "size": 253731,
-        "createdAt": "2026-08-03T13:10:14.914Z",
-        "category": "Sales Quotation PDF"
-      },
-      "lastPdfGeneratedAt": "2026-08-03T13:10:14.914Z"
+      "createdAt": "2026-08-04T12:58:04.579Z",
+      "updatedAt": "2026-08-04T12:58:04.579Z",
+      "amount": 19502.11,
+      "quotationNo": "QCZ-26-1004"
     },
     {
       "id": "33557e46-9fb7-4cb7-94e6-d51bfba81db2",

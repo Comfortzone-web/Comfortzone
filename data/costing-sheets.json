@@ -1970,6 +1970,112 @@
   ],
   "sheets": [
     {
+      "id": "04be1a35-b5bf-4d0e-ac63-987f78394e23",
+      "title": "New Costing",
+      "customer": "Ahmed",
+      "project": "Ahmed project",
+      "enquiryNo": "",
+      "defaultMargin": 10,
+      "priceIncrease": 20,
+      "rows": [
+        {
+          "id": "8831ed8e-32a0-4176-8970-711bdab9e85f",
+          "model": "FXFSQ100ARV1",
+          "qty": 2,
+          "listPrice": 4383,
+          "multiplier": 0.55,
+          "costPrice": 2410.65,
+          "finalPrice": 2276.54,
+          "increasedFinalPrice": 2731.848,
+          "sellingPrice": 3035.3866666666668,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:57:48.617Z"
+        },
+        {
+          "id": "dd029831-2d26-43ee-a925-59200617cef2",
+          "model": "FXFSQ25ARV1",
+          "qty": 3,
+          "listPrice": 3218,
+          "multiplier": 0.55,
+          "costPrice": 1769.9,
+          "finalPrice": 1742.25,
+          "increasedFinalPrice": 2090.7,
+          "sellingPrice": 2322.9999999999995,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:57:48.617Z"
+        },
+        {
+          "id": "9e055a25-fe53-49f9-88e1-cfbf097557f2",
+          "model": "EKEXV50",
+          "qty": 5,
+          "listPrice": 1277,
+          "multiplier": 0.65,
+          "costPrice": 830.0500000000001,
+          "finalPrice": 830.0500000000001,
+          "increasedFinalPrice": 996.0600000000001,
+          "sellingPrice": 1106.7333333333333,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:57:48.617Z"
+        }
+      ],
+      "isSaved": true,
+      "createdAt": "2026-08-04T12:57:48.617Z",
+      "updatedAt": "2026-08-04T12:57:59.732Z"
+    },
+    {
+      "id": "b9c96585-d332-4d87-b2ee-574f4c2ecc7e",
+      "title": "New Costing",
+      "customer": "A J E M ELECTROMECHANICAL WORKS L.L.C",
+      "project": "yahoo",
+      "enquiryNo": "",
+      "defaultMargin": 10,
+      "priceIncrease": 20,
+      "rows": [
+        {
+          "id": "01fc37d1-a5f7-46bb-a8b1-cbbdfc65ff6c",
+          "model": "RXQ16ARYFK",
+          "qty": 1,
+          "listPrice": 42299,
+          "multiplier": 0.55,
+          "costPrice": 23264.45,
+          "finalPrice": 18755.7,
+          "increasedFinalPrice": 22506.84,
+          "sellingPrice": 25007.6,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:36:49.061Z"
+        },
+        {
+          "id": "08a161fc-53ac-4e50-87c0-e21fce8a6317",
+          "model": "RXYTQ12UYF",
+          "qty": 1,
+          "listPrice": 43196,
+          "multiplier": 0.5,
+          "costPrice": 21598,
+          "finalPrice": 21598,
+          "increasedFinalPrice": 25917.6,
+          "sellingPrice": 28797.333333333332,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:36:49.061Z"
+        },
+        {
+          "id": "ed4ac534-cc43-430b-9c8d-09d616642f78",
+          "model": "FDMF54AVMK - RZF54AYMK",
+          "qty": 1,
+          "listPrice": 19970,
+          "multiplier": 0.5,
+          "costPrice": 9985,
+          "finalPrice": 9270,
+          "increasedFinalPrice": 11124,
+          "sellingPrice": 12360,
+          "priceSource": "Price List",
+          "updatedAt": "2026-08-04T12:36:49.061Z"
+        }
+      ],
+      "isSaved": false,
+      "createdAt": "2026-08-04T12:36:49.061Z",
+      "updatedAt": "2026-08-04T12:36:49.061Z"
+    },
+    {
       "id": "a265e481-1105-425a-a0cc-ec24cd8d9fa4",
       "title": "New Costing",
       "customer": "A & S CONTRACTING L.L.C",
@@ -2005,9 +2111,10 @@
           "updatedAt": "2026-08-03T12:59:24.571Z"
         }
       ],
+      "isSaved": false,
       "createdAt": "2026-08-03T09:09:05.319Z",
       "updatedAt": "2026-08-03T12:59:24.571Z"
     }
   ],
-  "activeSheetId": "a265e481-1105-425a-a0cc-ec24cd8d9fa4"
+  "activeSheetId": "04be1a35-b5bf-4d0e-ac63-987f78394e23"
 }

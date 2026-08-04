@@ -31,6 +31,7 @@ const MASTER_LOOKUPS = path.join(DATA, "master-lookups.json");
 const MASTER_PRICE_LIST = path.join(DATA, "master-price-list.json");
 const QUOTATION_TEMPLATE = path.join(DATA, "quotation-template.docx");
 const VRV_SCHEDULE_TEMPLATE = path.join(DATA, "vrv-schedule-template.xlsx");
+const DX_SELECTION_TEMPLATE = path.join(DATA, "dx-selection-template.xlsx");
 const INVENTORY_FILE = path.join(DATA, "inventory.json");
 const DELIVERY_NOTE_PDF_SCRIPT = path.join(ROOT, "scripts", "delivery_note_pdf.py");
 const PURCHASE_ORDERS_FILE = path.join(DATA, "purchase-orders.json");
@@ -571,6 +572,7 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
     defaultMargin,
     priceIncrease,
     rows: Array.isArray(input.rows) ? input.rows.map(row => normalizeCostingRow({ ...row, defaultMargin, priceIncrease }, priceItems)) : [],
+    isSaved: Boolean(input.isSaved),
     createdAt: cleanCell(input.createdAt || new Date().toISOString()),
     updatedAt: cleanCell(input.updatedAt || new Date().toISOString())
   };
@@ -1074,9 +1076,14 @@ function loadMasterPriceList() {
 function hydrateProject(project) {
   project.lookup = loadMasterLookups();
   project.priceList = loadMasterPriceList();
+  project.workflowMode = project.workflowMode === "dx" ? "dx" : "vrv";
   if (!project.tables) project.tables = {};
-  if (!project.tables.vrvSchedule) project.tables.vrvSchedule = { columns: vrvColumns(), rows: [] };
-  project.tables.vrvSchedule.columns = vrvColumns();
+  if (!project.tables.vrvSchedule) project.tables.vrvSchedule = { columns: workflowScheduleColumns(project.workflowMode), rows: [] };
+  project.tables.vrvSchedule.columns = workflowScheduleColumns(project.workflowMode);
+  if (!project.tables.thermal) project.tables.thermal = { columns: workflowThermalColumns(project.workflowMode), rows: [] };
+  if (project.workflowMode === "dx" && !project.tables.thermal.rows?.length) {
+    project.tables.thermal.columns = workflowThermalColumns(project.workflowMode);
+  }
   return project;
 }
 
@@ -1126,6 +1133,7 @@ async function createDefaultProject() {
   return {
     id: projectId,
     title: "Untitled Project",
+    workflowMode: "vrv",
     visible: false,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
@@ -1188,6 +1196,14 @@ function thermalColumns() {
   return ["Indoor", "Room", "Mode", "Family or Model", "Cooling DBT", "Cooling WBT", "Heating T", "Tot Cool Cap", "Sens Cool Cap", "Heat Cap", "Air Flow Rate"];
 }
 
+function dxExportColumns() {
+  return ["Unit Ref", "Type", "Location", "TKw", "SKw", "L/S"];
+}
+
+function workflowThermalColumns(mode = "vrv") {
+  return mode === "dx" ? dxExportColumns() : thermalColumns();
+}
+
 function costingColumns() {
   return ["S.No", "Model", "Qty", "TR", "List Price", "Multiplier", "Cost", "Amount", "Selling Price / Unit"];
 }
@@ -1208,6 +1224,22 @@ function vrvColumns() {
     "Outdoor Name", "Outdoor Model", "Outdoor Nominal Index", "Ambient Temp", "CC", "PI ESMA", "Outdoor PS",
     "Outdoor MCA", "MOP", "RLA", "Outdoor WxHxD", "Outdoor Weight"
   ];
+}
+
+function dxScheduleColumns() {
+  return [
+    "Ref", "Type", "Location", "TKw", "SKw", "L/S",
+    "Model ( Indoor / Outdoor )", "Qty", "NOMINAL TR", "Proposed Type", "Refrigerant",
+    "Indoor Temperature", "Outdoor Temperature", "TC", "SC", "AFR L/S",
+    "SPEED", "Actual Power Input", "ESMA Power Input", "COP (W/W)", "ESP", "Power Supply",
+    "Indoor H (mm)", "Indoor W (mm)", "Indoor D (mm)",
+    "Outdoor H (mm)", "Outdoor W (mm)", "Outdoor D (mm)",
+    "Indoor Weight (kg)", "Outdoor Weight (kg)"
+  ];
+}
+
+function workflowScheduleColumns(mode = "vrv") {
+  return mode === "dx" ? dxScheduleColumns() : vrvColumns();
 }
 
 function defaultIndoorData() {
@@ -1316,7 +1348,12 @@ async function costingViewResponse(store) {
       modelNo: item.modelNo || item.model || "",
       description: item.description || ""
     })),
-    customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []).map(customer => ({ name: customer.name || "" }))
+    customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []).map(customer => ({ name: customer.name || "" })),
+    quotations: (sales.quotations || []).map(quote => ({
+      id: quote.id,
+      no: quote.no || quote.quotationNo || "",
+      sourceCostingSheetId: quote.sourceCostingSheetId || ""
+    })).filter(quote => quote.sourceCostingSheetId)
   };
 }
 
@@ -1574,6 +1611,7 @@ function normalizeSalesItem(collection, input, store) {
       manualSubtotal: cleanCell(base.manualSubtotal || ""),
       discount: Number(base.discount || 0),
       sourceLeadId: cleanCell(base.sourceLeadId || ""),
+      sourceCostingSheetId: cleanCell(base.sourceCostingSheetId || ""),
       status: cleanCell(base.status || "Draft"),
       createdAt: cleanCell(base.createdAt || ""),
       updatedAt: cleanCell(base.updatedAt || "")
@@ -2053,6 +2091,7 @@ async function handleApi(req, res) {
     const store = await readCostingSheets();
     const body = await readJson(req);
     const sheet = normalizeCostingSheet(body.sheet || body, store.priceItems);
+    sheet.isSaved = true;
     sheet.updatedAt = new Date().toISOString();
     const existingIndex = store.sheets.findIndex(item => item.id === sheet.id);
     if (existingIndex >= 0) store.sheets[existingIndex] = { ...store.sheets[existingIndex], ...sheet };
@@ -2981,10 +3020,25 @@ async function handleApi(req, res) {
 
     if (req.method === "POST" && parts[3] === "extract" && parts[4] === "thermal-vision") {
       const body = await readJson(req);
-      const result = await extractThermalWithOpenAI(project, body);
-      if (!body.previewOnly && result.rows && result.rows.length) {
-        project.tables.thermal.rows = result.rows;
-        await writeProject(project);
+      let result;
+      try {
+        result = await extractThermalWithOpenAI(project, body);
+        if (!body.previewOnly && result.rows && result.rows.length) {
+          project.tables.thermal.rows = result.rows;
+          await writeProject(project);
+        } else if (!body.previewOnly && body.workflowMode === "dx" && result.customRows && result.customRows.length) {
+          project.tables.thermal.columns = result.customColumns || dxExportColumns();
+          project.tables.thermal.rows = result.customRows.map(row => {
+            const next = {};
+            (project.tables.thermal.columns || dxExportColumns()).forEach((column, index) => {
+              next[column] = Array.isArray(row) ? safeExtract(row[index]) : safeExtract(row?.[column]);
+            });
+            return next;
+          });
+          await writeProject(project);
+        }
+      } catch (error) {
+        result = openAIExtractionError(error);
       }
       return send(res, 200, result);
     }
@@ -3032,6 +3086,16 @@ async function handleApi(req, res) {
     return res.end(workbook);
   }
 
+  if (req.method === "POST" && url.pathname === "/api/export/dx-schedule") {
+    const payload = await readJson(req);
+    const workbook = generateDxSelectionWorkbook(payload);
+    res.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${(payload.filename || "DX Schedule.xlsx").replace(/"/g, "")}"`
+    });
+    return res.end(workbook);
+  }
+
   if (req.method === "POST" && url.pathname === "/api/export/quotation") {
     const payload = await readJson(req);
     if (fs.existsSync(QUOTATION_TEMPLATE)) {
@@ -3055,6 +3119,7 @@ async function handleApi(req, res) {
 
 async function extractThermalWithOpenAI(project, options) {
   options = normalizeThermalExtractionOptions(options || {});
+  const isDxThermalExtraction = options.workflowMode === "dx";
   if (!process.env.OPENAI_API_KEY) {
     return {
       status: "missing_api_key",
@@ -3070,6 +3135,9 @@ async function extractThermalWithOpenAI(project, options) {
     .filter(Boolean);
   if (!uploads.length) {
     return { status: "no_files", rows: [], unclearFields: [], message: "Upload the thermal sheet PDF or screenshots first." };
+  }
+  if (isDxThermalExtraction) {
+    return extractDxThermalWithOpenAI(project, options, uploads);
   }
 
   let parsed;
@@ -3088,6 +3156,12 @@ async function extractThermalWithOpenAI(project, options) {
   let customRows = Array.isArray(parsed.customRows)
     ? parsed.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
     : [];
+  let finalCustomColumns = customColumns;
+  if (isDxThermalExtraction) {
+    const normalizedDx = normalizeDxCustomThermalResult(customColumns, customRows);
+    finalCustomColumns = normalizedDx.columns;
+    customRows = normalizedDx.rows;
+  }
   const rows = options.customExtraction ? [] : (parsed.rows || []).map(row => ({
     "Indoor": safeExtract(row.indoor),
     "Room": safeExtract(row.room),
@@ -3140,7 +3214,7 @@ async function extractThermalWithOpenAI(project, options) {
       parsed.unclearFields.push("Numeric verification pass failed");
     }
   }
-  if (options.customExtraction && customColumns.length && customRows.length) {
+  if (options.customExtraction && !isDxThermalExtraction && customColumns.length && customRows.length) {
     try {
       const customVerification = await callOpenAIJson(
         "thermal_custom_column_verification",
@@ -3161,7 +3235,11 @@ async function extractThermalWithOpenAI(project, options) {
   const filteredReviewCells = {};
   const filteredCustomReviewCells = {};
   const finalRows = options.customExtraction ? [] : highConfidenceThermalRows(rows, reviewCells, filteredReviewCells);
-  customRows = options.customExtraction ? highConfidenceCustomThermalRows(customRows, customColumns, customReviewCells, filteredCustomReviewCells) : customRows;
+  customRows = options.customExtraction
+    ? isDxThermalExtraction
+      ? customRows
+      : highConfidenceCustomThermalRows(customRows, customColumns, customReviewCells, filteredCustomReviewCells)
+    : customRows;
   if (!options.customExtraction) {
     Object.keys(reviewCells).forEach(key => delete reviewCells[key]);
     Object.assign(reviewCells, filteredReviewCells);
@@ -3178,7 +3256,7 @@ async function extractThermalWithOpenAI(project, options) {
     selectedCapacitySource: options.capacitySource || parsed.selectedCapacitySource || "",
     familyModel: options.familyModel || parsed.familyModel || "",
     rows: finalRows,
-    customColumns,
+    customColumns: finalCustomColumns,
     customRows,
     unclearFields: parsed.unclearFields || [],
     reviewCells,
@@ -3189,6 +3267,188 @@ async function extractThermalWithOpenAI(project, options) {
       ? `${numericMismatchCount + customMismatchCount} cell(s) need review. Rows with missing required values were excluded.`
       : parsed.message || (customRows.length ? "Requested table columns were extracted into the Export File table." : finalRows.length ? "Thermal values extracted into the Export File table." : "No high-confidence rows were detected.")
   };
+}
+
+async function extractDxThermalWithOpenAI(project, options, uploads) {
+  const customColumns = dxExportColumns();
+  const customRows = [];
+  const customReviewCells = {};
+  const unclearFields = [];
+  const extractionErrors = [];
+
+  if (uploads.length > 1) {
+    try {
+      const parsed = await callOpenAIJson(
+        "dx_thermal_sheet_extraction_combined",
+        dxThermalJsonSchema(),
+        await thermalOpenAIContent(project, uploads, dxThermalPrompt({ ...options, combinedScreenshots: true }))
+      );
+      const sourceColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns.map(safeExtract).filter(Boolean) : [];
+      const sourceRows = Array.isArray(parsed.customRows)
+        ? parsed.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+        : [];
+      const normalized = normalizeDxCustomThermalResult(sourceColumns, sourceRows.length ? sourceRows : dxNamedRowsToCustomRows(parsed.dxRows), parsed.rows);
+      if (normalized.rows.length) {
+        applyDxThermalColumnSanityReview(normalized.rows, customReviewCells, 0);
+        const retryCells = dxThermalRetryCellsForRows(normalized.rows, customColumns, customReviewCells, 0);
+        if (retryCells.length) {
+          try {
+            const retry = await callOpenAIJson(
+              "dx_thermal_sheet_targeted_retry_combined",
+              dxThermalJsonSchema(),
+              await thermalOpenAIContent(project, uploads, dxThermalTargetedRetryPrompt(retryCells))
+            );
+            const retryColumns = Array.isArray(retry.customColumns) ? retry.customColumns.map(safeExtract).filter(Boolean) : [];
+            const retryRows = Array.isArray(retry.customRows)
+              ? retry.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+              : [];
+            const retryNormalized = normalizeDxCustomThermalResult(retryColumns, retryRows.length ? retryRows : dxNamedRowsToCustomRows(retry.dxRows), retry.rows, { keepIncomplete: true });
+            applyDxThermalTargetedRetry(normalized.rows, retryNormalized.rows, retryCells, customReviewCells, 0);
+            for (const field of retry.unclearFields || []) {
+              const note = safeExtract(field);
+              if (note && !unclearFields.includes(note)) unclearFields.push(note);
+            }
+          } catch (retryError) {
+            const note = `Combined screenshots: targeted retry skipped (${retryError?.message || "retry failed"})`;
+            if (!unclearFields.includes(note)) unclearFields.push(note);
+          }
+        }
+        for (const field of parsed.unclearFields || []) {
+          if (!unclearFields.includes(field)) unclearFields.push(field);
+        }
+        return {
+          status: unclearFields.length ? "needs_verification" : "ok",
+          capacitySources: [],
+          selectedCapacitySource: "",
+          familyModel: "",
+          rows: [],
+          customColumns,
+          customRows: normalized.rows,
+          unclearFields,
+          reviewCells: {},
+          customReviewCells,
+          detectedStructure: { rowCount: normalized.rows.length, columns: customColumns, notes: "Combined DX screenshot extraction" },
+          numericVerificationRows: [],
+          message: "DX thermal values were extracted into the Export File table."
+        };
+      }
+      const note = "Combined screenshots: no DX thermal rows detected, trying individual screenshots.";
+      if (!unclearFields.includes(note)) unclearFields.push(note);
+    } catch (error) {
+      extractionErrors.push(`Combined screenshots: ${error?.message || "extraction failed"}`);
+    }
+  }
+
+  for (const upload of uploads) {
+    try {
+      const parsed = await callOpenAIJson(
+        "dx_thermal_sheet_extraction",
+        dxThermalJsonSchema(),
+        await thermalOpenAIContent(project, [upload], dxThermalPrompt(options))
+      );
+      const sourceColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns.map(safeExtract).filter(Boolean) : [];
+      const sourceRows = Array.isArray(parsed.customRows)
+        ? parsed.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+        : [];
+      let normalized = normalizeDxCustomThermalResult(sourceColumns, sourceRows.length ? sourceRows : dxNamedRowsToCustomRows(parsed.dxRows), parsed.rows);
+      if (!normalized.rows.length) {
+        normalized = await extractRegularThermalRowsForDx(project, options, upload);
+      }
+      if (normalized.rows.length) {
+        const rowOffset = customRows.length;
+        applyDxThermalColumnSanityReview(normalized.rows, customReviewCells, rowOffset);
+        const retryCells = dxThermalRetryCellsForRows(normalized.rows, customColumns, customReviewCells, rowOffset);
+        if (retryCells.length) {
+          try {
+            const retry = await callOpenAIJson(
+              "dx_thermal_sheet_targeted_retry",
+              dxThermalJsonSchema(),
+              await thermalOpenAIContent(project, [upload], dxThermalTargetedRetryPrompt(retryCells))
+            );
+            const retryColumns = Array.isArray(retry.customColumns) ? retry.customColumns.map(safeExtract).filter(Boolean) : [];
+            const retryRows = Array.isArray(retry.customRows)
+              ? retry.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+              : [];
+            const retryNormalized = normalizeDxCustomThermalResult(retryColumns, retryRows.length ? retryRows : dxNamedRowsToCustomRows(retry.dxRows), retry.rows, { keepIncomplete: true });
+            applyDxThermalTargetedRetry(normalized.rows, retryNormalized.rows, retryCells, customReviewCells, rowOffset);
+            for (const field of retry.unclearFields || []) {
+              const note = safeExtract(field);
+              if (note && !unclearFields.includes(note)) unclearFields.push(note);
+            }
+          } catch (retryError) {
+            const note = `${upload.originalName || "Uploaded file"}: targeted retry skipped (${retryError?.message || "retry failed"})`;
+            if (!unclearFields.includes(note)) unclearFields.push(note);
+          }
+        }
+      }
+      customRows.push(...normalized.rows);
+      for (const field of parsed.unclearFields || []) {
+        if (!unclearFields.includes(field)) unclearFields.push(field);
+      }
+    } catch (error) {
+      extractionErrors.push(`${upload.originalName || "Uploaded file"}: ${error?.message || "extraction failed"}`);
+    }
+  }
+
+  if (!customRows.length && extractionErrors.length) {
+    return {
+      ...openAIExtractionError(new Error(`DX extraction failed: ${extractionErrors.join("; ")}`)),
+      customColumns,
+      customRows: []
+    };
+  }
+
+  for (const error of extractionErrors) {
+    if (!unclearFields.includes(error)) unclearFields.push(error);
+  }
+
+  return {
+    status: unclearFields.length ? "needs_verification" : "ok",
+    capacitySources: [],
+    selectedCapacitySource: "",
+    familyModel: "",
+    rows: [],
+    customColumns,
+    customRows,
+    unclearFields,
+    reviewCells: {},
+    customReviewCells,
+    detectedStructure: { rowCount: customRows.length, columns: customColumns, notes: "" },
+    numericVerificationRows: [],
+    message: customRows.length
+      ? "DX thermal values were extracted into the Export File table."
+      : "No DX thermal rows were detected. Upload a clearer screenshot and try again."
+  };
+}
+
+async function extractRegularThermalRowsForDx(project, options, upload) {
+  const parsed = await callOpenAIJson(
+    "dx_thermal_sheet_regular_fallback",
+    dxThermalJsonSchema(),
+    await thermalOpenAIContent(project, [upload], dxThermalPrompt({ ...options, forceRegularRows: true }))
+  );
+  const sourceColumns = Array.isArray(parsed.customColumns) ? parsed.customColumns.map(safeExtract).filter(Boolean) : [];
+  const sourceRows = Array.isArray(parsed.customRows)
+    ? parsed.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+    : [];
+  const normalized = normalizeDxCustomThermalResult(sourceColumns, sourceRows.length ? sourceRows : dxNamedRowsToCustomRows(parsed.dxRows), parsed.rows);
+  if (normalized.rows.length) return normalized;
+
+  const customFallback = await callOpenAIJson(
+    "dx_thermal_sheet_column_fallback",
+    thermalJsonSchema(),
+    await thermalOpenAIContent(project, [upload], thermalPrompt({
+      ...options,
+      workflowMode: "dx",
+      customExtraction: true,
+      customInstruction: "Extract DX thermal table columns Unit Ref, Type, Location, Total, Sensible, and Flow Rate. Total, Sensible, and Flow Rate must come only from the dark-blue Calculated AC Load group at the far right. These are the three rightmost columns after Occupant Density. Do not use Occupant Density, Area, No. of People, or Outdoor Air. Skip rows where any of those three Calculated AC Load values are blank."
+    }))
+  );
+  const fallbackColumns = Array.isArray(customFallback.customColumns) ? customFallback.customColumns.map(safeExtract).filter(Boolean) : [];
+  const fallbackRows = Array.isArray(customFallback.customRows)
+    ? customFallback.customRows.map(row => (Array.isArray(row.cells) ? row.cells.map(safeExtract) : []))
+    : [];
+  return normalizeDxCustomThermalResult(fallbackColumns, fallbackRows, customFallback.rows);
 }
 
 function normalizeThermalExtractionOptions(options) {
@@ -3217,7 +3477,8 @@ async function thermalOpenAIContent(project, uploads, prompt) {
     } else if (mime.startsWith("image/")) {
       content.push({
         type: "input_image",
-        image_url: `data:${mime};base64,${base64}`
+        image_url: `data:${mime};base64,${base64}`,
+        detail: "high"
       });
     }
   }
@@ -3239,14 +3500,32 @@ async function callOpenAIJson(name, schema, content) {
     }
   };
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
+  let response;
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok && isTransientOpenAIError({ status: response.status }) && attempt === 0) {
+        lastError = new Error(`OpenAI request failed with status ${response.status}`);
+        lastError.status = response.status;
+        await delay(650);
+        continue;
+      }
+      break;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientOpenAIError(error) || attempt === 1) throw error;
+      await delay(650);
+    }
+  }
+  if (!response) throw lastError || new Error("OpenAI request failed.");
   const json = await response.json().catch(() => ({}));
   if (!response.ok) {
     const message = json.error ? json.error.message : `OpenAI request failed with status ${response.status}`;
@@ -3260,6 +3539,20 @@ async function callOpenAIJson(name, schema, content) {
   } catch {
     throw new Error("OpenAI returned an unreadable extraction response.");
   }
+}
+
+function isTransientOpenAIError(error) {
+  const message = String(error?.message || "").toLowerCase();
+  return message.includes("fetch failed") ||
+    message.includes("network") ||
+    message.includes("timeout") ||
+    message.includes("econnreset") ||
+    message.includes("etimedout") ||
+    [408, 409, 429, 500, 502, 503, 504].includes(Number(error?.status));
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function openAIExtractionError(error) {
@@ -3462,6 +3755,222 @@ function applyThermalCustomVerification(customRows, verifiedRows, customColumns,
   return mismatchCount;
 }
 
+function normalizeDxCustomThermalResult(customColumns, customRows, regularRows = [], options = {}) {
+  const columns = ["Unit Ref", "Type", "Location", "TKw", "SKw", "L/S"];
+  const sourceIndexes = columns.map(column => dxThermalColumnIndex(customColumns, column));
+  let rows = (customRows || []).map(row => {
+    const hasMappedColumns = sourceIndexes.some(index => index >= 0);
+    const next = hasMappedColumns
+      ? sourceIndexes.map((index, targetIndex) => {
+        if (index >= 0) return safeExtract(row[index]);
+        return targetIndex < row.length ? safeExtract(row[targetIndex]) : "";
+      })
+      : columns.map((_, index) => safeExtract(row[index]));
+    return next;
+  }).filter(row => {
+    const hasIdentity = safeExtract(row[0] || row[2]);
+    return options.keepIncomplete ? hasIdentity : hasIdentity && safeExtract(row[3]) && safeExtract(row[4]) && safeExtract(row[5]);
+  });
+  if (!rows.length && Array.isArray(regularRows) && regularRows.length) {
+    rows = regularRows.map(row => ([
+      safeExtract(row.indoor),
+      "",
+      safeExtract(row.room),
+      safeExtract(row.totCoolCap),
+      safeExtract(row.sensCoolCap),
+      safeExtract(row.airFlowRate)
+    ])).filter(row => {
+      const hasIdentity = safeExtract(row[0] || row[2]);
+      return options.keepIncomplete ? hasIdentity : hasIdentity && safeExtract(row[3]) && safeExtract(row[4]) && safeExtract(row[5]);
+    });
+  }
+  return { columns, rows };
+}
+
+function applyDxThermalSoftVerification(firstRows, verifiedRows, customColumns, customReviewCells, rowOffset = 0) {
+  if (!Array.isArray(firstRows) || !Array.isArray(verifiedRows) || !firstRows.length || !verifiedRows.length) return 0;
+  let mismatchCount = 0;
+  const usedIndexes = new Set();
+  firstRows.forEach((firstRow, rowIndex) => {
+    const verifyIndex = findDxVerificationRowIndex(firstRow, verifiedRows, rowIndex, usedIndexes);
+    if (verifyIndex < 0) return;
+    usedIndexes.add(verifyIndex);
+    const secondRow = verifiedRows[verifyIndex] || [];
+    const outputRow = rowOffset + rowIndex;
+    const firstLocation = safeExtract(firstRow[2]);
+    const secondLocation = safeExtract(secondRow[2]);
+    if (firstLocation && secondLocation && !sameThermalLocation(firstLocation, secondLocation)) {
+      customReviewCells[`${outputRow}:${customColumns[2]}`] = {
+        row: outputRow,
+        column: customColumns[2],
+        first: firstLocation,
+        second: secondLocation,
+        reason: "Location verification mismatch"
+      };
+      mismatchCount += 1;
+    }
+    [3, 4, 5].forEach(columnIndex => {
+      const first = safeExtract(firstRow[columnIndex]);
+      const second = safeExtract(secondRow[columnIndex]);
+      if (!isThermalNumber(first) || !second || !isThermalNumber(second)) return;
+      if (!sameThermalNumber(first, second)) {
+        customReviewCells[`${outputRow}:${customColumns[columnIndex]}`] = {
+          row: outputRow,
+          column: customColumns[columnIndex],
+          first,
+          second,
+          reason: "Same-row verification mismatch"
+        };
+        mismatchCount += 1;
+      }
+    });
+  });
+  return mismatchCount;
+}
+
+function applyDxThermalColumnSanityReview(rows, customReviewCells, rowOffset = 0) {
+  const columns = dxExportColumns();
+  (rows || []).forEach((row, rowIndex) => {
+    const total = thermalNumericValue(row?.[3]);
+    const sensible = thermalNumericValue(row?.[4]);
+    const flow = thermalNumericValue(row?.[5]);
+    if (!Number.isFinite(total) || !Number.isFinite(sensible) || !Number.isFinite(flow)) return;
+    const outputRow = rowOffset + rowIndex;
+    const flowLooksLikeKw = flow > 0 && total > 0 && (flow < 40 || flow < total * 8 || flow <= sensible || flow <= total);
+    const totalLooksLikeFlow = total >= 75 && flowLooksLikeKw;
+    if (flowLooksLikeKw) {
+      setDxThermalReview(customReviewCells, outputRow, columns[5], row?.[5], "", "Flow Rate looks like a nearby kW column, not L/s. Verify the value under Calculated AC Load -> Flow Rate L/s.");
+      if (totalLooksLikeFlow) {
+        setDxThermalReview(customReviewCells, outputRow, columns[3], row?.[3], "", "Total kW may be shifted from the Flow Rate column.");
+      }
+      if (sensible >= flow || sensible > total) {
+        setDxThermalReview(customReviewCells, outputRow, columns[4], row?.[4], "", "Sensible kW may be shifted from a nearby calculated-load column.");
+      }
+    }
+    if (sensible > total) {
+      setDxThermalReview(customReviewCells, outputRow, columns[4], row?.[4], row?.[3], "Sensible kW greater than Total kW");
+    }
+  });
+}
+
+function setDxThermalReview(customReviewCells, row, column, first, second, reason) {
+  const key = `${row}:${column}`;
+  if (customReviewCells[key]) return;
+  customReviewCells[key] = {
+    row,
+    column,
+    first: safeExtract(first),
+    second: safeExtract(second),
+    reason
+  };
+}
+
+function findDxVerificationRowIndex(firstRow, verifiedRows, preferredIndex, usedIndexes) {
+  const firstUnit = thermalIdentityText(firstRow?.[0]);
+  const firstLocation = thermalLocationText(firstRow?.[2]);
+  const preferred = verifiedRows[preferredIndex];
+  if (preferred && !usedIndexes.has(preferredIndex) && dxVerificationIdentityMatches(firstUnit, firstLocation, preferred)) {
+    return preferredIndex;
+  }
+  for (let index = 0; index < verifiedRows.length; index += 1) {
+    if (usedIndexes.has(index)) continue;
+    if (dxVerificationIdentityMatches(firstUnit, firstLocation, verifiedRows[index])) return index;
+  }
+  return -1;
+}
+
+function dxVerificationIdentityMatches(firstUnit, firstLocation, secondRow) {
+  const secondUnit = thermalIdentityText(secondRow?.[0]);
+  if (firstUnit) return !!secondUnit && firstUnit === secondUnit;
+  const secondLocation = thermalLocationText(secondRow?.[2]);
+  return !!firstLocation && !!secondLocation && firstLocation === secondLocation;
+}
+
+function dxThermalRetryCellsForRows(rows, columns, customReviewCells, rowOffset = 0) {
+  const retryCells = [];
+  (rows || []).forEach((row, rowIndex) => {
+    columns.forEach((column, columnIndex) => {
+      const outputRow = rowOffset + rowIndex;
+      const hasReview = !!customReviewCells[`${outputRow}:${column}`];
+      const isRequired = columnIndex >= 3 && columnIndex <= 5;
+      if (!hasReview && (!isRequired || safeExtract(row[columnIndex]))) return;
+      retryCells.push({
+        row: rowIndex,
+        outputRow,
+        column,
+        columnIndex,
+        unitRef: safeExtract(row[0]),
+        location: safeExtract(row[2]),
+        first: safeExtract(row[columnIndex])
+      });
+    });
+  });
+  return retryCells;
+}
+
+function applyDxThermalTargetedRetry(firstRows, retryRows, retryCells, customReviewCells, rowOffset = 0) {
+  if (!Array.isArray(firstRows) || !Array.isArray(retryRows) || !Array.isArray(retryCells)) return 0;
+  let cleared = 0;
+  const grouped = retryCells.reduce((map, cell) => {
+    if (!map.has(cell.row)) map.set(cell.row, []);
+    map.get(cell.row).push(cell);
+    return map;
+  }, new Map());
+  grouped.forEach((cells, rowIndex) => {
+    const firstRow = firstRows[rowIndex];
+    const retryRow = retryRows.find(row => dxVerificationIdentityMatches(thermalIdentityText(firstRow?.[0]), thermalLocationText(firstRow?.[2]), row));
+    if (!retryRow) return;
+    cells.forEach(cell => {
+      const key = `${rowOffset + rowIndex}:${cell.column}`;
+      const retryValue = safeExtract(retryRow[cell.columnIndex]);
+      if (!retryValue) return;
+      if (cell.columnIndex >= 3 && cell.columnIndex <= 5 && !isThermalNumber(retryValue)) return;
+      const first = safeExtract(firstRow[cell.columnIndex]);
+      if (first && (cell.columnIndex >= 3 ? sameThermalNumber(first, retryValue) : first === retryValue)) {
+        delete customReviewCells[key];
+        cleared += 1;
+      } else if (!first) {
+        firstRow[cell.columnIndex] = retryValue;
+        delete customReviewCells[key];
+        cleared += 1;
+      } else {
+        setDxThermalReview(customReviewCells, rowOffset + rowIndex, cell.column, first, retryValue, "Targeted retry mismatch");
+      }
+    });
+  });
+  return cleared;
+}
+
+function dxNamedRowsToCustomRows(rows = []) {
+  return (Array.isArray(rows) ? rows : []).map(row => ([
+    safeExtract(row?.unitRef),
+    safeExtract(row?.type),
+    safeExtract(row?.location),
+    safeExtract(row?.tKw),
+    safeExtract(row?.sKw),
+    safeExtract(row?.flowRate)
+  ]));
+}
+
+function dxThermalColumnIndex(columns, target) {
+  const targetKeys = {
+    "Unit Ref": ["UNITREF", "REF", "UNITSREFERENCE", "UNITREFERENCE", "UNITSREFERENCENO", "UNITREFERENCENO", "UNIT", "INDOOR", "NAME"],
+    "Type": ["TYPE", "SYSTEMTYPE", "ACTYPE", "MODE"],
+    "Location": ["LOCATION", "ROOM", "ZONE"],
+    "TKw": ["TKW", "TOTALKW", "TOTAL", "TOTALLOAD", "TOTALCAPACITY", "TOTALCOOLING", "TOTALCOOLINGKW", "TOTCOOLCAP", "CALCULATEDACLOADTOTALKW"],
+    "SKw": ["SKW", "SENSIBLEKW", "SENSIBLE", "SENSIBLELOAD", "SENSIBLECAPACITY", "SENSIBLECOOLING", "SENSIBLECOOLINGKW", "SENSCOOLCAP", "CALCULATEDACLOADSENSIBLEKW"],
+    "L/S": ["LS", "LPS", "FLOWRATE", "FLOWRATELS", "FLOWRATELPS", "AIRFLOWRATE", "AIRFLOW", "CALCULATEDACLOADFLOWRATELS"]
+  }[target] || [];
+  return (columns || []).findIndex(column => targetKeys.includes(dxThermalColumnKey(column)));
+}
+
+function dxThermalColumnKey(value) {
+  return safeExtract(value)
+    .toUpperCase()
+    .replace(/\bCALCULATED\b|\bAC\b|\bLOAD\b|\bCOLUMN\b/g, "")
+    .replace(/[^A-Z0-9]+/g, "");
+}
+
 function thermalCustomIdentityColumnIndexes(columns) {
   const indexes = [];
   (columns || []).forEach((column, index) => {
@@ -3657,12 +4166,28 @@ Return JSON only.`;
 
 function thermalPrompt(options) {
   if (options.customExtraction) {
+    const dxRules = options.workflowMode === "dx"
+      ? `
+DX Workflow mapping:
+- Return customColumns exactly as: Unit Ref, Type, Location, TKw, SKw, L/S.
+- Unit Ref = Units Reference / No. or Ref.
+- Type = AC System and Type child column named Type.
+- Location = Location.
+- TKw = Calculated AC Load Total kW.
+- SKw = Calculated AC Load Sensible kW.
+- L/S = Calculated AC Load Flow Rate L/s.
+- Return every row in customRows with cells in exactly that same order.
+- For this DX table, rows must have visible Unit Ref or Location plus visible TKw, SKw, and L/S.
+`
+      : "";
     return `
 You are an accurate table extraction assistant for scanned PDFs and screenshots.
 
 The user wants a custom table extraction, not the regular VRV thermal export template.
 User request:
 ${options.customInstruction || "Extract the requested table and columns."}
+
+${dxRules}
 
 Rules:
 - Extract only the table(s), columns, and rows requested by the user.
@@ -3732,6 +4257,165 @@ Numeric accuracy rules:
 - Flow Rate must come from the Flow Rate L/s column only.
 
 If screenshots are uploaded with the PDF, use screenshots to clarify unreadable values.
+Return JSON only.`;
+}
+
+function dxThermalPrompt(options = {}) {
+  return `
+You are an accurate DX thermal load table extraction assistant for scanned PDFs and screenshots.
+
+Extract the visible DX thermal schedule rows into this fixed table:
+- Unit Ref
+- Type
+- Location
+- TKw
+- SKw
+- L/S
+
+Column mapping:
+- Unit Ref = Units Reference / No., Units Reference No., Unit Reference, Ref, or first unit/reference column.
+- Type = AC System and Type child column named Type.
+- Location = Location column.
+- TKw = Calculated AC Load -> Total kW. If the child header says only "Total" under Calculated AC Load, use that column.
+- SKw = Calculated AC Load -> Sensible kW. If the child header says only "Sensible" under Calculated AC Load, use that column.
+- L/S = Calculated AC Load -> Flow Rate L/s. If the child header says only "Flow Rate" under Calculated AC Load, use that column.
+
+Header/column rule:
+- First locate the merged/group header named "Calculated AC Load".
+- Read only the three child columns inside that group: Total, Sensible, Flow Rate.
+- These three child columns are always adjacent and in this exact left-to-right order: Total kW, Sensible kW, Flow Rate L/s.
+- Treat those three columns as one locked 3-column block. After finding Total, the next cell to the right is Sensible, and the next cell to the right is Flow Rate.
+- In screenshots like your DX sheet, "Calculated AC Load" is the dark blue header on the far right.
+- The three values to extract are the three rightmost columns after "Occupant Density": Total kW, Sensible kW, Flow Rate L/s.
+- Treat this as a locked column group: once you locate Calculated AC Load, move vertically down within those same three columns for every row.
+- Read as a grid, not as a text stream. Do not transcribe raw left-to-right/top-to-bottom text and reconstruct later.
+- Before extracting data, identify the header row, the column names, and the exact column order. Lock that schema first, then fill row values.
+- Do not pick values by rough position near the row. Use the column grid: Unit Ref row anchor on the left, then the same horizontal row under Calculated AC Load -> Total/Sensible/Flow Rate.
+- Do not read values from Area m2, Number of Typical Floors, No. of People, Outdoor Air L/s, Occupant Density, or DCV.
+- Do not shift left into Occupant Density. Do not shift left into Area, People, or Outdoor Air.
+- Keep each value on the exact same horizontal row as its Unit Ref/Location.
+- If Unit Ref is visible, use it as the row anchor. Return one JSON object per Unit Ref row.
+- Section/floor labels such as GROUND FLOOR, PODIUM, 1ST FLOOR, 2ND FLOOR, WAREHOUSE, SERVICE BLOCK are section labels only, not data rows.
+- If multiple screenshots are uploaded, treat them as ordered continuations of the same table. Use the header/schema from the screenshot where the header is visible, then apply that same locked column order to continued screenshots even when the header is not visible.
+- For continued screenshots without the header, preserve the previous table grid: Unit Ref remains the leftmost row anchor and the Calculated AC Load values remain the adjacent three-column block Total, Sensible, Flow Rate.
+
+Example alignment:
+- For row GF-DS-01 / MAIN ENTRANCE, if the row shows Occupant Density 12.56 and Calculated AC Load 12.30, 9.90, 856.00, return TKw=12.30, SKw=9.90, L/S=856.00. Never return Occupant Density as TKw.
+- For row 2F-DS-01 / APT-01, if the row shows Occupant Density 9.85 and Calculated AC Load 8.10, 6.80, 566.00, return TKw=8.10, SKw=6.80, L/S=566.00.
+
+Rows:
+- Include only actual equipment/data rows.
+- Ignore section headers, floor headers, blank rows, total rows, note rows, and outdoor rows.
+- Include a row only when Unit Ref or Location is visible AND TKw, SKw, and L/S are all visible in that same row.
+- If TKw, SKw, or L/S is blank, skip that row completely.
+- Cross-check that the extracted data-row count matches the visible rows that have Unit Ref plus all three Calculated AC Load values. If the count may be wrong, keep the visible rows you can read and mention the count issue in unclearFields.
+- Preserve row order from top to bottom across all uploaded screenshots.
+- Extract row by row, column by column. Complete one Unit Ref row before moving to the next row.
+
+Accuracy:
+- Transcribe exact visible text and numbers.
+- Read decimal numbers digit by digit.
+- Preserve decimal places and trailing zeros exactly.
+- Do not calculate, infer, auto-correct, merge, or guess.
+- Treat values such as #DIV/0! as non-data, not as numbers.
+- If a visible value is uncertain, keep the best first read and list that cell in unclearFields.
+- DX numeric pattern: TKw and SKw are usually decimal kW values; L/S is usually the larger airflow value.
+- If the value under L/S looks like a small kW number, re-check that you did not shift left from the Flow Rate column.
+- If TKw is a large airflow-like value and L/S is a small kW-like value, mark the row in unclearFields because the calculated-load columns may be shifted.
+- If TKw is greater than 40 while L/S is a much larger airflow number, re-check that TKw was not copied from Area, People, Outdoor Air, Occupant Density, or DCV.
+- If SKw is greater than TKw, keep both values and list that cell in unclearFields. Do not delete the row.
+- Validate row consistency after extraction: TKw should normally be greater than or equal to SKw. If not, re-check only that same Unit Ref row and mark review if still uncertain.
+- Numeric scale check: TKw/SKw are usually kW decimal values, while L/S is usually the larger airflow value. If the adjacent block does not follow Total, Sensible, Flow Rate order, mark review instead of shifting values.
+- If you cannot confidently read a numeric value from the correct Calculated AC Load child column, return "" for that cell and list it in unclearFields. Do not substitute a nearby-column number.
+
+Return BOTH:
+- dxRows with objects containing unitRef, type, location, tKw, sKw, and flowRate.
+- customColumns exactly as ["Unit Ref","Type","Location","TKw","SKw","L/S"].
+- customRows with cells in exactly that same order.
+
+Return JSON only.`;
+}
+
+function dxThermalVerificationPrompt(firstRows = []) {
+  const anchors = (firstRows || [])
+    .map((row, index) => `${index + 1}. Unit Ref: "${safeExtract(row?.[0])}"; Location: "${safeExtract(row?.[2])}"`)
+    .join("\n");
+  return `
+You are doing a second independent verification pass for a DX thermal load screenshot/PDF.
+
+Important:
+- Read directly from the uploaded file again.
+- Do not use row position alone. If Unit Ref is visible, match only that same Unit Ref row.
+- Use Location only when Unit Ref is not visible.
+- If you cannot confidently find the exact same row, return empty values for that row.
+- Do not read nearby rows.
+- Do not calculate, infer, auto-correct, or guess.
+
+For each first-pass row anchor below, return one row in the same order:
+${anchors || "- No rows"}
+
+Column verification:
+- TKw = value under Calculated AC Load -> Total kW/Total.
+- SKw = value under Calculated AC Load -> Sensible kW/Sensible.
+- L/S = value under Calculated AC Load -> Flow Rate L/s/Flow Rate.
+- These three columns are adjacent and ordered exactly: TKw first, SKw second, L/S third.
+- These are the three rightmost columns after Occupant Density in the DX screenshot.
+- First locate the Calculated AC Load group header, then verify only inside its three child columns.
+- If verifying a continued screenshot where the header is not visible, use the locked schema from the other uploaded screenshot where the header is visible.
+- For each anchor, read the same horizontal row as that Unit Ref. If you cannot find that exact Unit Ref row, return blanks for that row.
+- Verify row by row. Do not verify by reading the whole screenshot as a continuous text stream.
+- Never use Occupant Density as TKw.
+- Do not use Area, Outdoor Air, Occupant Density, DCV, Number of Floors, or People columns.
+- If a value appears to come from a nearby non-load column, return "" for that value and list it in unclearFields.
+
+Return BOTH:
+- dxRows with unitRef, type, location, tKw, sKw, flowRate.
+- customColumns exactly as ["Unit Ref","Type","Location","TKw","SKw","L/S"].
+- customRows with cells in exactly that order.
+
+If a cell is unclear, return "" for that cell and list it in unclearFields.
+Return JSON only.`;
+}
+
+function dxThermalTargetedRetryPrompt(retryCells = []) {
+  const lines = (retryCells || []).map(cell => {
+    const columnHint = cell.column === "TKw"
+      ? "Calculated AC Load -> Total kW"
+      : cell.column === "SKw"
+        ? "Calculated AC Load -> Sensible kW"
+        : cell.column === "L/S"
+          ? "Calculated AC Load -> Flow Rate L/s"
+          : cell.column;
+    return `- Row anchor Unit Ref "${safeExtract(cell.unitRef)}", Location "${safeExtract(cell.location)}", retry "${cell.column}" (${columnHint}). First read: "${safeExtract(cell.first)}"`;
+  }).join("\n");
+  return `
+You are doing a targeted retry for specific DX thermal load table cells.
+
+Inspect only these cells:
+${lines || "- No cells"}
+
+Rules:
+- Use Unit Ref as the row anchor. Find the exact same Unit Ref row first.
+- If the exact Unit Ref row cannot be found, return empty values for that row.
+- Do not use row position alone.
+- Do not read nearby rows.
+- For TKw/SKw/L/S, first locate the dark-blue "Calculated AC Load" group header, then read only inside its child columns:
+  - TKw = Total kW/Total
+  - SKw = Sensible kW/Sensible
+  - L/S = Flow Rate L/s/Flow Rate
+- The target numeric cells are adjacent in the same row and in this exact order: TKw, SKw, L/S.
+- If this screenshot is a continuation without the header, use the locked column grid from the uploaded screenshot that shows the header.
+- Never use Area, Number of Typical Floors, No. of People, Outdoor Air, Occupant Density, or DCV as TKw/SKw/L/S.
+- Do not calculate, infer, auto-correct, or guess.
+- Preserve exact visible decimals and trailing zeros.
+- If the target cell is blank or unreadable, return "" for that cell and list it in unclearFields.
+
+Return one row per requested Unit Ref anchor in the same order.
+Return BOTH:
+- dxRows with unitRef, type, location, tKw, sKw, flowRate.
+- customColumns exactly as ["Unit Ref","Type","Location","TKw","SKw","L/S"].
+- customRows with cells in exactly that order.
+
 Return JSON only.`;
 }
 
@@ -3880,6 +4564,46 @@ function thermalJsonSchema() {
       message: { type: "string" }
     },
     required: ["capacitySources", "selectedCapacitySource", "familyModel", "rows", "customColumns", "customRows", "unclearFields", "message"]
+  };
+}
+
+function dxThermalJsonSchema() {
+  return {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      customColumns: { type: "array", items: { type: "string" } },
+      customRows: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            cells: { type: "array", items: { type: "string" } }
+          },
+          required: ["cells"]
+        }
+      },
+      dxRows: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            unitRef: { type: "string" },
+            type: { type: "string" },
+            location: { type: "string" },
+            tKw: { type: "string" },
+            sKw: { type: "string" },
+            flowRate: { type: "string" }
+          },
+          required: ["unitRef", "type", "location", "tKw", "sKw", "flowRate"]
+        }
+      },
+      unclearFields: { type: "array", items: { type: "string" } },
+      message: { type: "string" }
+    },
+    required: ["customColumns", "customRows", "dxRows", "unclearFields", "message"]
   };
 }
 
@@ -7055,6 +7779,75 @@ function generateVrvScheduleWorkbook(payload = {}) {
   return zipEntries(entries);
 }
 
+function generateDxSelectionWorkbook(payload = {}) {
+  if (!fs.existsSync(DX_SELECTION_TEMPLATE)) {
+    throw new Error("DX Selection Sheet template file is missing.");
+  }
+  const entries = unzipEntriesBuffer(fs.readFileSync(DX_SELECTION_TEMPLATE));
+  removeWorkbookCalcChain(entries);
+  forceWorkbookRecalculation(entries);
+  const sheetPath = findWorkbookSheetPath(entries, "Selection Sheet") || "xl/worksheets/sheet1.xml";
+  if (!entries[sheetPath]) throw new Error("Selection Sheet worksheet was not found in the DX template.");
+  entries[sheetPath].data = Buffer.from(fillDxSelectionSheetXml(entries[sheetPath].data.toString("utf8"), payload), "utf8");
+  return zipEntries(entries);
+}
+
+function fillDxSelectionSheetXml(xml, payload = {}) {
+  const originalRows = xlsxRowsByNumber(xml);
+  const templateRowNumber = 17;
+  const lastDataRow = 165;
+  const templateRow = originalRows[templateRowNumber];
+  if (!templateRow) throw new Error("DX Selection Sheet data row template was not found.");
+  const inputRows = Array.isArray(payload.rows) ? payload.rows : [];
+  let next = xml;
+
+  [
+    ["C4", payload.projectName || payload.project || ""],
+    ["C5", payload.customerName || payload.customer || ""]
+  ].forEach(([ref, value]) => {
+    const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
+    if (!rowNumber) return;
+    const rowXml = originalRows[rowNumber] || `<row r="${rowNumber}"></row>`;
+    next = replaceXlsxRow(next, rowNumber, xlsxUpsertCell(rowXml, ref, value, xlsxCellStyle(rowXml, ref)));
+  });
+
+  for (let rowNumber = templateRowNumber; rowNumber <= lastDataRow; rowNumber += 1) {
+    const sourceRow = inputRows[rowNumber - templateRowNumber] || {};
+    const currentRow = originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
+    const styles = xlsxRowStyleMap(currentRow);
+    let updatedRow = currentRow;
+    const values = {
+      B: firstFilled(sourceRow, ["Ref", "Unit Ref"]),
+      C: firstFilled(sourceRow, ["Type"]),
+      D: firstFilled(sourceRow, ["Location"]),
+      E: firstFilled(sourceRow, ["TKw"]),
+      F: firstFilled(sourceRow, ["SKw"]),
+      G: firstFilled(sourceRow, ["L/S"]),
+      AN: firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]),
+      AO: firstFilled(sourceRow, ["Qty"])
+    };
+    for (const [column, value] of Object.entries(values)) {
+      updatedRow = xlsxUpsertCell(updatedRow, `${column}${rowNumber}`, value, styles[column]);
+    }
+    next = replaceXlsxRow(next, rowNumber, updatedRow);
+  }
+
+  return next;
+}
+
+function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
+  const source = String(templateRowNumber);
+  return templateRow
+    .replace(new RegExp(`\\br="${escapeRegExp(source)}"`, "g"), `r="${rowNumber}"`)
+    .replace(new RegExp(`(\\$?[A-Z]{1,3}\\$?)${escapeRegExp(source)}\\b`, "g"), `$1${rowNumber}`);
+}
+
+function replaceXlsxRow(xml, rowNumber, rowXml) {
+  const rowPattern = new RegExp(`<row\\b[^>]*\\br="${rowNumber}"[^>]*>[\\s\\S]*?<\\/row>`, "i");
+  if (rowPattern.test(xml)) return xml.replace(rowPattern, rowXml);
+  return xml.replace("</sheetData>", `${rowXml}</sheetData>`);
+}
+
 function removeWorkbookCalcChain(entries) {
   delete entries["xl/calcChain.xml"];
   const workbookRels = entries["xl/_rels/workbook.xml.rels"];
@@ -7071,6 +7864,24 @@ function removeWorkbookCalcChain(entries) {
       "utf8"
     );
   }
+}
+
+function forceWorkbookRecalculation(entries) {
+  const workbook = entries["xl/workbook.xml"];
+  if (!workbook) return;
+  let xml = workbook.data.toString("utf8");
+  if (/<calcPr\b/i.test(xml)) {
+    xml = xml.replace(/<calcPr\b([^>]*)\/?>/i, (match, attrs) => {
+      const cleanAttrs = attrs
+        .replace(/\sfullCalcOnLoad="[^"]*"/gi, "")
+        .replace(/\sforceFullCalc="[^"]*"/gi, "")
+        .replace(/\scalcMode="[^"]*"/gi, "");
+      return `<calcPr${cleanAttrs} calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>`;
+    });
+  } else {
+    xml = xml.replace("</workbook>", '<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>');
+  }
+  workbook.data = Buffer.from(xml, "utf8");
 }
 
 function findWorkbookSheetPath(entries, sheetName) {

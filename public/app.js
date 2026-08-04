@@ -117,6 +117,57 @@ const defaultThermalColumns = [
   "Indoor", "Room", "Mode", "Family or Model", "Cooling DBT", "Cooling WBT", "Heating T",
   "Tot Cool Cap", "Sens Cool Cap", "Heat Cap", "Air Flow Rate"
 ];
+const dxExportColumns = ["Unit Ref", "Type", "Location", "TKw", "SKw", "L/S"];
+const dxScheduleColumns = [
+  "Ref", "Type", "Location", "TKw", "SKw", "L/S",
+  "Model ( Indoor / Outdoor )", "Qty", "NOMINAL TR", "Proposed Type", "Refrigerant",
+  "Indoor Temperature", "Outdoor Temperature", "TC", "SC", "AFR L/S",
+  "SPEED", "Actual Power Input", "ESMA Power Input", "COP (W/W)", "ESP", "Power Supply",
+  "Indoor H (mm)", "Indoor W (mm)", "Indoor D (mm)",
+  "Outdoor H (mm)", "Outdoor W (mm)", "Outdoor D (mm)",
+  "Indoor Weight (kg)", "Outdoor Weight (kg)"
+];
+// Mirrors the Daikin-PROPOSED lookup table in the DX Selection Sheet template.
+// Keeping it in the browser lets the blue Proposed block fill immediately after extraction.
+const dxProposalCatalog = [
+  ["DUCTED", "FDMRN20AVKU - RR20AVKU", 1.5, "Non-Inverter", "R-410A", "24/16", 46, 4.24, 4.11, 255, "MEDIUM", 1.77, 1.8, 3.49, 40, "220-240/1/50", 261, 1200, 448, 753, 855, 328, 26, 47],
+  ["DUCTED", "FDMRN25AVKU - RR25AVKU", 2, "Non-Inverter", "R-410A", "24/16", 46, 5.48, 5.05, 303, "MEDIUM", 2.29, 2.35, 3.44, 40, "220-240/1/50", 378, 1115, 541, 753, 855, 328, 44, 51],
+  ["DUCTED", "FDMRN30AVKU - RR30AVKU", 2.5, "Non-Inverter", "R-410A", "24/16", 46, 6.93, 6.3, 374, "MEDIUM", 2.87, 3.05, 3.49, 40, "220-240/1/50", 378, 1115, 541, 852, 1030, 400, 44, 75],
+  ["DUCTED", "FDMRN36AVKU - RR36AVKU", 3, "Non-Inverter", "R-410A", "24/16", 46, 8.42, 8.18, 650, "MEDIUM", 3.39, 3.55, 3.56, 50, "220-240/1/50", 378, 1369, 541, 852, 1030, 400, 50, 92],
+  ["DUCTED", "FDMRN50AVKU - RR50AYKU", 4, "Non-Inverter", "R-410A", "24/16", 46, 11.46, 9.96, 686, "MEDIUM", 4.7, 4.95, 3.41, 50, "380-415/3/50", 378, 1569, 541, 852, 1030, 400, 56, 87],
+  ["DUCTED", "FDMRN60AVKU - RR60AYKU", 5, "Non-Inverter", "R-410A", "24/16", 46, 13.5, 12.28, 826, "MEDIUM", 5.34, 5.62, 3.52, 50, "380-415/3/50", 430, 1432, 784, 1067, 930, 880, 71, 120],
+  ["DUCTED", "FDMF18AVMK9 - RZF18AVMK9", 1.5, "Inverter", "R-32", "24/17", 46, 4.27, 3.93, 325, "MEDIUM", 1.55, 1.6, 3.85, 30, "220-240/1/50", 300, 1000, 700, 595, 845, 300, 35, 40],
+  ["DUCTED", "FDMF24AVMK9 - RZF24AVMK9", 2, "Inverter", "R-32", "24/17", 46, 6.4, 4.8, 450, "MEDIUM", 2.42, 2.5, 4.16, 30, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 60],
+  ["DUCTED", "FDMF30AVMK9 - RZF30AVMK9", 2.5, "Inverter", "R-32", "24/17", 46, 7.69, 6.82, 567, "MEDIUM", 3.1, 3.2, 3.6331673014942867, 30, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 61],
+  ["DUCTED", "FDMF36AVMK - RZF36AVMK", 3, "Inverter", "R-32", "24/17", 46, 7.72, 6.6, 567, "MEDIUM", 3.1, 3.2, 3.55, 50, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 61],
+  ["DUCTED", "FDMF48AVMK - RZF48AYMK", 4, "Inverter", "R-32", "24/17", 46, 10.74, 10.44, 683, "MEDIUM", 4.64, 4.8, 3.51, 50, "380-415/3/50", 400, 1500, 800, 870, 1100, 520, 59, 95],
+  ["DUCTED", "FDMF54AVMK - RZF54AYMK", 4.5, "Inverter", "R-32", "24/17", 46, 12.08, 11.75, 683, "MEDIUM", 5.02, 5.4, 3.51, 50, "380-415/3/50", 400, 1500, 800, 870, 1100, 520, 59, 95],
+  ["WALL MOUNTED", "FTKM18PVM - RKM18PVM", 1.5, "Inverter", "R-32", "25/18", 46, 4.61, 4.16, 342, "HIGH", 1.57, 2.12, 3.91, "-", "220-240/1/50", 340, 1050, 259, 695, 930, 350, 15, 46],
+  ["WALL MOUNTED", "FTKM24PVM - RKM24PVM", 2, "Inverter", "R-32", "25/18", 46, 6.15, 5, 367, "HIGH", 2.19, 2.82, 3.72, "-", "220-240/1/50", 340, 1050, 259, 695, 930, 350, 15, 49],
+  ["WALL MOUNTED", "FTKM28PVM - RKM28PVM", 2.4, "Inverter", "R-32", "25/18", 46, 7.18, 5.71, 420, "HIGH", 2.68, 3.2, 3.55, "-", "220-240/1/50", 340, 1200, 259, 695, 930, 350, 18, 49],
+  ["WALL MOUNTED", "FTKF12TVMVZK - RKFG12TVMVZK", 1, "Inverter", "R-32", "25/18", 46, 3.44, 2.95, 238, "HIGH", 1.04, 1.34, 4.35, "-", "220-240/1/50", 298, 885, 229, 595, 845, 300, 11, 34],
+  ["WALL MOUNTED", "FTKF18TVMUZK - RKFG18TVMUZK", 1.5, "Inverter", "R-32", "25/18", 46, 4.31, 3.83, 246, "HIGH", 1.77, 1.79, 3.59, "-", "220-240/1/50", 298, 885, 229, 595, 845, 300, 11, 37],
+  ["WALL MOUNTED", "FTKF24TVMTZK - RKFG24TVMTZK", 2, "Inverter", "R-32", "25/18", 46, 6.03, 4.31, 283, "HIGH", 2.28, 2.161, 3.51, "-", "220-240/1/50", 310, 1100, 239, 695, 930, 350, 12, 47],
+  ["PACKAGED UNIT", "UATQ80CGXY1U", 6.4, "Non-Inverter", "R-410A", "24/16", 46, 17.8, 16.86, 1156, "MEDIUM", 7.48, 7.55, 3.45, 105, "380-415/3/50", "-", "-", "-", 1350, 1280, 1520, "-", 387],
+  ["PACKAGED UNIT", "UATQ160CGXY1U", 13.3, "Non-Inverter", "R-410A", "24/16", 46, 37.2, 37.2, 3304, "MEDIUM", 15.6, 15.8, 3.42, 105, "380-415/3/50", "-", "-", "-", 1690, 1988, 2079, "-", 810],
+  ["PACKAGED UNIT", "UATQ180CGXY1U", 15, "Non-Inverter", "R-410A", "24/16", 46, 41.58, 41.58, 3304, "MEDIUM", 18.32, 18.5, 3.29, 150, "380-415/3/50", "-", "-", "-", 1690, 1965, 1905, "-", 840],
+  ["PACKAGED UNIT", "UATQ210CGXY1U", 17.5, "Non-Inverter", "R-410A", "24/16", 46, 49.19, 49.19, 3587, "MEDIUM", 21.67, 21.88, 3.31, 200, "380-415/3/50", "-", "-", "-", 1650, 2410, 2030, "-", 930],
+  ["PACKAGED UNIT", "UATQ240CGXY1U", 20, "Non-Inverter", "R-410A", "24/16", 46, 54.98, 52.4, 3776, "MEDIUM", 24.06, 24.3, 3.32, 200, "380-415/3/50", "-", "-", "-", 1650, 2410, 2030, "-", 940],
+  ["PACKAGED UNIT", "UATQ300CGXY1U", 25, "Non-Inverter", "R-410A", "24/16", 46, 66.04, 63.84, 4248, "MEDIUM", 29.95, 30.25, 3.27, 250, "380-415/3/50", "-", "-", "-", 1950, 2410, 2030, "-", 1090]
+].map(([family, model, nominalTR, proposedType, refrigerant, indoorTemperature, outdoorTemperature, TC, SC, airflow, speed, actualPowerInput, esmaPowerInput, cop, esp, powerSupply, indoorH, indoorW, indoorD, outdoorH, outdoorW, outdoorD, indoorWeight, outdoorWeight]) => ({
+  family, model, nominalTR, proposedType, refrigerant, indoorTemperature, outdoorTemperature, TC, SC, airflow, speed, actualPowerInput, esmaPowerInput, cop, esp, powerSupply, indoorH, indoorW, indoorD, outdoorH, outdoorW, outdoorD, indoorWeight, outdoorWeight
+}));
+const dxRemovedNodeIds = new Set(["vrv-upload", "costing-table", "boq-table", "quotation"]);
+const dxWorkflowPositions = {
+  details: [0, 0],
+  "thermal-upload": [760, 20],
+  "thermal-table": [620, 300],
+  "vrv-schedule": [430, 555]
+};
+const dxWorkflowDefaultSizes = {
+  "thermal-table": [640, 205],
+  "vrv-schedule": [1180, 230]
+};
 const paymentTermOptions = ["CDC", "15 Days PDC", "30 Days PDC", "60 Days PDC", "90 Days PDC"];
 const defaultPurchaseNotes = `1. Invoice should be attached with delivery note signed by site supervisor.
 2. Attach LPO copy along with invoice.
@@ -298,7 +349,7 @@ function bindShell() {
   $("#newProjectBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
     if (toggleActiveSidebarGroup("workflow")) return;
-    createProject();
+    createProject({ workflowMode: "vrv" });
   });
   $("#inventoryBtn").addEventListener("click", () => {
     if (!canAccessModule("inventory")) return showLockedModuleToast();
@@ -309,6 +360,16 @@ function bindShell() {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
     collapsedSidebarGroups.delete("workflow");
     showDocuments();
+  });
+  $("#workflowCanvasBtn").addEventListener("click", () => {
+    if (!canAccessModule("workflow")) return showLockedModuleToast();
+    collapsedSidebarGroups.delete("workflow");
+    createProject({ workflowMode: "vrv" });
+  });
+  $("#dxWorkflowBtn").addEventListener("click", () => {
+    if (!canAccessModule("workflow")) return showLockedModuleToast();
+    collapsedSidebarGroups.delete("workflow");
+    createProject({ workflowMode: "dx" });
   });
   $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("form"));
   $("#areaCalculationBtn").addEventListener("click", () => showAreaCalculation("detail"));
@@ -323,7 +384,7 @@ function bindShell() {
   });
   $("#logoutBtn").addEventListener("click", logout);
   $("#loginForm").addEventListener("submit", login);
-  $("#saveBtn").addEventListener("click", () => createProject({ fresh: true }));
+  $("#saveBtn").addEventListener("click", () => createProject({ fresh: true, workflowMode: workflowMode() }));
   $("#addNodeBtn").addEventListener("click", addFileNode);
   $("#zoomOutBtn").addEventListener("click", () => setZoom(canvasZoom - 0.1));
   $("#zoomInBtn").addEventListener("click", () => setZoom(canvasZoom + 0.1));
@@ -499,7 +560,7 @@ function applySidebarSubnavVisibility() {
 
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
-  const lockIds = ["salesDeskBtn", "newProjectBtn", "documentsBtn", "inventoryBtn", "settingsBtn"];
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "settingsBtn"];
   lockIds.forEach(id => {
     const button = document.getElementById(id);
     if (!button) return;
@@ -559,8 +620,10 @@ async function api(path, options = {}) {
 
 async function createProject(options = {}) {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
-  const fresh = !!options.fresh;
-  showCanvas();
+  const requestedMode = options.workflowMode === "dx" ? "dx" : options.workflowMode === "vrv" ? "vrv" : "";
+  let fresh = !!options.fresh;
+  if (requestedMode && state && workflowMode(state) !== requestedMode) fresh = true;
+  showCanvas(requestedMode);
   if (state && !fresh) {
     scheduleWorkflowRender({ fit: activeView === "canvas" && !canvas.innerHTML.trim() });
     return;
@@ -585,9 +648,12 @@ async function createProject(options = {}) {
   }
   projectPersisted = false;
   projectTouched = false;
+  if (requestedMode === "dx") configureDxWorkflow(state, { resetTables: true });
+  else state.workflowMode = "vrv";
   if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
   applyCompactLayout(true);
   history.replaceState(null, "", location.pathname);
+  setWorkflowSubnavActive(workflowMode(state));
   scheduleWorkflowRender({ fit: true });
 }
 
@@ -596,9 +662,64 @@ async function loadProject(id) {
   state = await api(`/api/projects/${id}`);
   projectPersisted = true;
   projectTouched = false;
+  if (workflowMode(state) === "dx") configureDxWorkflow(state, { resetTables: false });
   applyCompactLayout(false);
   showCanvas();
   scheduleWorkflowRender({ fit: true });
+}
+
+function workflowMode(project = state) {
+  return project?.workflowMode === "dx" ? "dx" : "vrv";
+}
+
+function isDxWorkflow(project = state) {
+  return workflowMode(project) === "dx";
+}
+
+function workflowTitleFallback(project = state) {
+  return isDxWorkflow(project) ? "DX Workflow" : "VRV Workflow";
+}
+
+function workflowThermalColumns(project = state) {
+  return isDxWorkflow(project) ? [...dxExportColumns] : [...defaultThermalColumns];
+}
+
+function workflowScheduleColumns(project = state) {
+  return isDxWorkflow(project) ? [...dxScheduleColumns] : [...(project?.tables?.vrvSchedule?.columns?.length ? project.tables.vrvSchedule.columns : [])];
+}
+
+function workflowScheduleTitle(project = state) {
+  return isDxWorkflow(project) ? "DX Schedule" : "VRV Schedule";
+}
+
+function workflowTableDownloadFilename(key) {
+  if (key === "vrvSchedule" && isDxWorkflow()) return "DX Schedule.xlsx";
+  return tableDownloadFilenames[key] || `${key}.xlsx`;
+}
+
+function configureDxWorkflow(project = state, options = {}) {
+  if (!project) return;
+  project.workflowMode = "dx";
+  project.layoutVersion = "dx-workflow-v1";
+  project.nodes = (project.nodes || [])
+    .filter(node => !dxRemovedNodeIds.has(node.id))
+    .map(node => node.id === "vrv-schedule" ? { ...node, title: "DX Schedule", type: "vrvSchedule" } : node);
+  if (!project.nodes.some(node => node.id === "vrv-schedule")) {
+    project.nodes.push({ id: "vrv-schedule", type: "vrvSchedule", title: "DX Schedule", x: dxWorkflowPositions["vrv-schedule"][0], y: dxWorkflowPositions["vrv-schedule"][1], locked: false, width: 1180, height: 230, data: {}, autoFollowExport: true });
+  }
+  project.tables = project.tables || {};
+  project.tables.thermal = project.tables.thermal || { columns: workflowThermalColumns(project), rows: [] };
+  if (options.resetTables || !project.tables.thermal.rows?.length) {
+    project.tables.thermal.columns = workflowThermalColumns(project);
+    if (options.resetTables) project.tables.thermal.rows = [];
+  }
+  project.tables.vrvSchedule = project.tables.vrvSchedule || { columns: [...dxScheduleColumns], rows: [] };
+  project.tables.vrvSchedule.columns = [...dxScheduleColumns];
+  if (options.resetTables) project.tables.vrvSchedule.rows = [];
+  const scheduleNode = project.nodes.find(node => node.id === "vrv-schedule");
+  if (scheduleNode && scheduleNode.autoFollowExport === undefined && !scheduleNode.userMoved) {
+    scheduleNode.autoFollowExport = true;
+  }
 }
 
 async function saveProject(options = {}) {
@@ -656,6 +777,8 @@ async function showDocuments() {
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#documentsBtn").classList.add("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#newProjectBtn").classList.add("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -671,7 +794,7 @@ async function showDocuments() {
   await loadProjectList();
 }
 
-function showCanvas() {
+function showCanvas(mode = "") {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   activeView = "canvas";
   setCanvasActionsVisible(true);
@@ -684,6 +807,7 @@ function showCanvas() {
   $("#settingsView").classList.add("hidden");
   $("#canvasView").classList.remove("hidden");
   $("#newProjectBtn").classList.add("active");
+  setWorkflowSubnavActive(mode || workflowMode(state));
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -694,6 +818,12 @@ function showCanvas() {
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
   applySidebarSubnavVisibility();
+}
+
+function setWorkflowSubnavActive(mode = "") {
+  const current = mode === "dx" ? "dx" : "vrv";
+  $("#workflowCanvasBtn")?.classList.toggle("active", current === "vrv");
+  $("#dxWorkflowBtn")?.classList.toggle("active", current === "dx");
 }
 
 async function showInventory(screen = "dashboard") {
@@ -710,6 +840,8 @@ async function showInventory(screen = "dashboard") {
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.add("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -754,6 +886,8 @@ async function showPurchaseOrders(screen = "form") {
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.add("active");
@@ -787,6 +921,8 @@ async function showAreaCalculation(mode = "detail") {
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -848,6 +984,8 @@ async function showSalesDesk(screen = "dashboard") {
   $("#salesDeskView").classList.remove("hidden");
   $("#settingsView").classList.add("hidden");
   $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -897,6 +1035,8 @@ async function showSettings() {
   $("#salesDeskView").classList.add("hidden");
   $("#settingsView").classList.remove("hidden");
   $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
   $("#documentsBtn").classList.remove("active");
   $("#inventoryBtn").classList.remove("active");
   $("#purchaseOrdersBtn").classList.remove("active");
@@ -1240,7 +1380,7 @@ function salesDeskTopbarConfig() {
         ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button><button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price List<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label><button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
         : costingMode === "all"
           ? `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button>`
-          : `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><button class="sales-primary" data-costing-action="create-quotation">Create Quotation</button>`
+          : costingTopbarActions()
     },
     projects: {
       title: "Projects",
@@ -1262,6 +1402,12 @@ function salesDeskTopbarConfig() {
     }
   };
   return configs[salesDeskScreen] || null;
+}
+
+function costingTopbarActions() {
+  const linkedQuote = costingLinkedQuotation();
+  const quotationNo = linkedQuote?.no || linkedQuote?.quotationNo || "";
+  return `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation">Create Quotation</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
 }
 
 function inventoryTopbarConfig() {
@@ -3393,13 +3539,16 @@ function salesCreateQuotationHtml() {
         </div>
         <label class="sales-notes">Terms &amp; Conditions<textarea data-sales-quote-field="terms">${escapeHtml(salesQuotationDraft.terms || "")}</textarea></label>
       </section>
-      <aside class="sales-card sales-summary-card">
-        <h3>Financial Summary</h3>
-        <div><span>Subtotal</span><input data-sales-quote-field="manualSubtotal" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(manualSubtotalText || money(itemSubtotal))}"></div>
-        <div><span>Discount</span><input data-sales-quote-field="discount" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${Number(salesQuotationDraft.discount || 0)}"></div>
-        <div><span>VAT (5%)</span><strong data-sales-summary="vat">${salesMoney(vat)}</strong></div>
-        <div class="sales-total"><span>Grand Total</span><strong data-sales-summary="total">${salesMoney(total)}</strong></div>
-      </aside>
+      <div class="sales-quote-side">
+        <aside class="sales-card sales-summary-card">
+          <h3>Financial Summary</h3>
+          <div><span>Subtotal</span><input data-sales-quote-field="manualSubtotal" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${escapeHtml(manualSubtotalText || money(itemSubtotal))}"></div>
+          <div><span>Discount</span><input data-sales-quote-field="discount" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${Number(salesQuotationDraft.discount || 0)}"></div>
+          <div><span>VAT (5%)</span><strong data-sales-summary="vat">${salesMoney(vat)}</strong></div>
+          <div class="sales-total"><span>Grand Total</span><strong data-sales-summary="total">${salesMoney(total)}</strong></div>
+        </aside>
+        ${salesQuotationDraft.sourceCostingSheetId ? `<button class="sales-costing-sheet-link" data-costing-action="open-linked-sheet" data-costing-sheet-id="${escapeHtml(salesQuotationDraft.sourceCostingSheetId)}">Costing Sheet</button>` : ""}
+      </div>
     </div>
   `;
 }
@@ -5010,6 +5159,7 @@ function quoteDraftFromSource(source = {}) {
     revisionNo: Number(source.revisionNo || 0) || 0,
     revision: source.revision || "Fresh Quote",
     sourceLeadId: source.sourceLeadId || "",
+    sourceCostingSheetId: source.sourceCostingSheetId || "",
     status: "Draft"
   };
 }
@@ -7057,10 +7207,11 @@ function render() {
     recalcCosting();
     recalcBoq();
   }
-  setWorkflowTitle(state.details.project || "Workflow");
+  setWorkflowTitle(state.details.project || workflowTitleFallback());
   $("#projectMeta").textContent = `${state.details.customer || "Internal project"} · ${state.quotation.quotationNo}`;
   canvas.innerHTML = "";
   state.nodes.forEach(renderNode);
+  sizeWorkflowCanvasToNodes();
   applyCanvasZoom();
   restoreWorkflowTableScrollState();
 }
@@ -7090,13 +7241,13 @@ function persistWorkflowNodeSize(el, node, options = {}) {
   const rect = el.getBoundingClientRect();
   const minSize = workflowNodeDefaultSize(node.id) || [0, 0];
   const width = Math.max(minSize[0], Math.round(rect.width / canvasZoom));
-  const fittedHeight = workflowTableFittedHeight(el);
   const measuredHeight = Math.round(rect.height / canvasZoom);
-  const height = Math.max(minSize[1], fittedHeight || measuredHeight);
+  const height = Math.max(minSize[1], measuredHeight);
   const changed = Math.abs((node.width || 0) - width) > 2 || Math.abs((node.height || 0) - height) > 2;
   if (!changed) return false;
   node.width = width;
   node.height = height;
+  if (options.userSized) node.userSized = true;
   if (options.save) {
     projectTouched = true;
     debounceSaveProject();
@@ -7116,8 +7267,9 @@ function restoreWorkflowTableScrollState() {
 }
 
 function applyCompactLayout(force) {
-  if (!force && state.layoutVersion === "screenshot-v5") return;
-  const positions = {
+  const version = isDxWorkflow() ? "dx-workflow-v1" : "screenshot-v5";
+  if (!force && state.layoutVersion === version) return;
+  const positions = isDxWorkflow() ? { ...dxWorkflowPositions } : {
     details: [0, 0],
     "thermal-upload": [180, 255],
     "vrv-upload": [640, 250],
@@ -7134,11 +7286,11 @@ function applyCompactLayout(force) {
       applyDefaultNodeSize(node, true);
     }
   });
-  state.layoutVersion = "screenshot-v5";
+  state.layoutVersion = version;
 }
 
 function autoLayoutWorkflow() {
-  const positions = {
+  const positions = isDxWorkflow() ? { ...dxWorkflowPositions } : {
     details: [0, 0],
     "thermal-upload": [180, 255],
     "vrv-upload": [640, 250],
@@ -7157,26 +7309,63 @@ function autoLayoutWorkflow() {
   const boqHeight = tableAutoHeight("boq", boqRows);
   const vrvHeight = tableAutoHeight("vrvSchedule", vrvRows);
 
-  positions["boq-table"][1] = positions["costing-table"][1] + costingHeight + 32;
-  positions.quotation[1] = Math.max(340, positions["boq-table"][1] - 100);
-  positions["vrv-schedule"][1] = Math.max(
-    770,
-    positions["thermal-table"][1] + thermalHeight + 65,
-    positions["boq-table"][1] + boqHeight + 65
-  );
+  if (isDxWorkflow()) {
+    const target = dxScheduleTargetPosition({ thermalHeight });
+    positions["vrv-schedule"] = [target.x, target.y];
+  } else {
+    positions["boq-table"][1] = positions["costing-table"][1] + costingHeight + 32;
+    positions.quotation[1] = Math.max(340, positions["boq-table"][1] - 100);
+    positions["vrv-schedule"][1] = Math.max(
+      770,
+      positions["thermal-table"][1] + thermalHeight + 65,
+      positions["boq-table"][1] + boqHeight + 65
+    );
+  }
   state.nodes.forEach(node => {
     if (positions[node.id] && !node.locked) {
-      node.x = positions[node.id][0];
-      node.y = positions[node.id][1];
-      applyAutoNodeSize(node, { thermalHeight, costingHeight, boqHeight, vrvHeight });
+      if (!node.userMoved) {
+        node.x = positions[node.id][0];
+        node.y = positions[node.id][1];
+      }
+      if (!node.userSized) applyAutoNodeSize(node, { thermalHeight, costingHeight, boqHeight, vrvHeight });
     }
   });
-  canvas.style.width = "1950px";
+  canvas.style.width = isDxWorkflow() ? "1420px" : "1950px";
   canvas.style.height = `${positions["vrv-schedule"][1] + vrvHeight + 180}px`;
+  sizeWorkflowCanvasToNodes();
+}
+
+function dxScheduleTargetPosition({ thermalHeight } = {}) {
+  const exportNode = state?.nodes?.find(node => node.id === "thermal-table");
+  const fallbackHeight = thermalHeight ?? tableAutoHeight("thermal", state?.tables?.thermal?.rows?.length || 0);
+  const exportX = Number(exportNode?.x ?? dxWorkflowPositions["thermal-table"][0]);
+  const exportY = Number(exportNode?.y ?? dxWorkflowPositions["thermal-table"][1]);
+  const exportHeight = workflowLayoutNodeHeight(exportNode, fallbackHeight);
+  const scheduleOffsetX = dxWorkflowPositions["vrv-schedule"][0] - dxWorkflowPositions["thermal-table"][0];
+  return {
+    x: Math.max(0, exportX + scheduleOffsetX),
+    y: Math.max(dxWorkflowPositions["vrv-schedule"][1], exportY + exportHeight + 26)
+  };
+}
+
+function sizeWorkflowCanvasToNodes() {
+  if (!canvas || !state?.nodes?.length) return;
+  const width = Math.max(
+    isDxWorkflow() ? 1420 : 1950,
+    ...state.nodes.map(node => Math.ceil((node.x || 0) + (node.width || workflowNodeDefaultSize(node.id)?.[0] || 260) + 80))
+  );
+  const height = Math.max(
+    760,
+    ...state.nodes.map(node => Math.ceil((node.y || 0) + (node.height || workflowNodeDefaultSize(node.id)?.[1] || 160) + 120))
+  );
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
 }
 
 function tableAutoHeight(key, rowCount) {
   const rows = Math.max(0, rowCount);
+  if (isDxWorkflow() && key === "thermal") return Math.max(205, Math.min(500, 104 + rows * 28 + 54));
+  if (isDxWorkflow() && key === "vrvSchedule") return Math.max(230, Math.min(340, 104 + rows * 28 + 54));
   if (key === "costing") return Math.max(220, 110 + rows * 28 + 110);
   if (key === "boq") return Math.max(190, 104 + rows * 28 + 74);
   if (key === "thermal") return Math.max(205, 104 + rows * 28 + 54);
@@ -7184,16 +7373,24 @@ function tableAutoHeight(key, rowCount) {
   return 240;
 }
 
+function workflowLayoutNodeHeight(node, fallbackHeight) {
+  if (!node) return fallbackHeight;
+  if (node.userSized) return Number(node.height || fallbackHeight);
+  return fallbackHeight;
+}
+
 function applyAutoNodeSize(node, heights) {
   const sizes = {
-    "thermal-table": [520, heights.thermalHeight],
+    "thermal-table": [isDxWorkflow() ? 640 : 520, heights.thermalHeight],
     "costing-table": [650, heights.costingHeight],
     "boq-table": [650, heights.boqHeight],
-    "vrv-schedule": [1550, heights.vrvHeight]
+    "vrv-schedule": [isDxWorkflow() ? 1180 : 1550, heights.vrvHeight]
   };
   if (sizes[node.id]) {
     node.width = Math.max(node.width || 0, sizes[node.id][0]);
-    node.height = Math.max(node.height || 0, sizes[node.id][1]);
+    node.height = isDxWorkflow()
+      ? Math.max(workflowNodeDefaultSize(node.id)?.[1] || 0, sizes[node.id][1])
+      : Math.max(node.height || 0, sizes[node.id][1]);
   }
 }
 
@@ -7207,10 +7404,10 @@ function applyDefaultNodeSize(node, reset = false) {
 
 function workflowNodeDefaultSize(nodeId) {
   const sizes = {
-    "thermal-table": [520, 205],
+    "thermal-table": [isDxWorkflow() ? dxWorkflowDefaultSizes["thermal-table"][0] : 520, dxWorkflowDefaultSizes["thermal-table"][1]],
     "costing-table": [650, 220],
     "boq-table": [650, 190],
-    "vrv-schedule": [1550, 230]
+    "vrv-schedule": [isDxWorkflow() ? dxWorkflowDefaultSizes["vrv-schedule"][0] : 1550, dxWorkflowDefaultSizes["vrv-schedule"][1]]
   };
   return sizes[nodeId] || null;
 }
@@ -7230,7 +7427,7 @@ function applyCanvasZoom() {
 function zoomToFit() {
   const wrap = $("#canvasView");
   if (!wrap) return;
-  const neededWidth = 1900;
+  const neededWidth = isDxWorkflow() ? 1350 : 1900;
   const available = Math.max(600, wrap.clientWidth - 30);
   setZoom(Math.min(0.9, Math.max(0.55, available / neededWidth)));
   wrap.scrollTo({ left: 0, top: 0, behavior: "smooth" });
@@ -7261,7 +7458,6 @@ function renderNode(node) {
   bindNode(template, node);
   bindResizeObserver(template, node);
   canvas.appendChild(template);
-  clampWorkflowTableNode(template, node);
 }
 
 function bindResizeObserver(el, node) {
@@ -7269,16 +7465,12 @@ function bindResizeObserver(el, node) {
   const observer = new ResizeObserver(entries => {
     const rect = entries[0].contentRect;
     const width = Math.round(rect.width);
-    let height = Math.round(rect.height);
-    const fittedHeight = workflowTableFittedHeight(el);
-    if (fittedHeight) el.style.maxHeight = `${fittedHeight}px`;
-    if (fittedHeight && height > fittedHeight + 2) {
-      height = fittedHeight;
-    }
+    const height = Math.round(rect.height);
     if (el.dataset.userResizing !== "1") return;
     if (Math.abs((node.width || 0) - width) > 2 || Math.abs((node.height || 0) - height) > 2) {
       node.width = width;
       node.height = height;
+      node.userSized = true;
       debounceSaveProject();
     }
   });
@@ -7300,15 +7492,7 @@ function workflowTableFittedHeight(el) {
 }
 
 function clampWorkflowTableNode(el, node) {
-  if (!tableKeys[node.type]) return;
-  requestAnimationFrame(() => {
-    const fittedHeight = workflowTableFittedHeight(el);
-    if (!fittedHeight) return;
-    el.style.maxHeight = `${fittedHeight}px`;
-    if ((node.height || 0) > fittedHeight + 2) {
-      el.style.height = `${fittedHeight}px`;
-    }
-  });
+  return;
 }
 
 function workflowOuterHeight(el) {
@@ -7328,7 +7512,7 @@ function bindNode(el, node) {
       if (nearResizeHandle) {
         el.dataset.userResizing = "1";
         const stopResizeTracking = () => {
-          persistWorkflowNodeSize(el, node, { save: true });
+          persistWorkflowNodeSize(el, node, { save: true, userSized: true });
           delete el.dataset.userResizing;
           window.removeEventListener("pointerup", stopResizeTracking);
           window.removeEventListener("pointercancel", stopResizeTracking);
@@ -7339,7 +7523,6 @@ function bindNode(el, node) {
         window.addEventListener("mouseup", stopResizeTracking);
       }
     });
-    el.addEventListener("focusin", () => persistWorkflowNodeSize(el, node, { save: true }));
   }
   header.addEventListener("pointerdown", event => {
     if (node.locked || event.target.closest("button")) return;
@@ -7355,6 +7538,10 @@ function bindNode(el, node) {
   });
   header.addEventListener("pointerup", () => {
     if (drag && drag.node.id === node.id) {
+      if (Math.abs((node.x || 0) - drag.ox) > 1 || Math.abs((node.y || 0) - drag.oy) > 1) {
+        node.userMoved = true;
+        if (isDxWorkflow() && node.id === "vrv-schedule") node.autoFollowExport = false;
+      }
       drag = null;
       saveProject();
     }
@@ -7630,10 +7817,16 @@ function tableBody(key, node) {
     return wrap;
   }
   const scroll = div("table-scroll");
+  const isDxSchedule = key === "vrvSchedule" && isDxWorkflow();
+  const dxHeader = isDxSchedule ? dxScheduleTableHeader() : "";
+  const dxColgroup = isDxSchedule ? dxScheduleTableColgroup(table.columns) : "";
   const html = [
-    "<table><thead><tr>",
-    table.columns.map((column, index) => `<th>${key === "costing" && index === 0 ? `<button class="row-add-button" title="Add row" data-add-row="${key}">+</button>` : ""}${escapeHtml(column)}</th>`).join(""),
-    "</tr></thead><tbody>",
+    `<table${isDxSchedule ? " class=\"dx-selection-table\"" : ""}>`,
+    dxColgroup,
+    isDxSchedule
+      ? dxHeader
+      : `<thead><tr>${table.columns.map((column, index) => `<th>${key === "costing" && index === 0 ? `<button class="row-add-button" title="Add row" data-add-row="${key}">+</button>` : ""}${escapeHtml(column)}</th>`).join("")}</tr></thead>`,
+    "<tbody>",
     table.rows.length
       ? table.rows.map((row, rowIndex) => {
         const editable = !node.locked && !isGeneratedTableRow(row);
@@ -7663,10 +7856,14 @@ function tableBody(key, node) {
         buildBoqFromCosting();
       }
       if (cell.dataset.table === "boq") recalcBoq();
-      if (cell.dataset.table === "thermal") buildVrvSchedule();
-      if (cell.dataset.table === "vrvSchedule") {
+      if (cell.dataset.table === "thermal") buildWorkflowScheduleFromThermal();
+      if (cell.dataset.table === "vrvSchedule" && !isDxWorkflow()) {
         fillVrvScheduleLookups();
         rebuildVrvScheduleTotals();
+      }
+      if (cell.dataset.table === "vrvSchedule" && isDxWorkflow()) {
+        const specifiedColumns = new Set(["Ref", "Type", "Location", "TKw", "SKw", "L/S"]);
+        if (specifiedColumns.has(cell.dataset.col)) applyDxProposal(row);
       }
       if (cell.dataset.table === "costing") {
         preserveTableSizes = true;
@@ -7690,6 +7887,94 @@ function tableBody(key, node) {
     });
   });
   return wrap;
+}
+
+function dxScheduleTableColgroup(columns) {
+  const widths = {
+    "Ref": 96,
+    "Type": 104,
+    "Location": 218,
+    "TKw": 68,
+    "SKw": 68,
+    "L/S": 68,
+    "Model ( Indoor / Outdoor )": 212,
+    "Qty": 58,
+    "NOMINAL TR": 86,
+    "Proposed Type": 96,
+    "Refrigerant": 92,
+    "Indoor Temperature": 74,
+    "Outdoor Temperature": 76,
+    "TC": 58,
+    "SC": 58,
+    "AFR L/S": 66,
+    "SPEED": 68,
+    "Actual Power Input": 80,
+    "ESMA Power Input": 80,
+    "COP (W/W)": 70,
+    "ESP": 60,
+    "Power Supply": 96,
+    "Indoor H (mm)": 70,
+    "Indoor W (mm)": 70,
+    "Indoor D (mm)": 70,
+    "Outdoor H (mm)": 72,
+    "Outdoor W (mm)": 72,
+    "Outdoor D (mm)": 72,
+    "Indoor Weight (kg)": 82,
+    "Outdoor Weight (kg)": 84
+  };
+  return `<colgroup>${columns.map(column => `<col style="width:${widths[column] || 80}px">`).join("")}</colgroup>`;
+}
+
+function dxScheduleTableHeader() {
+  return `<thead>
+    <tr class="dx-selection-group-row">
+      <th class="dx-specified" colspan="6">SPECIFIED</th>
+      <th class="dx-proposed" colspan="24">PROPOSED</th>
+    </tr>
+    <tr class="dx-selection-divider-row"><th colspan="30" aria-hidden="true"></th></tr>
+    <tr class="dx-selection-header-row">
+      <th class="dx-specified" rowspan="2">Ref</th>
+      <th class="dx-specified" rowspan="2">Type</th>
+      <th class="dx-specified" rowspan="2">Location</th>
+      <th class="dx-specified" rowspan="2">TKw</th>
+      <th class="dx-specified" rowspan="2">SKw</th>
+      <th class="dx-specified" rowspan="2">L/S</th>
+      <th class="dx-proposed" rowspan="2">Model ( Indoor / Outdoor )</th>
+      <th class="dx-proposed" rowspan="2">Qty</th>
+      <th class="dx-proposed" rowspan="2">NOMINAL TR</th>
+      <th class="dx-proposed" rowspan="2">Type</th>
+      <th class="dx-proposed" rowspan="2">Refrigerant</th>
+      <th class="dx-proposed" colspan="2">Temperature</th>
+      <th class="dx-proposed" colspan="2">Capacity (KW)</th>
+      <th class="dx-proposed">AFR</th>
+      <th class="dx-proposed" rowspan="2">SPEED</th>
+      <th class="dx-proposed" colspan="2">Power Input, KW</th>
+      <th class="dx-proposed">COP</th>
+      <th class="dx-proposed" rowspan="2">ESP</th>
+      <th class="dx-proposed" rowspan="2">Power Supply</th>
+      <th class="dx-proposed" colspan="3">Dimensions Indoor, mm</th>
+      <th class="dx-proposed" colspan="3">Dimensions Outdoor, mm</th>
+      <th class="dx-proposed" colspan="2">Weight</th>
+    </tr>
+    <tr class="dx-selection-subheader-row">
+      <th class="dx-proposed">Indoor</th>
+      <th class="dx-proposed">Outdoor</th>
+      <th class="dx-proposed">TC</th>
+      <th class="dx-proposed">SC</th>
+      <th class="dx-proposed">L/S</th>
+      <th class="dx-proposed">Actual</th>
+      <th class="dx-proposed">ESMA</th>
+      <th class="dx-proposed">W/W</th>
+      <th class="dx-proposed">H</th>
+      <th class="dx-proposed">W</th>
+      <th class="dx-proposed">D</th>
+      <th class="dx-proposed">H</th>
+      <th class="dx-proposed">W</th>
+      <th class="dx-proposed">D</th>
+      <th class="dx-proposed">Indoor kg</th>
+      <th class="dx-proposed">Outdoor kg</th>
+    </tr>
+  </thead>`;
 }
 
 function tableCellNeedsReview(row, column) {
@@ -9806,10 +10091,10 @@ function clearThermalChat() {
 function clearThermalTable(resetColumns = false) {
   if (!state?.tables?.thermal) return;
   if (resetColumns || !state.tables.thermal.columns?.length) {
-    state.tables.thermal.columns = [...defaultThermalColumns];
+    state.tables.thermal.columns = workflowThermalColumns();
   }
   state.tables.thermal.rows = [];
-  buildVrvSchedule();
+  buildWorkflowScheduleFromThermal();
   autoLayoutWorkflow();
   render();
   saveProject();
@@ -9829,6 +10114,7 @@ function syncThermalChatSelection() {
 }
 
 function thermalSelectionLabel() {
+  if (isDxWorkflow()) return "DX thermal columns: Unit Ref, Type, Location, TKw, SKw, L/S";
   if (thermalChatSelection.mode === "custom") return `custom extraction: ${thermalChatSelection.customInstruction}`;
   return thermalChatSelection.familyModel
     ? `${thermalChatSelection.capacitySource}, model ${thermalChatSelection.familyModel}`
@@ -9920,7 +10206,9 @@ async function sendThermalChatReply() {
       scheduleProjectSave();
     }
     input.value = "";
-    addChat(`Ok, I will use the fixed VRV Export File template with ${thermalSelectionLabel()}.`);
+    addChat(isDxWorkflow()
+      ? "Ok. I will extract the default DX columns into the Export File table."
+      : `Ok, I will use the fixed VRV Export File template with ${thermalSelectionLabel()}.`);
     await extractThermalFromChat();
     return;
   }
@@ -9971,6 +10259,20 @@ function parseThermalChatReply(text) {
   const clearTable = /\b(clear|empty|remove|delete)\b.*\b(table|export file|export)\b|\b(clear table|empty table)\b/.test(lower);
   const resetFlow = /\b(start over|from first|from beginning|generate from first|fresh|restart)\b/.test(lower);
   if (clearTable || resetFlow) return { clearTable: true, resetFlow };
+  if (isDxWorkflow()) {
+    const wantsDxDefault = isDxDefaultThermalInstruction(text);
+    const explicitSpecific = /\b(specific|particular|selected|only)\b.*\b(column|columns|field|fields)\b/.test(lower);
+    if (wantsDxDefault && !explicitSpecific) {
+      return {
+        mode: "regular",
+        capacitySource: "Calculated AC Load",
+        familyModel: "",
+        regenerate: /\b(regenerate|verify|recheck|check again|rerun|retry)\b/.test(lower),
+        append: /\b(continue|append|add below|below|next screenshot|next page|remaining|rest)\b/.test(lower),
+        useDefaultRegular: true
+      };
+    }
+  }
   const explicitCustom = /\b(custom|specific|particular|selected|only)\b.*\b(column|columns|table|field|fields)\b|\b(column|columns|field|fields)\b/.test(lower);
   const wantsRegular = !explicitCustom && /\bvrv\b|regular template|thermal template|export template|export file template|export file|fixed template/.test(lower);
   const feedbackOnly = /\b(wrong|mistake|incorrect|not correct|bad extraction|error)\b/.test(lower) &&
@@ -10050,6 +10352,11 @@ async function uploadThermalFromChat() {
 
 function askThermalExtractionChoice() {
   addChat("What do you want to extract?");
+  if (isDxWorkflow()) {
+    addChat("For DX Workflow, I will extract only: Unit Ref, Type, Location, TKw, SKw, and L/S.");
+    addChat("Rows without TKw, SKw, and L/S values will be skipped.");
+    return;
+  }
   addChat("For the regular VRV export, reply like: VRV first selection. Mention a model only if you want it filled.");
   addChat("For any other table, tell me the table or columns, for example: extract columns Indoor, Room, Air Flow Rate.");
 }
@@ -10060,27 +10367,46 @@ async function extractThermalFromChat(options = {}) {
     return;
   }
   syncThermalChatSelection();
-  if (thermalChatSelection.mode === "custom" && !thermalChatSelection.customInstruction) {
+  if (!isDxWorkflow() && thermalChatSelection.mode === "custom" && !thermalChatSelection.customInstruction) {
     addChat("Please tell me which table or columns to extract before clicking Extract Table.");
     return;
   }
   addChat(`Selected ${thermalSelectionLabel()}.`);
   addChat("Extracting values into the Export File table...");
-  const extracted = await scanThermal(false, { uploadIds: options.uploadIds });
+  let extracted;
+  workflowUploadLoading = true;
+  refreshWorkflowTitleSpinner();
+  try {
+    const selectedUploadIds = options.uploadIds || thermalUploadIds();
+    extracted = isDxWorkflow()
+      ? await scanThermal(false, { uploadIds: selectedUploadIds })
+      : await scanThermal(false, { uploadIds: selectedUploadIds });
+  } catch (error) {
+    addChat(error?.message || "Extraction request failed. Please try again.");
+    toast(error?.message || "Extraction request failed");
+    return;
+  } finally {
+    workflowUploadLoading = false;
+    refreshWorkflowTitleSpinner();
+  }
   applyThermalScanOptions(extracted);
   if (extracted.rows && extracted.rows.length) {
-    const thermalRows = applyExtractionReviewCells(extracted.rows, extracted.reviewCells);
-    state.tables.thermal.columns = [...defaultThermalColumns];
+    const thermalRows = isDxWorkflow()
+      ? normalizeDxThermalRows(applyExtractionReviewCells(extracted.rows, extracted.reviewCells))
+      : applyExtractionReviewCells(extracted.rows, extracted.reviewCells);
+    state.tables.thermal.columns = workflowThermalColumns();
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...thermalRows]
       : thermalRows;
+    buildWorkflowScheduleFromThermal();
+    normalizeDxScheduleAfterExtraction();
     autoLayoutWorkflow();
     addChat(extracted.message || "Preview table is ready in the Export File table. Please verify and edit there before downloading Excel.");
     if (extracted.unclearFields && extracted.unclearFields.length) {
       addChat(`Unable to read clearly: ${extracted.unclearFields.join(", ")}. Upload a higher-resolution or zoomed screenshot.`);
     }
   } else if (extracted.customColumns && extracted.customRows && extracted.customColumns.length) {
-    const nextRows = applyExtractionReviewCells(extracted.customRows.map(row => {
+    let nextRows = applyExtractionReviewCells(extracted.customRows.map(row => {
       const next = {};
       extracted.customColumns.forEach((column, index) => {
         next[column] = Array.isArray(row) ? (row[index] || "") : (row[column] || "");
@@ -10088,12 +10414,17 @@ async function extractThermalFromChat(options = {}) {
       return next;
     }), extracted.customReviewCells);
     const existingColumns = state.tables.thermal.columns || [];
-    state.tables.thermal.columns = thermalChatSelection.appendResults && existingColumns.length
+    if (isDxWorkflow()) nextRows = normalizeDxThermalRows(nextRows);
+    state.tables.thermal.columns = isDxWorkflow()
+      ? workflowThermalColumns()
+      : thermalChatSelection.appendResults && existingColumns.length
       ? existingColumns
       : extracted.customColumns;
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...nextRows]
       : nextRows;
+    buildWorkflowScheduleFromThermal();
+    normalizeDxScheduleAfterExtraction();
     autoLayoutWorkflow();
     addChat(extracted.message || "Custom table extraction is ready in the Export File table.");
     if (extracted.unclearFields && extracted.unclearFields.length) {
@@ -10104,6 +10435,56 @@ async function extractThermalFromChat(options = {}) {
   }
   render();
   saveProject();
+}
+
+async function scanDxThermalUploadsSequentially(uploadIds = []) {
+  const ids = [...new Set(uploadIds.filter(Boolean))];
+  const merged = {
+    status: "ok",
+    rows: [],
+    customColumns: workflowThermalColumns(),
+    customRows: [],
+    unclearFields: [],
+    customReviewCells: {},
+    message: ""
+  };
+  for (const uploadId of ids) {
+    try {
+      const result = await scanThermal(false, { uploadIds: [uploadId] });
+      const rowOffset = merged.customRows.length;
+      let resultRows = Array.isArray(result.customRows) ? result.customRows : [];
+      if (!resultRows.length && Array.isArray(result.rows) && result.rows.length) {
+        resultRows = normalizeDxThermalRows(applyExtractionReviewCells(result.rows, result.reviewCells))
+          .map(row => workflowThermalColumns(workflowMode()).map(column => row[column] || ""));
+      }
+      if (Array.isArray(result.customColumns) && result.customColumns.length) {
+        merged.customColumns = result.customColumns;
+      }
+      merged.customRows.push(...resultRows);
+      Object.entries(result.customReviewCells || {}).forEach(([key, review]) => {
+        const row = Number(review?.row);
+        const nextReview = {
+          ...review,
+          row: Number.isFinite(row) ? row + rowOffset : review?.row
+        };
+        merged.customReviewCells[`${key}-${uploadId}`] = nextReview;
+      });
+      for (const field of result.unclearFields || []) {
+        if (!merged.unclearFields.includes(field)) merged.unclearFields.push(field);
+      }
+      if (result.status && result.status !== "ok") merged.status = result.status;
+    } catch (error) {
+      const upload = findUpload(uploadId);
+      const label = upload?.originalName || "Uploaded file";
+      const message = `${label}: ${error?.message || "extraction failed"}`;
+      if (!merged.unclearFields.includes(message)) merged.unclearFields.push(message);
+      merged.status = "needs_verification";
+    }
+  }
+  merged.message = merged.customRows.length
+    ? "DX thermal values were extracted into the Export File table."
+    : "No DX thermal rows were detected. Upload a clearer screenshot and try again.";
+  return merged;
 }
 
 function applyExtractionReviewCells(rows = [], reviewCells = {}) {
@@ -10126,18 +10507,49 @@ function applyExtractionReviewCells(rows = [], reviewCells = {}) {
 
 async function scanThermal(previewOnly, overrides = {}) {
   const selection = { ...thermalChatSelection, ...overrides };
+  const dxMode = isDxWorkflow();
+  const dxDefaultExtraction = dxMode && (selection.mode !== "custom" || isDxDefaultThermalInstruction(selection.customInstruction));
   return api(`/api/projects/${state.id}/extract/thermal-vision`, {
     method: "POST",
     body: JSON.stringify({
       uploadIds: selection.uploadIds || thermalUploadIds(),
-      mode: selection.mode,
+      mode: dxMode ? (dxDefaultExtraction ? "regular" : "custom") : selection.mode,
       capacitySource: selection.capacitySource,
       familyModel: selection.familyModel,
-      customInstruction: selection.customInstruction,
-      customExtraction: selection.customExtraction !== undefined ? selection.customExtraction : selection.mode === "custom",
+      workflowMode: workflowMode(),
+      customInstruction: dxMode ? (dxDefaultExtraction ? "" : dxThermalExtractionInstruction()) : selection.customInstruction,
+      customExtraction: dxMode
+        ? !dxDefaultExtraction
+        : (selection.customExtraction !== undefined ? selection.customExtraction : selection.mode === "custom"),
       previewOnly
     })
   });
+}
+
+function isDxDefaultThermalInstruction(text = "") {
+  const lower = String(text || "").toLowerCase();
+  if (/\bdx\b|\bdx workflow\b/.test(lower)) return true;
+  if (!/\bextract\b/.test(lower)) return false;
+  const asksDefaultDxColumns =
+    /(unit|units|reference|ref)/.test(lower) &&
+    /(total|tkw|t\s*kw)/.test(lower) &&
+    /(sensible|skw|s\s*kw)/.test(lower) &&
+    /(flow|l\/s|l\s*\/\s*s|air flow)/.test(lower);
+  return asksDefaultDxColumns;
+}
+
+function dxThermalExtractionInstruction() {
+  return [
+    "Extract only these columns and return them in exactly this order: Unit Ref, Type, Location, TKw, SKw, L/S.",
+    "Unit Ref is the Units Reference / No. or Ref column.",
+    "Type is the AC System and Type child column named Type.",
+    "Location is the Location column.",
+    "TKw is Calculated AC Load Total kW. SKw is Calculated AC Load Sensible kW. L/S is Calculated AC Load Flow Rate L/s.",
+    "If the visible headers say Total, Sensible, and Flow Rate under Calculated AC Load, map them to TKw, SKw, and L/S.",
+    "Include only equipment rows where TKw, SKw, and L/S are all clearly visible.",
+    "Ignore section headings, floor headings, outdoor rows, blank rows, and rows where any of TKw, SKw, or L/S is empty.",
+    "If a cell is unclear, keep the best first read and mark that cell for review instead of guessing."
+  ].join(" ");
 }
 
 function applyThermalScanOptions(result) {
@@ -10174,7 +10586,7 @@ async function chooseUpload(nodeId) {
       const form = new FormData();
       form.append("nodeId", nodeId);
       const uploadFile = await workflowUploadFileForNode(nodeId, selectedFile);
-      form.append("file", uploadFile, selectedFile.name);
+      form.append("file", uploadFile, uploadFile.name || selectedFile.name);
       const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
       const project = await api(`/api/projects/${state.id}`);
       state.uploads = project.uploads;
@@ -10203,6 +10615,9 @@ async function chooseUpload(nodeId) {
 }
 
 async function workflowUploadFileForNode(nodeId, file) {
+  if (nodeId === "thermal-upload" && /^image\//i.test(file.type || "")) {
+    return optimizeThermalScreenshotUpload(file);
+  }
   const isDocx = /\.docx$/i.test(file.name || "");
   if (nodeId !== "vrv-upload" || !isDocx || file.size < 3.5 * 1024 * 1024) return file;
   const xml = await extractDocxDocumentXml(file);
@@ -10211,6 +10626,35 @@ async function workflowUploadFileForNode(nodeId, file) {
   return new File([xml], file.name, {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document+xml"
   });
+}
+
+async function optimizeThermalScreenshotUpload(file) {
+  if (!("createImageBitmap" in window)) return file;
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch (error) {
+    return file;
+  }
+  const maxDimension = file.size > 1.5 * 1024 * 1024 ? 2200 : 2600;
+  const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+  if (scale >= 1 && file.size <= 1.2 * 1024 * 1024) {
+    bitmap.close?.();
+    return file;
+  }
+  const canvasEl = document.createElement("canvas");
+  canvasEl.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvasEl.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvasEl.getContext("2d", { alpha: false });
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvasEl.width, canvasEl.height);
+  context.drawImage(bitmap, 0, 0, canvasEl.width, canvasEl.height);
+  bitmap.close?.();
+  const blob = await new Promise(resolve => canvasEl.toBlob(resolve, "image/jpeg", 0.88));
+  if (!blob || blob.size >= file.size) return file;
+  const name = (file.name || "thermal-sheet").replace(/\.[^.]+$/, "") + "-optimized.jpg";
+  toast("Thermal screenshot optimized for extraction");
+  return new File([blob], name, { type: "image/jpeg" });
 }
 
 async function extractDocxDocumentXml(file) {
@@ -10284,6 +10728,13 @@ function projectNameFromFile(name) {
 }
 
 function generateWorkflow() {
+  if (isDxWorkflow()) {
+    buildDxSchedule();
+    autoLayoutWorkflow();
+    render();
+    saveProject();
+    return;
+  }
   if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
   const vrv = state.extracted && state.extracted.vrv;
   if (vrv?.materialRows?.length) {
@@ -10369,6 +10820,173 @@ function recalcBoq() {
     vat: round2(total * 0.05),
     netAmount: round2(total * 1.05)
   };
+}
+
+function buildWorkflowScheduleFromThermal() {
+  if (isDxWorkflow()) {
+    buildDxSchedule();
+  } else {
+    buildVrvSchedule();
+  }
+}
+
+function buildDxSchedule() {
+  state.tables.vrvSchedule.columns = workflowScheduleColumns();
+  const rows = normalizeDxThermalRows(state.tables.thermal?.rows || []);
+  state.tables.vrvSchedule.rows = rows.map(row => {
+    const output = Object.fromEntries(state.tables.vrvSchedule.columns.map(column => [column, ""]));
+    output.Ref = row["Unit Ref"] || "";
+    output.Type = row.Type || "";
+    output.Location = row.Location || "";
+    output.TKw = row.TKw || "";
+    output.SKw = row.SKw || "";
+    output["L/S"] = row["L/S"] || "";
+    applyDxProposal(output);
+    return output;
+  });
+}
+
+function dxNumber(value) {
+  const match = String(value ?? "").replace(/,/g, "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : 0;
+}
+
+function dxProposalFamily(type = "") {
+  const value = norm(type);
+  if (value.includes("PACKAGE") || value.includes("UATQ")) return "PACKAGED UNIT";
+  if (value.includes("WALL") || value.includes("SPLIT")) return "WALL MOUNTED";
+  return "DUCTED";
+}
+
+function chooseDxProposal(row) {
+  const family = dxProposalFamily(row.Type);
+  const requiredTotal = dxNumber(row.TKw);
+  const requiredSensible = dxNumber(row.SKw);
+  const requiredAirflow = dxNumber(row["L/S"]);
+  if (!requiredTotal && !requiredSensible && !requiredAirflow) return null;
+  const options = dxProposalCatalog.filter(item => item.family === family);
+  const ranked = options.map(item => {
+    const capacityRatio = Math.max(
+      item.TC ? requiredTotal / Number(item.TC) : 0,
+      item.SC ? requiredSensible / Number(item.SC) : 0,
+      item.airflow ? requiredAirflow / Number(item.airflow) : 0
+    );
+    return { item, qty: Math.max(1, Math.ceil(capacityRatio || 1)) };
+  });
+  const compact = ranked.filter(option => option.qty <= 2);
+  const candidates = compact.length ? compact : ranked;
+  candidates.sort((left, right) => {
+    const capacityOrder = Number(left.item.TC) - Number(right.item.TC);
+    return capacityOrder || left.qty - right.qty || Number(left.item.nominalTR) - Number(right.item.nominalTR);
+  });
+  return candidates[0] || null;
+}
+
+function applyDxProposal(row) {
+  const proposal = chooseDxProposal(row);
+  const proposalColumns = [
+    "Model ( Indoor / Outdoor )", "Qty", "NOMINAL TR", "Proposed Type", "Refrigerant",
+    "Indoor Temperature", "Outdoor Temperature", "TC", "SC", "AFR L/S", "SPEED",
+    "Actual Power Input", "ESMA Power Input", "COP (W/W)", "ESP", "Power Supply",
+    "Indoor H (mm)", "Indoor W (mm)", "Indoor D (mm)", "Outdoor H (mm)", "Outdoor W (mm)",
+    "Outdoor D (mm)", "Indoor Weight (kg)", "Outdoor Weight (kg)"
+  ];
+  if (!proposal) {
+    proposalColumns.forEach(column => { row[column] = ""; });
+    return;
+  }
+  const { item, qty } = proposal;
+  Object.assign(row, {
+    "Model ( Indoor / Outdoor )": item.model,
+    Qty: qty,
+    "NOMINAL TR": item.nominalTR,
+    "Proposed Type": item.proposedType,
+    Refrigerant: item.refrigerant,
+    "Indoor Temperature": item.indoorTemperature,
+    "Outdoor Temperature": item.outdoorTemperature,
+    TC: item.TC,
+    SC: item.SC,
+    "AFR L/S": item.airflow,
+    SPEED: item.speed,
+    "Actual Power Input": item.actualPowerInput,
+    "ESMA Power Input": item.esmaPowerInput,
+    "COP (W/W)": item.cop,
+    ESP: item.esp,
+    "Power Supply": item.powerSupply,
+    "Indoor H (mm)": item.indoorH,
+    "Indoor W (mm)": item.indoorW,
+    "Indoor D (mm)": item.indoorD,
+    "Outdoor H (mm)": item.outdoorH,
+    "Outdoor W (mm)": item.outdoorW,
+    "Outdoor D (mm)": item.outdoorD,
+    "Indoor Weight (kg)": item.indoorWeight,
+    "Outdoor Weight (kg)": item.outdoorWeight
+  });
+}
+
+function normalizeDxScheduleAfterExtraction() {
+  if (!isDxWorkflow() || !state?.nodes?.length) return;
+  const exportNode = state.nodes.find(node => node.id === "thermal-table");
+  const scheduleNode = state.nodes.find(node => node.id === "vrv-schedule");
+  if (!exportNode || !scheduleNode) return;
+  const exportHeight = workflowLayoutNodeHeight(exportNode, tableAutoHeight("thermal", state.tables.thermal?.rows?.length || 0));
+  const target = dxScheduleTargetPosition({ thermalHeight: exportHeight });
+  if (!scheduleNode.userMoved && scheduleNode.autoFollowExport !== false) {
+    scheduleNode.y = target.y;
+    scheduleNode.x = target.x;
+  }
+}
+
+function normalizeDxThermalRows(rows = []) {
+  return rows
+    .map(row => {
+      const next = {
+        "Unit Ref": firstRowValue(row, [
+          "Unit Ref", "Ref", "Units Reference / No.", "Units Reference / No", "Units Reference No.",
+          "Units Reference", "Unit Reference", "Unit Reference No.", "Indoor", "Name", "FCU", "Unit"
+        ]),
+        Type: firstRowValue(row, ["Type", "System Type", "AC Type", "Mode"]),
+        Location: firstRowValue(row, ["Location", "Room", "Area", "Zone"]),
+        TKw: firstRowValue(row, [
+          "TKw", "T kW", "Total kW", "Total KW", "Total", "Calculated AC Load - Total kW",
+          "Calculated AC Load Total kW", "Tot Cool Cap", "Total Cooling kW"
+        ]),
+        SKw: firstRowValue(row, [
+          "SKw", "S kW", "Sensible kW", "Sensible KW", "Sensible", "Calculated AC Load - Sensible kW",
+          "Calculated AC Load Sensible kW", "Sens Cool Cap", "Sensible Cooling kW"
+        ]),
+        "L/S": firstRowValue(row, [
+          "L/S", "L/s", "Flow Rate", "Flow Rate L/s", "Calculated AC Load - Flow Rate L/s",
+          "Calculated AC Load Flow Rate L/s", "Air Flow Rate", "Airflow", "Air Flow"
+        ])
+      };
+      const reviewCells = {};
+      Object.entries(row.__reviewCells || {}).forEach(([column, review]) => {
+        const target = dxColumnForSource(column);
+        if (target) reviewCells[target] = review;
+      });
+      if (Object.keys(reviewCells).length) next.__reviewCells = reviewCells;
+      return next;
+    })
+    .filter(row => {
+      const hasIdentity = String(row["Unit Ref"] || row.Location || "").trim();
+      return hasIdentity && hasDxValue(row.TKw) && hasDxValue(row.SKw) && hasDxValue(row["L/S"]);
+    });
+}
+
+function hasDxValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function dxColumnForSource(column) {
+  const key = columnKey(column);
+  if (["UNITREF", "REF", "UNITSREFERENCENO", "UNITREFERENCENO", "INDOOR", "NAME", "FCU", "UNIT"].includes(key)) return "Unit Ref";
+  if (["TYPE", "SYSTEMTYPE", "ACTYPE", "MODE"].includes(key)) return "Type";
+  if (["LOCATION", "ROOM", "AREA", "ZONE"].includes(key)) return "Location";
+  if (["TKW", "TOTALKW", "TOTAL", "CALCULATEDACLOADTOTALKW", "TOTCOOLCAP", "TOTALCOOLINGKW"].includes(key)) return "TKw";
+  if (["SKW", "SENSIBLEKW", "SENSIBLE", "CALCULATEDACLOADSENSIBLEKW", "SENSCOOLCAP", "SENSIBLECOOLINGKW"].includes(key)) return "SKw";
+  if (["LS", "FLOWRATE", "FLOWRATELS", "CALCULATEDACLOADFLOWRATELS", "AIRFLOWRATE", "AIRFLOW", "AIRFLOWRATE"].includes(key)) return "L/S";
+  return "";
 }
 
 function buildVrvSchedule(sourceRows) {
@@ -10736,7 +11354,7 @@ function regenerate(type) {
     buildCosting(rows.map(row => [row.model, row.qty]));
   }
   if (type === "boqTable") buildBoqFromCosting();
-  if (type === "vrvSchedule") buildVrvSchedule();
+  if (type === "vrvSchedule") buildWorkflowScheduleFromThermal();
   autoLayoutWorkflow();
   render();
   saveProject();
@@ -10780,7 +11398,7 @@ async function downloadTable(key) {
       ["Price / Ton", money(s.pricePerTon)]
     );
   }
-  if (key === "vrvSchedule") {
+  if (key === "vrvSchedule" && !isDxWorkflow()) {
     const blob = await api("/api/export/vrv-schedule", {
       method: "POST",
       body: JSON.stringify({
@@ -10794,17 +11412,30 @@ async function downloadTable(key) {
     downloadBlob(blob, tableDownloadFilenames[key]);
     return;
   }
+  if (key === "vrvSchedule" && isDxWorkflow()) {
+    const blob = await api("/api/export/dx-schedule", {
+      method: "POST",
+      body: JSON.stringify({
+        filename: workflowTableDownloadFilename(key),
+        projectName: state.details?.project || state.details?.projectName || "",
+        customerName: state.details?.customer || state.details?.customerName || "",
+        rows: table.rows
+      })
+    });
+    downloadBlob(blob, workflowTableDownloadFilename(key));
+    return;
+  }
   if (key === "boq") {
     const s = table.summary;
     summaryRows.push(["Total", money(s.total)], ["VAT 5%", money(s.vat)], ["Net Amount", money(s.netAmount)]);
   }
   const blob = buildTableWorkbookBlob({
-    title: key,
+    title: key === "vrvSchedule" ? workflowScheduleTitle() : key,
     columns: table.columns,
     rows: table.rows,
     summaryRows: summaryRows.map(([label, value]) => ({ label, value }))
   });
-  downloadBlob(blob, tableDownloadFilenames[key] || `${key}.xlsx`);
+  downloadBlob(blob, workflowTableDownloadFilename(key));
 }
 
 async function downloadQuotation() {
@@ -11341,6 +11972,12 @@ function costingActiveSheet() {
   return (costingState?.sheets || []).find(sheet => sheet.id === costingActiveSheetId) || null;
 }
 
+function costingLinkedQuotation(sheet = costingActiveSheet()) {
+  if (!sheet?.id) return null;
+  const quotations = [...(salesData().quotations || []), ...(costingState?.quotations || [])];
+  return quotations.find(quote => quote.sourceCostingSheetId === sheet.id) || null;
+}
+
 function newCostingSheet() {
   return {
     id: costingId(),
@@ -11435,7 +12072,7 @@ function costingSheetHtml() {
             ${rows.map((row, index) => `<button class="costing-row-rail-delete" data-costing-action="remove-row" data-costing-row-index="${index}" title="Remove row" aria-label="Remove row ${index + 1}">x</button>`).join("")}
           </aside>
         </div>
-        <div class="costing-table-actions"><button class="sales-secondary costing-add-row" data-costing-action="add-row">+ Add Item</button><button class="sales-primary costing-save-button" data-costing-action="save-sheet">Save</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Project Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div>
+        <div class="costing-table-actions"><button class="sales-secondary costing-add-row" data-costing-action="add-row">+ Add Item</button><button class="sales-primary costing-save-button" data-costing-action="save-sheet">Save</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Costing Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div>
         <section class="costing-totals">
           <div><span>Total Increased Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
           <div class="good"><span>Margin</span><strong>${totals.margin.toFixed(1)}%</strong></div>
@@ -11610,16 +12247,77 @@ function scheduleCostingSave() {
 
 async function saveCostingSheet() {
   const sheet = costingActiveSheet();
-  if (!sheet) return;
+  if (!sheet) return null;
   costingState = await api("/api/costing/sheets", { method: "POST", body: JSON.stringify(sheet) });
   costingLoadedAt = Date.now();
-  costingActiveSheetId = sheet.id;
   const savedSheet = (costingState.sheets || []).find(item => item.id === sheet.id);
-  if (savedSheet) savedSheet.isSaved = true;
+  if (!savedSheet) throw new Error("The Costing Sheet could not be saved.");
+  costingActiveSheetId = savedSheet.id;
+  savedSheet.isSaved = true;
   costingProjectSaved = true;
+  return savedSheet;
+}
+
+function costingModelFromQuotationItem(item = {}) {
+  const description = String(item.description || "").trim();
+  const price = (costingState?.priceItems || []).find(candidate => description === candidate.model || description.startsWith(`${candidate.model} -`));
+  return price?.model || description.split(" - ")[0].trim();
+}
+
+async function recoverLinkedCostingSheet(sheetId) {
+  const quote = salesQuotationDraft?.sourceCostingSheetId === sheetId
+    ? salesQuotationDraft
+    : (salesData().quotations || []).find(item => item.sourceCostingSheetId === sheetId);
+  if (!quote) return null;
+
+  const sheet = {
+    ...newCostingSheet(),
+    id: sheetId,
+    title: quote.project || "Costing Sheet",
+    customer: quote.customer || "",
+    project: quote.project || "",
+    enquiryNo: quote.enquiryNo || "",
+    rows: []
+  };
+  sheet.rows = (quote.items || []).map(item => {
+    const model = costingModelFromQuotationItem(item);
+    const price = costingPriceForModel(model);
+    const sellingPrice = costingNumber(item.unitPrice);
+    const increasedFinalPrice = price ? costingNumber(price.finalPrice) * (1 + costingNumber(sheet.priceIncrease) / 100) : sellingPrice * (1 - costingNumber(sheet.defaultMargin) / 100);
+    const finalPrice = price ? costingNumber(price.finalPrice) : increasedFinalPrice / (1 + costingNumber(sheet.priceIncrease) / 100);
+    return costingRowWithPrice({
+      id: costingId(),
+      model,
+      qty: Math.max(1, costingNumber(item.qty)),
+      finalPrice,
+      increasedFinalPrice,
+      sellingPrice,
+      priceSource: price ? "Price List" : "Recovered from quotation"
+    }, sheet);
+  });
+  costingState.sheets.unshift(sheet);
+  costingActiveSheetId = sheet.id;
+  return saveCostingSheet();
 }
 
 async function handleCostingClick(action, target) {
+  if (action === "open-linked-sheet") {
+    const sheetId = target.dataset.costingSheetId;
+    let latestCosting;
+    try {
+      latestCosting = await loadCosting({ force: true });
+    } catch (error) {
+      return toast(error.message || "Unable to load Costing Sheet");
+    }
+    let sheet = (latestCosting?.sheets || []).find(item => item.id === sheetId);
+    if (!sheet) sheet = await recoverLinkedCostingSheet(sheetId);
+    if (!sheet) return toast("The linked Costing Sheet is no longer available.");
+    costingActiveSheetId = sheet.id;
+    costingHistoryOpen = false;
+    costingMode = "sheet";
+    costingProjectSaved = !!sheet.isSaved;
+    return showSalesDesk("costing");
+  }
   if (action === "show-prices") { costingHistoryOpen = false; costingMode = "prices"; return showSalesDesk("costing"); }
   if (action === "back-to-costing") { costingHistoryOpen = false; costingMode = "sheet"; return showSalesDesk("costing"); }
   if (action === "show-all-sheets") {
@@ -11675,7 +12373,7 @@ async function handleCostingClick(action, target) {
   if (action === "save-sheet") {
     await saveCostingSheet();
     renderSalesDesk();
-    return toast("Project saved");
+    return toast("Costing saved");
   }
   if (action === "new-sheet") {
     const sheet = newCostingSheet();
@@ -11740,10 +12438,15 @@ function costingQuotationDescription(row) {
 }
 
 async function createQuotationFromCosting() {
-  const sheet = activeCostingOrDraft();
+  activeCostingOrDraft();
+  const sheet = await saveCostingSheet();
+  if (!sheet) return toast("Save the Costing Sheet before creating a quotation.");
+  if (!salesCrmState) await loadSalesCrm().catch(error => toast(error.message || "Unable to load quotations"));
+  const linkedQuote = costingLinkedQuotation(sheet);
+  if (linkedQuote?.id) return editSalesQuotation(linkedQuote.id);
   const lines = (sheet.rows || []).filter(row => row.model && costingNumber(row.qty) > 0).map(row => ({ description: costingQuotationDescription(row), qty: costingNumber(row.qty), unit: "Nos", unitPrice: costingNumber(row.sellingPrice) }));
   if (!lines.length) return toast("Add at least one priced model before creating a quotation.");
-  return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "" });
+  return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "", sourceCostingSheetId: sheet.id });
 }
 
 function exportCostingSheet() {
