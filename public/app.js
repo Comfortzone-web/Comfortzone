@@ -7370,7 +7370,7 @@ function tableAutoHeight(key, rowCount) {
   const rows = Math.max(0, rowCount);
   if (isDxWorkflow() && key === "thermal") return Math.max(205, Math.min(500, 104 + rows * 28 + 54));
   if (isDxWorkflow() && key === "vrvSchedule") return Math.max(230, Math.min(340, 104 + rows * 28 + 54));
-  if (key === "costing") return Math.max(220, 110 + rows * 28 + 110);
+  if (key === "costing") return 185;
   if (key === "boq") return Math.max(190, 104 + rows * 28 + 74);
   if (key === "thermal") return Math.max(205, 104 + rows * 28 + 54);
   if (key === "vrvSchedule") return Math.max(230, 104 + rows * 28 + 54);
@@ -7386,11 +7386,16 @@ function workflowLayoutNodeHeight(node, fallbackHeight) {
 function applyAutoNodeSize(node, heights) {
   const sizes = {
     "thermal-table": [isDxWorkflow() ? 640 : 520, heights.thermalHeight],
-    "costing-table": [650, heights.costingHeight],
+    "costing-table": [280, heights.costingHeight],
     "boq-table": [650, heights.boqHeight],
     "vrv-schedule": [isDxWorkflow() ? 1180 : 1550, heights.vrvHeight]
   };
   if (sizes[node.id]) {
+    if (node.id === "costing-table") {
+      node.width = sizes[node.id][0];
+      node.height = sizes[node.id][1];
+      return;
+    }
     node.width = Math.max(node.width || 0, sizes[node.id][0]);
     node.height = isDxWorkflow()
       ? Math.max(workflowNodeDefaultSize(node.id)?.[1] || 0, sizes[node.id][1])
@@ -7409,7 +7414,7 @@ function applyDefaultNodeSize(node, reset = false) {
 function workflowNodeDefaultSize(nodeId) {
   const sizes = {
     "thermal-table": [isDxWorkflow() ? dxWorkflowDefaultSizes["thermal-table"][0] : 520, dxWorkflowDefaultSizes["thermal-table"][1]],
-    "costing-table": [650, 220],
+    "costing-table": [280, 185],
     "boq-table": [650, 190],
     "vrv-schedule": [isDxWorkflow() ? dxWorkflowDefaultSizes["vrv-schedule"][0] : 1550, dxWorkflowDefaultSizes["vrv-schedule"][1]]
   };
@@ -7474,9 +7479,10 @@ function renderNode(node) {
   template.querySelector(".node-body").appendChild(nodeBody(node));
   if (["projectDetails"].includes(node.type)) template.classList.add("details-node");
   if (["thermalUpload", "vrvUpload", "file"].includes(node.type)) template.classList.add("upload-node");
-  if (["thermalTable", "costingTable", "boqTable"].includes(node.type)) template.classList.add("table-node");
+  if (node.type === "costingTable") template.classList.add("workflow-costing-node");
+  if (["thermalTable", "boqTable"].includes(node.type)) template.classList.add("table-node");
   if (node.type === "vrvSchedule") template.classList.add("wide-node");
-  if (tableKeys[node.type]) template.classList.add("resizable-node");
+  if (tableKeys[node.type] && node.type !== "costingTable") template.classList.add("resizable-node");
   if (node.locked) template.style.resize = "none";
   if (node.type === "quotation") template.classList.add("quotation-node");
   bindNode(template, node);
@@ -7582,9 +7588,10 @@ function bindNode(el, node) {
 
 function menuItems(node) {
   const lockedText = node.locked ? "Unlock" : "Lock";
-  const download = tableKeys[node.type] ? `<button data-action="download">Download Excel</button>` : "";
+  const isVisibleTable = tableKeys[node.type] && node.type !== "costingTable";
+  const download = isVisibleTable ? `<button data-action="download">Download Excel</button>` : "";
   const quotationDownload = node.type === "quotation" ? `<button data-action="download-doc">Download Word</button>` : "";
-  const regen = tableKeys[node.type] ? `<button data-action="regenerate">Regenerate</button>` : "";
+  const regen = isVisibleTable ? `<button data-action="regenerate">Regenerate</button>` : "";
   const preview = node.type === "file" || node.type.includes("Upload") ? `<button data-action="preview">Preview File</button>` : "";
   const uploadDownload = ["thermalUpload", "vrvUpload"].includes(node.type) && node.data?.uploadId ? `<button data-action="download-upload">Download File</button>` : "";
   const clearChat = node.type === "thermalUpload" ? `<button data-action="clear-thermal-chat">Clear Chat</button>` : "";
@@ -7620,6 +7627,7 @@ function nodeBody(node) {
   if (node.type === "projectDetails") return detailsBody();
   if (node.type === "thermalUpload") return thermalUploadBody(node);
   if (node.type === "vrvUpload") return vrvUploadBody(node);
+  if (node.type === "costingTable") return workflowCostingButtonBody();
   if (tableKeys[node.type]) return tableBody(tableKeys[node.type], node);
   if (node.type === "quotation") return quotationBody();
   if (node.type === "file") return fileBody(node);
@@ -7829,7 +7837,7 @@ async function buildVrvTablesFromNode(node) {
     saveProject();
     return;
   }
-  generateWorkflow();
+  await generateWorkflow();
 }
 
 function tableBody(key, node) {
@@ -7840,6 +7848,7 @@ function tableBody(key, node) {
     wrap.innerHTML = `<div class="upload-card"><div><strong>${node.title} unavailable</strong></div></div>`;
     return wrap;
   }
+  if (key === "costing") recalcCosting();
   const scroll = div("table-scroll");
   const isDxSchedule = key === "vrvSchedule" && isDxWorkflow();
   const dxHeader = isDxSchedule ? dxScheduleTableHeader() : "";
@@ -7876,6 +7885,11 @@ function tableBody(key, node) {
       row[cell.dataset.col] = cell.textContent.trim();
       clearTableCellReview(row, cell.dataset.col);
       if (cell.dataset.table === "costing") {
+        if (cell.dataset.col === "Model") {
+          row["Final Price (AED)"] = "";
+          row["Increased Final Price (AED)"] = "";
+          row["Amount (AED)"] = "";
+        }
         recalcCosting();
         buildBoqFromCosting();
       }
@@ -8059,12 +8073,7 @@ function summaryBody(key) {
   const summary = state.tables[key].summary || {};
   const rows = key === "costing"
     ? [
-        ["Total TR", fmt(summary.totalTR)],
-        ["Total Cost", money(summary.totalCost)],
-        ["Margin", `<input class="margin-input" value="${Number(summary.margin || 0.1) * 100}"> %`],
-        ["Selling Price", money(summary.sellingPrice)],
-        ["Profit", money(summary.profit)],
-        ["Price / Ton", money(summary.pricePerTon)]
+        ["Total Amount", money(summary.totalAmount)]
       ]
     : [
         ["Total", money(summary.total)],
@@ -8072,17 +8081,80 @@ function summaryBody(key) {
         ["Net Amount", money(summary.netAmount)]
       ];
   box.innerHTML = rows.map(([k, v]) => `<strong>${k}</strong><span>${v}</span>`).join("");
-  const margin = box.querySelector(".margin-input");
-  if (margin) {
-    margin.addEventListener("change", () => {
-      state.tables.costing.summary.margin = Number(margin.value || 10) / 100;
-      recalcCosting();
-      buildBoqFromCosting();
-      render();
-      saveProject();
-    });
-  }
   return box;
+}
+
+function workflowCostingButtonBody() {
+  const wrap = document.createElement("div");
+  const count = workflowCostingSourceRows().length || state.tables.costing.rows.length || 0;
+  wrap.innerHTML = `
+    <button class="upload-card workflow-costing-button" id="workflowOpenCostingBtn" type="button">
+      <div>
+        <div class="workflow-costing-icon">AED</div>
+        <strong>Costing Sheet</strong>
+        <span>${count ? `${count} extracted item${count === 1 ? "" : "s"}` : "Open Sales Desk Costing"}</span>
+      </div>
+    </button>
+  `;
+  wrap.querySelector("#workflowOpenCostingBtn").addEventListener("click", openWorkflowCostingSheet);
+  return wrap;
+}
+
+function workflowCostingSourceRows() {
+  const materialRows = state.extracted?.vrv?.materialRows || [];
+  if (materialRows.length) return materialRows.map(row => ({ model: row.model, qty: row.qty }));
+  return (state.tables.costing.rows || [])
+    .filter(row => row.Model)
+    .map(row => ({ model: row.Model, qty: row.Qty }));
+}
+
+function findWorkflowCostingSheet(sheets = []) {
+  const projectKey = norm(state.details?.project || state.title || "");
+  const customerKey = norm(state.details?.customer || "");
+  return sheets.find(sheet => sheet.sourceWorkflowProjectId === state.id)
+    || sheets.find(sheet => {
+      if (!sheet.isSaved || !projectKey) return false;
+      const sheetProject = norm(sheet.project || sheet.title || "");
+      if (sheetProject !== projectKey) return false;
+      return !customerKey || !sheet.customer || norm(sheet.customer) === customerKey;
+    })
+    || null;
+}
+
+async function openWorkflowCostingSheet() {
+  await loadCosting({ force: true }).catch(error => toast(error.message || "Unable to load Sales Desk Price List"));
+  const sourceRows = workflowCostingSourceRows();
+  if (!sourceRows.length) return toast("Build tables from the VRV Selection Report first.");
+  const existing = findWorkflowCostingSheet(costingState?.sheets || []);
+  const sheet = existing || newCostingSheet();
+  sheet.sourceWorkflowProjectId = state.id;
+  if (!existing) {
+    costingState = costingState || { priceItems: [], sheets: [], customers: [], projects: [], stockModels: [] };
+    costingState.sheets.unshift(sheet);
+  }
+  if (!sheet.isSaved) {
+    sheet.customer = state.details.customer || sheet.customer || "";
+    sheet.project = state.details.project || state.title || sheet.project || "";
+    sheet.title = sheet.project || "Costing Sheet";
+    sheet.enquiryNo = state.details.enquiryNo || sheet.enquiryNo || "";
+    sheet.rows = sourceRows.map(row => costingRowWithPrice({
+      id: costingId(),
+      model: row.model || "",
+      qty: Math.max(1, costingNumber(row.qty || 1)),
+      listPrice: 0,
+      multiplier: 1,
+      costPrice: 0,
+      finalPrice: 0,
+      increasedFinalPrice: 0,
+      sellingPrice: 0,
+      priceSource: "Price List"
+    }, sheet));
+  }
+  costingActiveSheetId = sheet.id;
+  costingHistoryOpen = false;
+  costingProjectSaved = !!sheet.isSaved;
+  costingMode = "sheet";
+  showSalesDesk("costing");
 }
 
 function quotationBody() {
@@ -8124,7 +8196,7 @@ async function createSalesQuotationFromWorkflow() {
     location: state.details.location || "",
     enquiryNo: state.details.enquiryNo || "",
     items: workflowBoqQuoteItems(),
-    manualSubtotal: money(state.tables.boq.summary?.total || state.tables.costing.summary?.sellingPrice || 0)
+    manualSubtotal: money(state.tables.boq.summary?.total || state.tables.costing.summary?.totalAmount || 0)
   });
   salesQuotationRevisionNoLock = "";
   salesQuotationMode = "create";
@@ -10728,6 +10800,7 @@ async function extractVrvUpload(uploadId) {
   state.extracted = state.extracted || {};
   state.extracted.vrv = extracted;
   if (extracted.projectName && !state.details.project) state.details.project = extracted.projectName;
+  await ensureWorkflowCostingPriceList();
   if (extracted.materialRows && extracted.materialRows.length) {
     buildCosting(extracted.materialRows.map(row => [row.model, row.qty]));
     buildBoqFromCosting();
@@ -10751,7 +10824,7 @@ function projectNameFromFile(name) {
   return match ? match[1].trim() : name.replace(/\.[^.]+$/, "");
 }
 
-function generateWorkflow() {
+async function generateWorkflow() {
   if (isDxWorkflow()) {
     buildDxSchedule();
     autoLayoutWorkflow();
@@ -10759,7 +10832,7 @@ function generateWorkflow() {
     saveProject();
     return;
   }
-  if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
+  await ensureWorkflowCostingPriceList();
   const vrv = state.extracted && state.extracted.vrv;
   if (vrv?.materialRows?.length) {
     buildCosting(vrv.materialRows.map(row => [row.model, row.qty]));
@@ -10771,21 +10844,39 @@ function generateWorkflow() {
   saveProject();
 }
 
+async function ensureWorkflowCostingPriceList() {
+  if (costingState?.priceItems?.length) return costingState.priceItems;
+  try {
+    await loadCosting();
+  } catch (error) {
+    toast(error.message || "Unable to load Sales Desk Price List");
+  }
+  return workflowCostingPriceItems();
+}
+
+function workflowCostingPriceItems() {
+  return costingState?.priceItems?.length ? costingState.priceItems : [];
+}
+
+function workflowCostingColumns() {
+  return ["S.No", "Model", "Qty", "Final Price (AED)", "Increased Final Price (AED)", "Amount (AED)"];
+}
+
 function buildCosting(materialRows) {
-  const cols = state.tables.costing.columns;
-  const lookup = new Map(state.priceList.items.map(item => [norm(item.model), item]));
+  const cols = workflowCostingColumns();
+  const lookup = new Map(workflowCostingPriceItems().map(item => [norm(item.model), item]));
   state.tables.costing.rows = materialRows.map(([model, qty], index) => {
     const item = lookup.get(norm(model));
+    const finalPrice = item ? num(item.finalPrice) : 0;
+    const increasedFinalPrice = finalPrice ? round2(finalPrice * 1.2) : "";
+    const amount = increasedFinalPrice ? round2(increasedFinalPrice * num(qty)) : "";
     return {
       "S.No": index + 1,
       Model: model,
       Qty: qty,
-      TR: item ? round2(item.tr || 0) : "",
-      "List Price": item ? item.listPrice : "",
-      Multiplier: item ? item.multiplier : "",
-      Cost: "",
-      Amount: "",
-      "Selling Price / Unit": ""
+      "Final Price (AED)": finalPrice ? round2(finalPrice) : "",
+      "Increased Final Price (AED)": increasedFinalPrice,
+      "Amount (AED)": amount
     };
   });
   recalcCosting();
@@ -10793,43 +10884,35 @@ function buildCosting(materialRows) {
 }
 
 function recalcCosting() {
-  const summary = state.tables.costing.summary || { margin: 0.1 };
-  const rawMargin = Number(summary.margin ?? 0.1);
-  const margin = Math.min(Math.max(rawMargin, 0), 0.99);
-  const sellingDivisor = 1 - margin;
-  let totalTR = 0;
-  let totalCost = 0;
+  state.tables.costing.columns = workflowCostingColumns();
+  const summary = state.tables.costing.summary || { priceIncrease: 20 };
+  const priceIncrease = num(summary.priceIncrease ?? 20) / 100;
+  const lookup = new Map(workflowCostingPriceItems().map(item => [norm(item.model), item]));
+  let totalAmount = 0;
   state.tables.costing.rows.forEach((row, index) => {
     row["S.No"] = index + 1;
     const qty = num(row.Qty);
-    const tr = num(row.TR);
-    const list = num(row["List Price"]);
-    const multiplier = num(row.Multiplier);
-    const cost = list && multiplier ? list * multiplier : num(row.Cost);
-    const amount = cost * qty;
-    if (row.TR !== "" && row.TR != null) row.TR = round2(tr);
-    row.Cost = cost ? round2(cost) : "";
-    row.Amount = amount ? round2(amount) : "";
-    row["Selling Price / Unit"] = cost ? round2(cost / sellingDivisor) : "";
-    totalTR += tr * qty;
-    totalCost += amount;
+    const price = lookup.get(norm(row.Model));
+    const finalPrice = num(row["Final Price (AED)"]) || num(price?.finalPrice);
+    const increasedFinalPrice = num(row["Increased Final Price (AED)"]) || num(row["Increased Final Price"]) || (finalPrice ? round2(finalPrice * (1 + priceIncrease)) : 0);
+    const amount = increasedFinalPrice * qty;
+    row["Final Price (AED)"] = finalPrice ? round2(finalPrice) : "";
+    row["Increased Final Price (AED)"] = increasedFinalPrice ? round2(increasedFinalPrice) : "";
+    row["Amount (AED)"] = amount ? round2(amount) : "";
+    totalAmount += amount;
   });
-  summary.totalTR = round2(totalTR);
-  summary.totalCost = round2(totalCost);
-  summary.margin = margin;
-  summary.sellingPrice = round2(totalCost / sellingDivisor);
-  summary.profit = round2(summary.sellingPrice - totalCost);
-  summary.pricePerTon = totalTR ? round2(summary.sellingPrice / totalTR) : 0;
+  summary.totalAmount = round2(totalAmount);
+  summary.priceIncrease = num(summary.priceIncrease ?? 20) || 20;
   state.tables.costing.summary = summary;
 }
 
 function buildBoqFromCosting() {
-  const lookup = new Map(state.priceList.items.map(item => [norm(item.model), item]));
+  const lookup = new Map(workflowCostingPriceItems().map(item => [norm(item.model), item]));
   state.tables.boq.rows = state.tables.costing.rows.map((row, index) => {
     const item = lookup.get(norm(row.Model));
     return {
       "S.No": index + 1,
-      Description: item ? item.boqDescription : row.Model,
+      Description: item ? [item.model, item.description, item.origin].filter(Boolean).join(" - ") : row.Model,
       Qty: row.Qty,
       Unit: "Nos"
     };
@@ -10838,7 +10921,7 @@ function buildBoqFromCosting() {
 }
 
 function recalcBoq() {
-  const total = Number(state.tables.costing.summary?.sellingPrice || 0);
+  const total = Number(state.tables.costing.summary?.totalAmount || 0);
   state.tables.boq.summary = {
     total: round2(total),
     vat: round2(total * 0.05),
@@ -11414,12 +11497,7 @@ async function downloadTable(key) {
     recalcBoq();
     const s = state.tables.costing.summary || {};
     summaryRows.push(
-      ["Total TR", money(s.totalTr)],
-      ["Total Cost", money(s.totalCost)],
-      ["Margin", `${Math.round(Number(s.margin || 0) * 100)}%`],
-      ["Selling Price", money(s.sellingPrice)],
-      ["Profit", money(s.profit)],
-      ["Price / Ton", money(s.pricePerTon)]
+      ["Total Amount", money(s.totalAmount)]
     );
   }
   if (key === "vrvSchedule" && !isDxWorkflow()) {

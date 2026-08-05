@@ -611,6 +611,43 @@ input, select, textarea {
   line-height: 1.15;
 }
 
+.workflow-costing-node {
+  min-width: 260px;
+}
+
+.workflow-costing-node .node-body {
+  display: grid;
+}
+
+.workflow-costing-button {
+  height: 125px;
+  width: 100%;
+  cursor: pointer;
+}
+
+.workflow-costing-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: #eaf2ff;
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.workflow-costing-button strong {
+  color: #0b2453;
+  font-size: 18px;
+}
+
+.workflow-costing-button span {
+  font-size: 13px;
+}
+
 .node-actions {
   display: flex;
   gap: 8px;

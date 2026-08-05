@@ -569,6 +569,7 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
     customer: cleanCell(input.customer || ""),
     project: cleanCell(input.project || ""),
     enquiryNo: cleanCell(input.enquiryNo || ""),
+    sourceWorkflowProjectId: cleanCell(input.sourceWorkflowProjectId || ""),
     defaultMargin,
     priceIncrease,
     rows: Array.isArray(input.rows) ? input.rows.map(row => normalizeCostingRow({ ...row, defaultMargin, priceIncrease }, priceItems)) : [],
@@ -1064,6 +1065,12 @@ function loadMasterLookups() {
 }
 
 function loadMasterPriceList() {
+  if (fs.existsSync(COSTING_SHEETS_FILE)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(COSTING_SHEETS_FILE, "utf8"));
+      if (Array.isArray(parsed.priceItems)) return { items: parsed.priceItems };
+    } catch {}
+  }
   if (fs.existsSync(MASTER_PRICE_LIST)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(MASTER_PRICE_LIST, "utf8"));
@@ -1205,7 +1212,7 @@ function workflowThermalColumns(mode = "vrv") {
 }
 
 function costingColumns() {
-  return ["S.No", "Model", "Qty", "TR", "List Price", "Multiplier", "Cost", "Amount", "Selling Price / Unit"];
+  return ["S.No", "Model", "Qty", "Final Price (AED)", "Increased Final Price (AED)", "Amount (AED)"];
 }
 
 function boqColumns() {
@@ -1213,7 +1220,7 @@ function boqColumns() {
 }
 
 function defaultCostingSummary() {
-  return { totalTR: 0, totalCost: 0, margin: 0.1, sellingPrice: 0, profit: 0, pricePerTon: 0 };
+  return { totalAmount: 0, priceIncrease: 20 };
 }
 
 function vrvColumns() {
@@ -7522,12 +7529,9 @@ const COSTING_EXPORT_COLUMNS = [
   "S.No",
   "Model",
   "Qty",
-  "TR",
-  "List Price",
-  "Multiplier",
-  "Cost",
-  "Amount",
-  "Selling Price / Unit"
+  "Final Price (AED)",
+  "Increased Final Price (AED)",
+  "Amount (AED)"
 ];
 
 function generateCostingWorkbook(payload = {}) {
@@ -7539,7 +7543,7 @@ function generateCostingWorkbook(payload = {}) {
 
   sheetRows.push(costingRowXml(headerRowNumber, COSTING_EXPORT_COLUMNS.map((column, index) => ({
     column: index + 1,
-    value: column === "Selling Price / Unit" ? "Selling Price\n/ Unit" : column,
+    value: column,
     style: 1
   })), 30));
 
@@ -7549,31 +7553,23 @@ function generateCostingWorkbook(payload = {}) {
       { column: 1, value: numberOrText(row["S.No"] || index + 1), style: 3 },
       { column: 2, value: row.Model || "", style: 2 },
       { column: 3, value: numberOrText(row.Qty), style: 3 },
-      { column: 4, value: numberOrText(row.TR), style: 12 },
-      { column: 5, value: numberOrText(row["List Price"]), style: 4 },
-      { column: 6, value: numberOrText(row.Multiplier), style: 11 },
-      { column: 7, value: numberOrText(row.Cost), style: 4 },
-      { column: 8, value: numberOrText(row.Amount), style: 4 },
-      { column: 9, value: numberOrText(row["Selling Price / Unit"]), style: 4 }
+      { column: 4, value: numberOrText(row["Final Price (AED)"]), style: 4 },
+      { column: 5, value: numberOrText(row["Increased Final Price (AED)"] ?? row["Increased Final Price"]), style: 4 },
+      { column: 6, value: numberOrText(row["Amount (AED)"] ?? row["Amount AED"]), style: 4 }
     ]));
   });
 
   const summaryStart = firstDataRow + rows.length;
   const summaryRows = [
-    { label: "Total Cost", value: numberOrText(summary.totalCost), labelStyle: 6, valueStyle: 7, tr: numberOrText(summary.totalTR) },
-    { label: "Margin", value: Number(summary.margin || 0), labelStyle: 6, valueStyle: 10 },
-    { label: "Selling Price", value: numberOrText(summary.sellingPrice), labelStyle: 6, valueStyle: 7 },
-    { label: "Profit", value: numberOrText(summary.profit), labelStyle: 8, valueStyle: 9 },
-    { label: "Price / Ton", value: numberOrText(summary.pricePerTon), labelStyle: 6, valueStyle: 7 }
+    { label: "Total Amount", value: numberOrText(summary.totalAmount), labelStyle: 6, valueStyle: 7 }
   ];
 
   summaryRows.forEach((item, index) => {
     const rowNumber = summaryStart + index;
     const cells = [
-      { column: 7, value: item.label, style: item.labelStyle },
-      { column: 8, value: item.value, style: item.valueStyle }
+      { column: 5, value: item.label, style: item.labelStyle },
+      { column: 6, value: item.value, style: item.valueStyle }
     ];
-    if (index === 0) cells.push({ column: 4, value: item.tr, style: 13 });
     sheetRows.push(costingRowXml(rowNumber, cells));
   });
 
@@ -7584,11 +7580,8 @@ function generateCostingWorkbook(payload = {}) {
   <cols>
     <col min="1" max="1" width="8" customWidth="1"/>
     <col min="2" max="2" width="34" customWidth="1"/>
-    <col min="3" max="4" width="9" customWidth="1"/>
-    <col min="5" max="5" width="13" customWidth="1"/>
-    <col min="6" max="6" width="12" customWidth="1"/>
-    <col min="7" max="8" width="14" customWidth="1"/>
-    <col min="9" max="9" width="15" customWidth="1"/>
+    <col min="3" max="3" width="9" customWidth="1"/>
+    <col min="4" max="6" width="18" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows.join("")}</sheetData>
   <pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>
