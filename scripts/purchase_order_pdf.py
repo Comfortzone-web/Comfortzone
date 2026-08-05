@@ -160,6 +160,7 @@ def draw_party_and_details(c, po, x, y, width):
     details = [
         ("PO No:", po.get("poNo")),
         ("PO Date:", fmt_date(po.get("poDate"))),
+        ("Project Name:", po.get("projectName")),
         ("Reference:", po.get("quotationNo")),
         ("Payment Terms:", po.get("paymentTerms")),
         ("Purchase Rep:", po.get("purchaseRepresentative")),
@@ -170,7 +171,9 @@ def draw_party_and_details(c, po, x, y, width):
         c.setFont("Helvetica-Bold", 11)
         c.drawString(right_x, row_y, label)
         c.setFont("Helvetica", 10.5)
-        c.drawRightString(value_x, row_y, esc(value))
+        value_lines = wrap_text_width(value, 114, "Helvetica", 10.5)[:2]
+        for line_idx, line in enumerate(value_lines):
+            c.drawRightString(value_x, row_y - line_idx * 11, line)
 
 
 def item_row_height(item):

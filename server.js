@@ -6606,14 +6606,23 @@ async function purchaseOrderPdfBuffer(order) {
       const details = [
         ["PO No:", order.poNo],
         ["PO Date:", formatPdfDate(order.poDate)],
+        ["Project Name:", order.projectName],
         ["Reference:", order.quotationNo],
         ["Payment Terms:", order.paymentTerms],
         ["Purchase Rep:", order.purchaseRepresentative]
       ].filter(([, value]) => String(value || "").trim());
       details.forEach(([label, value], index) => {
         const rowY = y - index * 18;
-        doc.font(sansBoldFont).fontSize(11).text(label, pageWidth - 262, py(rowY, 11), { width: 100 });
-        doc.font(sansFont).fontSize(10.5).text(String(value || ""), pageWidth - 180, py(rowY, 10.5), { width: 122, align: "right" });
+        const labelX = pageWidth - 262;
+        const valueX = pageWidth - 172;
+        const valueW = 114;
+        doc.font(sansBoldFont).fontSize(11).text(label, labelX, py(rowY, 11), { width: 96 });
+        doc.font(sansFont).fontSize(10.5).text(String(value || ""), valueX, py(rowY, 10.5), {
+          width: valueW,
+          height: 26,
+          align: "right",
+          lineGap: 1
+        });
       });
     };
 
