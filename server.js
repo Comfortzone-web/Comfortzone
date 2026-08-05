@@ -5011,7 +5011,7 @@ function normalizePurchaseOrder(input = {}, store = defaultPurchaseOrders(), cre
     quotationDate: parseServerDate(input.quotationDate),
     purchaseRepresentative: cleanCell(input.purchaseRepresentative),
     poDate: parseServerDate(input.poDate) || todayISO(),
-    projectName: cleanCell(input.projectName),
+    projectName: cleanCell(input.projectName || input.project || input.jobDescription || input.description),
     deliveryTerms: cleanCell(input.deliveryTerms),
     paymentTerms: normalizePurchasePaymentTerms(input.paymentTerms),
     manualSubtotal: cleanCell(input.manualSubtotal),
@@ -6606,7 +6606,7 @@ async function purchaseOrderPdfBuffer(order) {
       const details = [
         ["PO No:", order.poNo],
         ["PO Date:", formatPdfDate(order.poDate)],
-        ["Project Name:", order.projectName],
+        ["Project:", order.projectName || order.project || order.jobDescription || order.description],
         ["Reference:", order.quotationNo],
         ["Payment Terms:", order.paymentTerms],
         ["Purchase Rep:", order.purchaseRepresentative]

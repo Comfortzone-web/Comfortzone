@@ -160,7 +160,7 @@ def draw_party_and_details(c, po, x, y, width):
     details = [
         ("PO No:", po.get("poNo")),
         ("PO Date:", fmt_date(po.get("poDate"))),
-        ("Project Name:", po.get("projectName")),
+        ("Project:", po.get("projectName") or po.get("project") or po.get("jobDescription") or po.get("description")),
         ("Reference:", po.get("quotationNo")),
         ("Payment Terms:", po.get("paymentTerms")),
         ("Purchase Rep:", po.get("purchaseRepresentative")),
