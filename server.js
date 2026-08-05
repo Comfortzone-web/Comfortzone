@@ -7795,12 +7795,14 @@ function generateDxSelectionWorkbook(payload = {}) {
 }
 
 function fillDxSelectionSheetXml(xml, payload = {}) {
+  const templateRowNumber = xlsxDxTemplateRowNumber(xml);
+  const templateLastRow = xlsxDxLastDataRow(xml, templateRowNumber);
+  xml = xlsxExpandDxSelectionSharedFormulas(xml);
   const originalRows = xlsxRowsByNumber(xml);
-  const templateRowNumber = 17;
-  const lastDataRow = 165;
+  const inputRows = Array.isArray(payload.rows) ? payload.rows : [];
+  const lastDataRow = Math.max(templateLastRow, templateRowNumber + inputRows.length - 1);
   const templateRow = originalRows[templateRowNumber];
   if (!templateRow) throw new Error("DX Selection Sheet data row template was not found.");
-  const inputRows = Array.isArray(payload.rows) ? payload.rows : [];
   let next = xml;
 
   [
@@ -7814,7 +7816,9 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
   });
 
   for (let rowNumber = templateRowNumber; rowNumber <= lastDataRow; rowNumber += 1) {
-    const sourceRow = inputRows[rowNumber - templateRowNumber] || {};
+    const sourceIndex = rowNumber - templateRowNumber;
+    const sourceRow = inputRows[sourceIndex] || {};
+    const hasSourceRow = sourceIndex < inputRows.length;
     const currentRow = originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
     const styles = xlsxRowStyleMap(currentRow);
     let updatedRow = currentRow;
@@ -7826,19 +7830,62 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
       D: firstFilled(sourceRow, ["Location"]),
       E: firstFilled(sourceRow, ["TKw"]),
       F: firstFilled(sourceRow, ["SKw"]),
-      G: firstFilled(sourceRow, ["L/S"]),
-      AN: modelValue,
-      AO: qtyValue
+      G: firstFilled(sourceRow, ["L/S"])
     };
-    if (modelValue !== "") values.H = modelValue;
-    if (qtyValue !== "") values.I = qtyValue;
+    if (hasSourceRow && modelValue !== "") values.AN = modelValue;
+    if (hasSourceRow && qtyValue !== "") values.AO = qtyValue;
     for (const [column, value] of Object.entries(values)) {
       updatedRow = xlsxUpsertCell(updatedRow, `${column}${rowNumber}`, value, styles[column]);
     }
+    if (modelValue !== "") updatedRow = xlsxSetFormulaCachedValue(updatedRow, `H${rowNumber}`, modelValue, styles.H);
+    if (qtyValue !== "") updatedRow = xlsxSetFormulaCachedValue(updatedRow, `I${rowNumber}`, qtyValue, styles.I);
     next = replaceXlsxRow(next, rowNumber, updatedRow);
   }
 
   return next;
+}
+
+function xlsxDxTemplateRowNumber(xml) {
+  const rows = xlsxRowsByNumber(xml);
+  for (const rowNumber of Object.keys(rows).map(Number).sort((a, b) => a - b)) {
+    const cellXml = xlsxCellXml(rows[rowNumber], `H${rowNumber}`);
+    if (cellXml && new RegExp(`\\bref="H${rowNumber}:H\\d+"|>\\s*AN${rowNumber}\\s*<`, "i").test(cellXml)) return rowNumber;
+  }
+  return 17;
+}
+
+function xlsxDxLastDataRow(xml, templateRowNumber) {
+  const templateCell = xlsxCellXml(xlsxRowsByNumber(xml)[templateRowNumber] || "", `H${templateRowNumber}`);
+  const sharedMatch = templateCell.match(new RegExp(`<f\\b[^>]*\\bref="H${templateRowNumber}:H(\\d+)"`, "i"));
+  if (sharedMatch) return Number(sharedMatch[1]) || templateRowNumber;
+  const rows = xlsxRowsByNumber(xml);
+  let lastRow = templateRowNumber;
+  for (const rowNumber of Object.keys(rows).map(Number)) {
+    if (rowNumber < templateRowNumber) continue;
+    const cellXml = xlsxCellXml(rows[rowNumber], `H${rowNumber}`);
+    if (cellXml && new RegExp(`>\\s*AN${rowNumber}\\s*<`, "i").test(cellXml)) lastRow = Math.max(lastRow, rowNumber);
+  }
+  return lastRow;
+}
+
+function xlsxExpandDxSelectionSharedFormulas(xml) {
+  const formulasByColumn = {
+    H: rowNumber => `AN${rowNumber}`,
+    I: rowNumber => `AO${rowNumber}`,
+    AM: rowNumber => `MAX(AJ${rowNumber}:AL${rowNumber})`,
+    AO: rowNumber => `IF(OR(AN${rowNumber}="",AN${rowNumber}=0),"",1)`
+  };
+  return xml.replace(/<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g, cellXml => {
+    const refMatch = cellXml.match(/\br="([A-Z]+)(\d+)"/);
+    if (!refMatch) return cellXml;
+    const [, column, rowText] = refMatch;
+    const formula = formulasByColumn[column]?.(Number(rowText));
+    if (!formula || !/<f\b[^>]*\bt="shared"/i.test(cellXml)) return cellXml;
+    if (/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/i.test(cellXml)) {
+      return cellXml.replace(/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/i, `<f>${escapeXml(formula)}</f>`);
+    }
+    return cellXml.replace(/(<c\b[^>]*>)/i, `$1<f>${escapeXml(formula)}</f>`);
+  });
 }
 
 function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
@@ -8017,17 +8064,40 @@ function xlsxRowStyleMap(rowXml) {
 }
 
 function xlsxCellStyle(rowXml, ref) {
-  const match = rowXml.match(new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*>`, "i"));
+  const match = xlsxCellXml(rowXml, ref)?.match(/<c\b[^>]*>/i);
   return match?.[0]?.match(/\bs="([^"]+)"/)?.[1] || "";
+}
+
+function xlsxCellXml(rowXml, ref) {
+  return rowXml.match(xlsxCellRegex(ref))?.[0] || "";
+}
+
+function xlsxCellRegex(ref) {
+  const safeRef = escapeRegExp(ref);
+  return new RegExp(`<c\\b(?=[^>]*\\br="${safeRef}")[^>]*\\/>|<c\\b(?=[^>]*\\br="${safeRef}")[^>]*>[\\s\\S]*?<\\/c>`, "i");
 }
 
 function xlsxUpsertCell(rowXml, ref, value, styleId = "") {
   const col = ref.match(/^[A-Z]+/)?.[0] || "";
   const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
   const cell = xlsxCell(col, rowNumber, value, styleId);
-  const cellRegex = new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)`, "i");
+  const cellRegex = xlsxCellRegex(ref);
   if (cellRegex.test(rowXml)) return rowXml.replace(cellRegex, cell);
   return rowXml.replace(/<\/row>$/, `${cell}</row>`);
+}
+
+function xlsxSetFormulaCachedValue(rowXml, ref, value, styleId = "") {
+  const col = ref.match(/^[A-Z]+/)?.[0] || "";
+  const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
+  const cellRegex = xlsxCellRegex(ref);
+  if (!cellRegex.test(rowXml)) return xlsxUpsertCell(rowXml, ref, value, styleId);
+  return rowXml.replace(cellRegex, cellXml => {
+    if (!/<f\b/i.test(cellXml)) return xlsxCell(col, rowNumber, value, styleId);
+    const cachedValue = value === undefined || value === null || value === "" ? "" : escapeXml(value);
+    if (/<v\b[^>]*\/>/i.test(cellXml)) return cellXml.replace(/<v\b[^>]*\/>/i, cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`);
+    if (/<v\b[^>]*>[\s\S]*?<\/v>/i.test(cellXml)) return cellXml.replace(/<v\b[^>]*>[\s\S]*?<\/v>/i, cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`);
+    return cellXml.replace(/<\/f>/i, `</f>${cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`}`);
+  });
 }
 
 function xlsxCell(col, rowNumber, value, styleId = "") {
