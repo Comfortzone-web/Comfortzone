@@ -7818,6 +7818,8 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     const currentRow = originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
     const styles = xlsxRowStyleMap(currentRow);
     let updatedRow = currentRow;
+    const modelValue = firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]);
+    const qtyValue = firstFilled(sourceRow, ["Qty"]);
     const values = {
       B: firstFilled(sourceRow, ["Ref", "Unit Ref"]),
       C: firstFilled(sourceRow, ["Type"]),
@@ -7825,9 +7827,11 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
       E: firstFilled(sourceRow, ["TKw"]),
       F: firstFilled(sourceRow, ["SKw"]),
       G: firstFilled(sourceRow, ["L/S"]),
-      AN: firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]),
-      AO: firstFilled(sourceRow, ["Qty"])
+      AN: modelValue,
+      AO: qtyValue
     };
+    if (modelValue !== "") values.H = modelValue;
+    if (qtyValue !== "") values.I = qtyValue;
     for (const [column, value] of Object.entries(values)) {
       updatedRow = xlsxUpsertCell(updatedRow, `${column}${rowNumber}`, value, styles[column]);
     }
@@ -8021,7 +8025,7 @@ function xlsxUpsertCell(rowXml, ref, value, styleId = "") {
   const col = ref.match(/^[A-Z]+/)?.[0] || "";
   const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
   const cell = xlsxCell(col, rowNumber, value, styleId);
-  const cellRegex = new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*>[\\s\\S]*?<\\/c>`, "i");
+  const cellRegex = new RegExp(`<c\\b[^>]*\\br="${escapeRegExp(ref)}"[^>]*(?:\\/>|>[\\s\\S]*?<\\/c>)`, "i");
   if (cellRegex.test(rowXml)) return rowXml.replace(cellRegex, cell);
   return rowXml.replace(/<\/row>$/, `${cell}</row>`);
 }
