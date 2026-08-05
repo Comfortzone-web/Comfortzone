@@ -7873,8 +7873,9 @@ function forceWorkbookRecalculation(entries) {
   if (!workbook) return;
   let xml = workbook.data.toString("utf8");
   if (/<calcPr\b/i.test(xml)) {
-    xml = xml.replace(/<calcPr\b([^>]*)\/?>/i, (match, attrs) => {
+    xml = xml.replace(/<calcPr\b([^>]*?)(?:\/>|>[\s\S]*?<\/calcPr>)/i, (match, attrs) => {
       const cleanAttrs = attrs
+        .replace(/\/\s*$/g, "")
         .replace(/\sfullCalcOnLoad="[^"]*"/gi, "")
         .replace(/\sforceFullCalc="[^"]*"/gi, "")
         .replace(/\scalcMode="[^"]*"/gi, "");
