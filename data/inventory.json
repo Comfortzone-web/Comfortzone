@@ -17,7 +17,7 @@
       "description": "REFNETS - ODU - INDIA",
       "brand": "Daikin",
       "type": "",
-      "reservedQty": 0
+      "reservedQty": 12
     },
     {
       "id": "ae657f66-9af1-4617-bf29-2790cb9a3c90",
@@ -25,7 +25,7 @@
       "description": "REFNETS - ODU - INDIA",
       "brand": "Daikin",
       "type": "",
-      "reservedQty": 0
+      "reservedQty": 13
     },
     {
       "id": "7466a193-3a0f-4eb0-9b0d-18553245a775",
@@ -93,7 +93,8 @@
       "id": "3e777150-fd42-4318-8465-94ff903e14fd",
       "modelNo": "BYCQ140E",
       "description": "Standard Decoration Panel",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "e971e570-d164-498b-a872-15be92566cbc",
@@ -111,7 +112,8 @@
       "id": "da6451be-2c40-489f-8e05-f4be6d0cb0ec",
       "modelNo": "DCM601B51",
       "description": "DAIKIN INTELLIGENT TOUCH MANAGER",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "072a4e39-0edb-4f25-a741-ecad95c49965",
@@ -123,7 +125,8 @@
       "id": "272e9680-da88-49c4-878b-ef4250ba6251",
       "modelNo": "DCPE02S",
       "description": "DAIKIN REIRI IAQ SENSOR",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "a74ab444-45f5-4809-919d-d295db13824d",
@@ -135,13 +138,15 @@
       "id": "119d55e0-1569-45da-8a8f-2248db24c52f",
       "modelNo": "DGE601A52",
       "description": "INDOOR UNIT EXTENSION",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "77f6af54-e38f-416f-be06-07aaa22c89d8",
       "modelNo": "DGE601A53",
       "description": "EXTENSION MODULE",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "0877e0e7-2edf-42c5-8338-49bfb7983292",
@@ -153,7 +158,8 @@
       "id": "a13c3832-cc4e-4be1-b32d-66d3a5292909",
       "modelNo": "EKEACB",
       "description": "Unified Control Box",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 15
     },
     {
       "id": "4cf581b6-0892-4759-a8fd-3864fc944a41",
@@ -237,43 +243,50 @@
       "id": "e4f0b417-bfb0-43f6-ad8a-7f65885da9df",
       "modelNo": "EKEXVA250",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "394bd0fa-c2b3-4a8c-aa77-44a19640e08f",
       "modelNo": "EKEXVA300",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 4
     },
     {
       "id": "101bab14-caf4-4d99-bbd9-0e8944422d62",
       "modelNo": "EKEXVA350",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "e03b1293-40c2-4bca-889d-60d757a0add6",
       "modelNo": "EKEXVA400",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 2
     },
     {
       "id": "179d2ce5-eba3-450e-99b8-d521e9f1efc9",
       "modelNo": "EKEXVA450",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 2
     },
     {
       "id": "b1100c66-6474-4a95-9b65-2db37bbc9f24",
       "modelNo": "EKEXVA500",
       "description": "Expansion Valve kit for Air Handling Application",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 5
     },
     {
       "id": "ac144c36-8084-4346-8438-1f7ab2513713",
       "modelNo": "EKMBDXB",
       "description": "Modbus - Czech Republic",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "0edc67ad-267b-496e-87b0-b667de34205d",
@@ -327,7 +340,8 @@
       "id": "f8eb2a1e-78a9-49c0-be29-def5f9a44ac7",
       "modelNo": "FDMF36AVMK",
       "description": "DUCTED INVERTER R32 - 3 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "83a3f6c9-20bf-44eb-8968-6d73c6aa5ea8",
@@ -339,13 +353,15 @@
       "id": "726a464c-aeb5-4313-a032-63fe5cafb154",
       "modelNo": "FDMF54AVMK",
       "description": "DUCTED INVERTER R32 - 4.5 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "07d1a57c-380b-46d1-a5cf-7b42a5d92932",
       "modelNo": "FDMRN20AVKU",
       "description": "DUCTED - R410 - 1.5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 2
     },
     {
       "id": "84d23197-3a96-4796-a9dc-28d355dcf837",
@@ -357,43 +373,50 @@
       "id": "6285a448-f7cf-4fd8-949c-918d83eeac58",
       "modelNo": "FDMRN30AVKU",
       "description": "DUCTED -  R410 - 2.5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "4f3ada49-1e02-44ee-bbc8-04d241e0e13d",
       "modelNo": "FDMRN36AVKU",
       "description": "DUCTED -  R410 - 3 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "d0a95aa3-d339-43e8-bab2-188a347b9b13",
       "modelNo": "FDMRN50AVKU",
       "description": "DUCTED -  R410 - 4 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c37b8784-cf71-4472-9732-0c4ca961e5cc",
       "modelNo": "FDMRN60AVKU",
       "description": "DUCTED -  R410 - 5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "dd78547c-ce7d-4f4d-b713-d9a97616ce86",
       "modelNo": "FTKF12TVMVZK",
       "description": "WALL SPLIT INVERTER R32 - 1 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 1
     },
     {
       "id": "d5adaeb2-d994-4889-a83c-f5e2ba3ed75d",
       "modelNo": "FTKF18TVMUZK",
       "description": "WALL SPLIT INVERTER R32 - 1.5 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "f5303f41-9544-4a84-b814-74320184b7d2",
       "modelNo": "FTKF24TVMTZK",
       "description": "WALL SPLIT INVERTER R32 - 2 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "f4e80b37-ada7-42a4-8e3e-8d705dc3fe87",
@@ -405,49 +428,57 @@
       "id": "0f7be25b-e30e-4679-bfd6-8cc62fff3ee3",
       "modelNo": "FTKM24PVM",
       "description": "WALL SPLIT INVERTER R32 - 2 TR - THAILAND",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "09887e8b-30f2-4b53-a97b-e5ef285fb423",
       "modelNo": "FTKM28PVM",
       "description": "WALL SPLIT INVERTER R32 - 2.5 TR - THAILAND",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 5
     },
     {
       "id": "b3d9ac42-cbd0-4acd-8dc7-43cede34c4e1",
       "modelNo": "FWW1000TANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7487c749-91d5-442f-8a1b-2a894ab02b7a",
       "modelNo": "FWW1000TANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "5c10b500-3e42-47e9-8a92-d597460651ea",
       "modelNo": "FWW1000TFNLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "23f51b84-b279-4d16-92a8-a82af702a3bd",
       "modelNo": "FWW1000TFNREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "2e680a1b-bb66-4439-8d36-5e7d17c24c8e",
       "modelNo": "FWW1000VANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "bdbec1f3-e867-4fa6-821a-6839d99397cb",
       "modelNo": "FWW1000VANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "bbaecf6d-3b86-4168-8179-f838c5292689",
@@ -489,19 +520,22 @@
       "id": "294fbae8-b4df-4ac1-bcf0-01370cbee33b",
       "modelNo": "FWW1400TANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "8bba358b-5eaf-47c5-8f96-4e06db35de09",
       "modelNo": "FWW1400TANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "fe4b9258-bb98-45da-a1e2-a31e55f8f6d4",
       "modelNo": "FWW1400TFNLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "42d401f2-13e8-4d6d-b2d1-5314faa7aa35",
@@ -537,7 +571,8 @@
       "id": "da099f29-988f-4e8a-8535-5140fa86298e",
       "modelNo": "FWW1600TANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7421e951-b83f-44df-9cfe-31d27a0d46d0",
@@ -561,7 +596,8 @@
       "id": "df697ae9-f009-4b63-9afe-f4ad0d6cf565",
       "modelNo": "FWW16DAMLCANAE",
       "description": "CHW FCU - 16DA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7525bacb-4059-45ca-8c81-872064cc82d0",
@@ -573,7 +609,8 @@
       "id": "2e2f3287-2b70-40b1-a970-1436ef1e270a",
       "modelNo": "FWW1800TANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "52fb5e48-fb52-41d2-99bd-177a7f755688",
@@ -591,19 +628,22 @@
       "id": "ea90781b-3cac-4c0f-a003-0b7c0bbe0d47",
       "modelNo": "FWW2000TANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "9c4811f9-eeb5-46d0-a56b-66bfc620e146",
       "modelNo": "FWW2000TANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "bca74b4f-65be-4fb5-b848-eea43e76eea8",
       "modelNo": "FWW2000TFNLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "0d72bb5a-c889-44f1-8ee6-0407da4c5d1c",
@@ -639,13 +679,15 @@
       "id": "caf91663-75b8-4b74-b07b-51c09019c4bd",
       "modelNo": "FWW300VANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "de3d65c1-b4b1-4e20-ae21-805ffa9d6044",
       "modelNo": "FWW300VANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "749a3af4-4ce6-4ba7-a44f-8a12db4c71e5",
@@ -663,13 +705,15 @@
       "id": "a11ea5f9-852c-4097-abd0-dfbcfe62ec54",
       "modelNo": "FWW400VANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "6d1a982e-0dd9-4c4a-b937-127f0ca8e251",
       "modelNo": "FWW400VANREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "ff86fa9b-d0e3-4ad7-a2c0-c38b423b530b",
@@ -711,7 +755,8 @@
       "id": "50720332-0f06-490c-8770-a5ac5620208d",
       "modelNo": "FWW600VANLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "85b60c8a-a6c2-4b3b-8eec-28ff581562c9",
@@ -729,7 +774,8 @@
       "id": "d2e99199-6cc8-4601-a884-1a1a4f5aaba9",
       "modelNo": "FWW600VFNREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "2041e14e-95f1-4532-9602-0ba7941be0ff",
@@ -771,13 +817,15 @@
       "id": "031298cf-9e04-4d31-af3a-6c6b57ea6c13",
       "modelNo": "FWW800VFNLEH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - LEFT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "a8dae233-a22a-4edd-9357-76dd7552d647",
       "modelNo": "FWW800VFNREH-A0AE",
       "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - RIGHT",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "92ffb466-af9c-4e52-b8d7-9f80cd9e5669",
@@ -807,7 +855,8 @@
       "id": "dfb01712-795f-4a22-9ad9-f5e3a7368226",
       "modelNo": "FXAQ25ARVM",
       "description": "VRV INDOOR UNIT-Wall - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "56ab2ac4-d00a-4159-968b-e9144c924929",
@@ -819,7 +868,8 @@
       "id": "73b8610a-ceac-4bc4-be01-7bd94b2db84e",
       "modelNo": "FXAQ32ARVM",
       "description": "VRV INDOOR UNIT-Wall - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "3376e3ae-20e0-4adf-bab6-b9706c1a67fd",
@@ -831,7 +881,8 @@
       "id": "b25dd374-3ec8-410f-95fc-fba0cf511969",
       "modelNo": "FXAQ40ARVM",
       "description": "VRV INDOOR UNIT-Wall - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7634c8b9-806f-413a-b8bd-176ba0903e92",
@@ -843,7 +894,8 @@
       "id": "c78d20cd-2715-41e6-9f4f-e83a37680147",
       "modelNo": "FXAQ50ARVM",
       "description": "VRV INDOOR UNIT-Wall - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "669605ea-6b89-4d93-8bef-6b22006d4916",
@@ -855,7 +907,8 @@
       "id": "97a10eac-0fb7-4ee6-a7e5-8dbe6a62cbff",
       "modelNo": "FXAQ63ARVM",
       "description": "VRV INDOOR UNIT-Wall - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c78b1a0a-c006-4331-9c9a-5c9c5d70739e",
@@ -951,7 +1004,8 @@
       "id": "e2cf89bd-459f-4e5b-a23c-fbb61b6dfd1f",
       "modelNo": "FXFQ125BVEB",
       "description": "VRV INDOOR UNIT - ROUND FLOW CASSETTE",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "4ab220af-c8b5-466e-9bf2-f1d82f28ab0c",
@@ -999,7 +1053,8 @@
       "id": "22875686-8169-44e7-827f-c247be430b1b",
       "modelNo": "FXFQ80BVEB",
       "description": "VRV INDOOR UNIT - ROUND FLOW CASSETTE",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "70c7521a-fc34-47d1-abfd-1c81333055a1",
@@ -1077,19 +1132,22 @@
       "id": "0393dcf4-b969-4ffe-9398-671b83be2b45",
       "modelNo": "FXMQ100PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "cabadbc3-17dc-4277-9f65-0c0549b21be7",
       "modelNo": "FXMQ125PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "029c0db2-dd00-4b7d-b6ae-825d93154a62",
       "modelNo": "FXMQ140PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c8aa9671-5857-445c-8969-b98515d4e9e4",
@@ -1107,7 +1165,8 @@
       "id": "b799b45f-2238-410a-855a-4538d9a188dc",
       "modelNo": "FXMQ200NVE6",
       "description": "VRV INDOOR UNIT- Ducted (high static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "fc52225b-8f72-4ea3-94b8-3ab95f0011cc",
@@ -1125,7 +1184,8 @@
       "id": "387854be-b114-4ff5-b888-410dc3aa6ec4",
       "modelNo": "FXMQ40PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "af830ecb-2a5b-4a9b-9b59-3acdc6e80a4f",
@@ -1137,19 +1197,22 @@
       "id": "b9b32521-8913-491d-a87d-d42caa7c0cca",
       "modelNo": "FXMQ63PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c843bdd1-a363-4294-95e8-bff717792746",
       "modelNo": "FXMQ80PBV1",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "f9d34f68-4624-49da-9e7c-b8ae999d5533",
       "modelNo": "FXSQ100A",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "b0f532b4-9cf9-4e47-a21c-1115fcc19492",
@@ -1191,7 +1254,8 @@
       "id": "edbaf2fd-12c3-4b3d-832f-edf541786f31",
       "modelNo": "FXSQ40A",
       "description": "VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "41c3fa32-bfce-4319-957c-bfce40667614",
@@ -1215,25 +1279,29 @@
       "id": "c07e9e6b-8784-4d8e-b81e-14429066f606",
       "modelNo": "KHRP26A22T6",
       "description": "REFNETS - IDU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 6
     },
     {
       "id": "c564f4a9-708c-4eed-9b09-821602a3a068",
       "modelNo": "KHRP26A33T6",
       "description": "REFNETS - IDU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "f2fd40a5-1034-4128-b359-1bc745deb771",
       "modelNo": "KHRP26A72T6",
       "description": "REFNETS - IDU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 3
     },
     {
       "id": "a33fd2ac-6212-4a58-92e4-3784e441f7e1",
       "modelNo": "KHRP26A73T6",
       "description": "REFNETS - IDU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 57
     },
     {
       "id": "525d5688-279d-450b-8695-d0b89e7df982",
@@ -1245,31 +1313,36 @@
       "id": "1d3811d0-853b-442a-baa3-2b65009ef3d2",
       "modelNo": "KHRP26M73TP6",
       "description": "REFNETS - IDU - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 54
     },
     {
       "id": "0f2c7652-289b-4bf5-810b-0fa2911e51a5",
       "modelNo": "KHRQ22M20T",
       "description": "REFNETS - IDU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7f7c813d-b57d-4ef6-8d52-936fee66c657",
       "modelNo": "KHRQ22M29T9",
       "description": "REFNETS - IDU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "2463d7e3-3cb5-442e-ad7b-c0fb1d93deeb",
       "modelNo": "KHRQ22M64T",
       "description": "REFNETS - IDU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "9d6bede6-fa2c-4577-ae0a-fc5d7cb24c8e",
       "modelNo": "KHRQ22M75T",
       "description": "REFNETS - IDU - BELGIUM",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "5b04dccf-255d-4dcc-b96f-03712819d74b",
@@ -1281,19 +1354,22 @@
       "id": "989257a5-8a80-4673-98ad-d8d249b92da4",
       "modelNo": "RKFG12TVMVZK",
       "description": "WALL SPLIT INVERTER R32 - 1 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 1
     },
     {
       "id": "57050c03-e267-4c52-840d-079246575aa2",
       "modelNo": "RKFG18TVMUZK",
       "description": "WALL SPLIT INVERTER R32 - 1.5 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "3c16da21-c147-4366-b5f6-97afa134fe13",
       "modelNo": "RKFG24TVMTZK",
       "description": "WALL SPLIT INVERTER R32 - 2 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c9d0d31d-f190-41cc-ba11-ebec4350e792",
@@ -1305,55 +1381,64 @@
       "id": "4ca75e77-2024-4007-b187-902777d28e7e",
       "modelNo": "RKM24PVM",
       "description": "WALL SPLIT INVERTER R32 - 2 TR - THAILAND",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "82b6b47c-572d-443f-a25a-c0308ef9041a",
       "modelNo": "RKM28PVM",
       "description": "WALL SPLIT INVERTER R32 - 2.5 TR - THAILAND",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 5
     },
     {
       "id": "341a4a2d-258e-4041-b9b9-912e214d7e4e",
       "modelNo": "RR20AVKU",
       "description": "DUCTED - R410 - 1.5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 1
     },
     {
       "id": "8dda3ce0-fd2a-4300-85e7-6ef618e5fe97",
       "modelNo": "RR25AVKU",
       "description": "DUCTED - R410 - 2 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "9c6f371f-eb3e-4d71-b7e3-408e2e2de96a",
       "modelNo": "RR30AVKU",
       "description": "DUCTED -  R410 - 2.5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "5e703dbb-fc9e-4a34-81ef-1edb7bc727cb",
       "modelNo": "RR36AVKU",
       "description": "DUCTED -  R410 - 3 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "c3b2deca-983a-4b31-afd0-046f16140e62",
       "modelNo": "RR50AYKU",
       "description": "DUCTED -  R410 - 4 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "b225dbb9-1d54-49a3-9372-111bf90b3546",
       "modelNo": "RR60AYKU",
       "description": "DUCTED -  R410 - 5 TR - MALAYSIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "882b2baf-66df-4ece-a335-566c43f7be09",
       "modelNo": "RXQ10ARYFK",
       "description": "VRV OUTDOOR UNIT - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "5c51472a-a745-47a5-b4b3-e0a26343c775",
@@ -1365,25 +1450,29 @@
       "id": "15bf0222-d613-4713-9af9-cb90b31603f6",
       "modelNo": "RXQ14ARYFK",
       "description": "VRV OUTDOOR UNIT - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "4ed8daa4-08a8-4c47-b228-e1154b2aa679",
       "modelNo": "RXQ16ARYFK",
       "description": "VRV OUTDOOR UNIT - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "7c55d83e-cbfb-4d45-b0b7-4bf532b4c1b4",
       "modelNo": "RXQ6ARYFK",
       "description": "VRV OUTDOOR UNIT - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "75c68da3-b7ec-4235-a1fc-c8cc182092a8",
       "modelNo": "RXQ8ARYFK",
       "description": "VRV OUTDOOR UNIT - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "f0053f47-fc5a-491c-a781-8d916749fba1",
@@ -1413,7 +1502,8 @@
       "id": "02082334-411b-4791-ba6c-29f572d5d60d",
       "modelNo": "RXYTQ10U5YF",
       "description": "VRV OUTDOOR UNIT - TURKEY",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "cd26d1e7-be8f-4f98-a885-6b421ed25a19",
@@ -1425,7 +1515,8 @@
       "id": "fd105988-1e36-4f94-b5f5-ab9b3519e4cf",
       "modelNo": "RXYTQ12U5YF",
       "description": "VRV OUTDOOR UNIT - TURKEY",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "5109d3fc-3769-4bb1-9879-359640ec548d",
@@ -1449,7 +1540,8 @@
       "id": "f829aefc-5eea-494b-9fd6-f90d3b75e866",
       "modelNo": "RXYTQ16U5YF",
       "description": "VRV OUTDOOR UNIT - TURKEY",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "555bbf5d-aeb6-4c9f-ac0b-0c01ad570375",
@@ -1521,7 +1613,8 @@
       "id": "24140933-b3fa-4a25-9946-f16e1239ccf5",
       "modelNo": "RZF36AVMK",
       "description": "DUCTED INVERTER R32 - 3 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "b0af4670-ea20-41d7-8cad-fe01af45ecc8",
@@ -1533,7 +1626,8 @@
       "id": "8465ef69-d916-425e-a562-a48ea63a3658",
       "modelNo": "RZF54AYMK",
       "description": "DUCTED INVERTER R32 - 4.5 TR - INDIA",
-      "brand": "Daikin"
+      "brand": "Daikin",
+      "reservedQty": 0
     },
     {
       "id": "130ee557-7ee5-4148-80b2-4f9809010893",
@@ -1571,7 +1665,842 @@
       "defaultDeliveryLocation": "Dubai, U.A.E"
     }
   ],
-  "supplierDns": [],
+  "supplierDns": [
+    {
+      "id": "1524a70a-e37a-4889-9db9-165a03caa603",
+      "uploadedDate": "2026-08-05",
+      "supplierDnNo": "Stock 0508202600",
+      "projectName": "Manual Stock Entry",
+      "status": "Confirmed",
+      "isManualAdjustment": true,
+      "lines": [
+        {
+          "id": "2ff47975-4f7a-4400-8c8e-40c3343d2534",
+          "modelNo": "RXYTQ10U5YF",
+          "description": "VRV OUTDOOR UNIT - TURKEY",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "d1a98509-1eb0-4c95-bb35-c27fb629c5f9",
+          "modelNo": "RXYTQ12U5YF",
+          "description": "VRV OUTDOOR UNIT - TURKEY",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "e57b582b-8c73-48c3-a51f-17545bc5c044",
+          "modelNo": "RXYTQ16U5YF",
+          "description": "VRV OUTDOOR UNIT - TURKEY",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "e1971e85-f236-45e0-8bd7-bd3f9e841f60",
+          "modelNo": "FXSQ40A",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "7378e132-1518-40a2-adb3-7f8ef84c30cf",
+          "modelNo": "FXSQ100A",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - CZECH REPUBLIC",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "a50fda61-ec26-4175-8c0e-ad49efba1dc9",
+          "modelNo": "RXQ6ARYFK",
+          "description": "VRV OUTDOOR UNIT - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "e2235027-ad63-453f-afe5-8449d0ec61ee",
+          "modelNo": "RXQ8ARYFK",
+          "description": "VRV OUTDOOR UNIT - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "145a35d5-67c9-4447-96f9-c531ff3eea41",
+          "modelNo": "RXQ10ARYFK",
+          "description": "VRV OUTDOOR UNIT - INDIA",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        },
+        {
+          "id": "62a8664f-b177-4143-93fa-5238c3d04c69",
+          "modelNo": "RXQ14ARYFK",
+          "description": "VRV OUTDOOR UNIT - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "0bad4cac-cbc8-4df1-bc4d-bf83260e0753",
+          "modelNo": "RXQ16ARYFK",
+          "description": "VRV OUTDOOR UNIT - INDIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "22e79bdf-8ceb-4305-a78c-9d90c1bc6384",
+          "modelNo": "FXMQ40PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "5265ced2-a61f-49e4-a2d9-4c1170306a14",
+          "modelNo": "FXMQ63PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        },
+        {
+          "id": "1f505ff1-4240-4081-be5a-bdaf7385ef90",
+          "modelNo": "FXMQ80PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 10,
+          "finalQty": 10,
+          "status": "Ready"
+        },
+        {
+          "id": "43c52573-c6c6-4dc2-8584-023a86b8c2f3",
+          "modelNo": "FXMQ100PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 11,
+          "finalQty": 11,
+          "status": "Ready"
+        },
+        {
+          "id": "52ebc29f-ccb8-47d1-b81d-ed70efa9e16c",
+          "modelNo": "FXMQ125PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "63f4e18c-a557-4607-bd51-8b5157771760",
+          "modelNo": "FXMQ140PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "detectedQty": 13,
+          "finalQty": 13,
+          "status": "Ready"
+        },
+        {
+          "id": "938670bf-6145-411e-94dc-b833ce0f8dbe",
+          "modelNo": "FXMQ200NVE6",
+          "description": "VRV INDOOR UNIT- Ducted (high static) - INDIA",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        },
+        {
+          "id": "598f8265-e290-4a21-a215-4a8764a94f78",
+          "modelNo": "FXAQ25ARVM",
+          "description": "VRV INDOOR UNIT-Wall - INDIA",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "8b07cb60-676a-4e43-90c9-f466a20164e9",
+          "modelNo": "FXAQ32ARVM",
+          "description": "VRV INDOOR UNIT-Wall - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "0ada3384-c218-4551-bf2a-374489e7f196",
+          "modelNo": "FXAQ40ARVM",
+          "description": "VRV INDOOR UNIT-Wall - INDIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "f471f539-ed32-4908-ba71-5d85e278d918",
+          "modelNo": "FXAQ50ARVM",
+          "description": "VRV INDOOR UNIT-Wall - INDIA",
+          "detectedQty": 20,
+          "finalQty": 20,
+          "status": "Ready"
+        },
+        {
+          "id": "60b47ca9-0f30-481f-ab6b-2775a9a30276",
+          "modelNo": "FXAQ63ARVM",
+          "description": "VRV INDOOR UNIT-Wall - INDIA",
+          "detectedQty": 15,
+          "finalQty": 15,
+          "status": "Ready"
+        },
+        {
+          "id": "12bb7bf5-ec7c-4391-9fd0-85c8ff7328ea",
+          "modelNo": "KHRQ22M20T",
+          "description": "REFNETS - IDU - BELGIUM",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "dd2522f3-a2ae-42a5-8901-398978cc5dbe",
+          "modelNo": "KHRQ22M29T9",
+          "description": "REFNETS - IDU - BELGIUM",
+          "detectedQty": 8,
+          "finalQty": 8,
+          "status": "Ready"
+        },
+        {
+          "id": "b24f0fcc-86d4-4fc8-9e78-e14c188ec593",
+          "modelNo": "KHRQ22M64T",
+          "description": "REFNETS - IDU - BELGIUM",
+          "detectedQty": 20,
+          "finalQty": 20,
+          "status": "Ready"
+        },
+        {
+          "id": "67ddd503-32ab-436a-a94c-839866a55555",
+          "modelNo": "KHRQ22M75T",
+          "description": "REFNETS - IDU - BELGIUM",
+          "detectedQty": 30,
+          "finalQty": 30,
+          "status": "Ready"
+        },
+        {
+          "id": "5b039d46-f926-474d-9228-55fae594fbba",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "detectedQty": 16,
+          "finalQty": 16,
+          "status": "Ready"
+        },
+        {
+          "id": "01203ffc-eee8-4672-bdfd-19d06cfcd61b",
+          "modelNo": "BHFQ22P1517",
+          "description": "REFNETS - ODU - BELGIUM",
+          "detectedQty": 14,
+          "finalQty": 14,
+          "status": "Ready"
+        },
+        {
+          "id": "053a58c2-5cd0-4707-8db8-1154281f3411",
+          "modelNo": "KHRP26A22T6",
+          "description": "REFNETS - IDU - INDIA",
+          "detectedQty": 24,
+          "finalQty": 24,
+          "status": "Ready"
+        },
+        {
+          "id": "d5015be6-a581-466f-9dad-6f4d68bae6eb",
+          "modelNo": "KHRP26A33T6",
+          "description": "REFNETS - IDU - INDIA",
+          "detectedQty": 25,
+          "finalQty": 25,
+          "status": "Ready"
+        },
+        {
+          "id": "c3a44464-223c-46fd-99cc-4c0461a9b52f",
+          "modelNo": "KHRP26A72T6",
+          "description": "REFNETS - IDU - INDIA",
+          "detectedQty": 30,
+          "finalQty": 30,
+          "status": "Ready"
+        },
+        {
+          "id": "7309631a-af55-4a00-becc-bdf46b91ea3f",
+          "modelNo": "KHRP26A73T6",
+          "description": "REFNETS - IDU - INDIA",
+          "detectedQty": 113,
+          "finalQty": 113,
+          "status": "Ready"
+        },
+        {
+          "id": "76529597-6658-4254-a64e-92e6d363ce7a",
+          "modelNo": "KHRP26M73TP6",
+          "description": "REFNETS - IDU - INDIA",
+          "detectedQty": 115,
+          "finalQty": 115,
+          "status": "Ready"
+        },
+        {
+          "id": "d1073178-0941-46ca-922d-0bee55a4af76",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 19,
+          "finalQty": 19,
+          "status": "Ready"
+        },
+        {
+          "id": "62807f6e-ba41-4f32-bfa7-e4e115dc114f",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 28,
+          "finalQty": 28,
+          "status": "Ready"
+        },
+        {
+          "id": "21597325-3c18-475c-8060-ef40d8ade6ef",
+          "modelNo": "BRC1H82W",
+          "description": "WIRED THERMOSTAT (WHITE) - CHINA",
+          "detectedQty": 226,
+          "finalQty": 226,
+          "status": "Ready"
+        },
+        {
+          "id": "a198b107-72fe-4a42-8015-a946b25fec3a",
+          "modelNo": "BRC1H82W7",
+          "description": "WIRED THERMOSTAT",
+          "detectedQty": 45,
+          "finalQty": 45,
+          "status": "Ready"
+        },
+        {
+          "id": "93a0f104-9f47-48ed-9e51-fd23927dccef",
+          "modelNo": "BRC1H82K",
+          "description": "WIRED THERMOSTAT (BLACK) - CHINA",
+          "detectedQty": 19,
+          "finalQty": 19,
+          "status": "Ready"
+        },
+        {
+          "id": "40604777-6afb-41a9-ae5f-2926d15c2eda",
+          "modelNo": "BRC1H82S",
+          "description": "WIRED THERMOSTAT (SILVER) - CHINA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "78dba61d-bad1-473f-96f9-b93eb269dfbf",
+          "modelNo": "FTKF12TVMVZK",
+          "description": "WALL SPLIT INVERTER R32 - 1 TR - INDIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "e412eacb-732b-470e-8c97-44143b37dc04",
+          "modelNo": "RKFG12TVMVZK",
+          "description": "WALL SPLIT INVERTER R32 - 1 TR - INDIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "c4c9c13e-4d77-46c7-8e9a-f4c43a32699d",
+          "modelNo": "FTKF18TVMUZK",
+          "description": "WALL SPLIT INVERTER R32 - 1.5 TR - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "5d591599-fc5a-4809-bffc-4720e988f6f9",
+          "modelNo": "RKFG18TVMUZK",
+          "description": "WALL SPLIT INVERTER R32 - 1.5 TR - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "3c102e7d-7edf-4771-869b-0ca31c06167e",
+          "modelNo": "FTKF24TVMTZK",
+          "description": "WALL SPLIT INVERTER R32 - 2 TR - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "dcbdb2b5-7a2a-4688-8a88-dc016b4b068f",
+          "modelNo": "RKFG24TVMTZK",
+          "description": "WALL SPLIT INVERTER R32 - 2 TR - INDIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "b7935dd0-f048-4505-a43f-a2ffe00554e3",
+          "modelNo": "FTKM24PVM",
+          "description": "WALL SPLIT INVERTER R32 - 2 TR - THAILAND",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "f533051b-f688-479e-8c58-d94272b8a987",
+          "modelNo": "RKM24PVM",
+          "description": "WALL SPLIT INVERTER R32 - 2 TR - THAILAND",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "e895c9ba-bf2b-44c5-870a-1f7a200b90c3",
+          "modelNo": "FTKM28PVM",
+          "description": "WALL SPLIT INVERTER R32 - 2.5 TR - THAILAND",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "61c8117c-9b4c-4991-b5c6-ad7e7b13c1dd",
+          "modelNo": "RKM28PVM",
+          "description": "WALL SPLIT INVERTER R32 - 2.5 TR - THAILAND",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "333ca748-f790-48a0-a433-a58508ef5df2",
+          "modelNo": "FDMRN20AVKU",
+          "description": "DUCTED - R410 - 1.5 TR - MALAYSIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "7d4b8bc7-36e6-4133-8d2e-bf4f0797af9c",
+          "modelNo": "RR20AVKU",
+          "description": "DUCTED - R410 - 1.5 TR - MALAYSIA",
+          "detectedQty": 6,
+          "finalQty": 6,
+          "status": "Ready"
+        },
+        {
+          "id": "bdee4cf7-a9d0-40a6-93ed-ed9ae72dfeb3",
+          "modelNo": "RR25AVKU",
+          "description": "DUCTED - R410 - 2 TR - MALAYSIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "29c5d574-5931-442e-a0df-b9180ea28b3c",
+          "modelNo": "FDMRN30AVKU",
+          "description": "DUCTED -  R410 - 2.5 TR - MALAYSIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "43cc5404-c5bd-43ec-9613-9e8cab9c2867",
+          "modelNo": "RR30AVKU",
+          "description": "DUCTED -  R410 - 2.5 TR - MALAYSIA",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "95a300cc-1a4f-46a7-9b65-e7c997801a72",
+          "modelNo": "FDMRN36AVKU",
+          "description": "DUCTED -  R410 - 3 TR - MALAYSIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "9e7f6574-fd1c-4c48-b752-d9e0acc75169",
+          "modelNo": "RR36AVKU",
+          "description": "DUCTED -  R410 - 3 TR - MALAYSIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "1d69414a-0d16-4425-9b7a-a669afb207a2",
+          "modelNo": "FDMRN50AVKU",
+          "description": "DUCTED -  R410 - 4 TR - MALAYSIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "3766768a-5afe-4d93-9bd8-c651f8892234",
+          "modelNo": "RR50AYKU",
+          "description": "DUCTED -  R410 - 4 TR - MALAYSIA",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "321ac327-5ce3-47d7-99a1-0881e46012c2",
+          "modelNo": "FDMRN60AVKU",
+          "description": "DUCTED -  R410 - 5 TR - MALAYSIA",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "6d5466b4-c3ea-47e3-9ff6-1b4df3afa5a3",
+          "modelNo": "RR60AYKU",
+          "description": "DUCTED -  R410 - 5 TR - MALAYSIA",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "1e430672-0ca0-4911-98b7-312c2a816ba4",
+          "modelNo": "FDMF36AVMK",
+          "description": "DUCTED INVERTER R32 - 3 TR - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "10f42f8d-9e7d-46ca-a24d-f62311a48cbe",
+          "modelNo": "RZF36AVMK",
+          "description": "DUCTED INVERTER R32 - 3 TR - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "e4e48969-93d9-4044-a775-450d4b446331",
+          "modelNo": "FDMF54AVMK",
+          "description": "DUCTED INVERTER R32 - 4.5 TR - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "6be2bb13-e55a-491d-9873-83eca9f2766f",
+          "modelNo": "RZF54AYMK",
+          "description": "DUCTED INVERTER R32 - 4.5 TR - INDIA",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "8e2426cf-7eec-4a7d-8b21-cf39d004d1cf",
+          "modelNo": "FWW16DAMLCANAE",
+          "description": "CHW FCU - 16DA - LEFT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "2a0a4828-be99-4e59-ac0b-49b48c58373e",
+          "modelNo": "FWW300VANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "afbef301-4ee2-44a1-a849-fb6dfb523ece",
+          "modelNo": "FWW300VANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "45e90642-82e5-4ae6-bc04-db53f7dc39be",
+          "modelNo": "FWW400VANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "4be0f4ad-6a5e-4548-b521-acf4e0e46c9f",
+          "modelNo": "FWW400VANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "87f649ff-cf22-45a0-8e2d-e16c7c0daada",
+          "modelNo": "FWW600VANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "81b37357-804d-4be8-b7db-10a658cf4276",
+          "modelNo": "FWW1000VANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "2c5f6a0d-3a79-43a2-8ca7-1d4564caf838",
+          "modelNo": "FWW1000VANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VA - RIGHT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "a1b410f2-dd98-4693-a34c-fef2d135062c",
+          "modelNo": "FWW1000TANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        },
+        {
+          "id": "071b50f1-5e95-4e87-98fb-7527d213726c",
+          "modelNo": "FWW1000TANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "2ac9f579-20e6-4dfe-9591-f74d847a1779",
+          "modelNo": "FWW1400TANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "dc0c6600-c129-4b28-9e0c-11bd4d63ab46",
+          "modelNo": "FWW1400TANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "b43c32ea-440c-4846-8ecd-7e51c9bb94ba",
+          "modelNo": "FWW1600TANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "c228b020-553a-4bdd-8708-7633bf9c8029",
+          "modelNo": "FWW1800TANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
+          "detectedQty": 3,
+          "finalQty": 3,
+          "status": "Ready"
+        },
+        {
+          "id": "d48f222c-c070-43cb-a16f-55b1e05ab419",
+          "modelNo": "FWW2000TANLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - LEFT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "3a169dc0-154f-47e8-84bd-93bf0700477a",
+          "modelNo": "FWW2000TANREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TA - RIGHT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "f588992e-92e4-4ca9-9575-802766a4268d",
+          "modelNo": "FWW600VFNREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - RIGHT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "6afeaa1f-175a-49d8-b4fc-1fc47f11f0fe",
+          "modelNo": "FWW800VFNLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "2eb39d57-423f-4f15-aa95-59b218703049",
+          "modelNo": "FWW800VFNREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - VF - RIGHT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "432d2179-26d9-4f03-bc60-858e7a63933a",
+          "modelNo": "FWW1000TFNLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "eaf941f2-1f95-4720-bd4b-54ce44727432",
+          "modelNo": "FWW1000TFNREH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - RIGHT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "48d54d16-9066-481f-ba7f-b651bf484824",
+          "modelNo": "FWW1400TFNLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "c2834919-a5a3-461c-95dc-86b5d28db18e",
+          "modelNo": "FWW2000TFNLEH-A0AE",
+          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "fbef6dd8-b328-4cb3-938e-73863ee6b0db",
+          "modelNo": "EKEACB",
+          "description": "Unified Control Box",
+          "detectedQty": 22,
+          "finalQty": 22,
+          "status": "Ready"
+        },
+        {
+          "id": "02542a14-506e-4ce4-9439-50c5aec8c0b9",
+          "modelNo": "EKEXVA250",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "8d7762a4-7480-4693-9bbb-3f4f6e887e69",
+          "modelNo": "EKEXVA300",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 4,
+          "finalQty": 4,
+          "status": "Ready"
+        },
+        {
+          "id": "bd5376c8-7e0c-41b0-8dec-b5ebb0e18cf7",
+          "modelNo": "EKEXVA350",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "38273068-6043-4bfe-b5bb-77c0481a3c23",
+          "modelNo": "EKEXVA400",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "bc4b7aa9-5349-454a-ba97-effbb5e490c1",
+          "modelNo": "EKEXVA450",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "276f300c-845e-4408-b8c2-51e87425f474",
+          "modelNo": "EKEXVA500",
+          "description": "Expansion Valve kit for Air Handling Application",
+          "detectedQty": 7,
+          "finalQty": 7,
+          "status": "Ready"
+        },
+        {
+          "id": "832e85a0-61d1-47df-af41-00e56ffcfc6c",
+          "modelNo": "EKMBDXB",
+          "description": "Modbus - Czech Republic",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "89f5f703-bb18-47cc-a800-0a808f7efbb4",
+          "modelNo": "BYCQ140E",
+          "description": "Standard Decoration Panel",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "3d62a668-9068-4bb6-99d5-e9d505a8fcc4",
+          "modelNo": "DCM601B51",
+          "description": "DAIKIN INTELLIGENT TOUCH MANAGER",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "a2c532f0-9eaa-4867-b9d6-5606997872c6",
+          "modelNo": "DCPE02S",
+          "description": "DAIKIN REIRI IAQ SENSOR",
+          "detectedQty": 5,
+          "finalQty": 5,
+          "status": "Ready"
+        },
+        {
+          "id": "7139ec10-cddd-48d9-a6dd-f15abcffe4fc",
+          "modelNo": "DGE601A52",
+          "description": "INDOOR UNIT EXTENSION",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "4918bf79-efb3-45cd-a1d3-2b1d2cb357f0",
+          "modelNo": "DGE601A53",
+          "description": "EXTENSION MODULE",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "853851f9-ca95-4c92-9c69-3f7fcb8b50ae",
+          "modelNo": "FXFQ80BVEB",
+          "description": "VRV INDOOR UNIT - ROUND FLOW CASSETTE",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        },
+        {
+          "id": "4e3c9d60-db1b-4b50-8b89-4640838d3ad2",
+          "modelNo": "FXFQ125BVEB",
+          "description": "VRV INDOOR UNIT - ROUND FLOW CASSETTE",
+          "detectedQty": 2,
+          "finalQty": 2,
+          "status": "Ready"
+        },
+        {
+          "id": "c7392c0d-b90b-429f-9e64-04d96c6c7581",
+          "modelNo": "BRC51D66",
+          "description": "Wired Remote Controller - White - Malaysia",
+          "detectedQty": 1,
+          "finalQty": 1,
+          "status": "Ready"
+        }
+      ]
+    }
+  ],
   "deliveryNotes": [],
   "uploads": [
     {
