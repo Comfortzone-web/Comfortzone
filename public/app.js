@@ -99,6 +99,7 @@ let costingSearchQuery = "";
 let costingSelectedModel = "";
 let costingHistoryOpen = false;
 let costingProjectSaved = false;
+let costingQuotationCreating = false;
 let currentUser = null;
 let appSettings = null;
 let settingsDraft = null;
@@ -1407,7 +1408,9 @@ function salesDeskTopbarConfig() {
 function costingTopbarActions() {
   const linkedQuote = costingLinkedQuotation();
   const quotationNo = linkedQuote?.no || linkedQuote?.quotationNo || "";
-  return `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation">Create Quotation</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
+  const creatingAttr = costingQuotationCreating ? " disabled aria-busy=\"true\"" : "";
+  const label = costingQuotationCreating ? "Creating" : "Create Quotation";
+  return `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation"${creatingAttr}>${label}</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
 }
 
 function inventoryTopbarConfig() {
@@ -3496,7 +3499,7 @@ function salesCreateQuotationHtml() {
   const total = taxable + vat;
   const modelOptions = salesQuoteModelOptions();
   return `
-    ${salesPageHeader("Create New Quotation", "Prepare a quotation inside Sales Desk.", `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary" data-sales-action="send-quote">Mark Sent</button>`)}
+    ${salesPageHeader("Create New Quotation", "Prepare a quotation inside Sales Desk.", `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary" data-sales-action="send-quote">Create</button>`)}
     <div class="sales-quote-layout">
       <section class="sales-card">
         <div class="sales-card-title"><h3>Quotation Details</h3>${salesBadge("Draft")}</div>
@@ -5167,10 +5170,10 @@ function quoteDraftFromSource(source = {}) {
 async function startSalesQuotationDraft(source = {}) {
   salesQuotationDraft = null;
   salesQuotationRevisionNoLock = "";
-  await loadSalesCrm({ force: true }).catch(error => console.warn(error));
   salesQuotationDraft = quoteDraftFromSource(source);
   salesQuotationMode = "create";
   showSalesDesk("quotation");
+  loadSalesCrm({ force: true }).catch(error => console.warn(error));
 }
 
 async function saveSalesQuotation(status = "Draft", triggerButton = null) {
@@ -7209,6 +7212,7 @@ function render() {
   }
   setWorkflowTitle(state.details.project || workflowTitleFallback());
   $("#projectMeta").textContent = `${state.details.customer || "Internal project"} · ${state.quotation.quotationNo}`;
+  $("#projectMeta").textContent = state.details.project || "Internal project";
   canvas.innerHTML = "";
   state.nodes.forEach(renderNode);
   sizeWorkflowCanvasToNodes();
@@ -7413,7 +7417,8 @@ function workflowNodeDefaultSize(nodeId) {
 }
 
 function setZoom(next) {
-  canvasZoom = Math.min(1.35, Math.max(0.45, next));
+  const minZoom = isDxWorkflow() ? 0.32 : 0.45;
+  canvasZoom = Math.min(1.35, Math.max(minZoom, next));
   applyCanvasZoom();
 }
 
@@ -7427,10 +7432,29 @@ function applyCanvasZoom() {
 function zoomToFit() {
   const wrap = $("#canvasView");
   if (!wrap) return;
-  const neededWidth = isDxWorkflow() ? 1350 : 1900;
-  const available = Math.max(600, wrap.clientWidth - 30);
-  setZoom(Math.min(0.9, Math.max(0.55, available / neededWidth)));
+  const bounds = workflowCanvasFitBounds();
+  const availableWidth = Math.max(600, wrap.clientWidth - 36);
+  const availableHeight = Math.max(420, wrap.clientHeight - 36);
+  const widthScale = availableWidth / bounds.width;
+  const heightScale = availableHeight / bounds.height;
+  const minZoom = isDxWorkflow() ? 0.32 : 0.45;
+  setZoom(Math.min(0.9, Math.max(minZoom, Math.min(widthScale, heightScale))));
   wrap.scrollTo({ left: 0, top: 0, behavior: "smooth" });
+}
+
+function workflowCanvasFitBounds() {
+  if (!state?.nodes?.length) {
+    return { width: isDxWorkflow() ? 1420 : 1900, height: 760 };
+  }
+  const maxRight = Math.max(
+    isDxWorkflow() ? 1420 : 1900,
+    ...state.nodes.map(node => (node.x || 0) + (node.width || workflowNodeDefaultSize(node.id)?.[0] || 260) + 80)
+  );
+  const maxBottom = Math.max(
+    760,
+    ...state.nodes.map(node => (node.y || 0) + (node.height || workflowNodeDefaultSize(node.id)?.[1] || 160) + 80)
+  );
+  return { width: maxRight, height: maxBottom };
 }
 
 function renderNode(node) {
@@ -12438,15 +12462,26 @@ function costingQuotationDescription(row) {
 }
 
 async function createQuotationFromCosting() {
-  activeCostingOrDraft();
-  const sheet = await saveCostingSheet();
-  if (!sheet) return toast("Save the Costing Sheet before creating a quotation.");
-  if (!salesCrmState) await loadSalesCrm().catch(error => toast(error.message || "Unable to load quotations"));
-  const linkedQuote = costingLinkedQuotation(sheet);
-  if (linkedQuote?.id) return editSalesQuotation(linkedQuote.id);
-  const lines = (sheet.rows || []).filter(row => row.model && costingNumber(row.qty) > 0).map(row => ({ description: costingQuotationDescription(row), qty: costingNumber(row.qty), unit: "Nos", unitPrice: costingNumber(row.sellingPrice) }));
-  if (!lines.length) return toast("Add at least one priced model before creating a quotation.");
-  return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "", sourceCostingSheetId: sheet.id });
+  if (costingQuotationCreating) return;
+  costingQuotationCreating = true;
+  renderViewActions();
+  try {
+    activeCostingOrDraft();
+    if (!salesCrmState) loadSalesCrm().catch(error => {
+      toast(error.message || "Unable to load quotations");
+      return null;
+    });
+    const sheet = await saveCostingSheet();
+    if (!sheet) return toast("Save the Costing Sheet before creating a quotation.");
+    const linkedQuote = costingLinkedQuotation(sheet);
+    if (linkedQuote?.id) return editSalesQuotation(linkedQuote.id);
+    const lines = (sheet.rows || []).filter(row => row.model && costingNumber(row.qty) > 0).map(row => ({ description: costingQuotationDescription(row), qty: costingNumber(row.qty), unit: "Nos", unitPrice: costingNumber(row.sellingPrice) }));
+    if (!lines.length) return toast("Add at least one priced model before creating a quotation.");
+    return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "", sourceCostingSheetId: sheet.id });
+  } finally {
+    costingQuotationCreating = false;
+    renderViewActions();
+  }
 }
 
 function exportCostingSheet() {
