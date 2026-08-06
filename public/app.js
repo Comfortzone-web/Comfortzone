@@ -1378,7 +1378,7 @@ function salesDeskTopbarConfig() {
       subtitle: costingMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
       search: costingMode === "prices" ? "Search model or brand..." : "",
       actions: costingMode === "prices"
-        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button><button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price List<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label><button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
+        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button><button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label><button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
         : costingMode === "all"
           ? `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button>`
           : costingTopbarActions()

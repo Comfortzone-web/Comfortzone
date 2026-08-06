@@ -1303,7 +1303,13 @@ td[contenteditable="true"]:focus {
 .costing-price-summary span { display: grid; gap: 8px; color: #52647d; font-size: 13px; }
 .costing-price-summary strong { color: #0a2a63; font-size: 21px; }
 .costing-empty { padding: 28px !important; color: #71819a !important; }
-.costing-import-button { display: inline-flex; align-items: center; cursor: pointer; }
+.costing-import-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+}
 
 @media (max-width: 1260px) {
   .costing-page.with-history { grid-template-columns: 1fr; }
