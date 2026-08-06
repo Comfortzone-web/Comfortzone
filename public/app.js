@@ -7319,11 +7319,7 @@ function autoLayoutWorkflow() {
   } else {
     positions["boq-table"][1] = positions["costing-table"][1] + costingHeight + 32;
     positions.quotation[1] = Math.max(340, positions["boq-table"][1] - 100);
-    positions["vrv-schedule"][1] = Math.max(
-      770,
-      positions["thermal-table"][1] + thermalHeight + 65,
-      positions["boq-table"][1] + boqHeight + 65
-    );
+    positions["vrv-schedule"][1] = 770;
   }
   state.nodes.forEach(node => {
     if (positions[node.id] && !node.locked) {
