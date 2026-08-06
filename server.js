@@ -7767,6 +7767,8 @@ const VRV_SCHEDULE_XLSX_COLUMNS = [
   { col: "AH", keys: ["Outdoor Weight"] }
 ];
 
+const DX_SELECTION_TABLE_COLUMNS = xlsxColumnRange("B", "AO");
+
 function generateVrvScheduleWorkbook(payload = {}) {
   if (!fs.existsSync(VRV_SCHEDULE_TEMPLATE)) {
     throw new Error("VRV Schedule template file is missing.");
@@ -7826,8 +7828,13 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     const currentRow = rowNumber <= templateLastRow
       ? (originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber))
       : cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
-    const styles = xlsxRowStyleMap(currentRow);
-    let updatedRow = currentRow;
+    const baseStyles = {
+      ...xlsxRowStyleMap(templateRow),
+      ...xlsxRowStyleMap(currentRow)
+    };
+    const styledRow = xlsxEnsureStyledCells(currentRow, rowNumber, DX_SELECTION_TABLE_COLUMNS, baseStyles);
+    const styles = xlsxRowStyleMap(styledRow);
+    let updatedRow = styledRow;
     const modelValue = firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]);
     const qtyValue = firstFilled(sourceRow, ["Qty"]);
     const values = {
@@ -7849,10 +7856,19 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
   }
 
   if (templateTotalRowXml) {
-    const totalRowXml = xlsxUpdateDxTotalRow(templateTotalRowXml, totalRowNumber, templateTotalRow, templateRowNumber, lastDataRow);
+    const totalStyleSource = originalRows[Math.min(lastDataRow, templateLastRow)] || templateRow;
+    const totalRowXml = xlsxUpdateDxTotalRow(
+      templateTotalRowXml,
+      totalRowNumber,
+      templateTotalRow,
+      templateRowNumber,
+      lastDataRow,
+      xlsxRowStyleMap(totalStyleSource)
+    );
     next = replaceXlsxRow(next, totalRowNumber, totalRowXml);
   }
-  next = xlsxUpdateDimension(next, `B4:AR${templateTotalRowXml ? totalRowNumber : lastDataRow}`);
+  next = xlsxRemoveCellsInColumns(next, xlsxColumnRange("AP", "AR"));
+  next = xlsxUpdateDimension(next, `B4:AO${templateTotalRowXml ? totalRowNumber : lastDataRow}`);
 
   return next;
 }
@@ -7907,8 +7923,9 @@ function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
     .replace(new RegExp(`(\\$?[A-Z]{1,3}\\$?)${escapeRegExp(source)}\\b`, "g"), `$1${rowNumber}`);
 }
 
-function xlsxUpdateDxTotalRow(rowXml, rowNumber, sourceRowNumber, firstDataRow, lastDataRow) {
+function xlsxUpdateDxTotalRow(rowXml, rowNumber, sourceRowNumber, firstDataRow, lastDataRow, fallbackStyles = {}) {
   let next = cloneDxSelectionRow(rowXml, rowNumber, sourceRowNumber);
+  next = xlsxEnsureStyledCells(next, rowNumber, DX_SELECTION_TABLE_COLUMNS, fallbackStyles);
   next = next.replace(new RegExp(`SUM\\(I${firstDataRow}:I${sourceRowNumber - 1}\\)`, "gi"), `SUM(I${firstDataRow}:I${lastDataRow})`);
   return next;
 }
@@ -7918,6 +7935,15 @@ function xlsxUpdateDimension(xml, ref) {
     return xml.replace(/<dimension\b[^>]*\/>/i, `<dimension ref="${ref}"/>`);
   }
   return xml.replace(/<sheetViews\b/i, `<dimension ref="${ref}"/><sheetViews`);
+}
+
+function xlsxRemoveCellsInColumns(xml, columns) {
+  let next = xml;
+  for (const column of columns) {
+    const pattern = new RegExp(`<c\\b(?=[^>]*\\br="${column}\\d+")[^>]*\\/>|<c\\b(?=[^>]*\\br="${column}\\d+")[^>]*>[\\s\\S]*?<\\/c>`, "gi");
+    next = next.replace(pattern, "");
+  }
+  return next;
 }
 
 function replaceXlsxRow(xml, rowNumber, rowXml) {
@@ -8105,6 +8131,29 @@ function xlsxRowsByNumber(xml) {
   return rows;
 }
 
+function xlsxColumnRange(firstColumn, lastColumn) {
+  const first = xlsxColumnIndex(firstColumn);
+  const last = xlsxColumnIndex(lastColumn);
+  const columns = [];
+  for (let index = first; index <= last; index += 1) columns.push(xlsxColumnName(index));
+  return columns;
+}
+
+function xlsxColumnIndex(column) {
+  return String(column).split("").reduce((sum, char) => (sum * 26) + char.charCodeAt(0) - 64, 0);
+}
+
+function xlsxColumnName(index) {
+  let name = "";
+  let current = index;
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    current = Math.floor((current - 1) / 26);
+  }
+  return name;
+}
+
 function xlsxRowStyleMap(rowXml) {
   const styles = {};
   const cellRegex = /<c\b[^>]*\br="([A-Z]+)\d+"[^>]*>/g;
@@ -8114,6 +8163,17 @@ function xlsxRowStyleMap(rowXml) {
     if (styleMatch) styles[match[1]] = styleMatch[1];
   }
   return styles;
+}
+
+function xlsxEnsureStyledCells(rowXml, rowNumber, columns, styles = {}) {
+  const openTag = rowXml.match(/^<row\b[^>]*>/i)?.[0] || `<row r="${rowNumber}">`;
+  const cellsByColumn = {};
+  for (const column of columns) {
+    const ref = `${column}${rowNumber}`;
+    cellsByColumn[column] = xlsxCellXml(rowXml, ref) || xlsxCell(column, rowNumber, "", styles[column] || "");
+  }
+  const orderedColumns = Object.keys(cellsByColumn).sort((a, b) => xlsxColumnIndex(a) - xlsxColumnIndex(b));
+  return `${openTag}${orderedColumns.map(column => cellsByColumn[column]).join("")}</row>`;
 }
 
 function xlsxCellStyle(rowXml, ref) {
