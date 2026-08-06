@@ -1131,7 +1131,7 @@ async function readJson(req) {
   return JSON.parse(buffer.toString("utf8"));
 }
 
-async function createDefaultProject() {
+async function createDefaultProject(user = null) {
   const now = new Date();
   const yyyy = now.getFullYear();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
@@ -1155,9 +1155,9 @@ async function createDefaultProject() {
       model: "Daikin",
       validity: "Valid for 7 days",
       enquiryNo: "",
-      preparedBy: ""
+      preparedBy: cleanCell(user?.name || "")
     },
-    quotation: { quotationNo: await nextQuotationNo(), generatedDocId: "", generatedPdfId: "" },
+    quotation: { quotationNo: "", generatedDocId: "", generatedPdfId: "" },
     layoutVersion: "screenshot-v5",
     nodes: defaultNodes(),
     uploads: [],
@@ -1170,20 +1170,6 @@ async function createDefaultProject() {
     priceList: loadMasterPriceList(),
     lookup: loadMasterLookups()
   };
-}
-
-async function nextQuotationNo() {
-  const projects = await listProjects("", true);
-  let max = 1000;
-  const year = String(new Date().getFullYear()).slice(-2);
-  for (const project of projects) {
-    try {
-      const q = project.quotation && project.quotation.quotationNo;
-      const match = typeof q === "string" && q.match(/(\d+)$/);
-      if (match) max = Math.max(max, Number(match[1]));
-    } catch {}
-  }
-  return `QCZ-A/${year}/${max + 1}`;
 }
 
 function defaultNodes() {
@@ -1295,7 +1281,6 @@ async function listProjects(query = "", includeHidden = false) {
         project.details.model,
         project.details.enquiryNo,
         project.details.preparedBy,
-        project.quotation.quotationNo
       ].join(" ").toLowerCase();
       return haystack.includes(q);
     });
@@ -1308,7 +1293,6 @@ async function listProjects(query = "", includeHidden = false) {
       customer: project.details.customer,
       location: project.details.location,
       model: project.details.model,
-      quotationNo: project.quotation.quotationNo,
       enquiryNo: project.details.enquiryNo,
       preparedBy: project.details.preparedBy,
       updatedAt: project.updatedAt
@@ -2070,7 +2054,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/projects") {
-    const project = await createDefaultProject();
+    const project = await createDefaultProject(user);
     if (url.searchParams.get("draft") === "1") {
       return send(res, 200, project);
     }

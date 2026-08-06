@@ -651,6 +651,7 @@ async function createProject(options = {}) {
   projectTouched = false;
   if (requestedMode === "dx") configureDxWorkflow(state, { resetTables: true });
   else state.workflowMode = "vrv";
+  ensureWorkflowPreparedByDefault();
   if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
   applyCompactLayout(true);
   history.replaceState(null, "", location.pathname);
@@ -664,6 +665,7 @@ async function loadProject(id) {
   projectPersisted = true;
   projectTouched = false;
   if (workflowMode(state) === "dx") configureDxWorkflow(state, { resetTables: false });
+  ensureWorkflowPreparedByDefault();
   applyCompactLayout(false);
   showCanvas();
   scheduleWorkflowRender({ fit: true });
@@ -675,6 +677,11 @@ function workflowMode(project = state) {
 
 function isDxWorkflow(project = state) {
   return workflowMode(project) === "dx";
+}
+
+function ensureWorkflowPreparedByDefault(project = state) {
+  if (!project?.details || project.details.preparedBy || !currentUser?.name) return;
+  project.details.preparedBy = currentUser.name;
 }
 
 function workflowTitleFallback(project = state) {
@@ -7120,7 +7127,7 @@ async function loadProjectList() {
     <article class="project-card">
       <div>
         <h3>${escapeHtml(project.project || project.title || "Untitled Project")}</h3>
-        <p>${escapeHtml(project.customer || "No customer")} · ${escapeHtml(project.quotationNo || "")} · ${new Date(project.updatedAt).toLocaleString()}</p>
+        <p>${escapeHtml(project.customer || "No customer")} · ${new Date(project.updatedAt).toLocaleString()}</p>
       </div>
       <div class="project-card-actions">
         <button class="workflow-menu-button" type="button" data-workflow-menu="${project.id}" aria-label="Workflow actions">...</button>
@@ -7211,7 +7218,6 @@ function render() {
     recalcBoq();
   }
   setWorkflowTitle(state.details.project || workflowTitleFallback());
-  $("#projectMeta").textContent = `${state.details.customer || "Internal project"} · ${state.quotation.quotationNo}`;
   $("#projectMeta").textContent = state.details.project || "Internal project";
   canvas.innerHTML = "";
   state.nodes.forEach(renderNode);
@@ -7634,6 +7640,7 @@ function detailsBody() {
   const wrap = document.createElement("div");
   wrap.className = "details-grid";
   if (!state.details.model) state.details.model = "Daikin";
+  if (!state.details.preparedBy && currentUser?.name) state.details.preparedBy = currentUser.name;
   const fields = [
     ["customer", "Customer"], ["contactPerson", "Contact Person"], ["telNo", "Tel. No"],
     ["email", "Email"], ["project", "Project"], ["date", "Date"],
@@ -11540,19 +11547,19 @@ async function downloadQuotation() {
   const blob = await api("/api/export/quotation", {
     method: "POST",
     body: JSON.stringify({
-      filename: `${safeFile(state.quotation.quotationNo || "quotation")}.docx`,
+      filename: "quotation.docx",
       details: state.details,
-      quotationNo: state.quotation.quotationNo,
+      quotationNo: "",
       boq: state.tables.boq
     })
   });
-  downloadBlob(blob, `${safeFile(state.quotation.quotationNo || "quotation")}.docx`);
+  downloadBlob(blob, "quotation.docx");
 }
 
 async function openQuotationPrint() {
   const blob = await api("/api/export/quotation", {
     method: "POST",
-    body: JSON.stringify({ details: state.details, quotationNo: state.quotation.quotationNo, boq: state.tables.boq })
+    body: JSON.stringify({ details: state.details, quotationNo: "", boq: state.tables.boq })
   });
   const url = URL.createObjectURL(blob);
   const win = window.open(url, "_blank");
