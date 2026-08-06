@@ -1409,8 +1409,8 @@ function costingTopbarActions() {
   const linkedQuote = costingLinkedQuotation();
   const quotationNo = linkedQuote?.no || linkedQuote?.quotationNo || "";
   const creatingAttr = costingQuotationCreating ? " disabled aria-busy=\"true\"" : "";
-  const label = costingQuotationCreating ? "Creating" : "Create Quotation";
-  return `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation"${creatingAttr}>${label}</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
+  const label = costingQuotationCreating ? "Creating..." : "Create Quotation";
+  return `<button class="sales-primary costing-new-button" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation"${creatingAttr}>${label}</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
 }
 
 function inventoryTopbarConfig() {

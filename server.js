@@ -7787,6 +7787,7 @@ function generateDxSelectionWorkbook(payload = {}) {
   }
   const entries = unzipEntriesBuffer(fs.readFileSync(DX_SELECTION_TEMPLATE));
   removeWorkbookCalcChain(entries);
+  removeWorkbookPivotTables(entries);
   forceWorkbookRecalculation(entries);
   const sheetPath = findWorkbookSheetPath(entries, "Selection Sheet") || "xl/worksheets/sheet1.xml";
   if (!entries[sheetPath]) throw new Error("Selection Sheet worksheet was not found in the DX template.");
@@ -7797,12 +7798,15 @@ function generateDxSelectionWorkbook(payload = {}) {
 function fillDxSelectionSheetXml(xml, payload = {}) {
   const templateRowNumber = xlsxDxTemplateRowNumber(xml);
   const templateLastRow = xlsxDxLastDataRow(xml, templateRowNumber);
+  const templateTotalRow = templateLastRow + 1;
   xml = xlsxExpandDxSelectionSharedFormulas(xml);
   const originalRows = xlsxRowsByNumber(xml);
   const inputRows = Array.isArray(payload.rows) ? payload.rows : [];
   const lastDataRow = Math.max(templateLastRow, templateRowNumber + inputRows.length - 1);
+  const totalRowNumber = lastDataRow + 1;
   const templateRow = originalRows[templateRowNumber];
   if (!templateRow) throw new Error("DX Selection Sheet data row template was not found.");
+  const templateTotalRowXml = originalRows[templateTotalRow] || "";
   let next = xml;
 
   [
@@ -7819,7 +7823,9 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     const sourceIndex = rowNumber - templateRowNumber;
     const sourceRow = inputRows[sourceIndex] || {};
     const hasSourceRow = sourceIndex < inputRows.length;
-    const currentRow = originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
+    const currentRow = rowNumber <= templateLastRow
+      ? (originalRows[rowNumber] || cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber))
+      : cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber);
     const styles = xlsxRowStyleMap(currentRow);
     let updatedRow = currentRow;
     const modelValue = firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]);
@@ -7841,6 +7847,12 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     if (qtyValue !== "") updatedRow = xlsxSetFormulaCachedValue(updatedRow, `I${rowNumber}`, qtyValue, styles.I);
     next = replaceXlsxRow(next, rowNumber, updatedRow);
   }
+
+  if (templateTotalRowXml) {
+    const totalRowXml = xlsxUpdateDxTotalRow(templateTotalRowXml, totalRowNumber, templateTotalRow, templateRowNumber, lastDataRow);
+    next = replaceXlsxRow(next, totalRowNumber, totalRowXml);
+  }
+  next = xlsxUpdateDimension(next, `B4:AR${templateTotalRowXml ? totalRowNumber : lastDataRow}`);
 
   return next;
 }
@@ -7895,6 +7907,19 @@ function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
     .replace(new RegExp(`(\\$?[A-Z]{1,3}\\$?)${escapeRegExp(source)}\\b`, "g"), `$1${rowNumber}`);
 }
 
+function xlsxUpdateDxTotalRow(rowXml, rowNumber, sourceRowNumber, firstDataRow, lastDataRow) {
+  let next = cloneDxSelectionRow(rowXml, rowNumber, sourceRowNumber);
+  next = next.replace(new RegExp(`SUM\\(I${firstDataRow}:I${sourceRowNumber - 1}\\)`, "gi"), `SUM(I${firstDataRow}:I${lastDataRow})`);
+  return next;
+}
+
+function xlsxUpdateDimension(xml, ref) {
+  if (/<dimension\b[^>]*\/>/i.test(xml)) {
+    return xml.replace(/<dimension\b[^>]*\/>/i, `<dimension ref="${ref}"/>`);
+  }
+  return xml.replace(/<sheetViews\b/i, `<dimension ref="${ref}"/><sheetViews`);
+}
+
 function replaceXlsxRow(xml, rowNumber, rowXml) {
   const rowPattern = new RegExp(`<row\\b[^>]*\\br="${rowNumber}"[^>]*>[\\s\\S]*?<\\/row>`, "i");
   if (rowPattern.test(xml)) return xml.replace(rowPattern, rowXml);
@@ -7914,6 +7939,34 @@ function removeWorkbookCalcChain(entries) {
   if (contentTypes) {
     contentTypes.data = Buffer.from(
       contentTypes.data.toString("utf8").replace(/<Override\b(?=[^>]*PartName="\/xl\/calcChain\.xml")[^>]*\/>/g, ""),
+      "utf8"
+    );
+  }
+}
+
+function removeWorkbookPivotTables(entries) {
+  for (const name of Object.keys(entries)) {
+    if (/^xl\/pivot(?:Tables|Cache)\//i.test(name)) delete entries[name];
+  }
+  const workbook = entries["xl/workbook.xml"];
+  if (workbook) {
+    workbook.data = Buffer.from(
+      workbook.data.toString("utf8").replace(/<pivotCaches\b[\s\S]*?<\/pivotCaches>/gi, ""),
+      "utf8"
+    );
+  }
+  for (const relPath of ["xl/_rels/workbook.xml.rels", "xl/worksheets/_rels/sheet1.xml.rels"]) {
+    const rels = entries[relPath];
+    if (!rels) continue;
+    rels.data = Buffer.from(
+      rels.data.toString("utf8").replace(/<Relationship\b(?=[^>]*Type="[^"]*\/pivot(?:Table|CacheDefinition)")[^>]*\/>/gi, ""),
+      "utf8"
+    );
+  }
+  const contentTypes = entries["[Content_Types].xml"];
+  if (contentTypes) {
+    contentTypes.data = Buffer.from(
+      contentTypes.data.toString("utf8").replace(/<Override\b(?=[^>]*PartName="\/xl\/pivot(?:Tables|Cache)\/[^"]+")[^>]*\/>/gi, ""),
       "utf8"
     );
   }
