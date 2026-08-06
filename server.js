@@ -7804,7 +7804,8 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
   xml = xlsxExpandDxSelectionSharedFormulas(xml);
   const originalRows = xlsxRowsByNumber(xml);
   const inputRows = Array.isArray(payload.rows) ? payload.rows : [];
-  const lastDataRow = Math.max(templateLastRow, templateRowNumber + inputRows.length - 1);
+  const outputRowCount = Math.max(1, inputRows.length);
+  const lastDataRow = templateRowNumber + outputRowCount - 1;
   const totalRowNumber = lastDataRow + 1;
   const templateRow = originalRows[templateRowNumber];
   if (!templateRow) throw new Error("DX Selection Sheet data row template was not found.");
@@ -7855,6 +7856,9 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     next = replaceXlsxRow(next, rowNumber, updatedRow);
   }
 
+  if (lastDataRow < templateTotalRow) {
+    next = xlsxRemoveRowsInRange(next, lastDataRow + 1, templateTotalRow);
+  }
   if (templateTotalRowXml) {
     const totalStyleSource = originalRows[Math.min(lastDataRow, templateLastRow)] || templateRow;
     const totalRowXml = xlsxUpdateDxTotalRow(
@@ -7942,6 +7946,14 @@ function xlsxRemoveCellsInColumns(xml, columns) {
   for (const column of columns) {
     const pattern = new RegExp(`<c\\b(?=[^>]*\\br="${column}\\d+")[^>]*\\/>|<c\\b(?=[^>]*\\br="${column}\\d+")[^>]*>[\\s\\S]*?<\\/c>`, "gi");
     next = next.replace(pattern, "");
+  }
+  return next;
+}
+
+function xlsxRemoveRowsInRange(xml, firstRow, lastRow) {
+  let next = xml;
+  for (let rowNumber = firstRow; rowNumber <= lastRow; rowNumber += 1) {
+    next = next.replace(new RegExp(`<row\\b[^>]*\\br="${rowNumber}"[^>]*>[\\s\\S]*?<\\/row>`, "i"), "");
   }
   return next;
 }
