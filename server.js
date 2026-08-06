@@ -1599,6 +1599,8 @@ function normalizeSalesItem(collection, input, store) {
       notes: cleanMultilineCell(base.notes || ""),
       terms: cleanMultilineCell(base.terms || ""),
       items: Array.isArray(base.items) ? base.items.map(normalizeSalesQuoteItem) : [],
+      combineRefnets: !!base.combineRefnets,
+      refnetOriginalItems: Array.isArray(base.refnetOriginalItems) ? base.refnetOriginalItems.map(normalizeSalesQuoteItem) : [],
       manualSubtotal: cleanCell(base.manualSubtotal || ""),
       discount: Number(base.discount || 0),
       sourceLeadId: cleanCell(base.sourceLeadId || ""),

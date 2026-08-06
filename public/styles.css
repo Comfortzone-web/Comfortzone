@@ -4066,6 +4066,27 @@ td[contenteditable="true"]:focus {
   color: #fff;
 }
 
+.quote-item-breakdown-title {
+  justify-content: space-between;
+}
+
+.quote-refnet-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #1b365d;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quote-refnet-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #0f75ff;
+}
+
 .sales-form-grid input,
 .sales-form-grid select,
 .sales-notes-block textarea,

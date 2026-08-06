@@ -230,6 +230,11 @@ Units offered are covered under a standard warranty of 12 months from the date o
 
 Exclusions:
 Installation of AC units, unloading of units at site & supply of items other than mentioned.`;
+const salesQuoteRefnetModels = [
+  "KHRP26A22T6", "KHRP26A33T6", "KHRP26A72T6", "KHRP26A73T6", "KHRP26M73TP6",
+  "KHRP26M73TP", "KHRQ22M20T", "KHRQ22M29T9", "KHRQ22M64T", "KHRQ22M75T",
+  "BHFP22P1006", "BHFP22P1516", "BHFQ22P1007", "BHFQ22P1517"
+];
 const salesCrmData = {
   settings: { nextQuotationNo: defaultSalesQuotationNo(), nextEnquiryNo: `EN${String(new Date().getFullYear()).slice(-2)}-1001`, nextProjectNo: `PRJ-${String(new Date().getFullYear()).slice(-2)}-0001` },
   leads: [
@@ -3505,6 +3510,8 @@ function salesCreateQuotationHtml() {
   const vat = taxable * 0.05;
   const total = taxable + vat;
   const modelOptions = salesQuoteModelOptions();
+  const showCombineRefnets = salesQuoteCanShowRefnetToggle();
+  const quoteUnitOptions = ["Nos", "Sets", "Meters", "Units", "Lot"];
   return `
     ${salesPageHeader("Create New Quotation", "Prepare a quotation inside Sales Desk.", `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary" data-sales-action="send-quote">Create</button>`)}
     <div class="sales-quote-layout">
@@ -3524,7 +3531,10 @@ function salesCreateQuotationHtml() {
         <datalist id="salesQuoteModelList">
           ${modelOptions.map(item => `<option value="${escapeHtml(salesQuoteModelDisplay(item))}"></option>`).join("")}
         </datalist>
-        <div class="sales-card-title"><h3>Item Breakdown</h3></div>
+        <div class="sales-card-title quote-item-breakdown-title">
+          <h3>Item Breakdown</h3>
+          ${showCombineRefnets ? `<label class="quote-refnet-toggle"><input type="checkbox" data-sales-quote-combine-refnets ${salesQuotationDraft.combineRefnets ? "checked" : ""}><span>Combine Refnets</span></label>` : ""}
+        </div>
         <table class="sales-table sales-quote-table">
           <colgroup><col class="quote-col-description"><col class="quote-col-qty"><col class="quote-col-unit"><col class="quote-col-price"><col class="quote-col-action"></colgroup>
           <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Price</th><th></th></tr></thead>
@@ -3532,7 +3542,7 @@ function salesCreateQuotationHtml() {
             <tr>
               <td><input data-suggestion-list="salesQuoteModelList" data-sales-quote-line="${index}" data-field="description" placeholder="Type model no..." value="${escapeHtml(item.description)}"></td>
               <td><input type="number" data-sales-quote-line="${index}" data-field="qty" value="${Number(item.qty || 0)}"></td>
-              <td><select data-sales-quote-line="${index}" data-field="unit">${["Nos", "Sets", "Meters", "Units"].map(unit => `<option ${item.unit === unit ? "selected" : ""}>${unit}</option>`).join("")}</select></td>
+              <td><select data-sales-quote-line="${index}" data-field="unit">${quoteUnitOptions.map(unit => `<option ${item.unit === unit ? "selected" : ""}>${unit}</option>`).join("")}</select></td>
               <td><input type="number" min="0" step="0.01" data-sales-quote-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0).toFixed(2)}"></td>
               <td><button data-sales-delete-quote-line="${index}">Delete</button></td>
             </tr>`).join("")}</tbody>
@@ -5049,6 +5059,11 @@ function handleSalesChange(event) {
     updateManualFollowStatus(event.target.dataset.manualFollowStatus, event.target.value);
     return;
   }
+  if (event.target.dataset.salesQuoteCombineRefnets !== undefined) {
+    salesQuoteApplyRefnetCombine(event.target.checked);
+    renderSalesDesk();
+    return;
+  }
   updateSalesQuotationDraft(event, true);
 }
 
@@ -5145,6 +5160,41 @@ function applySalesQuotePreset(type) {
   renderSalesDesk();
 }
 
+function salesQuoteItemHasRefnet(item = {}) {
+  const description = String(item.description || "").toUpperCase();
+  return salesQuoteRefnetModels.some(model => description.includes(model));
+}
+
+function salesQuoteCanShowRefnetToggle() {
+  if (!salesQuotationDraft) return false;
+  return !!salesQuotationDraft.combineRefnets || (salesQuotationDraft.items || []).some(salesQuoteItemHasRefnet) || (salesQuotationDraft.refnetOriginalItems || []).some(salesQuoteItemHasRefnet);
+}
+
+function salesQuoteApplyRefnetCombine(enabled) {
+  if (!salesQuotationDraft) return;
+  if (enabled) {
+    if (salesQuotationDraft.combineRefnets) return;
+    const originalItems = structuredClone(salesQuotationDraft.items || []);
+    const refnetItems = originalItems.filter(salesQuoteItemHasRefnet);
+    if (!refnetItems.length) return;
+    const normalItems = originalItems.filter(item => !salesQuoteItemHasRefnet(item));
+    const refnetTotal = refnetItems.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
+    salesQuotationDraft.refnetOriginalItems = originalItems;
+    salesQuotationDraft.items = [
+      ...normalItems,
+      { description: "DAIKIN REFNETS", qty: 1, unit: "Lot", unitPrice: Number(refnetTotal.toFixed(2)) }
+    ];
+    salesQuotationDraft.combineRefnets = true;
+    return;
+  }
+  if (!salesQuotationDraft.combineRefnets) return;
+  if (Array.isArray(salesQuotationDraft.refnetOriginalItems) && salesQuotationDraft.refnetOriginalItems.length) {
+    salesQuotationDraft.items = structuredClone(salesQuotationDraft.refnetOriginalItems);
+  }
+  delete salesQuotationDraft.refnetOriginalItems;
+  salesQuotationDraft.combineRefnets = false;
+}
+
 function quoteDraftFromSource(source = {}) {
   const loginName = String(currentUser?.name || "").trim();
   return {
@@ -5163,6 +5213,8 @@ function quoteDraftFromSource(source = {}) {
     notes: source.notes ?? "",
     terms: source.terms || quoteVrvTerms,
     items: Array.isArray(source.items) && source.items.length ? source.items : [{ description: "", qty: 1, unit: "Nos", unitPrice: 0 }],
+    combineRefnets: !!source.combineRefnets,
+    refnetOriginalItems: Array.isArray(source.refnetOriginalItems) ? structuredClone(source.refnetOriginalItems) : [],
     manualSubtotal: source.manualSubtotal || "",
     discount: 0,
     baseQuotationNo: source.baseQuotationNo || "",
