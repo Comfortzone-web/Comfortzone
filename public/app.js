@@ -9744,6 +9744,22 @@ function collectDeliveryDraft(status) {
   };
 }
 
+function collectDeliveryHeaderDraft(status) {
+  return {
+    ...deliveryDraft,
+    dnNo: $("#dnNoInput")?.value || deliveryDraft.dnNo,
+    date: parseInventoryDate($("#dnDateInput")?.value || deliveryDraft.date),
+    projectNo: $("#deliveryProjectNoInput")?.value.trim() || deliveryDraft.projectNo || "",
+    customerName: $("#customerNameInput")?.value || deliveryDraft.customerName,
+    contactPerson: $("#contactInput")?.value || deliveryDraft.contactPerson,
+    phone: $("#phoneInput")?.value || deliveryDraft.phone,
+    deliveryLocation: $("#locationInput")?.value || deliveryDraft.deliveryLocation,
+    projectName: $("#projectInput")?.value || deliveryDraft.projectName,
+    lines: deliveryDraft.lines || [],
+    status
+  };
+}
+
 function fillCustomerDetails() {
   const name = $("#customerNameInput").value;
   const customer = inventoryState.customers.find(c => c.customerName === name);
@@ -9906,6 +9922,7 @@ function addDeliveryLine() {
 }
 
 function updateDeliveryLineModel(index, value) {
+  deliveryDraft = collectDeliveryHeaderDraft(deliveryDraft.status || "Draft");
   const line = deliveryDraft?.lines?.[index];
   if (!line) return;
   const typedModel = value.trim().toUpperCase();
