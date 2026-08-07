@@ -5875,6 +5875,7 @@ async function createSalesQuotationRevision(quoteId) {
     revisionNo,
     revision: `Revision R${revisionNo}`,
     status: "Draft",
+    sourceCostingSheetId: "",
     quotationDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
     date: new Date().toLocaleDateString("en-GB").replace(/\//g, "-")
   };
