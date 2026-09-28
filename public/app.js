@@ -1467,6 +1467,7 @@ function inventoryTopbarConfig() {
       searchValue: "",
       search: "Search model or description",
       searchClass: "stock-top-search",
+      beforeSearchActions: `<button class="sales-primary" data-inventory-top-action="add-stock">Add Unit / Stock</button>`,
       actions: ""
     }
   };
@@ -6195,6 +6196,7 @@ function renderViewActions() {
   if (inventoryTopbar) {
     actions.classList.remove("hidden");
     actions.innerHTML = `
+      ${inventoryTopbar.beforeSearchActions || ""}
       <label class="quotation-search ${escapeHtml(inventoryTopbar.searchClass || "")}">
         <span></span>
         <input id="${escapeHtml(inventoryTopbar.searchId)}" data-inventory-top-search value="${escapeHtml(inventoryTopbar.searchValue || "")}" placeholder="${escapeHtml(inventoryTopbar.search)}">
@@ -6298,6 +6300,7 @@ function bindInventoryTopbarActions() {
       if (action === "new-delivery") return openDeliveryModal();
       if (action === "customer-list") return showInventory("customers");
       if (action === "save-stock") return openStockModelModal();
+      if (action === "add-stock") return openStockModelModal("", "add");
     });
   });
 }
@@ -8671,23 +8674,27 @@ function stockModelModalHtml(mode = "edit") {
     new Map([...(inventoryState.models || []), ...stock].filter(item => item?.modelNo).map(item => [norm(item.modelNo), item])).values()
   );
   const isReturn = mode === "return";
+  const isAdd = mode === "add";
+  const modelOptions = isAdd ? "" : `<datalist id="stockModelOptions">
+    ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
+  </datalist>`;
+  const descriptionField = isReturn ? "" : `<label>Description<input id="stockDescription"></label>`;
+  const brandField = isAdd || isReturn ? "" : `<label>Brand<input id="stockBrand" value="Daikin"></label>`;
   return `
     <div class="modal stock-model-modal">
       <div class="inventory-topbar">
-        <div><h2>${isReturn ? "Return to Warehouse" : "Stock Adjustment / Edit Model"}</h2><p class="inventory-muted">${isReturn ? "Record returned quantity for this model." : "Update model details and current available stock."}</p></div>
+        <div><h2>${isAdd ? "Add Unit / Stock" : isReturn ? "Return to Warehouse" : "Stock Adjustment / Edit Model"}</h2><p class="inventory-muted">${isAdd ? "Add a new unit model and its opening stock quantity." : isReturn ? "Record returned quantity for this model." : "Update model details and current available stock."}</p></div>
         <button class="mini-button" data-close-stock-modal>Close</button>
       </div>
       <div class="form-grid">
-        <label>Model No.<input id="stockModelNo" list="stockModelOptions"></label>
-        <datalist id="stockModelOptions">
-          ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
-        </datalist>
-        ${isReturn ? "" : `<label>Description<input id="stockDescription"></label>
-        <label>Brand<input id="stockBrand" value="Daikin"></label>`}
+        <label>Model No.<input id="stockModelNo"${isAdd ? "" : " list=\"stockModelOptions\""}></label>
+        ${modelOptions}
+        ${descriptionField}
+        ${brandField}
         <label>${isReturn ? "Returned Qty" : "Quantity"}<input id="stockQuantity" type="number" min="0" value="0"></label>
       </div>
-      <p class="inventory-muted">${isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
-      <div class="inventory-actions">${isReturn ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockReturnBtn">Save Return</button>` : `<button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button>`}</div>
+      <p class="inventory-muted">${isAdd ? "The quantity will be added to the available warehouse stock." : isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
+      <div class="inventory-actions">${isAdd ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Add to Stock</button>` : isReturn ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockReturnBtn">Save Return</button>` : `<button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button>`}</div>
     </div>
   `;
 }
@@ -10037,6 +10044,7 @@ function clearStockModelForm() {
 }
 
 async function saveStockModel() {
+  const isAdd = document.querySelector("[data-stock-model-modal]")?.dataset.stockMode === "add";
   const payload = {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
     description: $("#stockDescription")?.value.trim(),
@@ -10044,9 +10052,11 @@ async function saveStockModel() {
     quantity: Number($("#stockQuantity")?.value || 0)
   };
   if (!payload.modelNo) return alert("Model No. is required.");
+  if (isAdd && !payload.description) return alert("Description is required.");
+  if (isAdd && !(payload.quantity > 0)) return alert("Quantity must be greater than 0.");
   inventoryState = await api("/api/inventory/models", { method: "POST", body: JSON.stringify(payload) });
   renderInventory();
-  toast("Model saved");
+  toast(isAdd ? "Stock added" : "Model saved");
 }
 
 async function saveStockReturn() {

@@ -4682,13 +4682,13 @@ function manualStockDateCode(dateValue) {
 
 function nextManualStockNo(inventory, dateValue) {
   const dateCode = manualStockDateCode(dateValue);
-  const pattern = new RegExp(`^Stock ${dateCode}(\\d{2})$`, "i");
+  const pattern = new RegExp(`^Manual ${dateCode}(\\d{2})$`, "i");
   let maxSuffix = -1;
   for (const dn of inventory.supplierDns || []) {
     const match = String(dn.supplierDnNo || "").match(pattern);
     if (match) maxSuffix = Math.max(maxSuffix, Number(match[1]));
   }
-  return `Stock ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
+  return `Manual ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
 }
 
 function ensureManualStockNumbers(inventory) {
@@ -4699,7 +4699,7 @@ function ensureManualStockNumbers(inventory) {
     if (dn.isReturn || inventoryNorm(dn.supplierDnNo) === "RETURN") continue;
     const dateCode = manualStockDateCode(dn.uploadedDate);
     usedByDate[dateCode] = usedByDate[dateCode] || new Set();
-    const existing = String(dn.supplierDnNo || "").match(new RegExp(`^Stock ${dateCode}(\\d{2})$`, "i"));
+    const existing = String(dn.supplierDnNo || "").match(new RegExp(`^(?:Stock|Manual) ${dateCode}(\\d{2})$`, "i"));
     if (existing && !usedByDate[dateCode].has(existing[1])) {
       usedByDate[dateCode].add(existing[1]);
       continue;
@@ -4707,7 +4707,7 @@ function ensureManualStockNumbers(inventory) {
     let suffix = 0;
     while (usedByDate[dateCode].has(String(suffix).padStart(2, "0"))) suffix += 1;
     const suffixText = String(suffix).padStart(2, "0");
-    dn.supplierDnNo = `Stock ${dateCode}${suffixText}`;
+    dn.supplierDnNo = `Manual ${dateCode}${suffixText}`;
     usedByDate[dateCode].add(suffixText);
     changed = true;
   }
