@@ -377,8 +377,8 @@ function bindShell() {
     collapsedSidebarGroups.delete("workflow");
     createProject({ workflowMode: "dx" });
   });
-  $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("form"));
-  $("#areaCalculationBtn").addEventListener("click", () => showAreaCalculation("detail"));
+  $("#purchaseOrdersBtn").addEventListener("click", () => showPurchaseOrders("list"));
+  $("#areaCalculationBtn").addEventListener("click", () => showAreaCalculation("files"));
   $("#salesDeskBtn").addEventListener("click", () => {
     if (!canAccessModule("sales")) return showLockedModuleToast();
     if (toggleActiveSidebarGroup("sales")) return;
