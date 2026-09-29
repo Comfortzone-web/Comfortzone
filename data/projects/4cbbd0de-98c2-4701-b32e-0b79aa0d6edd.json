@@ -1,15 +1,16 @@
 {
-  "id": "6620664f-2793-495f-8c2f-7dd8f78c5ac8",
+  "id": "4cbbd0de-98c2-4701-b32e-0b79aa0d6edd",
   "title": "Untitled Project",
-  "createdAt": "2026-07-18T08:07:32.794Z",
-  "updatedAt": "2026-07-18T08:07:42.420Z",
+  "workflowMode": "dx",
+  "createdAt": "2026-08-05T12:30:39.120Z",
+  "updatedAt": "2026-08-05T12:30:57.089Z",
   "details": {
     "customer": "",
     "contactPerson": "",
     "telNo": "",
     "email": "",
     "project": "",
-    "date": "2026-07-18",
+    "date": "2026-08-05",
     "location": "",
     "model": "Daikin",
     "validity": "Valid for 7 days",
@@ -17,11 +18,11 @@
     "preparedBy": ""
   },
   "quotation": {
-    "quotationNo": "QCZ-A/26/1009",
+    "quotationNo": "QCZ-A/26/1005",
     "generatedDocId": "",
     "generatedPdfId": ""
   },
-  "layoutVersion": "screenshot-v5",
+  "layoutVersion": "dx-workflow-v1",
   "nodes": [
     {
       "id": "details",
@@ -36,112 +37,47 @@
       "id": "thermal-upload",
       "type": "thermalUpload",
       "title": "Thermal Sheet",
-      "x": 180,
-      "y": 255,
+      "x": 760,
+      "y": 20,
       "locked": false,
       "data": {
-        "uploadId": "450f1dcf-6472-438d-a313-ca6697e92e8c"
+        "uploadId": "a132d7d8-546a-4b7f-aeb0-45418e2de31a"
       }
-    },
-    {
-      "id": "vrv-upload",
-      "type": "vrvUpload",
-      "title": "VRV Selection Report",
-      "x": 640,
-      "y": 250,
-      "locked": false,
-      "data": {}
     },
     {
       "id": "thermal-table",
       "type": "thermalTable",
       "title": "Export File",
-      "x": 55,
-      "y": 520,
+      "x": 620,
+      "y": 300,
       "locked": false,
-      "width": 520,
+      "width": 640,
       "height": 205,
-      "data": {}
-    },
-    {
-      "id": "costing-table",
-      "type": "costingTable",
-      "title": "Costing Sheet",
-      "x": 980,
-      "y": 130,
-      "locked": false,
-      "width": 633,
-      "height": 218,
-      "data": {}
-    },
-    {
-      "id": "boq-table",
-      "type": "boqTable",
-      "title": "BOQ / Price",
-      "x": 970,
-      "y": 430,
-      "locked": false,
-      "width": 633,
-      "height": 188,
-      "data": {}
-    },
-    {
-      "id": "quotation",
-      "type": "quotation",
-      "title": "Quotation",
-      "x": 1680,
-      "y": 340,
-      "locked": false,
       "data": {}
     },
     {
       "id": "vrv-schedule",
       "type": "vrvSchedule",
-      "title": "VRV Schedule",
-      "x": 170,
-      "y": 770,
+      "title": "DX Schedule",
+      "x": 430,
+      "y": 555,
       "locked": false,
-      "width": 1550,
+      "width": 1180,
       "height": 230,
-      "data": {}
+      "data": {},
+      "autoFollowExport": true
     }
   ],
-  "uploads": [
-    {
-      "id": "450f1dcf-6472-438d-a313-ca6697e92e8c",
-      "projectId": "6620664f-2793-495f-8c2f-7dd8f78c5ac8",
-      "nodeId": "thermal-upload",
-      "originalName": "Screenshot 2026-07-18 120137.png",
-      "storedName": "450f1dcf-6472-438d-a313-ca6697e92e8c-Screenshot 2026-07-18 120137.png",
-      "mimeType": "image/png",
-      "size": 471453,
-      "createdAt": "2026-07-18T08:07:42.277Z"
-    },
-    {
-      "id": "cbb460e1-b7b9-4aac-ae04-5b792d070f2c",
-      "projectId": "6620664f-2793-495f-8c2f-7dd8f78c5ac8",
-      "nodeId": "thermal-screenshot",
-      "originalName": "Screenshot 2026-07-18 120150.png",
-      "storedName": "cbb460e1-b7b9-4aac-ae04-5b792d070f2c-Screenshot 2026-07-18 120150.png",
-      "mimeType": "image/png",
-      "size": 359564,
-      "createdAt": "2026-07-18T08:07:42.327Z"
-    }
-  ],
+  "uploads": [],
   "tables": {
     "thermal": {
       "columns": [
-        "Indoor",
-        "Room",
-        "Mode",
-        "Family or Model",
-        "Cooling DBT",
-        "Cooling WBT",
-        "Heating T",
-        "Tot Cool Cap",
-        "Sens Cool Cap",
-        "Heat Cap",
-        "Air Flow Rate"
+        "Unit Ref",
+        "Type",
+        "Location",
+        "TKw",
+        "SKw",
+        "L/S"
       ],
       "rows": []
     },
@@ -183,38 +119,36 @@
     },
     "vrvSchedule": {
       "columns": [
-        "System",
-        "Name",
-        "Location",
-        "Rq TC",
-        "Rq SC",
-        "Air Flow Rate",
-        "FCU",
-        "Nominal Index",
-        "Country of Origin",
+        "Ref",
         "Type",
-        "Ambient - On Coil Temperature",
-        "Max TC",
-        "Max SC",
-        "Proposed Air Flow Rate",
-        "PIC",
-        "Sound",
-        "PS",
-        "MCA",
-        "WxHxD",
-        "Weight",
-        "Outdoor Name",
-        "Outdoor Model",
-        "Outdoor Nominal Index",
-        "Ambient Temp",
-        "CC",
-        "PI ESMA",
-        "Outdoor PS",
-        "Outdoor MCA",
-        "MOP",
-        "RLA",
-        "Outdoor WxHxD",
-        "Outdoor Weight"
+        "Location",
+        "TKw",
+        "SKw",
+        "L/S",
+        "Model ( Indoor / Outdoor )",
+        "Qty",
+        "NOMINAL TR",
+        "Proposed Type",
+        "Refrigerant",
+        "Indoor Temperature",
+        "Outdoor Temperature",
+        "TC",
+        "SC",
+        "AFR L/S",
+        "SPEED",
+        "Actual Power Input",
+        "ESMA Power Input",
+        "COP (W/W)",
+        "ESP",
+        "Power Supply",
+        "Indoor H (mm)",
+        "Indoor W (mm)",
+        "Indoor D (mm)",
+        "Outdoor H (mm)",
+        "Outdoor W (mm)",
+        "Outdoor D (mm)",
+        "Indoor Weight (kg)",
+        "Outdoor Weight (kg)"
       ],
       "rows": []
     }
@@ -229,7 +163,8 @@
         "listPrice": 21371,
         "multiplier": 0.55,
         "costPrice": 11754.050000000001,
-        "tr": 4.800000000000001
+        "tr": 4.800000000000001,
+        "finalPrice": 9557.63
       },
       {
         "model": "RXQ8ARYFK",
@@ -239,7 +174,8 @@
         "listPrice": 23269,
         "multiplier": 0.55,
         "costPrice": 12797.95,
-        "tr": 6.4
+        "tr": 6.4,
+        "finalPrice": 10406.03
       },
       {
         "model": "RXQ10ARYFK",
@@ -249,7 +185,8 @@
         "listPrice": 31920,
         "multiplier": 0.55,
         "costPrice": 17556,
-        "tr": 8
+        "tr": 8,
+        "finalPrice": 14272.31
       },
       {
         "model": "RXQ12ARYFK",
@@ -259,7 +196,8 @@
         "listPrice": 34955,
         "multiplier": 0.55,
         "costPrice": 19225.25,
-        "tr": 9.600000000000001
+        "tr": 9.600000000000001,
+        "finalPrice": 15498.45
       },
       {
         "model": "RXQ14ARYFK",
@@ -269,7 +207,8 @@
         "listPrice": 38452,
         "multiplier": 0.55,
         "costPrice": 21148.600000000002,
-        "tr": 11.200000000000001
+        "tr": 11.200000000000001,
+        "finalPrice": 17048.8
       },
       {
         "model": "RXQ16ARYFK",
@@ -279,7 +218,8 @@
         "listPrice": 42299,
         "multiplier": 0.55,
         "costPrice": 23264.45,
-        "tr": 12.8
+        "tr": 12.8,
+        "finalPrice": 18755.7
       },
       {
         "model": "RXYMQ4AVMK",
@@ -379,7 +319,8 @@
         "listPrice": 30360,
         "multiplier": 0.5,
         "costPrice": 15180,
-        "tr": 6.4
+        "tr": 6.4,
+        "finalPrice": 12674.49
       },
       {
         "model": "RXYTQ10U5YF",
@@ -389,7 +330,8 @@
         "listPrice": 39826,
         "multiplier": 0.5,
         "costPrice": 19913,
-        "tr": 8
+        "tr": 8,
+        "finalPrice": 16665
       },
       {
         "model": "RXYTQ12U5YF",
@@ -399,7 +341,8 @@
         "listPrice": 43196,
         "multiplier": 0.5,
         "costPrice": 21598,
-        "tr": 9.600000000000001
+        "tr": 9.600000000000001,
+        "finalPrice": 17826.5
       },
       {
         "model": "RXYTQ14U5YF",
@@ -409,7 +352,8 @@
         "listPrice": 52544,
         "multiplier": 0.5,
         "costPrice": 26272,
-        "tr": 11.200000000000001
+        "tr": 11.200000000000001,
+        "finalPrice": 21397.86
       },
       {
         "model": "RXYTQ16U5YF",
@@ -419,7 +363,8 @@
         "listPrice": 54285,
         "multiplier": 0.5,
         "costPrice": 27142.5,
-        "tr": 12.8
+        "tr": 12.8,
+        "finalPrice": 22120.01
       },
       {
         "model": "FXAQ20ARVM",
@@ -429,7 +374,8 @@
         "listPrice": 2206,
         "multiplier": 0.55,
         "costPrice": 1213.3000000000002,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1200.89
       },
       {
         "model": "FXAQ25ARVM",
@@ -439,7 +385,8 @@
         "listPrice": 2332,
         "multiplier": 0.55,
         "costPrice": 1282.6000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1235.23
       },
       {
         "model": "FXAQ32ARVM",
@@ -449,7 +396,8 @@
         "listPrice": 2395,
         "multiplier": 0.55,
         "costPrice": 1317.25,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1287.75
       },
       {
         "model": "FXAQ40ARVM",
@@ -459,7 +407,8 @@
         "listPrice": 2552,
         "multiplier": 0.55,
         "costPrice": 1403.6000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1323.1
       },
       {
         "model": "FXAQ50ARVM",
@@ -469,7 +418,8 @@
         "listPrice": 2848,
         "multiplier": 0.55,
         "costPrice": 1566.4,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1475.61
       },
       {
         "model": "FXAQ63ARVM",
@@ -479,7 +429,8 @@
         "listPrice": 2883,
         "multiplier": 0.55,
         "costPrice": 1585.65,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1494.8
       },
       {
         "model": "FXAQ15A",
@@ -489,7 +440,8 @@
         "listPrice": 5072,
         "multiplier": 0.5,
         "costPrice": 2536,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2253.3807
       },
       {
         "model": "FXAQ20A",
@@ -499,7 +451,8 @@
         "listPrice": 5218,
         "multiplier": 0.5,
         "costPrice": 2609,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2484.6
       },
       {
         "model": "FXAQ25A",
@@ -509,7 +462,8 @@
         "listPrice": 5368,
         "multiplier": 0.5,
         "costPrice": 2684,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2555.3
       },
       {
         "model": "FXAQ32A",
@@ -519,7 +473,8 @@
         "listPrice": 5513,
         "multiplier": 0.5,
         "costPrice": 2756.5,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2626
       },
       {
         "model": "FXAQ40A",
@@ -529,7 +484,8 @@
         "listPrice": 6057,
         "multiplier": 0.5,
         "costPrice": 3028.5,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2911.83
       },
       {
         "model": "FXAQ50A",
@@ -539,7 +495,8 @@
         "listPrice": 6254,
         "multiplier": 0.5,
         "costPrice": 3127,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3006.77
       },
       {
         "model": "FXAQ63A",
@@ -549,7 +506,8 @@
         "listPrice": 6450,
         "multiplier": 0.5,
         "costPrice": 3225,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3100.7
       },
       {
         "model": "FXFQ20B",
@@ -649,7 +607,8 @@
         "listPrice": 3218,
         "multiplier": 0.55,
         "costPrice": 1769.9,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1742.25
       },
       {
         "model": "FXFSQ32ARV1",
@@ -659,7 +618,8 @@
         "listPrice": 3396,
         "multiplier": 0.55,
         "costPrice": 1867.8000000000002,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1763.46
       },
       {
         "model": "FXFSQ40ARV1",
@@ -669,7 +629,8 @@
         "listPrice": 3572,
         "multiplier": 0.55,
         "costPrice": 1964.6000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1856.38
       },
       {
         "model": "FXFSQ50ARV1",
@@ -679,7 +640,8 @@
         "listPrice": 3757,
         "multiplier": 0.55,
         "costPrice": 2066.3500000000004,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2025.05
       },
       {
         "model": "FXFSQ63ARV1",
@@ -689,7 +651,8 @@
         "listPrice": 3951,
         "multiplier": 0.55,
         "costPrice": 2173.05,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2061.1979
       },
       {
         "model": "FXFSQ80ARV1",
@@ -699,7 +662,8 @@
         "listPrice": 4163,
         "multiplier": 0.55,
         "costPrice": 2289.65,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2162.41
       },
       {
         "model": "FXFSQ100ARV1",
@@ -709,7 +673,8 @@
         "listPrice": 4383,
         "multiplier": 0.55,
         "costPrice": 2410.65,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2276.54
       },
       {
         "model": "FXFSQ125ARV1",
@@ -719,7 +684,8 @@
         "listPrice": 4612,
         "multiplier": 0.55,
         "costPrice": 2536.6000000000004,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2405.8806
       },
       {
         "model": "FXFSQ140ARV1",
@@ -899,7 +865,8 @@
         "listPrice": 4490,
         "multiplier": 0.55,
         "costPrice": 2469.5,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2020
       },
       {
         "model": "FXMQ50PBV1",
@@ -909,7 +876,8 @@
         "listPrice": 4620,
         "multiplier": 0.55,
         "costPrice": 2541,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2115.95
       },
       {
         "model": "FXMQ63PBV1",
@@ -919,7 +887,8 @@
         "listPrice": 5600,
         "multiplier": 0.55,
         "costPrice": 3080.0000000000005,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2519.95
       },
       {
         "model": "FXMQ80PBV1",
@@ -929,7 +898,8 @@
         "listPrice": 5773,
         "multiplier": 0.55,
         "costPrice": 3175.15,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2597.72
       },
       {
         "model": "FXMQ100PBV1",
@@ -939,7 +909,8 @@
         "listPrice": 6581,
         "multiplier": 0.55,
         "costPrice": 3619.55,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2979.5
       },
       {
         "model": "FXMQ125PBV1",
@@ -949,7 +920,8 @@
         "listPrice": 6774,
         "multiplier": 0.55,
         "costPrice": 3725.7000000000003,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3048.18
       },
       {
         "model": "FXMQ140PBV1",
@@ -959,7 +931,8 @@
         "listPrice": 6080,
         "multiplier": 0.55,
         "costPrice": 3344.0000000000005,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3189.58
       },
       {
         "model": "FXSQ15A",
@@ -989,7 +962,8 @@
         "listPrice": 4498,
         "multiplier": 0.55,
         "costPrice": 2473.9,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1951.32
       },
       {
         "model": "FXSQ32A",
@@ -999,7 +973,8 @@
         "listPrice": 4636,
         "multiplier": 0.55,
         "costPrice": 2549.8,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2090.7
       },
       {
         "model": "FXSQ40A",
@@ -1009,7 +984,8 @@
         "listPrice": 4769,
         "multiplier": 0.55,
         "costPrice": 2622.9500000000003,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2239.17
       },
       {
         "model": "FXSQ50A",
@@ -1019,7 +995,8 @@
         "listPrice": 4915,
         "multiplier": 0.55,
         "costPrice": 2703.25,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2305.83
       },
       {
         "model": "FXSQ63A",
@@ -1029,7 +1006,8 @@
         "listPrice": 5955,
         "multiplier": 0.55,
         "costPrice": 3275.2500000000005,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2617.92
       },
       {
         "model": "FXSQ80A",
@@ -1039,7 +1017,8 @@
         "listPrice": 6136,
         "multiplier": 0.55,
         "costPrice": 3374.8,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 2695.69
       },
       {
         "model": "FXSQ100A",
@@ -1049,7 +1028,8 @@
         "listPrice": 6994,
         "multiplier": 0.55,
         "costPrice": 3846.7000000000003,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3074.44
       },
       {
         "model": "FXSQ125A",
@@ -1059,7 +1039,8 @@
         "listPrice": 7203,
         "multiplier": 0.55,
         "costPrice": 3961.6500000000005,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3166.35
       },
       {
         "model": "FXSQ140A",
@@ -1069,7 +1050,8 @@
         "listPrice": 7420,
         "multiplier": 0.55,
         "costPrice": 4081.0000000000005,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 3260.28
       },
       {
         "model": "FXMQ170NVE6",
@@ -1079,7 +1061,8 @@
         "listPrice": 10498,
         "multiplier": 0.55,
         "costPrice": 5773.900000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 4808.61
       },
       {
         "model": "FXMQ200NVE6",
@@ -1089,7 +1072,8 @@
         "listPrice": 12720,
         "multiplier": 0.55,
         "costPrice": 6996.000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 5397.44
       },
       {
         "model": "FXMQ250NVE6",
@@ -1099,7 +1083,8 @@
         "listPrice": 14027,
         "multiplier": 0.55,
         "costPrice": 7714.85,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 5753.97
       },
       {
         "model": "FXMQ200MA",
@@ -1129,7 +1114,8 @@
         "listPrice": 162,
         "multiplier": 0.65,
         "costPrice": 105.3,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 83
       },
       {
         "model": "KHRP26A33T6",
@@ -1139,7 +1125,8 @@
         "listPrice": 194,
         "multiplier": 0.65,
         "costPrice": 126.10000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 99
       },
       {
         "model": "KHRP26A72T6",
@@ -1149,7 +1136,8 @@
         "listPrice": 320,
         "multiplier": 0.65,
         "costPrice": 208,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 164
       },
       {
         "model": "KHRP26A73T6",
@@ -1159,7 +1147,8 @@
         "listPrice": 477,
         "multiplier": 0.65,
         "costPrice": 310.05,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 245
       },
       {
         "model": "KHRP26M73TP6",
@@ -1169,7 +1158,8 @@
         "listPrice": 162,
         "multiplier": 0.65,
         "costPrice": 105.3,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 83
       },
       {
         "model": "KHRP26A73T6 + KHRP26M73TP",
@@ -1179,7 +1169,8 @@
         "listPrice": 639,
         "multiplier": 0.65,
         "costPrice": 415.35,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 328
       },
       {
         "model": "BHFP22P1006",
@@ -1189,7 +1180,8 @@
         "listPrice": 705,
         "multiplier": 0.65,
         "costPrice": 458.25,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 413.5
       },
       {
         "model": "BHFP22P1516",
@@ -1199,7 +1191,8 @@
         "listPrice": 1664,
         "multiplier": 0.65,
         "costPrice": 1081.6000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 849
       },
       {
         "model": "KHRQ22M20T",
@@ -1209,7 +1202,8 @@
         "listPrice": 726,
         "multiplier": 0.65,
         "costPrice": 471.90000000000003,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 370
       },
       {
         "model": "KHRQ22M29T9",
@@ -1219,7 +1213,8 @@
         "listPrice": 805,
         "multiplier": 0.65,
         "costPrice": 523.25,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 412
       },
       {
         "model": "KHRQ22M64T",
@@ -1229,7 +1224,8 @@
         "listPrice": 1061,
         "multiplier": 0.65,
         "costPrice": 689.65,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 542
       },
       {
         "model": "KHRQ22M75T",
@@ -1239,7 +1235,8 @@
         "listPrice": 2223,
         "multiplier": 0.65,
         "costPrice": 1444.95,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1134
       },
       {
         "model": "BHFQ22P1007",
@@ -1249,7 +1246,8 @@
         "listPrice": 1124,
         "multiplier": 0.65,
         "costPrice": 730.6,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 573
       },
       {
         "model": "BHFQ22P1517",
@@ -1259,7 +1257,8 @@
         "listPrice": 2184,
         "multiplier": 0.65,
         "costPrice": 1419.6000000000001,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 1115
       },
       {
         "model": "BRC1H82K",
@@ -1269,7 +1268,8 @@
         "listPrice": 493,
         "multiplier": 0.65,
         "costPrice": 320.45,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 253
       },
       {
         "model": "BRC1H82S",
@@ -1279,7 +1279,8 @@
         "listPrice": 493,
         "multiplier": 0.65,
         "costPrice": 320.45,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 253
       },
       {
         "model": "BRC1H82W",
@@ -1289,7 +1290,8 @@
         "listPrice": 493,
         "multiplier": 0.65,
         "costPrice": 320.45,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 253
       },
       {
         "model": "FCA18AVMK - RZCA18AVMK",
@@ -1349,7 +1351,8 @@
         "listPrice": 10264,
         "multiplier": 0.5,
         "costPrice": 5132,
-        "tr": 1.5
+        "tr": 1.5,
+        "finalPrice": 4606
       },
       {
         "model": "FDMF24AVMK9 - RZF24AVMK9",
@@ -1359,7 +1362,8 @@
         "listPrice": 13745,
         "multiplier": 0.5,
         "costPrice": 6872.5,
-        "tr": 2
+        "tr": 2,
+        "finalPrice": 6565
       },
       {
         "model": "FDMF30AVMK9 - RZF30AVMK9",
@@ -1369,7 +1373,8 @@
         "listPrice": 14174,
         "multiplier": 0.5,
         "costPrice": 7087,
-        "tr": 2.5
+        "tr": 2.5,
+        "finalPrice": 6705
       },
       {
         "model": "FDMF36AVMK - RZF36AVMK",
@@ -1379,7 +1384,8 @@
         "listPrice": 14513,
         "multiplier": 0.5,
         "costPrice": 7256.5,
-        "tr": 3
+        "tr": 3,
+        "finalPrice": 7288
       },
       {
         "model": "FDMF48AVMK - RZF48AYMK",
@@ -1389,7 +1395,8 @@
         "listPrice": 19089,
         "multiplier": 0.5,
         "costPrice": 9544.5,
-        "tr": 4
+        "tr": 4,
+        "finalPrice": 8716
       },
       {
         "model": "FDMF54AVMK - RZF54AYMK",
@@ -1399,7 +1406,8 @@
         "listPrice": 19970,
         "multiplier": 0.5,
         "costPrice": 9985,
-        "tr": 5
+        "tr": 5,
+        "finalPrice": 9270
       },
       {
         "model": "FDMF18AVMK9 - RZF18AVMK9 + Thermostat",
@@ -1469,7 +1477,8 @@
         "listPrice": 6732,
         "multiplier": 0.5,
         "costPrice": 3366,
-        "tr": 1.5
+        "tr": 1.5,
+        "finalPrice": 3413
       },
       {
         "model": "FDMRN25AVKU - RR25AVKU",
@@ -1479,7 +1488,8 @@
         "listPrice": 8038,
         "multiplier": 0.5,
         "costPrice": 4019,
-        "tr": 2
+        "tr": 2,
+        "finalPrice": 3932
       },
       {
         "model": "FDMRN30AVKU - RR30AVKU",
@@ -1489,7 +1499,8 @@
         "listPrice": 9748,
         "multiplier": 0.5,
         "costPrice": 4874,
-        "tr": 2.5
+        "tr": 2.5,
+        "finalPrice": 4788
       },
       {
         "model": "FDMRN36AVKU - RR36AVKU",
@@ -1499,7 +1510,8 @@
         "listPrice": 11747,
         "multiplier": 0.5,
         "costPrice": 5873.5,
-        "tr": 3
+        "tr": 3,
+        "finalPrice": 5944
       },
       {
         "model": "FDMRN50AVKU - RR50AYKU",
@@ -1509,7 +1521,8 @@
         "listPrice": 14083,
         "multiplier": 0.5,
         "costPrice": 7041.5,
-        "tr": 4
+        "tr": 4,
+        "finalPrice": 6848
       },
       {
         "model": "FDMRN60AVKU - RR60AYKU",
@@ -1519,7 +1532,8 @@
         "listPrice": 19966,
         "multiplier": 0.5,
         "costPrice": 9983,
-        "tr": 5
+        "tr": 5,
+        "finalPrice": 8600
       },
       {
         "model": "BAG",
@@ -1549,7 +1563,8 @@
         "listPrice": 3826,
         "multiplier": 0.5,
         "costPrice": 1913,
-        "tr": 1
+        "tr": 1,
+        "finalPrice": 1925
       },
       {
         "model": "FTKF18TVMUZK - RKFG18TVMUZK",
@@ -1559,7 +1574,8 @@
         "listPrice": 4593,
         "multiplier": 0.5,
         "costPrice": 2296.5,
-        "tr": 1.5
+        "tr": 1.5,
+        "finalPrice": 2450
       },
       {
         "model": "FTKF24TVMTZK - RKFG24TVMTZK",
@@ -1569,7 +1585,8 @@
         "listPrice": 6136,
         "multiplier": 0.5,
         "costPrice": 3068,
-        "tr": 2
+        "tr": 2,
+        "finalPrice": 2975
       },
       {
         "model": "FTKM18PVM - RKM18PVM",
@@ -1669,7 +1686,8 @@
         "listPrice": 2500,
         "multiplier": 0.65,
         "costPrice": 1625,
-        "tr": 0
+        "tr": 0,
+        "finalPrice": 460
       },
       {
         "model": "DCM601A51",
@@ -2831,6 +2849,45 @@
         "wxhxd": "1,240 x 1,685 x 765",
         "weight": 283,
         "nominalIndex": 400
+      },
+      {
+        "model": "RXYMQ4AYFK",
+        "ambient": 46,
+        "cc": 10.6,
+        "piEsma": 3.38,
+        "ps": "400V 3Nph",
+        "mca": 18.9,
+        "mop": "-",
+        "rla": 5.1,
+        "wxhxd": "1,100 x 870 x 460",
+        "weight": 120,
+        "nominalIndex": 100
+      },
+      {
+        "model": "RXYMQ5AYFK",
+        "ambient": 46,
+        "cc": 12.7,
+        "piEsma": 4.29,
+        "ps": "400V 3Nph",
+        "mca": 18.9,
+        "mop": "-",
+        "rla": 6.33,
+        "wxhxd": "1,100 x 870 x 460",
+        "weight": 120,
+        "nominalIndex": 125
+      },
+      {
+        "model": "RXYMQ6AYFK",
+        "ambient": 46,
+        "cc": 14.5,
+        "piEsma": 4.9,
+        "ps": "400V 3Nph",
+        "mca": 18.9,
+        "mop": "-",
+        "rla": 7.27,
+        "wxhxd": "1,100 x 870 x 460",
+        "weight": 120,
+        "nominalIndex": 150
       }
     ]
   },
@@ -2838,7 +2895,7 @@
     "mode": "custom",
     "capacitySource": "Calculated AC Load",
     "familyModel": "",
-    "customInstruction": "Extract Column, Units/Reference No. Location, Calculated AC Load - Total,  Sensible, Flow Rate",
+    "customInstruction": "Extract Column, Units/Reference No. Location, Total,  Sensible, Flow Rate",
     "requested": true,
     "appendResults": false
   },
@@ -2850,27 +2907,30 @@
     },
     {
       "kind": "file",
-      "name": "Screenshot 2026-07-18 120137.png",
-      "size": 471453
-    },
-    {
-      "kind": "file",
-      "name": "Screenshot 2026-07-18 120150.png",
-      "size": 359564
+      "name": "Screenshot 2026-07-23 110937.png",
+      "size": 407491
     },
     {
       "kind": "text",
       "role": "assistant",
-      "text": "Files added. Should I verify the table again using these screenshot(s)? Reply: verify again."
+      "text": "Screenshot/file added. Should I verify the table again using these screenshot(s)? Reply: verify again."
+    },
+    {
+      "kind": "text",
+      "role": "user",
+      "text": "clear"
+    },
+    {
+      "kind": "text",
+      "role": "assistant",
+      "text": "Tell me what to extract. For the fixed Export File format, reply: VRV export template. For custom columns, reply: extract columns Indoor, Room, Air Flow Rate."
     }
   ],
   "thermalChatUploadIds": [
-    "450f1dcf-6472-438d-a313-ca6697e92e8c",
-    "cbb460e1-b7b9-4aac-ae04-5b792d070f2c"
+    "a132d7d8-546a-4b7f-aeb0-45418e2de31a"
   ],
   "thermalPendingUploadIds": [
-    "450f1dcf-6472-438d-a313-ca6697e92e8c",
-    "cbb460e1-b7b9-4aac-ae04-5b792d070f2c"
+    "a132d7d8-546a-4b7f-aeb0-45418e2de31a"
   ],
   "visible": true
 }

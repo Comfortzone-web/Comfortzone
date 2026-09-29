@@ -4774,44 +4774,6 @@
       "lastPdfGeneratedAt": "2026-08-01T09:18:01.039Z"
     }
   ],
-  "orderBook": [
-    {
-      "id": "06c25244-1de5-4f72-9af8-311678db4a61",
-      "orderNo": "CZ26-1001",
-      "date": "01/08/2026",
-      "customer": "AKG Contracting LLC",
-      "jobDescription": "",
-      "location": "",
-      "contactPerson": "",
-      "contactNumber": "",
-      "salesPerson": "Admin User",
-      "division": "Project/Inst",
-      "brand": "Daikin",
-      "status": "Payment Pending",
-      "deliveryStatus": "Pending Delivery",
-      "remarks": "",
-      "valueWithoutVat": 4566,
-      "vatAmount": 228.3,
-      "orderValue": 4794.3,
-      "installationValue": 0,
-      "equipmentValue": 0,
-      "equipmentCost": 0,
-      "equipmentProfit": 0,
-      "grossMargin": 0,
-      "paymentReceived": 0,
-      "invoiceAmount": 0,
-      "po": {},
-      "invoices": [],
-      "payments": [],
-      "timeline": [
-        {
-          "date": "01/08/2026",
-          "title": "Order Book Created",
-          "note": "Created from quotation QCZ-26-1003",
-          "id": "83f45a64-b14b-408c-a9a1-f77819dbd679"
-        }
-      ]
-    }
-  ],
+  "orderBook": [],
   "followUps": []
 }

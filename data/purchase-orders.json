@@ -1,8 +1,47 @@
 {
   "settings": {
-    "nextPoNo": "AMTS-26-LPO-002"
+    "nextPoNo": "AMTS-26-LPO-003"
   },
   "orders": [
+    {
+      "id": "ba16a3b5-6d20-425a-beed-fc3e88ec265a",
+      "poNo": "AMTS-26-LPO-002",
+      "basePoNo": "AMTS-26-LPO-002",
+      "revisionNo": 0,
+      "revision": "",
+      "status": "Created",
+      "supplierName": "AL IMRAN AC SPARE PARTS LLC",
+      "supplierAddress": "Dubai, UAE",
+      "trn": "100254201500003",
+      "quotationNo": "",
+      "quotationDate": "",
+      "purchaseRepresentative": "Admin User",
+      "poDate": "2026-09-29",
+      "projectName": "",
+      "deliveryTerms": "",
+      "paymentTerms": "",
+      "manualSubtotal": "",
+      "discount": 0,
+      "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
+      "sourceUploadId": "",
+      "createdAt": "2026-09-29T08:29:50.640Z",
+      "updatedAt": "2026-09-29T08:29:50.640Z",
+      "items": [
+        {
+          "id": "1790670582901.9036",
+          "description": "wd",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 45,
+          "vatPercent": 5,
+          "amount": 45
+        }
+      ],
+      "subtotal": 45,
+      "totalAfterDiscount": 45,
+      "vatTotal": 2.25,
+      "grandTotal": 47.25
+    },
     {
       "id": "7ab7c252-4150-45c8-94df-58557c074f66",
       "poNo": "AMTS-26-LPO-001",
@@ -10,16 +49,16 @@
       "revisionNo": 0,
       "revision": "",
       "status": "Created",
-      "supplierName": "Al Samah LLC",
-      "supplierAddress": "PO Box: 35057, Sharjah, UAE",
-      "trn": "",
-      "quotationNo": "",
+      "supplierName": "AL QEMAH A/C SYSTEMS ACCESSORIES IND. CENTRE LLC",
+      "supplierAddress": "UAE",
+      "trn": "100056113200003",
+      "quotationNo": "976747 - dhb",
       "quotationDate": "",
-      "purchaseRepresentative": "Admin User",
+      "purchaseRepresentative": "Admin User- cilla",
       "poDate": "2026-07-29",
-      "projectName": "",
+      "projectName": "villa 2567 &",
       "deliveryTerms": "",
-      "paymentTerms": "",
+      "paymentTerms": "30 Days PDC",
       "manualSubtotal": "",
       "discount": 0,
       "notes": "1. Invoice should be attached with delivery note signed by site supervisor.\n2. Attach LPO copy along with invoice.\n3. Delivery to be made as per schedule instruction provided to you.",
@@ -29,18 +68,36 @@
       "items": [
         {
           "id": "1785317107063.7417",
-          "description": "",
+          "description": "Rod 50 mm",
           "modelNo": "",
           "qty": 1,
-          "unitPrice": 46545,
+          "unitPrice": 46,
           "vatPercent": 5,
-          "amount": 46545
+          "amount": 46
+        },
+        {
+          "id": "1790669650560.2527",
+          "description": "GI Sheet 2mm thk",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 345,
+          "vatPercent": 5,
+          "amount": 345
+        },
+        {
+          "id": "1790669657960.7253",
+          "description": "Cladding 12",
+          "modelNo": "",
+          "qty": 1,
+          "unitPrice": 3456,
+          "vatPercent": 5,
+          "amount": 3456
         }
       ],
-      "subtotal": 46545,
-      "totalAfterDiscount": 46545,
-      "vatTotal": 2327.25,
-      "grandTotal": 48872.25
+      "subtotal": 3847,
+      "totalAfterDiscount": 3847,
+      "vatTotal": 192.35000000000002,
+      "grandTotal": 4039.35
     }
   ],
   "suppliers": [

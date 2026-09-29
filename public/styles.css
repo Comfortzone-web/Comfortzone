@@ -4750,17 +4750,23 @@ td[contenteditable="true"]:focus {
   vertical-align: middle;
 }
 
-.po-list-table .po-list-col-no { width: 140px; }
-.po-list-table .po-list-col-supplier { width: 31%; }
-.po-list-table .po-list-col-project { width: 20%; }
-.po-list-table .po-list-col-items { width: 58px; }
-.po-list-table .po-list-col-rep { width: 120px; }
-.po-list-table .po-list-col-total { width: 110px; }
-.po-list-table .po-list-col-status { width: 92px; }
+.po-list-table .po-list-col-no { width: 135px; }
+.po-list-table .po-list-col-supplier { width: 28%; }
+.po-list-table .po-list-col-project { width: 24%; }
+.po-list-table .po-list-col-rep { width: 17%; }
+.po-list-table .po-list-col-total { width: 115px; }
+.po-list-table .po-list-col-status { width: 96px; }
 .po-list-table .po-list-col-action { width: 64px; }
 
 .po-list-table td {
+  white-space: normal;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+
+.po-list-table td:nth-child(2) {
+  text-align: left;
 }
 
 .po-list-table .row-menu {

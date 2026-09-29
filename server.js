@@ -6545,8 +6545,11 @@ async function purchaseOrderPdfBuffer(order) {
     const signImage = path.join(PUBLIC, "assets", "sign-2.jpg");
     const sansFont = "Helvetica";
     const sansBoldFont = "Helvetica-Bold";
-    const green = "#00572e";
-    const line = "#949494";
+    const green = "#075B3B";
+    const lightGreen = "#EAF3EF";
+    const lightGrey = "#F5F7F6";
+    const charcoal = "#17231f";
+    const line = "#c6d2cc";
     const tableW = pageWidth - left * 2;
     const col = [42, 176, 66, 86, 50, tableW - 420];
     const py = (value, height = 0) => pageHeight - value - height;
@@ -6555,11 +6558,11 @@ async function purchaseOrderPdfBuffer(order) {
     const tableBottomY = 765;
 
     const rowHeight = item => Math.max(28, 12 + Math.min(8, pdfWrapWords(doc, item.description || "", col[1] - 18, sansFont, 9.2).length) * 13);
-    const paginate = items => {
+    const paginate = (items, firstPageY = firstTableY) => {
       const pages = [];
       let current = [];
       let used = 0;
-      let limit = tableBottomY - firstTableY - 30;
+      let limit = tableBottomY - firstPageY - 30;
       for (const item of items) {
         const h = rowHeight(item);
         if (current.length && used + h > limit) {
@@ -6580,36 +6583,88 @@ async function purchaseOrderPdfBuffer(order) {
     };
 
     const drawTitle = y => {
-      doc.fillColor("#000000").font(sansBoldFont).fontSize(20).text("PURCHASE ORDER", 0, py(y, 20), { width: pageWidth, align: "center" });
+      doc.fillColor(charcoal).font(sansBoldFont).fontSize(20).text("PURCHASE ORDER", 0, py(y, 20), { width: pageWidth, align: "center", characterSpacing: 0.25 });
+      const dividerY = py(y - 8, 0);
+      doc.strokeColor(green).lineWidth(0.75).moveTo(left + 72, dividerY).lineTo(pageWidth - left - 72, dividerY).stroke();
+      doc.fillColor(green).rect(pageWidth / 2 - 32, dividerY - 2, 64, 4).fill();
     };
 
     const drawDetails = y => {
       const supplierNameLines = pdfWrapWords(doc, order.supplierName || "", 205, sansFont, 11).slice(0, 3);
       const supplierAddressLines = pdfWrapWords(doc, order.supplierAddress || "", 205, sansFont, 11).slice(0, 4);
       const supplierLines = [...supplierNameLines, ...supplierAddressLines, order.trn ? `VAT: ${order.trn}` : ""].filter(Boolean);
-      doc.fillColor("#000000").font(sansFont).fontSize(11);
-      supplierLines.slice(0, 7).forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230, height: 13, lineBreak: false }));
+      const visibleSupplierLines = supplierLines.slice(0, 7);
       const details = [
         ["PO No:", order.poNo],
         ["PO Date:", formatPdfDate(order.poDate)],
         ["Project:", order.projectName || order.project || order.jobDescription || order.description],
-        ["Reference:", order.quotationNo],
         ["Payment Terms:", order.paymentTerms],
         ["Purchase Rep:", order.purchaseRepresentative]
       ].filter(([, value]) => String(value || "").trim());
-      details.forEach(([label, value], index) => {
-        const rowY = y - index * 18;
-        const labelX = pageWidth - 262;
-        const valueX = pageWidth - 172;
-        const valueW = 114;
-        doc.font(sansBoldFont).fontSize(11).text(label, labelX, py(rowY, 11), { width: 96 });
-        doc.font(sansFont).fontSize(10.5).text(String(value || ""), valueX, py(rowY, 10.5), {
-          width: valueW,
-          height: 26,
-          align: "right",
-          lineGap: 1
-        });
+      const labelX = pageWidth - 262;
+      const labelW = 96;
+      const valueX = pageWidth - 164;
+      const valueW = 130;
+      const lineH = 13;
+      const referenceValueLines = String(order.quotationNo || "").trim()
+        ? pdfWrapWords(doc, order.quotationNo, 150, sansFont, 10.5)
+        : [];
+      const detailRows = details.map(([label, value]) => {
+        const labelLines = pdfWrapWords(doc, label, labelW, sansBoldFont, 11);
+        const valueLines = pdfWrapWords(doc, String(value || ""), valueW, sansFont, 10.5);
+        const lineCount = Math.max(labelLines.length, valueLines.length, 1);
+        return { label, value, labelLines, valueLines, lineCount, rowH: lineCount * lineH + 8 };
       });
+      const rightContentHeight = detailRows.reduce((sum, row) => sum + row.rowH, 0);
+      const lastDetailRow = detailRows[detailRows.length - 1];
+      const rightRenderedHeight = lastDetailRow
+        ? rightContentHeight - (lastDetailRow.rowH - lastDetailRow.lineCount * lineH)
+        : 0;
+      const leftRenderedHeight = visibleSupplierLines.length
+        ? (visibleSupplierLines.length - 1) * 17 + 11
+        : 0;
+      const leftHeightWithReference = referenceValueLines.length
+        ? visibleSupplierLines.length * 17
+          + 5
+          + (referenceValueLines.length - 1) * 13
+          + 10.5
+        : leftRenderedHeight;
+      const detailsHeight = Math.max(leftHeightWithReference, rightRenderedHeight) + 8;
+      const detailsTop = py(y + 20, 0);
+      doc.roundedRect(left - 4, detailsTop, tableW + 8, detailsHeight, 7).fillAndStroke(lightGreen, lightGreen);
+      doc.strokeColor("#b7c9c0").lineWidth(0.65).moveTo(pageWidth - 286, detailsTop + 14).lineTo(pageWidth - 286, detailsTop + detailsHeight - 14).stroke();
+      doc.fillColor(charcoal).font(sansFont).fontSize(11);
+      visibleSupplierLines.forEach((lineText, index) => doc.text(lineText, left, py(y - index * 17, 11), { width: 230, height: 13, lineBreak: false }));
+      if (referenceValueLines.length) {
+        const referenceY = y - visibleSupplierLines.length * 17 - 5;
+        doc.font(sansBoldFont).fontSize(11).text("Reference:", left, py(referenceY, 11), { width: 82, lineBreak: false });
+        referenceValueLines.forEach((lineText, index) => {
+          doc.font(sansFont).fontSize(10.5).text(lineText, left + 84, py(referenceY - index * 13, 10.5), {
+            width: 150,
+            lineBreak: false
+          });
+        });
+      }
+      doc.fillColor(charcoal);
+      let detailY = y;
+      details.forEach(([label, value]) => {
+        const row = detailRows.find(item => item.label === label && item.value === value);
+        row.labelLines.forEach((lineText, lineIndex) => {
+          doc.font(sansBoldFont).fontSize(11).text(lineText, labelX, py(detailY - lineIndex * lineH, 11), {
+            width: labelW,
+            lineBreak: false
+          });
+        });
+        row.valueLines.forEach((lineText, lineIndex) => {
+          doc.font(sansFont).fontSize(10.5).text(lineText, valueX, py(detailY - lineIndex * lineH, 10.5), {
+            width: valueW,
+            align: "right",
+            lineBreak: false
+          });
+        });
+        detailY -= row.rowH;
+      });
+      return detailsTop + detailsHeight + 38;
     };
 
     const drawHeader = y => {
@@ -6629,7 +6684,7 @@ async function purchaseOrderPdfBuffer(order) {
 
     const drawRow = (item, top, serial) => {
       const h = rowHeight(item);
-      doc.rect(left, top, tableW, h).strokeColor(line).lineWidth(0.45).stroke();
+      doc.rect(left, top, tableW, h).fillAndStroke(serial % 2 === 0 ? lightGrey : "#ffffff", line);
       let x = left;
       for (const width of col.slice(0, -1)) {
         x += width;
@@ -6685,11 +6740,11 @@ async function purchaseOrderPdfBuffer(order) {
         const isLast = index === rows.length - 1;
         const boldSummaryLabel = ["Subtotal", "VAT Total", "Grand Total"].includes(label);
         const rowTop = top + index * 34;
-        doc.rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? green : "#ffffff", line);
+        doc.rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? green : lightGrey, line);
         doc.moveTo(x + labelW, rowTop).lineTo(x + labelW, rowTop + 34).stroke();
-        doc.fillColor(isLast ? "#ffffff" : "#000000").font(boldSummaryLabel ? sansBoldFont : sansFont).fontSize(10.5);
+        doc.fillColor(isLast ? "#ffffff" : charcoal).font(boldSummaryLabel ? sansBoldFont : sansFont).fontSize(isLast ? 12.5 : 10.5);
         doc.text(label, x + 8, rowTop + 11, { width: labelW - 14 });
-        doc.font(isLast ? sansBoldFont : sansFont);
+        doc.font(isLast ? sansBoldFont : sansFont).fontSize(isLast ? 12.5 : 10.5);
         doc.text(value, x + labelW + 8, rowTop + 11, { width: valueW - 16, align: "right" });
       });
       return top + rows.length * 34;
@@ -6737,14 +6792,15 @@ async function purchaseOrderPdfBuffer(order) {
       if (fs.existsSync(signImage)) doc.image(signImage, left + 168, sealTop + 50, { width: 82, height: 42 });
     };
 
-    const pages = paginate(order.items || []);
+    drawBackground(1, 1);
+    drawTitle(704);
+    const firstPageTableY = drawDetails(662);
+    const pages = paginate(order.items || [], firstPageTableY);
     const totalPages = pages.length;
     pages.forEach((items, pageIndex) => {
       if (pageIndex > 0) doc.addPage({ size: "A4", margin: 0 });
-      drawBackground(pageIndex + 1, totalPages);
-      if (pageIndex === 0) drawTitle(704);
-      if (pageIndex === 0) drawDetails(662);
-      let y = drawHeader(pageHeight - (pageIndex === 0 ? firstTableY : nextTableY));
+      if (pageIndex > 0) drawBackground(pageIndex + 1, totalPages);
+      let y = drawHeader(pageHeight - (pageIndex === 0 ? firstPageTableY : nextTableY));
       const startIndex = pages.slice(0, pageIndex).reduce((sum, page) => sum + page.length, 0);
       items.forEach((item, index) => {
         y = drawRow(item, y, startIndex + index + 1);
