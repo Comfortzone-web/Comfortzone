@@ -8450,7 +8450,7 @@ function deliveryNoteViewHtml() {
     <div>
       <div class="inventory-topbar"><div class="inventory-title"><h2>Outbound Delivery Note</h2><p>Create, manage, and track outbound delivery notes.</p></div><div class="inventory-search"><input id="deliverySearchInput" placeholder="Search delivery note..." value="${escapeHtml(deliverySearchQuery)}"></div></div>
       <div class="inventory-card">
-        <table class="inventory-table delivery-list-table"><thead><tr><th>DN No.</th><th>Customer / Project</th><th>Date</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+        <table class="inventory-table delivery-list-table"><thead><tr><th>DN No.</th><th>Customer / Project</th><th>Delivery Location</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
           ${deliveryNoteRows(visibleNotes)}
         </tbody></table>
         <div id="deliveryPagination">${deliveryNotePagination(notes.length, pageSize, deliveryListPage, search, visibleNotes.length)}</div>
@@ -8460,7 +8460,21 @@ function deliveryNoteViewHtml() {
 }
 
 function deliveryNoteRows(notes) {
-  return notes.map(note => `<tr><td><strong>${escapeHtml(note.dnNo)}</strong></td><td>${escapeHtml(note.customerName)}<br><span class="inventory-muted">${escapeHtml(note.projectName)}</span></td><td>${formatInventoryDate(note.date)}</td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu([{label:"Edit",action:"edit-delivery",id:note.id},{label:"Download",action:"download-delivery",id:note.id},{label:"Cancel",action:"cancel-delivery",id:note.id,danger:true},{label:"Delete",action:"delete-delivery",id:note.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
+  return notes.map(note => {
+    const customerName = String(note.customerName || "").trim() || "—";
+    const projectName = String(note.projectName || "").trim() || "—";
+    const deliveryLocation = String(note.deliveryLocation || "").trim() || "—";
+    const contactPerson = String(note.contactPerson || "").trim() || "—";
+    const menuItems = [
+      { label: "Edit", action: "edit-delivery", id: note.id },
+      { label: "Download", action: "download-delivery", id: note.id },
+      { label: "Cancel", action: "cancel-delivery", id: note.id, danger: true }
+    ];
+    if (norm(note.status) === "DRAFT") {
+      menuItems.push({ label: "Delete", action: "delete-delivery", id: note.id, danger: true });
+    }
+    return `<tr><td><strong>${escapeHtml(note.dnNo || "—")}</strong><br><span class="inventory-muted delivery-list-secondary">${escapeHtml(formatInventoryDate(note.date))}</span></td><td><span>${escapeHtml(customerName)}</span><br><span class="inventory-muted delivery-list-secondary">${escapeHtml(projectName)}</span></td><td><span>${escapeHtml(deliveryLocation)}</span><br><span class="inventory-muted delivery-list-secondary">Contact: ${escapeHtml(contactPerson)}</span></td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu(menuItems)}</td></tr>`;
+  }).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
 }
 
 function deliveryNoteStatusLabel(status = "") {
@@ -8491,6 +8505,8 @@ function deliveryNoteSearchText(note) {
     note.dnNo,
     note.customerName,
     note.projectName,
+    note.deliveryLocation,
+    note.contactPerson,
     note.date,
     formatInventoryDate(note.date),
     note.status,
@@ -9971,6 +9987,11 @@ async function cancelDeliveryNote(deliveryNoteId) {
 }
 
 async function deleteDeliveryNote(deliveryNoteId) {
+  const note = (inventoryState.deliveryNotes || []).find(item => item.id === deliveryNoteId);
+  if (!note || norm(note.status) !== "DRAFT") {
+    toast("Only draft Delivery Notes can be deleted.");
+    return;
+  }
   if (!confirm("Delete this Delivery Note? This removes the record.")) return;
   inventoryState = await api(`/api/inventory/delivery-notes/${deliveryNoteId}`, { method: "DELETE" });
   deliveryDraft = newDeliveryDraft();

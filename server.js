@@ -2923,6 +2923,11 @@ async function handleApi(req, res) {
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/inventory\/delivery-notes\/[^/]+$/)) {
     const inventory = await readInventory();
     const deliveryNoteId = url.pathname.split("/").pop();
+    const deliveryNote = (inventory.deliveryNotes || []).find(item => item.id === deliveryNoteId);
+    if (!deliveryNote) return notFound(res);
+    if (inventoryNorm(deliveryNote.status) !== "DRAFT") {
+      return send(res, 400, { error: "Only draft Delivery Notes can be deleted." });
+    }
     inventory.deliveryNotes = (inventory.deliveryNotes || []).filter(item => item.id !== deliveryNoteId);
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));
