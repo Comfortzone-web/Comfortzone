@@ -2697,7 +2697,7 @@ async function handleApi(req, res) {
       inventory.supplierDns.unshift({
         id: id(),
         uploadedDate: todayISO(),
-        supplierDnNo: "Return",
+        supplierDnNo: nextReturnStockNo(inventory, todayISO()),
         projectName: "Return to Warehouse",
         status: "Confirmed",
         isManualAdjustment: true,
@@ -2714,7 +2714,9 @@ async function handleApi(req, res) {
         inventory.supplierDns.unshift({
           id: id(),
           uploadedDate,
-          supplierDnNo: nextManualStockNo(inventory, uploadedDate),
+          supplierDnNo: inventoryNorm(body.reason) === "ADJUSTMENT"
+            ? nextAdjustmentStockNo(inventory, uploadedDate)
+            : nextManualStockNo(inventory, uploadedDate),
           projectName: "Manual Stock Entry",
           status: "Confirmed",
           isManualAdjustment: true,
@@ -4687,13 +4689,35 @@ function manualStockDateCode(dateValue) {
 
 function nextManualStockNo(inventory, dateValue) {
   const dateCode = manualStockDateCode(dateValue);
-  const pattern = new RegExp(`^Manual ${dateCode}(\\d{2})$`, "i");
+  const pattern = new RegExp(`^(?:Manual|New Stock) ${dateCode}(\\d{2})$`, "i");
   let maxSuffix = -1;
   for (const dn of inventory.supplierDns || []) {
     const match = String(dn.supplierDnNo || "").match(pattern);
     if (match) maxSuffix = Math.max(maxSuffix, Number(match[1]));
   }
-  return `Manual ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
+  return `New Stock ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
+}
+
+function nextReturnStockNo(inventory, dateValue) {
+  const dateCode = manualStockDateCode(dateValue);
+  const pattern = new RegExp(`^Return ${dateCode}(\\d{2})$`, "i");
+  let maxSuffix = -1;
+  for (const dn of inventory.supplierDns || []) {
+    const match = String(dn.supplierDnNo || "").match(pattern);
+    if (match) maxSuffix = Math.max(maxSuffix, Number(match[1]));
+  }
+  return `Return ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
+}
+
+function nextAdjustmentStockNo(inventory, dateValue) {
+  const dateCode = manualStockDateCode(dateValue);
+  const pattern = new RegExp(`^Adjustment ${dateCode}(\\d{2})$`, "i");
+  let maxSuffix = -1;
+  for (const dn of inventory.supplierDns || []) {
+    const match = String(dn.supplierDnNo || "").match(pattern);
+    if (match) maxSuffix = Math.max(maxSuffix, Number(match[1]));
+  }
+  return `Adjustment ${dateCode}${String(maxSuffix + 1).padStart(2, "0")}`;
 }
 
 function ensureManualStockNumbers(inventory) {
@@ -4701,10 +4725,10 @@ function ensureManualStockNumbers(inventory) {
   let changed = false;
   for (const dn of inventory.supplierDns || []) {
     if (!dn.isManualAdjustment) continue;
-    if (dn.isReturn || inventoryNorm(dn.supplierDnNo) === "RETURN") continue;
+    if (dn.isReturn || /^(?:Return|Adjustment)\b/i.test(String(dn.supplierDnNo || ""))) continue;
     const dateCode = manualStockDateCode(dn.uploadedDate);
     usedByDate[dateCode] = usedByDate[dateCode] || new Set();
-    const existing = String(dn.supplierDnNo || "").match(new RegExp(`^(?:Stock|Manual) ${dateCode}(\\d{2})$`, "i"));
+    const existing = String(dn.supplierDnNo || "").match(new RegExp(`^(?:Stock|Manual|New Stock) ${dateCode}(\\d{2})$`, "i"));
     if (existing && !usedByDate[dateCode].has(existing[1])) {
       usedByDate[dateCode].add(existing[1]);
       continue;

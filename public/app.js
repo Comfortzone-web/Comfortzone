@@ -1467,7 +1467,7 @@ function inventoryTopbarConfig() {
       searchValue: "",
       search: "Search model or description",
       searchClass: "stock-top-search",
-      beforeSearchActions: `<button class="sales-primary" data-inventory-top-action="add-stock">Add Unit / Stock</button>`,
+      beforeSearchActions: `<button class="sales-primary" data-inventory-top-action="add-stock">New Stock / Return</button>`,
       actions: ""
     }
   };
@@ -8356,7 +8356,7 @@ function supplierDnViewHtml() {
       <div class="inventory-search"><input id="supplierSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card">
-      <table class="inventory-table supplier-dn-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Details</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      <table class="inventory-table supplier-dn-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
         ${supplierDnRows(latestDns)}
       </tbody></table>
     </div>
@@ -8379,7 +8379,7 @@ function supplierDnAllViewHtml() {
       <div class="inventory-search"><input id="supplierAllSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card">
-      <table class="inventory-table supplier-dn-all-table"><thead><tr><th>Uploaded Date</th><th>Supplier DN No.</th><th>Details</th><th>Models Found</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      <table class="inventory-table supplier-dn-all-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
         ${supplierDnRows(pageRows)}
       </tbody></table>
       ${supplierDnPagination(dns.length, pageSize, supplierAllPage)}
@@ -8388,13 +8388,21 @@ function supplierDnAllViewHtml() {
 }
 
 function supplierDnRows(dns) {
-  return dns.map(dn => `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td><strong>${escapeHtml(dn.supplierDnNo || "-")}</strong></td><td>${escapeHtml(supplierDnDetails(dn))}</td><td>${(dn.lines || []).length}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`).join("") || `<tr><td colspan="7">No Supplier DN uploaded.</td></tr>`;
+  return dns.map(dn => {
+    const supplierDnNo = String(dn.supplierDnNo || "").trim();
+    const projectName = String(dn.projectName || "").trim();
+    const details = dn.isManualAdjustment
+      ? supplierDnNo || "-"
+      : [supplierDnNo, projectName].filter(Boolean).join(" - ") || "-";
+    const models = supplierDnModels(dn);
+    const modelsClass = models.length > 140 ? " compact" : models.length > 80 ? " condensed" : "";
+    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td><strong>${escapeHtml(details)}</strong></td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`;
+  }).join("") || `<tr><td colspan="6">No Supplier DN uploaded.</td></tr>`;
 }
 
-function supplierDnDetails(dn) {
-  if (!dn?.isManualAdjustment) return dn?.projectName || "-";
-  const models = [...new Set((dn.lines || []).map(line => line.modelNo).filter(Boolean))];
-  return models.join(", ") || dn.projectName || "-";
+function supplierDnModels(dn) {
+  const models = [...new Set((dn?.lines || []).map(line => String(line.modelNo || "").trim()).filter(Boolean))];
+  return models.join(", ") || "-";
 }
 
 function supplierDnPagination(total, pageSize, currentPage) {
@@ -8414,7 +8422,7 @@ function supplierDnPagination(total, pageSize, currentPage) {
 }
 
 function supplierDnMenuItems(dn) {
-  const items = [{ label: "View", action: "view-supplier", id: dn.id }];
+  const items = [];
   if (!dn.isManualAdjustment) items.push({ label: "Edit", action: "edit-supplier", id: dn.id });
   items.push({ label: "Cancel", action: "cancel-supplier", id: dn.id, danger: true });
   items.push({ label: "Delete", action: "delete-supplier", id: dn.id, danger: true });
@@ -8690,23 +8698,25 @@ function stockModelModalHtml(mode = "edit") {
   );
   const isReturn = mode === "return";
   const isAdd = mode === "add";
-  const modelOptions = isAdd ? "" : `<datalist id="stockModelOptions">
+  const modelOptions = `<datalist id="stockModelOptions">
     ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
   </datalist>`;
   const descriptionField = isReturn ? "" : `<label>Description<input id="stockDescription"></label>`;
+  const reasonField = isAdd ? `<label>Reason<select id="stockReason"><option value="new-stock">New Stock</option><option value="return">Return</option><option value="adjustment">Adjustment</option></select></label>` : "";
   const brandField = isAdd || isReturn ? "" : `<label>Brand<input id="stockBrand" value="Daikin"></label>`;
   return `
     <div class="modal stock-model-modal">
       <div class="inventory-topbar">
-        <div><h2>${isAdd ? "Add Unit / Stock" : isReturn ? "Return to Warehouse" : "Stock Adjustment / Edit Model"}</h2><p class="inventory-muted">${isAdd ? "Add a new unit model and its opening stock quantity." : isReturn ? "Record returned quantity for this model." : "Update model details and current available stock."}</p></div>
+        <div><h2>${isAdd ? "New Stock / Return" : isReturn ? "Return to Warehouse" : "Stock Adjustment / Edit Model"}</h2><p class="inventory-muted">${isAdd ? "Add new stock or record a returned quantity." : isReturn ? "Record returned quantity for this model." : "Update model details and current available stock."}</p></div>
         <button class="mini-button" data-close-stock-modal>Close</button>
       </div>
       <div class="form-grid">
-        <label>Model No.<input id="stockModelNo"${isAdd ? "" : " list=\"stockModelOptions\""}></label>
+        <label>Model No.<input id="stockModelNo" list="stockModelOptions"></label>
         ${modelOptions}
         ${descriptionField}
         ${brandField}
         <label>${isReturn ? "Returned Qty" : "Quantity"}<input id="stockQuantity" type="number" min="0" value="0"></label>
+        ${reasonField}
       </div>
       <p class="inventory-muted">${isAdd ? "The quantity will be added to the available warehouse stock." : isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
       <div class="inventory-actions">${isAdd ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Add to Stock</button>` : isReturn ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockReturnBtn">Save Return</button>` : `<button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button>`}</div>
@@ -10061,22 +10071,29 @@ function clearStockModelForm() {
   const quantity = $("#stockQuantity");
   if (brand) brand.value = "Daikin";
   if (quantity) quantity.value = 0;
+  const reason = $("#stockReason");
+  if (reason) reason.value = "new-stock";
 }
 
 async function saveStockModel() {
   const isAdd = document.querySelector("[data-stock-model-modal]")?.dataset.stockMode === "add";
+  const reason = isAdd ? $("#stockReason")?.value || "new-stock" : "adjustment";
+  const isReturn = isAdd && reason === "return";
   const payload = {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
     description: $("#stockDescription")?.value.trim(),
     brand: $("#stockBrand")?.value.trim() || "Daikin",
-    quantity: Number($("#stockQuantity")?.value || 0)
+    ...(isReturn
+      ? { returnQuantity: Number($("#stockQuantity")?.value || 0), reason: "return" }
+      : { quantity: Number($("#stockQuantity")?.value || 0), reason })
   };
   if (!payload.modelNo) return alert("Model No. is required.");
   if (isAdd && !payload.description) return alert("Description is required.");
-  if (isAdd && !(payload.quantity > 0)) return alert("Quantity must be greater than 0.");
+  const stockQuantity = isReturn ? payload.returnQuantity : payload.quantity;
+  if (isAdd && !(stockQuantity > 0)) return alert(isReturn ? "Returned Qty must be greater than 0." : "Quantity must be greater than 0.");
   inventoryState = await api("/api/inventory/models", { method: "POST", body: JSON.stringify(payload) });
   renderInventory();
-  toast(isAdd ? "Stock added" : "Model saved");
+  toast(isReturn ? "Return added to warehouse" : isAdd ? "Stock added" : "Model saved");
 }
 
 async function saveStockReturn() {
