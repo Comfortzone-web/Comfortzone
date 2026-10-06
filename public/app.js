@@ -8349,7 +8349,7 @@ function refreshDashboardStockOverview() {
 function supplierDnViewHtml() {
   const dns = inventoryState.supplierDns || [];
   const latestDns = dns.slice(0, 5);
-  const active = activeSupplierDnId ? dns.find(dn => dn.id === activeSupplierDnId && !dn.isManualAdjustment) : null;
+  const active = activeSupplierDnId ? dns.find(dn => dn.id === activeSupplierDnId) : null;
   return `
     <div class="inventory-topbar">
       <div class="inventory-title"><h2>Supplier DN</h2><p>Latest 5 stock-in records and upload verification.</p></div>
@@ -8396,7 +8396,10 @@ function supplierDnRows(dns) {
       : [supplierDnNo, projectName].filter(Boolean).join(" - ") || "-";
     const models = supplierDnModels(dn);
     const modelsClass = models.length > 140 ? " compact" : models.length > 80 ? " condensed" : "";
-    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td><strong>${escapeHtml(details)}</strong></td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`;
+    const detailsHtml = dn.uploadId
+      ? `<a class="supplier-dn-upload-link" href="/api/inventory/uploads/${encodeURIComponent(dn.uploadId)}" download><strong>${escapeHtml(details)}</strong></a>`
+      : `<strong>${escapeHtml(details)}</strong>`;
+    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td>${detailsHtml}</td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`;
   }).join("") || `<tr><td colspan="6">No Supplier DN uploaded.</td></tr>`;
 }
 
@@ -8423,7 +8426,7 @@ function supplierDnPagination(total, pageSize, currentPage) {
 
 function supplierDnMenuItems(dn) {
   const items = [];
-  if (!dn.isManualAdjustment) items.push({ label: "Edit", action: "edit-supplier", id: dn.id });
+  items.push({ label: "Edit", action: "edit-supplier", id: dn.id });
   items.push({ label: "Cancel", action: "cancel-supplier", id: dn.id, danger: true });
   items.push({ label: "Delete", action: "delete-supplier", id: dn.id, danger: true });
   return items;
@@ -9531,11 +9534,6 @@ function handleInventoryMenuAction(action, idValue) {
     return renderInventory();
   }
   if (action === "edit-supplier" || action === "select-supplier") {
-    const dn = inventoryState.supplierDns.find(item => item.id === idValue);
-    if (dn?.isManualAdjustment) {
-      activeSupplierDnId = "";
-      return renderInventory();
-    }
     activeSupplierDnId = idValue;
     if (inventoryScreen === "supplierAll") return showInventory("supplier");
     return renderInventory();
@@ -9720,6 +9718,7 @@ async function confirmActiveSupplierDn() {
   const missing = dn.lines.filter(line => !inventoryState.models.some(model => norm(model.modelNo) === norm(line.modelNo)));
   if (missing.length && !confirm(`${missing.length} model(s) are not in Model Master. Add them and confirm stock?`)) return;
   inventoryState = await api(`/api/inventory/supplier-dns/${dn.id}/confirm`, { method: "POST", body: "{}" });
+  activeSupplierDnId = "";
   renderInventory();
   toast("Stock updated");
 }
@@ -10802,8 +10801,12 @@ async function chooseUpload(nodeId) {
       const form = new FormData();
       form.append("nodeId", nodeId);
       const uploadFile = await workflowUploadFileForNode(nodeId, selectedFile);
-      form.append("file", uploadFile, uploadFile.name || selectedFile.name);
-      const upload = await api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
+      const upload = uploadFile.size > 2 * 1024 * 1024 && nodeId === "vrv-upload"
+        ? await uploadWorkflowFileInChunks(state.id, nodeId, uploadFile)
+        : await (async () => {
+          form.append("file", uploadFile, uploadFile.name || selectedFile.name);
+          return api(`/api/projects/${state.id}/uploads`, { method: "POST", body: form });
+        })();
       const project = await api(`/api/projects/${state.id}`);
       state.uploads = project.uploads;
       state.nodes = project.nodes;
@@ -10828,6 +10831,48 @@ async function chooseUpload(nodeId) {
   });
   input.value = "";
   input.click();
+}
+
+async function uploadWorkflowFileInChunks(projectId, nodeId, file) {
+  const chunkSize = 2 * 1024 * 1024;
+  const uploadId = typeof crypto?.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const totalChunks = Math.ceil(file.size / chunkSize);
+  toast("Uploading large VRV report in secure chunks...");
+  for (let index = 0; index < totalChunks; index += 1) {
+    const start = index * chunkSize;
+    const chunk = file.slice(start, Math.min(file.size, start + chunkSize));
+    const response = await fetch(`/api/projects/${encodeURIComponent(projectId)}/upload-chunk`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "X-Upload-Id": uploadId,
+        "X-Chunk-Index": String(index),
+        "X-Chunk-Total": String(totalChunks),
+        "X-Node-Id": nodeId,
+        "X-File-Name": encodeURIComponent(file.name || "vrv-selection-report"),
+        "X-File-Mime": file.type || "application/octet-stream"
+      },
+      body: chunk
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || "Large VRV report upload failed.");
+    }
+  }
+  return api(`/api/projects/${encodeURIComponent(projectId)}/upload-chunk/finalize`, {
+    method: "POST",
+    body: JSON.stringify({
+      uploadId,
+      nodeId,
+      originalName: file.name || "vrv-selection-report",
+      mimeType: file.type || "application/octet-stream",
+      size: file.size,
+      totalChunks
+    })
+  });
 }
 
 async function workflowUploadFileForNode(nodeId, file) {

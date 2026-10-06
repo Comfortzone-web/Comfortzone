@@ -5050,6 +5050,17 @@ td[contenteditable="true"]:focus {
   line-height: 1.2;
 }
 
+.supplier-dn-upload-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: #1476ff;
+  text-underline-offset: 2px;
+}
+
+.supplier-dn-upload-link:hover {
+  color: #1476ff;
+}
+
 #deliverySplit .inventory-card {
   min-width: 0;
 }

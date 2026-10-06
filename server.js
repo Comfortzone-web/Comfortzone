@@ -2829,6 +2829,22 @@ async function handleApi(req, res) {
     return send(res, 200, await inventoryView(inventory));
   }
 
+  const inventoryUploadMatch = url.pathname.match(/^\/api\/inventory\/uploads\/([^/]+)$/);
+  if (req.method === "GET" && inventoryUploadMatch) {
+    const inventory = await readInventory();
+    const uploadId = decodeURIComponent(inventoryUploadMatch[1]);
+    const upload = (inventory.uploads || []).find(item => item.id === uploadId);
+    if (!upload) return notFound(res);
+    const bytes = await readUpload("inventory", upload.storedName);
+    if (!bytes) return notFound(res);
+    const originalName = String(upload.originalName || "supplier-dn-upload").replace(/["\r\n]/g, "");
+    res.writeHead(200, {
+      "Content-Type": upload.mimeType || "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${originalName}"`
+    });
+    return res.end(bytes);
+  }
+
   if (req.method === "POST" && url.pathname === "/api/inventory/supplier-dns/upload") {
     const inventory = await readInventory();
     const buffer = await collect(req);
@@ -2965,6 +2981,65 @@ async function handleApi(req, res) {
     if (req.method === "DELETE" && parts.length === 3) {
       await deleteProject(projectId);
       return send(res, 200, { ok: true });
+    }
+
+    if (req.method === "POST" && parts[3] === "upload-chunk" && parts.length === 4) {
+      try {
+        const chunkUploadId = safeName(req.headers["x-upload-id"] || "");
+        const chunkIndex = Number(req.headers["x-chunk-index"]);
+        const totalChunks = Number(req.headers["x-chunk-total"]);
+        if (!chunkUploadId || !Number.isInteger(chunkIndex) || chunkIndex < 0 || !Number.isInteger(totalChunks) || totalChunks < 1 || chunkIndex >= totalChunks) {
+          return send(res, 400, { error: "Invalid chunk upload metadata" });
+        }
+        const chunk = await collect(req);
+        if (!chunk.length) return send(res, 400, { error: "Empty upload chunk" });
+        await saveUpload(`projects/${projectId}/.chunks/${chunkUploadId}`, `${chunkIndex}.part`, chunk, "application/octet-stream");
+        return send(res, 201, { uploadId: chunkUploadId, chunkIndex, totalChunks });
+      } catch (error) {
+        return send(res, 500, { error: error.message || "Chunk upload failed" });
+      }
+    }
+
+    if (req.method === "POST" && parts[3] === "upload-chunk" && parts[4] === "finalize") {
+      try {
+        const body = await readJson(req);
+        const chunkUploadId = safeName(body.uploadId || "");
+        const totalChunks = Number(body.totalChunks);
+        if (!chunkUploadId || !Number.isInteger(totalChunks) || totalChunks < 1) return send(res, 400, { error: "Invalid chunk finalization metadata" });
+        const existing = project.uploads.find(upload => upload.id === chunkUploadId);
+        if (existing) return send(res, 200, existing);
+        const chunks = [];
+        for (let index = 0; index < totalChunks; index += 1) {
+          const chunk = await readUpload(`projects/${projectId}/.chunks/${chunkUploadId}`, `${index}.part`);
+          if (!chunk) return send(res, 400, { error: `Missing upload chunk ${index + 1} of ${totalChunks}` });
+          chunks.push(chunk);
+        }
+        const bytes = Buffer.concat(chunks);
+        const originalName = String(body.originalName || "vrv-selection-report");
+        const storedName = `${chunkUploadId}-${safeName(originalName)}`;
+        await saveUpload(`projects/${projectId}`, storedName, bytes, body.mimeType || "application/octet-stream");
+        const upload = {
+          id: chunkUploadId,
+          projectId,
+          nodeId: body.nodeId || "file",
+          originalName,
+          storedName,
+          mimeType: body.mimeType || "application/octet-stream",
+          size: bytes.length,
+          createdAt: new Date().toISOString()
+        };
+        project.uploads.push(upload);
+        const node = project.nodes.find(item => item.id === upload.nodeId);
+        if (node) node.data.uploadId = upload.id;
+        if (upload.nodeId === "thermal-upload" || upload.nodeId === "vrv-upload") project.visible = true;
+        await writeProject(project);
+        for (let index = 0; index < totalChunks; index += 1) {
+          await deleteUpload(`projects/${projectId}/.chunks/${chunkUploadId}`, `${index}.part`);
+        }
+        return send(res, 201, upload);
+      } catch (error) {
+        return send(res, 500, { error: error.message || "Chunk upload finalization failed" });
+      }
     }
 
     if (req.method === "POST" && parts[3] === "uploads") {
