@@ -1,6 +1,6 @@
 const $ = selector => document.querySelector(selector);
 const canvas = $("#canvas");
-const loginRoles = ["Admin", "Staff", "PO Only"];
+const loginRoles = ["Admin", "Staff", "MTS"];
 
 let state = null;
 let activeView = "canvas";
@@ -346,7 +346,7 @@ async function init() {
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
   const projectManagementPath = location.pathname.match(/^\/projects(?:\/([^/]+))?\/?$/);
-  if (projectManagementPath) {
+  if (projectManagementPath && canAccessModule("projects")) {
     await showProjects(projectManagementPath[1] || "");
   } else if (projectId) {
     await loadProject(projectId);
@@ -426,6 +426,10 @@ function bindShell() {
     button.addEventListener("click", () => {
       if (!canAccessModule("sales")) return showLockedModuleToast();
       collapsedSidebarGroups.delete("sales");
+      if (button.dataset.salesView === "costing") {
+        costingMode = "all";
+        costingHistoryOpen = false;
+      }
       showSalesDesk(button.dataset.salesView);
     });
   });
@@ -494,6 +498,12 @@ async function login(event) {
       method: "POST",
       body: JSON.stringify({ email: $("#loginEmail").value.trim(), password: $("#loginPassword").value })
     });
+    salesCrmState = null;
+    costingState = null;
+    salesQuotationDraft = null;
+    salesLeadDetailId = "";
+    salesCrmLoadedAt = 0;
+    costingLoadedAt = 0;
     currentUser = auth.user;
     appSettings = auth.settings;
     applyAppSettings();
@@ -530,15 +540,25 @@ function warmViewData() {
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
   currentUser = null;
+  salesCrmState = null;
+  costingState = null;
+  salesQuotationDraft = null;
+  salesCrmLoadedAt = 0;
+  costingLoadedAt = 0;
   applyRoleAccess();
   showLogin();
 }
 
 function isPoOnlyUser() {
-  return norm(currentUser?.role) === "POONLY";
+  return ["POONLY", "MTS"].includes(norm(currentUser?.role));
+}
+
+function isStaffUser() {
+  return norm(currentUser?.role) === "STAFF";
 }
 
 function canAccessModule(moduleName) {
+  if (isStaffUser() && ["projects", "area", "settings"].includes(moduleName)) return false;
   if (!isPoOnlyUser()) return true;
   if (moduleName === "projects") return true;
   return moduleName === "purchase" || moduleName === "area";
@@ -551,7 +571,7 @@ function hideProjectManagementView() {
 }
 
 function showLockedModuleToast() {
-  toast("This login has Purchase Orders and Area Calculation access only.");
+  toast(isStaffUser() ? "This module is not available to Staff." : "This login has Purchase Orders and Area Calculation access only.");
 }
 
 function activeSidebarGroup() {
@@ -582,13 +602,16 @@ function applySidebarSubnavVisibility() {
 
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
-  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "settingsBtn"];
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn"];
   lockIds.forEach(id => {
     const button = document.getElementById(id);
     if (!button) return;
-    button.disabled = poOnly;
-    button.classList.toggle("locked-nav", poOnly);
-    if (poOnly) button.title = "Locked for PO Only users";
+    const locked = !canAccessModule(id === "settingsBtn" ? "settings"
+      : id === "projectsBtn" ? "projects" : id === "areaCalculationBtn" ? "area"
+      : id === "inventoryBtn" ? "inventory" : id === "salesDeskBtn" ? "sales" : "workflow");
+    button.disabled = locked;
+    button.classList.toggle("locked-nav", locked);
+    if (locked) button.title = poOnly ? "Locked for MTS users" : "Locked for Staff users";
     else button.removeAttribute("title");
   });
   applySidebarSubnavVisibility();
@@ -1407,10 +1430,12 @@ function refreshSalesCrmInBackground() {
 }
 
 function salesData() {
-  return salesCrmState || salesCrmData;
+  if (salesCrmState) return salesCrmState;
+  return isStaffUser() ? { ...salesCrmData, leads: [], quotations: [] } : salesCrmData;
 }
 
 function nextSalesEnquiryNoDefault() {
+  if (isStaffUser() && salesData().settings?.nextEnquiryNo) return salesData().settings.nextEnquiryNo;
   const year = String(new Date().getFullYear()).slice(-2);
   let maxNumber = 1000;
   let width = 4;
@@ -5328,7 +5353,8 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
   };
   try {
     salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
-    markLeadQuoteSentFromQuotation(quote).catch(error => console.warn(error));
+    const savedQuote = (salesCrmState.quotations || []).find(item => item.id === salesCrmState.savedItemId) || quote;
+    markLeadQuoteSentFromQuotation(savedQuote).catch(error => console.warn(error));
     salesQuotationMode = "list";
     salesQuotationDraft = null;
     salesQuotationRevisionNoLock = "";
@@ -5602,7 +5628,8 @@ function openSalesLeadDrawer(itemId = "") {
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
     if (!payload.customer || !payload.projectDescription || !payload.enquiryNo) return alert("Customer, project description and enquiry number are required.");
     salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
-    const savedLead = (salesData().leads || []).find(lead => payload.id && lead.id === payload.id) ||
+    const savedLead = (salesData().leads || []).find(lead => lead.id === salesCrmState.savedItemId) ||
+      (salesData().leads || []).find(lead => payload.id && lead.id === payload.id) ||
       (salesData().leads || []).find(lead => norm(lead.enquiryNo) === norm(payload.enquiryNo));
     salesLeadDetailId = savedLead?.id || payload.id || salesLeadDetailId;
     modal.remove();
@@ -6282,13 +6309,13 @@ function renderViewActions() {
     actions.innerHTML = `
       <button class="ghost-button" id="headerPoListBtn">Purchase Orders</button>
       <button class="ghost-button" id="headerPoSuppliersBtn">Suppliers</button>
-      <button class="primary-button" id="headerPoManualBtn">Create PO</button>
-      <button class="ghost-button" id="headerPoUploadBtn">Upload</button>
+      ${isStaffUser() ? "" : `<button class="primary-button" id="headerPoManualBtn">Create PO</button>
+      <button class="ghost-button" id="headerPoUploadBtn">Upload</button>`}
     `;
     $("#headerPoListBtn").addEventListener("click", () => showPurchaseOrders("list"));
     $("#headerPoSuppliersBtn").addEventListener("click", () => showPurchaseOrders("suppliers"));
-    $("#headerPoUploadBtn").addEventListener("click", () => uploadPurchaseQuotation());
-    $("#headerPoManualBtn").addEventListener("click", () => {
+    $("#headerPoUploadBtn")?.addEventListener("click", () => uploadPurchaseQuotation());
+    $("#headerPoManualBtn")?.addEventListener("click", () => {
       purchaseRevisionPoNoLock = "";
       purchaseDraft = newPurchaseDraft();
       applyNextPurchasePoNoToDraft(true);
@@ -6701,6 +6728,11 @@ function renderPurchaseOrders() {
   if (purchaseScreen === "list") root.innerHTML = purchaseOrderListHtml();
   else if (purchaseScreen === "suppliers") root.innerHTML = purchaseSupplierListHtml();
   else root.innerHTML = purchaseOrderFormPageHtml();
+  if (isStaffUser() && purchaseScreen === "form") {
+    root.querySelectorAll("input, select, textarea, button").forEach(control => {
+      if (control.id !== "poDownloadBtn") control.disabled = true;
+    });
+  }
   bindPurchaseEvents();
 }
 
@@ -6734,7 +6766,7 @@ function purchaseOrderFormPageHtml() {
     <div class="po-layout">
       <section class="inventory-card po-form-card">
         <div class="po-form-title-row">
-          <h3>New Purchase Order</h3>
+          <h3>${isStaffUser() ? "Purchase Order" : "New Purchase Order"}</h3>
           <label>LPO No.<input data-po-field="poNo" ${poInputAttrs("lpo-no")} value="${escapeHtml(purchaseDraft.poNo || "")}"></label>
         </div>
         ${purchaseOrderFormHtml(purchaseDraft)}
@@ -6776,7 +6808,7 @@ function purchaseOrderListHtml() {
         </colgroup>
         <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Purchase Rep</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${escapeHtml(order.purchaseRepresentative || "-")}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu([{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
+          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${escapeHtml(order.purchaseRepresentative || "-")}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu(isStaffUser() ? [{label:"View",action:"view-po",id:order.id},{label:"Download",action:"download-po",id:order.id}] : [{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -6794,13 +6826,13 @@ function purchaseSupplierListHtml() {
         </div>
         <div class="inventory-search">
           <input id="poSupplierSearchInput" type="search" placeholder="Search supplier, TRN, phone..." value="${escapeHtml(purchaseSupplierSearchQuery)}">
-          <button class="primary-button" id="poAddSupplierBtn">Create New Supplier</button>
+          ${isStaffUser() ? "" : `<button class="primary-button" id="poAddSupplierBtn">Create New Supplier</button>`}
         </div>
       </div>
       <table class="inventory-table">
         <thead><tr><th>Supplier Name</th><th>TRN</th><th>Contact</th><th>Email</th><th>Payment Terms</th><th>Action</th></tr></thead>
         <tbody>
-          ${suppliers.map(supplier => `<tr><td><strong>${escapeHtml(supplier.supplierName)}</strong><br><span class="inventory-muted">${escapeHtml(supplier.address || "")}</span></td><td>${escapeHtml(supplier.trn || "")}</td><td>${escapeHtml(supplier.contactPerson || "")}<br><span class="inventory-muted">${escapeHtml(supplier.phone || "")}</span></td><td>${escapeHtml(supplier.email || "")}</td><td>${escapeHtml(supplier.paymentTerms || "")}</td><td>${rowMenu([{label:"Edit",action:"edit-po-supplier",id:supplier.id},{label:"Delete",action:"delete-po-supplier",id:supplier.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No suppliers added.</td></tr>`}
+          ${suppliers.map(supplier => `<tr><td><strong>${escapeHtml(supplier.supplierName)}</strong><br><span class="inventory-muted">${escapeHtml(supplier.address || "")}</span></td><td>${escapeHtml(supplier.trn || "")}</td><td>${escapeHtml(supplier.contactPerson || "")}<br><span class="inventory-muted">${escapeHtml(supplier.phone || "")}</span></td><td>${escapeHtml(supplier.email || "")}</td><td>${escapeHtml(supplier.paymentTerms || "")}</td><td>${isStaffUser() ? "" : rowMenu([{label:"Edit",action:"edit-po-supplier",id:supplier.id},{label:"Delete",action:"delete-po-supplier",id:supplier.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No suppliers added.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -6999,8 +7031,10 @@ function purchaseSummaryHtml(po) {
     <div class="po-summary-row po-summary-total"><strong>Grand Total (AED)</strong><strong id="poGrandTotal">${money(po.grandTotal)}</strong></div>
     <div class="po-status-box"><span class="po-status-icon" aria-hidden="true">${poIcon("tag")}</span><span>Status</span>${statusPill(po.status || "Draft")}</div>
     <div class="inventory-actions po-summary-actions">
-      <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span>Save Draft</span></button>
-      <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span>Create Purchase Order</span></button>
+      ${isStaffUser() ? "" : `
+        <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span>Save Draft</span></button>
+        <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span>Create Purchase Order</span></button>
+      `}
       <button class="ghost-button" id="poDownloadBtn">${poIcon("download")}<span>Download PDF</span></button>
     </div>
   `;
@@ -9435,7 +9469,8 @@ function removePurchaseAttachment() {
 
 function handlePurchaseMenuAction(action, idValue) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
-  if (action === "edit-po") {
+  if (action === "edit-po" || action === "view-po") {
+    if (isStaffUser() && action !== "view-po") return;
     const order = (purchaseState.orders || []).find(item => item.id === idValue);
     if (!order) return;
     purchaseRevisionPoNoLock = "";
@@ -12445,20 +12480,29 @@ function costingSheetHtml() {
 
 function costingAllSheetsHtml() {
   const sheets = (costingState?.sheets || []).filter(sheet => sheet.isSaved !== false);
-  return `<div class="costing-all-page">
-    ${sheets.map(sheet => {
+  return `<section class="costing-all-page">
+    <div class="costing-all-heading"><h3>All Costing Sheets</h3><span>${sheets.length} sheet${sheets.length === 1 ? "" : "s"}</span></div>
+    <table class="costing-all-table">
+      <colgroup><col class="costing-all-col-date"><col class="costing-all-col-project"><col class="costing-all-col-increase"><col class="costing-all-col-profit"><col class="costing-all-col-selling"><col class="costing-all-col-vat"><col class="costing-all-col-grand"><col class="costing-all-col-action"></colgroup>
+      <thead><tr><th scope="col">Date</th><th scope="col">Project / Customer</th><th scope="col">Total Increase Price</th><th scope="col">Profit / Margin</th><th scope="col">Total Selling</th><th scope="col">VAT 5%</th><th scope="col">Grand Total</th><th scope="col" aria-label="Actions"></th></tr></thead>
+      <tbody>${sheets.map(sheet => {
       const totals = costingTotals(sheet.rows || []);
       const name = sheet.project || sheet.title || "Untitled Costing";
-      const details = [sheet.customer, sheet.enquiryNo].filter(Boolean).join(" · ") || "No customer or enquiry selected";
-      const updatedAt = sheet.updatedAt ? new Date(sheet.updatedAt).toLocaleString("en-GB") : "Not saved yet";
-      return `<article class="costing-sheet-card">
-        <div class="costing-sheet-card-main"><h3>${escapeHtml(name)}</h3><p>${escapeHtml(details)}</p><small>${(sheet.rows || []).length} item${(sheet.rows || []).length === 1 ? "" : "s"} · Updated ${escapeHtml(updatedAt)}</small></div>
-        <div class="costing-sheet-card-total"><span>Total Increased Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
-        <div class="costing-sheet-card-total"><span>Grand Total</span><strong>AED ${costingMoney(totals.grand)}</strong></div>
-        <div class="row-menu costing-sheet-menu"><button class="costing-sheet-menu-button" data-row-menu title="Costing sheet actions" aria-label="Costing sheet actions">...</button><div class="row-menu-list hidden"><button data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Open</button><button data-costing-action="revise-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Revision</button><button class="danger" data-costing-action="delete-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Delete</button></div></div>
-      </article>`;
-    }).join("") || `<section class="costing-all-empty"><h3>No costing sheets yet</h3><p>Create a costing sheet to begin saving project prices.</p></section>`}
-  </div>`;
+      const dateValue = Date.parse(sheet.createdAt || sheet.updatedAt || "");
+      const date = Number.isFinite(dateValue) ? new Date(dateValue).toLocaleDateString("en-GB") : "-";
+      return `<tr>
+        <td data-label="Date">${escapeHtml(date)}</td>
+        <td data-label="Project / Customer"><div class="costing-all-project"><button class="costing-all-project-link" data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">${escapeHtml(name)}</button><span>${escapeHtml(sheet.customer || "No customer selected")}</span></div></td>
+        <td data-label="Total Increase Price" class="costing-all-money">AED ${costingMoney(totals.increasedFinalPrice)}</td>
+        <td data-label="Profit / Margin" class="costing-all-profit"><div><strong>AED ${costingMoney(totals.profit)}</strong><span>${totals.margin.toFixed(1)}% margin</span></div></td>
+        <td data-label="Total Selling" class="costing-all-money">AED ${costingMoney(totals.selling)}</td>
+        <td data-label="VAT 5%" class="costing-all-money">AED ${costingMoney(totals.vat)}</td>
+        <td data-label="Grand Total" class="costing-all-money costing-all-grand">AED ${costingMoney(totals.grand)}</td>
+        <td class="costing-all-action"><div class="row-menu costing-sheet-menu"><button class="costing-sheet-menu-button" data-row-menu title="Costing sheet actions" aria-label="Costing sheet actions">...</button><div class="row-menu-list hidden"><button data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Open</button><button data-costing-action="revise-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Revision</button><button class="danger" data-costing-action="delete-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Delete</button></div></div></td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="8" class="costing-all-empty"><strong>No costing sheets yet</strong><span>Create a costing sheet to begin saving project prices.</span></td></tr>`}</tbody>
+    </table>
+  </section>`;
 }
 
 function costingRevisionName(name, sheets = []) {

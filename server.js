@@ -291,7 +291,11 @@ function normalizeSettings(parsed = {}) {
     ...parsed,
     company: { ...fallback.company, ...(parsed.company || {}) },
     company2: { ...fallback.company2, ...(parsed.company2 || {}) },
-    users: Array.isArray(parsed.users) && parsed.users.length ? parsed.users : fallback.users,
+    users: (Array.isArray(parsed.users) && parsed.users.length ? parsed.users : fallback.users).map(user =>
+      String(user.role || "").toLowerCase().replace(/\s+/g, "") === "poonly"
+        ? { ...user, role: "MTS" }
+        : user
+    ),
     attachments: Array.isArray(parsed.attachments) ? parsed.attachments : []
   };
   if (!settings.users.some(user => String(user.role).toLowerCase() === "admin")) settings.users.unshift(fallback.users[0]);
@@ -582,12 +586,12 @@ function projectManagementDashboard(store, query = {}, user, loginUsers = []) {
   };
 }
 
-function publicSettings(settings) {
+function publicSettings(settings, user) {
   return {
     company: settings.company,
     company2: settings.company2,
     attachments: settings.attachments,
-    users: (settings.users || []).map(({ passwordHash: _passwordHash, ...user }) => user)
+    users: isStaff(user) ? [] : (settings.users || []).map(({ passwordHash: _passwordHash, ...entry }) => entry)
   };
 }
 
@@ -653,8 +657,37 @@ function isAdmin(user) {
   return String(user?.role || "").toLowerCase() === "admin";
 }
 
+function isStaff(user) {
+  return String(user?.role || "").toLowerCase() === "staff";
+}
+
 function isPoOnly(user) {
-  return String(user?.role || "").toLowerCase().replace(/\s+/g, "") === "poonly";
+  const role = String(user?.role || "").toLowerCase().replace(/\s+/g, "");
+  return role === "poonly" || role === "mts";
+}
+
+function staffNumberPrefix(user) {
+  const identity = crypto.createHash("sha256").update(String(user.id)).digest("hex").slice(0, 8).toUpperCase();
+  return `S${identity}`;
+}
+
+function staffNextEnquiryNo(user, leads = []) {
+  const prefix = `EN${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
+  const numbers = leads.map(lead => String(lead.enquiryNo || "").startsWith(prefix)
+    ? Number(String(lead.enquiryNo).slice(prefix.length)) : NaN).filter(Number.isFinite);
+  return `${prefix}${String(Math.max(1000, ...numbers) + 1).padStart(4, "0")}`;
+}
+
+function staffNextQuotationNo(user, quotations = []) {
+  const prefix = `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
+  const numbers = quotations.filter(quote => !quotationRevisionNo(quote))
+    .map(quote => String(quote.no || quote.quotationNo || "").startsWith(prefix)
+      ? Number(String(quote.no || quote.quotationNo).slice(prefix.length)) : NaN).filter(Number.isFinite);
+  return `${prefix}${String(Math.max(0, ...numbers) + 1).padStart(3, "0")}`;
+}
+
+function staffOwns(item, user) {
+  return item?.ownerId === user.id;
 }
 
 function sendAuthRequired(res) {
@@ -845,6 +878,7 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
   const priceIncrease = Math.max(0, costingNumber(input.priceIncrease ?? 20));
   return {
     id: cleanCell(input.id || id()),
+    ownerId: cleanCell(input.ownerId || ""),
     title: cleanCell(input.title || "New Costing"),
     customer: cleanCell(input.customer || ""),
     project: cleanCell(input.project || ""),
@@ -1275,10 +1309,18 @@ function mergedSalesCustomers(salesCustomers = [], inventoryCustomers = []) {
   return merged.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
-async function salesCrmView(store) {
+async function salesCrmView(store, user) {
   const inventory = await readInventory();
+  const staff = isStaff(user);
   return {
     ...store,
+    settings: staff ? {
+      ...store.settings,
+      nextEnquiryNo: staffNextEnquiryNo(user, store.leads),
+      nextQuotationNo: staffNextQuotationNo(user, store.quotations)
+    } : store.settings,
+    leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
+    quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
     customers: mergedSalesCustomers(store.customers || [], inventory.customers || [])
   };
 }
@@ -1611,16 +1653,21 @@ function parseMultipart(buffer, contentType) {
   return parts;
 }
 
-async function costingViewResponse(store) {
+async function costingViewResponse(store, user) {
   const [inventory, sales] = await Promise.all([readInventory(), readSalesCrm()]);
+  const normalized = normalizeCostingSheets(store);
+  const staff = isStaff(user);
   return {
-    ...normalizeCostingSheets(store),
+    ...normalized,
+    sheets: staff ? normalized.sheets.filter(item => staffOwns(item, user)) : normalized.sheets,
+    activeSheetId: staff && !normalized.sheets.some(item => item.id === normalized.activeSheetId && staffOwns(item, user))
+      ? normalized.sheets.find(item => staffOwns(item, user))?.id || "" : normalized.activeSheetId,
     stockModels: (inventory.models || []).map(item => ({
       modelNo: item.modelNo || item.model || "",
       description: item.description || ""
     })),
     customers: mergedSalesCustomers(sales.customers || [], inventory.customers || []).map(customer => ({ name: customer.name || "" })),
-    quotations: (sales.quotations || []).map(quote => ({
+    quotations: (staff ? sales.quotations.filter(quote => staffOwns(quote, user)) : sales.quotations || []).map(quote => ({
       id: quote.id,
       no: quote.no || quote.quotationNo || "",
       sourceCostingSheetId: quote.sourceCostingSheetId || ""
@@ -1746,6 +1793,7 @@ function normalizeSalesItem(collection, input, store) {
     const status = cleanCell(base.status || "New Enquiry");
     return {
       id: base.id,
+      ownerId: cleanCell(base.ownerId || ""),
       enquiryNo: cleanCell(base.enquiryNo || store.settings.nextEnquiryNo || `EN${String(new Date().getFullYear()).slice(-2)}-1001`),
       avatar: initials(customer),
       salesPerson: cleanCell(base.salesPerson || ""),
@@ -1862,6 +1910,7 @@ function normalizeSalesItem(collection, input, store) {
     const baseQuotationNo = cleanCell(base.baseQuotationNo || quoteNo.replace(/-R\d+$/i, ""));
     const quote = {
       id: base.id,
+      ownerId: cleanCell(base.ownerId || ""),
       no: quoteNo,
       baseQuotationNo,
       revisionNo,
@@ -2512,7 +2561,7 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
     const settings = await readSettings();
-    return send(res, 200, { user, settings: publicSettings(settings) });
+    return send(res, 200, { user, settings: publicSettings(settings, user) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
@@ -2526,7 +2575,7 @@ async function handleApi(req, res) {
       "Content-Type": "application/json; charset=utf-8",
       "Set-Cookie": sessionCookie("cz_session", token, req)
     });
-    return res.end(JSON.stringify({ user: { id: matched.id, name: matched.name, role: matched.role, email: matched.email }, settings: publicSettings(settings) }));
+    return res.end(JSON.stringify({ user: { id: matched.id, name: matched.name, role: matched.role, email: matched.email }, settings: publicSettings(settings, matched) }));
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/logout") {
@@ -2544,13 +2593,23 @@ async function handleApi(req, res) {
   if (isPoOnly(user) && !canPoOnlyAccessPath(req, url.pathname)) {
     return sendPoOnlyForbidden(res);
   }
+  if (isStaff(user)) {
+    if (url.pathname.startsWith("/api/project-management") || url.pathname.startsWith("/api/area-calculations")) {
+      return send(res, 403, { error: "Staff cannot access Projects or Area Calculation" });
+    }
+    if (url.pathname.startsWith("/api/purchase-orders")
+      && req.method !== "GET"
+      && !(req.method === "POST" && url.pathname === "/api/purchase-orders/pdf")) {
+      return send(res, 403, { error: "Staff can view Purchase Orders only" });
+    }
+  }
 
   if (parts[0] === "api" && parts[1] === "project-management") {
     return handleProjectManagementApi(req, res, parts, url, user);
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
-    return send(res, 200, { user, settings: publicSettings(await readSettings()) });
+    return send(res, 200, { user, settings: publicSettings(await readSettings(), user) });
   }
 
   if (req.method === "PUT" && url.pathname === "/api/settings/company") {
@@ -2673,17 +2732,20 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/sales-crm") {
-    return send(res, 200, await salesCrmView(await readSalesCrm()));
+    return send(res, 200, await salesCrmView(await readSalesCrm(), user));
   }
 
   if (req.method === "GET" && url.pathname === "/api/costing") {
-    return send(res, 200, await costingViewResponse(await readCostingSheets()));
+    return send(res, 200, await costingViewResponse(await readCostingSheets(), user));
   }
 
   if (req.method === "POST" && url.pathname === "/api/costing/sheets") {
     const store = await readCostingSheets();
     const body = await readJson(req);
     const sheet = normalizeCostingSheet(body.sheet || body, store.priceItems);
+    const existingSheet = store.sheets.find(item => item.id === sheet.id);
+    if (isStaff(user) && existingSheet && !staffOwns(existingSheet, user)) return sendForbidden(res);
+    sheet.ownerId = existingSheet?.ownerId || (isStaff(user) ? user.id : sheet.ownerId);
     sheet.isSaved = true;
     sheet.updatedAt = new Date().toISOString();
     const existingIndex = store.sheets.findIndex(item => item.id === sheet.id);
@@ -2691,16 +2753,17 @@ async function handleApi(req, res) {
     else store.sheets.unshift(sheet);
     store.activeSheetId = sheet.id;
     await writeCostingSheets(store);
-    return send(res, 200, await costingViewResponse(store));
+    return send(res, 200, await costingViewResponse(store, user));
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/costing\/sheets\/[^/]+$/)) {
     const store = await readCostingSheets();
     const sheetId = decodeURIComponent(url.pathname.split("/").pop());
+    if (isStaff(user) && !staffOwns(store.sheets.find(sheet => sheet.id === sheetId), user)) return sendForbidden(res);
     store.sheets = store.sheets.filter(sheet => sheet.id !== sheetId);
     if (store.activeSheetId === sheetId) store.activeSheetId = store.sheets[0]?.id || "";
     await writeCostingSheets(store);
-    return send(res, 200, await costingViewResponse(store));
+    return send(res, 200, await costingViewResponse(store, user));
   }
 
   if (req.method === "POST" && url.pathname === "/api/costing/price-items") {
@@ -2719,7 +2782,7 @@ async function handleApi(req, res) {
       store.priceItems.unshift(item);
     }
     await writeCostingSheets(store);
-    return send(res, 200, await costingViewResponse(store));
+    return send(res, 200, await costingViewResponse(store, user));
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/costing\/price-items\/[^/]+$/)) {
@@ -2727,7 +2790,7 @@ async function handleApi(req, res) {
     const itemId = decodeURIComponent(url.pathname.split("/").pop());
     store.priceItems = store.priceItems.filter(item => item.id !== itemId);
     await writeCostingSheets(store);
-    return send(res, 200, await costingViewResponse(store));
+    return send(res, 200, await costingViewResponse(store, user));
   }
 
   if (req.method === "POST" && url.pathname === "/api/costing/price-items/import") {
@@ -2752,7 +2815,7 @@ async function handleApi(req, res) {
       imported++;
     }
     await writeCostingSheets(store);
-    return send(res, 200, { ...(await costingViewResponse(store)), imported });
+    return send(res, 200, { ...(await costingViewResponse(store, user)), imported });
   }
 
   if (req.method === "POST" && url.pathname === "/api/sales-crm/customers/import") {
@@ -2780,7 +2843,7 @@ async function handleApi(req, res) {
     store.customers = mergeDuplicateSalesCustomers(store.customers);
     await writeSalesCrm(store);
     await writeInventory(inventory);
-    return send(res, 200, { imported, state: await salesCrmView(store) });
+    return send(res, 200, { imported, state: await salesCrmView(store, user) });
   }
 
   if (req.method === "POST" && url.pathname === "/api/sales-crm/quotations/pdf") {
@@ -2910,7 +2973,7 @@ async function handleApi(req, res) {
     project.directDeliveryUploads = (project.directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
     if (upload?.storedName) await deleteUpload(`sales-project-deliveries/${projectId}`, upload.storedName);
     await writeSalesCrm(store);
-    return send(res, 200, await salesCrmView(store));
+    return send(res, 200, await salesCrmView(store, user));
   }
 
   if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
@@ -2939,7 +3002,26 @@ async function handleApi(req, res) {
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
-    if (collection === "quotations" && existingIndex < 0) {
+    if (isStaff(user) && ["leads", "quotations"].includes(collection) && existingIndex >= 0
+      && !staffOwns(store[collection][existingIndex], user)) return sendForbidden(res);
+    if (isStaff(user) && ["leads", "quotations"].includes(collection)) item.ownerId = user.id;
+    if (isStaff(user) && collection === "leads" && existingIndex < 0) {
+      item.enquiryNo = staffNextEnquiryNo(user, store.leads);
+    }
+    if (isStaff(user) && collection === "quotations" && existingIndex < 0) {
+      const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
+      const ownBase = store.quotations.some(quote => staffOwns(quote, user) && cleanSalesQuotationBaseNo(quote.no || quote.quotationNo) === baseNo);
+      if (item.revisionNo && ownBase) {
+        item.no = `${baseNo}-R${nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations)}`;
+      } else {
+        item.no = staffNextQuotationNo(user, store.quotations);
+        item.revisionNo = 0;
+        item.revision = "Fresh Quote";
+      }
+      item.quotationNo = item.no;
+      item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
+    }
+    if (collection === "quotations" && existingIndex < 0 && !isStaff(user)) {
       const submittedQuoteNo = cleanCell(item.no || item.quotationNo || "");
       const submittedIsRevision = /-R\d+$/i.test(submittedQuoteNo);
       const exactQuotationExists = (store.quotations || []).some(quote => (
@@ -2964,12 +3046,12 @@ async function handleApi(req, res) {
         item.revision = item.revision || "Fresh Quote";
       }
     }
-    if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo) {
+    if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo && !isStaff(user)) {
       existingIndex = store.leads.findIndex(entry => inventoryNorm(entry.enquiryNo) === inventoryNorm(item.enquiryNo));
     }
     if (collection === "leads" && existingIndex < 0) {
       const isDuplicateEnquiryNo = store.leads.some(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(item.enquiryNo));
-      if (!cleanSalesEnquiryNo(item.enquiryNo) || isDuplicateEnquiryNo) item.enquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
+      if (!isStaff(user) && (!cleanSalesEnquiryNo(item.enquiryNo) || isDuplicateEnquiryNo)) item.enquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
       item.createdAt = item.createdAt || nowIso;
       item.updatedAt = nowIso;
     }
@@ -3004,7 +3086,7 @@ async function handleApi(req, res) {
     }
     await writeSalesCrm(store);
     if (collection === "customers") await syncSalesCustomerToInventory(item);
-    return send(res, 200, await salesCrmView(store));
+    return send(res, 200, { ...(await salesCrmView(store, user)), savedItemId: item.id });
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)\/[^/]+$/)) {
@@ -3013,6 +3095,8 @@ async function handleApi(req, res) {
     const collection = parts[3];
     const itemId = decodeURIComponent(parts[4]);
     const deletedItem = (store[collection] || []).find(item => item.id === itemId);
+    if (isStaff(user) && ["leads", "quotations"].includes(collection)
+      && !staffOwns(deletedItem, user)) return sendForbidden(res);
     if (collection === "customers") {
       const customerName = deletedItem?.name || "";
       const hasQuotation = customerName && (store.quotations || []).some(quote => inventoryNorm(quote.customer) === inventoryNorm(customerName));
@@ -3029,7 +3113,7 @@ async function handleApi(req, res) {
       inventory.customers = (inventory.customers || []).filter(customer => customer.id !== itemId);
       await writeInventory(inventory);
     }
-    return send(res, 200, await salesCrmView(store));
+    return send(res, 200, await salesCrmView(store, user));
   }
 
   if (req.method === "POST" && url.pathname === "/api/purchase-orders/suppliers") {

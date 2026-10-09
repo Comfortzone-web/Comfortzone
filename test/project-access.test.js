@@ -108,8 +108,7 @@ test("PO users see only tagged projects and each dashboard shows only assigned f
     assert.equal(adminView.projects.length, 3);
     assert.deepEqual(adminView.followUps.map(item => item.id), ["admin-follow"]);
     assert.equal(adminView.kpis.pendingFollowUps, 1);
-    assert.equal((await dashboard(staffCookie)).projects.length, 3);
-    assert.equal((await dashboard(staffCookie)).followUps.length, 0);
+    assert.equal((await request(staffCookie, "/api/project-management/dashboard")).status, 403);
 
     const invalidAssignment = await request(admin, `/api/project-management/projects/${aliceProject.id}`, json("PUT", {
       ...aliceProject, followUps: [...aliceProject.followUps, { id: "invalid", subject: "Invalid", assignedUserId: "missing-user" }]
