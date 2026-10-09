@@ -14,7 +14,7 @@ async function freePort() {
   return port;
 }
 
-test("entered quotation numbers persist and drive the next number", { timeout: 30000 }, async () => {
+test("entered enquiry and quotation numbers persist and drive the next number", { timeout: 30000 }, async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cz-quote-numbering-"));
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -63,6 +63,21 @@ test("entered quotation numbers persist and drive the next number", { timeout: 3
     assert.equal(nextRevision.quotations[0].no, `${adminNo}-R2`);
     const duplicate = await request(admin, "/api/sales-crm/quotations", json({ no: adminNo, customer: "C", items: [] }));
     assert.equal(duplicate.status, 409);
+    const adminEnquiryNo = `EN${year}-1212`;
+    const firstEnquiry = await save(admin, "/api/sales-crm/leads", {
+      enquiryNo: adminEnquiryNo, customer: "Admin Customer", projectDescription: "Project A"
+    });
+    assert.equal(firstEnquiry.leads[0].enquiryNo, adminEnquiryNo);
+    assert.equal(firstEnquiry.settings.nextEnquiryNo, `EN${year}-1213`);
+    assert.equal((await (await request(admin, "/api/sales-crm")).json()).settings.nextEnquiryNo, `EN${year}-1213`);
+    const secondEnquiry = await save(admin, "/api/sales-crm/leads", {
+      customer: "Admin Customer 2", projectDescription: "Project B"
+    });
+    assert.equal(secondEnquiry.leads[0].enquiryNo, `EN${year}-1213`);
+    const duplicateEnquiry = await request(admin, "/api/sales-crm/leads", json({
+      enquiryNo: adminEnquiryNo, customer: "Duplicate", projectDescription: "Project C"
+    }));
+    assert.equal(duplicateEnquiry.status, 409);
 
     for (const name of ["Alice", "Bob"]) {
       await save(admin, "/api/settings/users", {
@@ -71,15 +86,36 @@ test("entered quotation numbers persist and drive the next number", { timeout: 3
     }
     const alice = await login("alice@example.test", "test-password");
     const bob = await login("bob@example.test", "test-password");
+    const collidingNext = await save(alice, "/api/sales-crm/quotations", {
+      no: `EN${year}-1211`, customer: "Alice Earlier Customer", items: []
+    });
+    assert.equal(collidingNext.settings.nextQuotationNo, `EN${year}-1214`);
     const staffNo = `EN${year}-2200`;
     const staffQuote = await save(alice, "/api/sales-crm/quotations", { no: staffNo, customer: "Alice Customer", items: [] });
     assert.equal(staffQuote.quotations[0].no, staffNo);
     assert.equal(staffQuote.settings.nextQuotationNo, `EN${year}-2201`);
     const nextStaffQuote = await save(alice, "/api/sales-crm/quotations", { customer: "Alice Customer 2", items: [] });
     assert.equal(nextStaffQuote.quotations[0].no, `EN${year}-2201`);
+    const staffEnquiryNo = `EN${year}-2200`;
+    const staffEnquiry = await save(alice, "/api/sales-crm/leads", {
+      enquiryNo: staffEnquiryNo, customer: "Alice Customer", projectDescription: "Alice Project"
+    });
+    assert.equal(staffEnquiry.leads[0].enquiryNo, staffEnquiryNo);
+    assert.equal(staffEnquiry.settings.nextEnquiryNo, `EN${year}-2201`);
+    const nextStaffEnquiry = await save(alice, "/api/sales-crm/leads", {
+      customer: "Alice Customer 2", projectDescription: "Alice Project 2"
+    });
+    assert.equal(nextStaffEnquiry.leads[0].enquiryNo, `EN${year}-2201`);
     const bobView = await (await request(bob, "/api/sales-crm")).json();
     assert.match(bobView.settings.nextQuotationNo, /^CZ-QTN-\d{2}-S[A-Z0-9]+-001$/);
+    assert.match(bobView.settings.nextEnquiryNo, /^EN\d{2}-S[A-Z0-9]+-1001$/);
     assert.equal(bobView.quotations.length, 0);
+    assert.equal(bobView.leads.length, 0);
+    const bobQuote = await save(bob, "/api/sales-crm/quotations", {
+      no: `CZ-QTN-${year}-001`, customer: "Bob Customer", items: []
+    });
+    assert.equal(bobQuote.quotations[0].no, `CZ-QTN-${year}-001`);
+    assert.equal(bobQuote.settings.nextQuotationNo, `CZ-QTN-${year}-002`);
   } finally {
     server.kill();
     if (server.exitCode === null) await new Promise(resolve => server.once("exit", resolve));

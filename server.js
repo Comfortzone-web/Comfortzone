@@ -687,7 +687,10 @@ function staffNumberPrefix(user) {
 
 function staffNextEnquiryNo(user, leads = []) {
   const prefix = `EN${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
-  const numbers = leads.map(lead => String(lead.enquiryNo || "").startsWith(prefix)
+  const ownLeads = leads.filter(lead => staffOwns(lead, user));
+  const standardNumbers = ownLeads.filter(lead => salesEnquiryNumberParts(lead.enquiryNo));
+  if (standardNumbers.length) return nextAvailableSalesEnquiryNo("", standardNumbers, leads);
+  const numbers = ownLeads.map(lead => String(lead.enquiryNo || "").startsWith(prefix)
     ? Number(String(lead.enquiryNo).slice(prefix.length)) : NaN).filter(Number.isFinite);
   return `${prefix}${String(Math.max(1000, ...numbers) + 1).padStart(4, "0")}`;
 }
@@ -695,7 +698,10 @@ function staffNextEnquiryNo(user, leads = []) {
 function staffNextQuotationNo(user, quotations = []) {
   const prefix = `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
   const ownQuotes = quotations.filter(quote => staffOwns(quote, user));
-  return nextAvailableSalesQuotationNo(`${prefix}001`, ownQuotes);
+  let next = nextAvailableSalesQuotationNo(`${prefix}001`, ownQuotes);
+  const used = new Set(quotations.map(quote => inventoryNorm(quote.no || quote.quotationNo || "")));
+  while (used.has(inventoryNorm(next))) next = nextSalesQuotationNoFrom(next);
+  return next;
 }
 
 function staffOwns(item, user) {
@@ -2155,7 +2161,7 @@ function salesEnquiryNumberParts(value) {
   return { number: Number(match[1]) || 0, width: Math.max(4, match[1].length) };
 }
 
-function nextAvailableSalesEnquiryNo(current, leads = []) {
+function nextAvailableSalesEnquiryNo(current, leads = [], usedLeads = leads) {
   const year = String(new Date().getFullYear()).slice(-2);
   let maxNumber = 1000;
   let width = 4;
@@ -2168,7 +2174,7 @@ function nextAvailableSalesEnquiryNo(current, leads = []) {
   const currentParts = salesEnquiryNumberParts(current);
   if (currentParts && currentParts.number > maxNumber) maxNumber = currentParts.number - 1;
   let next = `EN${year}-${String(maxNumber + 1).padStart(width, "0")}`;
-  const used = new Set((leads || []).map(lead => inventoryNorm(cleanSalesEnquiryNo(lead.enquiryNo) || lead.enquiryNo)).filter(Boolean));
+  const used = new Set((usedLeads || []).map(lead => inventoryNorm(cleanSalesEnquiryNo(lead.enquiryNo) || lead.enquiryNo)).filter(Boolean));
   let guard = 0;
   while (used.has(inventoryNorm(next)) && guard < 10000) {
     next = nextSalesEnquiryNoFrom(next);
@@ -3023,7 +3029,6 @@ async function handleApi(req, res) {
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
     const rawItem = body.item || body;
-    const hadIncomingId = !!cleanCell(rawItem.id || "");
     const requestedQuotationNo = collection === "quotations"
       ? cleanCell(body.requestedQuotationNo || rawItem.requestedQuotationNo || rawItem.quotationNo || rawItem.no)
       : "";
@@ -3047,8 +3052,10 @@ async function handleApi(req, res) {
     if (isStaff(user) && ["leads", "quotations"].includes(collection) && existingIndex >= 0
       && !staffOwns(store[collection][existingIndex], user)) return sendForbidden(res);
     if (isStaff(user) && ["leads", "quotations"].includes(collection)) item.ownerId = user.id;
-    if (isStaff(user) && collection === "leads" && existingIndex < 0) {
-      item.enquiryNo = staffNextEnquiryNo(user, store.leads);
+    if (collection === "leads" && existingIndex < 0) {
+      item.enquiryNo = cleanCell(rawItem.enquiryNo || "") || (isStaff(user)
+        ? staffNextEnquiryNo(user, store.leads)
+        : nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads));
     }
     if (collection === "quotations" && existingIndex < 0) {
       const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
@@ -3072,12 +3079,12 @@ async function handleApi(req, res) {
         item.revision = `Revision R${item.revisionNo}`;
       }
     }
-    if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo && !isStaff(user)) {
-      existingIndex = store.leads.findIndex(entry => inventoryNorm(entry.enquiryNo) === inventoryNorm(item.enquiryNo));
+    if (collection === "leads") {
+      const duplicate = store.leads.some((lead, index) => index !== existingIndex
+        && inventoryNorm(lead.enquiryNo) === inventoryNorm(item.enquiryNo));
+      if (duplicate) return send(res, 409, { error: `Enquiry number ${item.enquiryNo} already exists` });
     }
     if (collection === "leads" && existingIndex < 0) {
-      const isDuplicateEnquiryNo = store.leads.some(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(item.enquiryNo));
-      if (!isStaff(user) && (!cleanSalesEnquiryNo(item.enquiryNo) || isDuplicateEnquiryNo)) item.enquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
       item.createdAt = item.createdAt || nowIso;
       item.updatedAt = nowIso;
     }
@@ -3099,11 +3106,9 @@ async function handleApi(req, res) {
         item.updatedAt = nowIso;
       }
       store[collection].unshift(item);
-      if (collection === "leads") {
-        store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
-      }
     }
     if (collection === "customers") store.customers = mergeDuplicateSalesCustomers(store.customers);
+    if (collection === "leads") store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
     if (collection === "quotations") {
       store.settings.nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
     }

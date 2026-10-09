@@ -1464,18 +1464,7 @@ function salesData() {
 }
 
 function nextSalesEnquiryNoDefault() {
-  if (isStaffUser() && salesData().settings?.nextEnquiryNo) return salesData().settings.nextEnquiryNo;
-  const year = String(new Date().getFullYear()).slice(-2);
-  let maxNumber = 1000;
-  let width = 4;
-  (salesData().leads || []).forEach(lead => {
-    const match = String(lead.enquiryNo || "").trim().match(new RegExp(`^EN${year}-(\\d+)$`, "i"));
-    if (!match) return;
-    const number = Number(match[1]) || 0;
-    if (number > maxNumber) maxNumber = number;
-    if (match[1].length > width) width = match[1].length;
-  });
-  return `EN${year}-${String(maxNumber + 1).padStart(width, "0")}`;
+  return salesData().settings?.nextEnquiryNo || `EN${String(new Date().getFullYear()).slice(-2)}-1001`;
 }
 
 function salesDeskTopbarConfig() {
@@ -3420,74 +3409,11 @@ function syncSalesQuotationRevisionFields(quote = {}) {
 }
 
 function cleanNextSalesQuotationNo() {
-  const quotations = salesData().quotations || [];
-  const freshQuotes = quotations.filter(quote => !quotationRevisionNo(quote) && quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
-  const currentNext = quotationBaseNo(salesData().settings?.nextQuotationNo || "");
-  const hasCurrentPattern = currentNext && !isLegacyDefaultSalesQuotationNo(currentNext);
-  const hasFreshCustomPattern = freshQuotes.some(quote => !isLegacyDefaultSalesQuotationNo(quote.baseQuotationNo || quote.no || quote.quotationNo || ""));
-  if (!hasFreshCustomPattern) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
-  const latestFreshQuote = latestSalesQuotationForNumbering(freshQuotes);
-  if (!latestFreshQuote) return hasCurrentPattern ? currentNext : defaultSalesQuotationNo();
-  const latestBase = quotationBaseNo(latestFreshQuote.baseQuotationNo || latestFreshQuote.no || latestFreshQuote.quotationNo || "");
-  let nextNo = nextSalesQuotationNoFromBase(latestBase);
-  const patternKey = quotationNoPatternKey(latestBase);
-  for (const quote of quotations) {
-    const quoteNo = quotationBaseNo(quote.baseQuotationNo || quote.no || quote.quotationNo || "");
-    if (!quoteNo || quotationRevisionNo(quote) || quotationNoPatternKey(quoteNo) !== patternKey) continue;
-    const candidate = nextSalesQuotationNoFromBase(quoteNo);
-    if (quotationNoSequenceValue(candidate) > quotationNoSequenceValue(nextNo)) nextNo = candidate;
-  }
-  return nextNo;
-}
-
-function nextSalesQuotationNoFromBase(value) {
-  const text = quotationBaseNo(value);
-  const match = text.match(/^(.*?)(\d+)$/);
-  if (!match) return defaultSalesQuotationNo();
-  return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+  return salesData().settings?.nextQuotationNo || defaultSalesQuotationNo();
 }
 
 function defaultSalesQuotationNo() {
   return `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}`;
-}
-
-function quotationNoSequenceValue(value) {
-  const match = quotationBaseNo(value).match(/(\d+)$/);
-  return match ? Number(match[1]) || 0 : 0;
-}
-
-function latestSalesQuotationForNumbering(quotes = []) {
-  return quotes.reduce((latest, quote, index) => {
-    const score = salesQuotationNumberingScore(quote, index);
-    return !latest || score > latest.score ? { quote, score } : latest;
-  }, null)?.quote || null;
-}
-
-function salesQuotationNumberingScore(quote = {}, index = 0) {
-  const quoteNo = quote.baseQuotationNo || quote.no || quote.quotationNo || "";
-  const patternPriority = isLegacyDefaultSalesQuotationNo(quoteNo) ? 0 : 1_000_000_000_000_000;
-  return patternPriority + salesQuotationCreatedSortValue(quote, index);
-}
-
-function salesQuotationCreatedSortValue(quote = {}, index = 0) {
-  const raw = String(quote.createdAt || quote.createdDate || quote.savedAt || quote.date || quote.quotationDate || "").trim();
-  const parsed = Date.parse(raw);
-  if (Number.isFinite(parsed)) return parsed;
-  const dateMatch = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
-  if (dateMatch) {
-    const year = dateMatch[3].length === 2 ? Number(`20${dateMatch[3]}`) : Number(dateMatch[3]);
-    return new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1])).getTime();
-  }
-  return -index;
-}
-
-function quotationNoPatternKey(value) {
-  const match = quotationBaseNo(value).match(/^(.*?)(\d+)$/);
-  return match ? norm(match[1]) : norm(value);
-}
-
-function isLegacyDefaultSalesQuotationNo(value) {
-  return /^CZ-QTN-\d{4}-\d+$/i.test(quotationBaseNo(value));
 }
 
 function quotationRevisionNo(quote = {}) {
@@ -5343,12 +5269,16 @@ function quoteDraftFromSource(source = {}) {
 }
 
 async function startSalesQuotationDraft(source = {}) {
+  try {
+    await loadSalesCrm({ force: true });
+  } catch (error) {
+    return toast(error.message || "Could not load the next quotation number");
+  }
   salesQuotationDraft = null;
   salesQuotationRevisionNoLock = "";
   salesQuotationDraft = quoteDraftFromSource(source);
   salesQuotationMode = "create";
   showSalesDesk("quotation");
-  loadSalesCrm({ force: true }).catch(error => console.warn(error));
 }
 
 async function saveSalesQuotation(status = "Draft", triggerButton = null) {
@@ -5593,7 +5523,14 @@ function projectStatusFromLead(status = "") {
   return "Site Visit Done";
 }
 
-function openSalesLeadDrawer(itemId = "") {
+async function openSalesLeadDrawer(itemId = "") {
+  if (!itemId) {
+    try {
+      await loadSalesCrm({ force: true });
+    } catch (error) {
+      return toast(error.message || "Could not load the next enquiry number");
+    }
+  }
   const existingRaw = itemId ? (salesData().leads || []).find(item => item.id === itemId) : null;
   const existing = existingRaw ? normalizeSalesLead(existingRaw, (salesData().leads || []).indexOf(existingRaw)) : null;
   const item = existing || blankSalesLead();
@@ -5656,14 +5593,22 @@ function openSalesLeadDrawer(itemId = "") {
   modal.querySelector("#saveSalesLeadBtn").addEventListener("click", async () => {
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
     if (!payload.customer || !payload.projectDescription || !payload.enquiryNo) return alert("Customer, project description and enquiry number are required.");
-    salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
-    const savedLead = (salesData().leads || []).find(lead => lead.id === salesCrmState.savedItemId) ||
-      (salesData().leads || []).find(lead => payload.id && lead.id === payload.id) ||
-      (salesData().leads || []).find(lead => norm(lead.enquiryNo) === norm(payload.enquiryNo));
-    salesLeadDetailId = savedLead?.id || payload.id || salesLeadDetailId;
-    modal.remove();
-    renderSalesDesk();
-    toast("Enquiry saved");
+    const button = modal.querySelector("#saveSalesLeadBtn");
+    button.disabled = true;
+    try {
+      salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
+      const savedLead = (salesData().leads || []).find(lead => lead.id === salesCrmState.savedItemId) ||
+        (salesData().leads || []).find(lead => payload.id && lead.id === payload.id) ||
+        (salesData().leads || []).find(lead => norm(lead.enquiryNo) === norm(payload.enquiryNo));
+      salesLeadDetailId = savedLead?.id || payload.id || salesLeadDetailId;
+      modal.remove();
+      renderSalesDesk();
+      toast("Enquiry saved");
+    } catch (error) {
+      alert(error.message || "Could not save enquiry");
+    } finally {
+      button.disabled = false;
+    }
   });
 }
 
