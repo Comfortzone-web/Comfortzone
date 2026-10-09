@@ -579,7 +579,7 @@ function projectManagementDashboard(store, query = {}, user, loginUsers = []) {
   const activeProjects = visibleProjects.filter(project => project.status !== "Completed");
   const averageProgress = projects.length ? Math.round(projects.reduce((sum, project) => sum + project.derived.progress, 0) / projects.length) : 0;
   return {
-    projects, followUps, pendingWorks, permissions: { canCreateProject: !isPoOnly(user) },
+    projects, followUps, pendingWorks, permissions: { canCreateProject: true },
     kpis: {
       totalProjects: projects.length, averageProgress,
       needsAttention: activeProjects.filter(project => project.derived.needsAttention).length,
@@ -2272,9 +2272,11 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
   }
 
   if (req.method === "POST" && parts[2] === "projects" && parts.length === 3) {
-    if (isPoOnly(user)) return send(res, 403, { error: "PO Only users cannot create projects" });
     const body = await readJson(req);
-    const next = projectManagementNormalizeProject({ ...body, id: id(), createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { user });
+    const projectEngineers = isPoOnly(user)
+      ? [...(Array.isArray(body.projectEngineers) ? body.projectEngineers : []), { id: user.id, name: user.name }]
+      : body.projectEngineers;
+    const next = projectManagementNormalizeProject({ ...body, projectEngineers, id: id(), createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { user });
     const settings = await readSettings();
     if (!projectManagementSyncFollowUpAssignees(next, null, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
     projectManagementActivity(next, user, "Project created", `Created ${next.name}`);

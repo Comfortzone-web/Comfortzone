@@ -2,7 +2,7 @@
   const root = document.getElementById("projectsRoot");
   if (!root) return;
 
-  const state = { dashboard: null, dashboardQuery: "", dashboardRequest: 0, project: null, tab: "overview", search: "", filter: "all", modal: "", engineerUsers: null, selectedEngineers: [], engineerPickerOpen: false, followUpUsers: null,
+  const state = { dashboard: null, dashboardQuery: "", dashboardRequest: 0, project: null, tab: "overview", search: "", filter: "all", modal: "", engineerUsers: null, selectedEngineers: [], requiredEngineerId: "", engineerPickerOpen: false, followUpUsers: null,
     lpoOrders: null, lpoUploads: [], lpoError: "", lpoRequest: 0, lpoViewId: "",
     documentSearch: "", documentType: "all", documentCategory: "all", documentUploader: "all", selectedDocumentIds: new Set(), pendingDocumentFile: null,
     folderSelectMode: false, selectedFolderNames: new Set(), renamingFolderName: "", dashboardViewAll: "", dashboardModalSearch: "", dashboardListItems: null, dashboardListError: "",
@@ -551,6 +551,7 @@
     state.modal = "project";
     state.engineerUsers = null;
     state.selectedEngineers = Array.isArray(project.projectEngineers) ? project.projectEngineers.map(item => ({ id: item.id, name: item.name })) : [];
+    state.requiredEngineerId = "";
     state.engineerPickerOpen = false;
     root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal" data-pm-form="project"><div class="pm-modal-head"><div><h2>${project.id ? "Edit Project" : "New Project"}</h2><p>Start with the project identity. The standard HVAC checklists will be created automatically.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Project Code<input name="code" value="${esc(project.code)}" placeholder="Optional"></label><label>Project Name<input name="name" required value="${esc(project.name === "Untitled Project" ? "" : project.name)}"></label><label>Customer<input name="customer" value="${esc(project.customer)}"></label><label>Consultant<input name="consultant" value="${esc(project.consultant)}"></label><label>Contact Person<input name="contact" value="${esc(project.contact)}"></label><label>Phone<input name="phone" value="${esc(project.phone)}"></label><label>Email<input type="email" name="email" value="${esc(project.email)}"></label><label>Status<select name="status">${options(["Active", "On Hold", "Completed"], project.status || "Active")}</select></label><label class="wide">Location<input name="location" value="${esc(project.location)}"></label><div class="wide pm-engineer-field"><label for="pmEngineerSearch">Project Engineers</label><div class="pm-engineer-picker"><div class="pm-engineer-chips" data-pm-engineer-chips></div><input id="pmEngineerSearch" data-pm-engineer-search type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="pmEngineerOptions" aria-expanded="false" placeholder="Search Login Access names"><div id="pmEngineerOptions" class="pm-engineer-options" role="listbox" hidden></div></div></div><label>Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="contractValue" value="${esc(project.contractValue || "")}"></label><label>Target Handover<input type="date" name="targetHandover" value="${esc(project.targetHandover)}"></label><label class="wide">Payment Note<textarea name="paymentSummary" rows="2">${esc(project.paymentSummary)}</textarea></label><label class="wide">Project Notes<textarea name="notes" rows="3">${esc(project.notes)}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${project.id ? "Save Changes" : "Create Project"}</button></div></form></div>`);
     const modal = root.querySelector(".pm-modal-backdrop");
@@ -562,6 +563,11 @@
         const current = state.engineerUsers.find(user => user.id === selected.id);
         return current ? { id: current.id, name: current.name } : selected;
       });
+      if (!project.id && ["mts", "poonly"].includes(String(response.user?.role || "").toLowerCase().replace(/\s+/g, ""))) {
+        const current = state.engineerUsers.find(user => user.id === response.user.id) || response.user;
+        state.requiredEngineerId = current.id;
+        if (!state.selectedEngineers.some(user => user.id === current.id)) state.selectedEngineers.push({ id: current.id, name: current.name });
+      }
       if (state.modal === "project") renderEngineerPicker();
     }).catch(error => {
       if (modal.isConnected && state.modal === "project") {
@@ -575,7 +581,7 @@
   function renderEngineerPicker() {
     const search = root.querySelector("[data-pm-engineer-search]");
     if (!search) return;
-    root.querySelector("[data-pm-engineer-chips]").innerHTML = state.selectedEngineers.map(user => `<span class="pm-engineer-chip">${esc(user.name)}<button type="button" data-pm-action="remove-engineer" data-pm-engineer-id="${esc(user.id)}" aria-label="Remove ${esc(user.name)}">×</button></span>`).join("");
+    root.querySelector("[data-pm-engineer-chips]").innerHTML = state.selectedEngineers.map(user => `<span class="pm-engineer-chip">${esc(user.name)}${user.id === state.requiredEngineerId ? "" : `<button type="button" data-pm-action="remove-engineer" data-pm-engineer-id="${esc(user.id)}" aria-label="Remove ${esc(user.name)}">×</button>`}</span>`).join("");
     const list = root.querySelector("#pmEngineerOptions");
     const query = search.value.trim().toLowerCase();
     const available = (state.engineerUsers || []).filter(user => !state.selectedEngineers.some(selected => selected.id === user.id) && `${user.name} ${user.email || ""}`.toLowerCase().includes(query));

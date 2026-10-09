@@ -23,7 +23,7 @@ async function waitForServer(url, process) {
   throw new Error("Test server did not start");
 }
 
-test("PO users see only tagged projects and each dashboard shows only assigned follow-ups", { timeout: 20000 }, async () => {
+test("MTS users see only tagged projects and each dashboard shows only assigned follow-ups", { timeout: 20000 }, async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cz-project-access-"));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}`;
@@ -52,7 +52,7 @@ test("PO users see only tagged projects and each dashboard shows only assigned f
       assert.equal(response.status, 200);
       return (await response.json()).settings.users.find(user => user.email === email);
     };
-    const alice = await createUser("Alice Engineer", "alice@example.test", "PO Only");
+    const alice = await createUser("Alice Engineer", "alice@example.test", "MTS");
     const bob = await createUser("Bob Engineer", "bob@example.test", "PO Only");
     await createUser("Office Staff", "staff@example.test", "Staff");
     const created = async body => {
@@ -90,7 +90,7 @@ test("PO users see only tagged projects and each dashboard shows only assigned f
     assert.equal(aliceView.kpis.pendingFollowUps, 2);
     assert.equal(aliceView.projects[0].derived.activeFollowUpCount, 2);
     assert.deepEqual(aliceView.projects[0].followUps, []);
-    assert.equal(aliceView.permissions.canCreateProject, false);
+    assert.equal(aliceView.permissions.canCreateProject, true);
     const aliceList = await (await request(aliceCookie, "/api/project-management/projects")).json();
     assert.deepEqual(aliceList.map(project => project.id), [aliceProject.id]);
     const aliceDetail = await request(aliceCookie, `/api/project-management/projects/${aliceProject.id}`);
@@ -98,14 +98,20 @@ test("PO users see only tagged projects and each dashboard shows only assigned f
     assert.equal((await aliceDetail.json()).followUps.length, 5);
     assert.equal((await request(aliceCookie, `/api/project-management/projects/${bobProject.id}`)).status, 404);
     assert.equal((await request(aliceCookie, `/api/project-management/projects/${bobProject.id}/pending-works`, json("POST", {}))).status, 404);
-    assert.equal((await request(aliceCookie, "/api/project-management/projects", json("POST", { name: "Unauthorized" }))).status, 403);
+    const ownProjectResponse = await request(aliceCookie, "/api/project-management/projects", json("POST", { name: "Alice new project", createdBy: "Someone Else" }));
+    assert.equal(ownProjectResponse.status, 201);
+    const ownProject = await ownProjectResponse.json();
+    assert.equal(ownProject.createdBy, alice.name);
+    assert.deepEqual(ownProject.projectEngineers, [{ id: alice.id, name: alice.name }]);
+    assert.ok((await dashboard(aliceCookie)).projects.some(project => project.id === ownProject.id));
+    assert.equal((await request(bobCookie, `/api/project-management/projects/${ownProject.id}`)).status, 404);
 
     const bobView = await dashboard(bobCookie);
     assert.deepEqual(bobView.projects.map(project => project.id), [bobProject.id]);
     assert.deepEqual(bobView.followUps.map(item => item.id), ["bob-own"]);
     assert.deepEqual(bobView.pendingWorks.map(item => item.id), ["bob-work"]);
     const adminView = await dashboard(admin);
-    assert.equal(adminView.projects.length, 3);
+    assert.equal(adminView.projects.length, 4);
     assert.deepEqual(adminView.followUps.map(item => item.id), ["admin-follow"]);
     assert.equal(adminView.kpis.pendingFollowUps, 1);
     assert.equal((await request(staffCookie, "/api/project-management/dashboard")).status, 403);
