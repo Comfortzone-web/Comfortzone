@@ -338,7 +338,7 @@ async function init() {
   applyRoleAccess();
   if (isPoOnlyUser()) {
     if (location.pathname.match(/^\/projects(?:\/[^/]+)?\/?$/)) await showProjects(location.pathname.split("/")[2] || "");
-    else await showPurchaseOrders("list");
+    else await showProjects();
     warmViewData();
     return;
   }
@@ -510,7 +510,7 @@ async function login(event) {
     applyRoleAccess();
     hideLogin();
     if (isPoOnlyUser()) {
-      await showPurchaseOrders("list");
+      await showProjects();
       warmViewData();
       return;
     }
@@ -526,8 +526,9 @@ async function login(event) {
 }
 
 function warmViewData() {
+  if (isPoOnlyUser()) return;
   const run = () => {
-    if (!isPoOnlyUser()) loadInventory().catch(error => console.warn(error));
+    loadInventory().catch(error => console.warn(error));
     loadPurchaseOrders().catch(error => console.warn(error));
   };
   if ("requestIdleCallback" in window) {
@@ -878,7 +879,7 @@ async function showProjects(projectId = "", tab = "overview") {
   $("#pageTitle").textContent = "Projects";
   $("#projectMeta").textContent = "Monitor project progress, pending works, payments and follow-ups.";
   applySidebarSubnavVisibility();
-  if (window.projectManagement?.open) await window.projectManagement.open(projectId, tab);
+  if (window.projectManagement?.open) await window.projectManagement.open(projectId, tab, { user: currentUser, users: appSettings?.users || [] });
 }
 
 window.showProjects = showProjects;

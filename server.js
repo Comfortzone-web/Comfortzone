@@ -573,9 +573,17 @@ function projectManagementDashboard(store, query = {}, user, loginUsers = []) {
   const now = Date.now();
   const followUps = visibleProjects.flatMap(project => assignedFollowUps(project).filter(item => projectManagementDashboardItemVisible(item, now)).map(item => ({ ...item, projectId: project.id, projectName: project.name }))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
   const pendingWorks = visibleProjects.flatMap(project => project.derived.pendingWorkRows.filter(item => projectManagementDashboardItemVisible(item, now)).map(item => ({ ...item, projectId: project.id, projectName: project.name })));
-  const projects = visibleProjects.map(project => ({ ...project, followUps: [], derived: {
-    ...project.derived, activeFollowUpCount: assignedFollowUps(project).filter(item => !projectManagementIsCompleted(item.status)).length
-  } }));
+  const projects = visibleProjects.map(project => ({
+    id: project.id, code: project.code, name: project.name, customer: project.customer,
+    contractValue: project.contractValue, status: project.status, updatedAt: project.updatedAt, followUps: [],
+    derived: {
+      progress: project.derived.progress, nextMilestone: project.derived.nextMilestone,
+      receivedPayment: project.derived.receivedPayment, receivedPaymentKnown: project.derived.receivedPaymentKnown,
+      pendingPayment: project.derived.pendingPayment, pendingWorkCount: project.derived.pendingWorkCount,
+      needsAttention: project.derived.needsAttention, readyForHandover: project.derived.readyForHandover,
+      activeFollowUpCount: assignedFollowUps(project).filter(item => !projectManagementIsCompleted(item.status)).length
+    }
+  }));
   const activeProjects = visibleProjects.filter(project => project.status !== "Completed");
   const averageProgress = projects.length ? Math.round(projects.reduce((sum, project) => sum + project.derived.progress, 0) / projects.length) : 0;
   return {
@@ -655,6 +663,7 @@ async function sessionUser(req) {
     sessions.delete(token);
     return null;
   }
+  req.authSettings = settings;
   return { id: user.id, name: user.name, role: user.role, email: user.email };
 }
 
@@ -2256,17 +2265,16 @@ function projectManagementDocumentCategories(project) {
 
 async function handleProjectManagementApi(req, res, parts, url, user) {
   const store = await readProjectManagement();
+  const settings = req.authSettings;
   const projectId = parts[2] === "projects" ? decodeURIComponent(parts[3] || "") : "";
   const projectIndex = projectId ? store.projects.findIndex(item => item.id === projectId) : -1;
   const project = projectIndex >= 0 ? store.projects[projectIndex] : null;
 
   if (req.method === "GET" && parts[2] === "dashboard") {
-    const settings = await readSettings();
     return send(res, 200, projectManagementDashboard(store, Object.fromEntries(url.searchParams.entries()), user, settings.users));
   }
 
   if (req.method === "GET" && parts[2] === "projects" && parts.length === 3) {
-    const settings = await readSettings();
     const dashboard = projectManagementDashboard(store, Object.fromEntries(url.searchParams.entries()), user, settings.users);
     return send(res, 200, dashboard.projects);
   }
@@ -2277,7 +2285,6 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
       ? [...(Array.isArray(body.projectEngineers) ? body.projectEngineers : []), { id: user.id, name: user.name }]
       : body.projectEngineers;
     const next = projectManagementNormalizeProject({ ...body, projectEngineers, id: id(), createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { user });
-    const settings = await readSettings();
     if (!projectManagementSyncFollowUpAssignees(next, null, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
     projectManagementActivity(next, user, "Project created", `Created ${next.name}`);
     store.projects.unshift(next);
@@ -2337,7 +2344,6 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
   if (req.method === "PUT" && parts[2] === "projects" && parts.length === 4) {
     const body = await readJson(req);
     const next = projectManagementNormalizeProject({ ...project, ...body, id: project.id, createdAt: project.createdAt, createdBy: project.createdBy }, { user });
-    const settings = await readSettings();
     if (!projectManagementSyncFollowUpAssignees(next, project, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
     next.activityHistory = project.activityHistory || [];
     const now = new Date().toISOString();
@@ -2567,7 +2573,7 @@ async function handleApi(req, res) {
   const user = await sessionUser(req);
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
-    const settings = await readSettings();
+    const settings = req.authSettings || await readSettings();
     return send(res, 200, { user, settings: publicSettings(settings, user) });
   }
 
@@ -2616,7 +2622,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
-    return send(res, 200, { user, settings: publicSettings(await readSettings(), user) });
+    return send(res, 200, { user, settings: publicSettings(req.authSettings, user) });
   }
 
   if (req.method === "PUT" && url.pathname === "/api/settings/company") {

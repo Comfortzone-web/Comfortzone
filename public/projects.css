@@ -236,6 +236,8 @@
 .pm-primary { background: var(--pm-blue); box-shadow: 0 1px 2px rgba(18, 100, 244, .18); }
 .pm-primary:hover { background: #0756da; }
 .pm-primary:focus-visible, .pm-secondary:focus-visible, .pm-link:focus-visible, .pm-more:focus-visible, .pm-tabs button:focus-visible { outline: 3px solid rgba(18, 100, 244, .22); outline-offset: 2px; }
+.pm-modal-actions .pm-primary { min-width: 120px; }
+.pm-modal-actions .pm-primary:disabled { cursor: wait; opacity: .72; }
 .pm-secondary { border-color: var(--pm-border); color: #263a56; box-shadow: 0 1px 1px rgba(11, 23, 54, .025); }
 .pm-secondary:hover { border-color: #aebfd5; background: #f9fbfe; }
 .pm-link { color: var(--pm-blue); font-size: 12px; font-weight: 600; }

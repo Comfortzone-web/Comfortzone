@@ -82,6 +82,9 @@ test("MTS users see only tagged projects and each dashboard shows only assigned 
     const aliceCookie = await login(alice.email);
     const bobCookie = await login(bob.email);
     const staffCookie = await login("staff@example.test");
+    const aliceAuth = await (await request(aliceCookie, "/api/auth/me")).json();
+    assert.equal(aliceAuth.user.role, "MTS");
+    assert.ok(aliceAuth.settings.users.some(user => user.id === alice.id));
     const dashboard = async cookie => (await request(cookie, "/api/project-management/dashboard")).json();
     const aliceView = await dashboard(aliceCookie);
     assert.deepEqual(aliceView.projects.map(project => project.id), [aliceProject.id]);
@@ -90,6 +93,8 @@ test("MTS users see only tagged projects and each dashboard shows only assigned 
     assert.equal(aliceView.kpis.pendingFollowUps, 2);
     assert.equal(aliceView.projects[0].derived.activeFollowUpCount, 2);
     assert.deepEqual(aliceView.projects[0].followUps, []);
+    assert.equal(aliceView.projects[0].activityHistory, undefined);
+    assert.equal(aliceView.projects[0].installationItems, undefined);
     assert.equal(aliceView.permissions.canCreateProject, true);
     const aliceList = await (await request(aliceCookie, "/api/project-management/projects")).json();
     assert.deepEqual(aliceList.map(project => project.id), [aliceProject.id]);

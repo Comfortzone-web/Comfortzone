@@ -2,7 +2,7 @@
   const root = document.getElementById("projectsRoot");
   if (!root) return;
 
-  const state = { dashboard: null, dashboardQuery: "", dashboardRequest: 0, project: null, tab: "overview", search: "", filter: "all", modal: "", engineerUsers: null, selectedEngineers: [], requiredEngineerId: "", engineerPickerOpen: false, followUpUsers: null,
+  const state = { dashboard: null, dashboardQuery: "", dashboardRequest: 0, project: null, tab: "overview", search: "", filter: "all", modal: "", loginUser: null, loginUsers: [], engineerUsers: null, selectedEngineers: [], requiredEngineerId: "", engineerPickerOpen: false, followUpUsers: null,
     lpoOrders: null, lpoUploads: [], lpoError: "", lpoRequest: 0, lpoViewId: "",
     documentSearch: "", documentType: "all", documentCategory: "all", documentUploader: "all", selectedDocumentIds: new Set(), pendingDocumentFile: null,
     folderSelectMode: false, selectedFolderNames: new Set(), renamingFolderName: "", dashboardViewAll: "", dashboardModalSearch: "", dashboardListItems: null, dashboardListError: "",
@@ -61,7 +61,9 @@
     history.replaceState(null, "", path);
   }
 
-  async function open(projectId = "", tab = "overview") {
+  async function open(projectId = "", tab = "overview", access = {}) {
+    state.loginUser = access.user || null;
+    state.loginUsers = (access.users || []).filter(user => user.active !== false && user.id && user.name);
     state.tab = tab;
     state.modal = "";
     if (projectId) {
@@ -197,12 +199,13 @@
     if (!["followups", "pending"].includes(type)) return;
     state.dashboardViewAll = type;
     state.dashboardModalSearch = "";
-    state.dashboardListItems = null;
+    state.dashboardListItems = state.search ? null : (state.dashboard?.[type === "followups" ? "followUps" : "pendingWorks"] || []);
     state.dashboardListError = "";
     const title = type === "followups" ? "Follow-ups" : "Pending Works";
     root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop pm-dashboard-list-backdrop"><section class="pm-modal pm-dashboard-list-modal" role="dialog" aria-modal="true" aria-label="All ${title}"><div class="pm-modal-head"><div><h2>${title}</h2><p>${type === "followups" ? "What needs a response next" : "Open a project to move work forward"}</p></div><button type="button" class="pm-close" data-pm-action="close-modal" aria-label="Close ${title}">×</button></div><div class="pm-dashboard-list-toolbar"><label class="pm-search"><span aria-hidden="true">⌕</span><input type="search" data-pm-dashboard-list-search placeholder="Search ${title.toLowerCase()}..." aria-label="Search ${title.toLowerCase()}"></label><span data-pm-dashboard-list-count></span></div><div class="pm-dashboard-list-results" data-pm-dashboard-list-results></div></section></div>`);
     renderDashboardListResults();
     root.querySelector("[data-pm-dashboard-list-search]")?.focus();
+    if (!state.search) return;
     api("/api/project-management/dashboard").then(dashboard => {
       if (state.dashboardViewAll !== type || !root.querySelector(".pm-dashboard-list-backdrop")) return;
       state.dashboardListItems = type === "followups" ? dashboard.followUps || [] : dashboard.pendingWorks || [];
@@ -549,33 +552,16 @@
   function openProjectModal() {
     const project = state.project || {};
     state.modal = "project";
-    state.engineerUsers = null;
+    state.engineerUsers = state.loginUsers;
     state.selectedEngineers = Array.isArray(project.projectEngineers) ? project.projectEngineers.map(item => ({ id: item.id, name: item.name })) : [];
     state.requiredEngineerId = "";
+    if (!project.id && ["mts", "poonly"].includes(String(state.loginUser?.role || "").toLowerCase().replace(/\s+/g, ""))) {
+      state.requiredEngineerId = state.loginUser.id;
+      state.selectedEngineers.push({ id: state.loginUser.id, name: state.loginUser.name });
+    }
     state.engineerPickerOpen = false;
     root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal" data-pm-form="project"><div class="pm-modal-head"><div><h2>${project.id ? "Edit Project" : "New Project"}</h2><p>Start with the project identity. The standard HVAC checklists will be created automatically.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Project Code<input name="code" value="${esc(project.code)}" placeholder="Optional"></label><label>Project Name<input name="name" required value="${esc(project.name === "Untitled Project" ? "" : project.name)}"></label><label>Customer<input name="customer" value="${esc(project.customer)}"></label><label>Consultant<input name="consultant" value="${esc(project.consultant)}"></label><label>Contact Person<input name="contact" value="${esc(project.contact)}"></label><label>Phone<input name="phone" value="${esc(project.phone)}"></label><label>Email<input type="email" name="email" value="${esc(project.email)}"></label><label>Status<select name="status">${options(["Active", "On Hold", "Completed"], project.status || "Active")}</select></label><label class="wide">Location<input name="location" value="${esc(project.location)}"></label><div class="wide pm-engineer-field"><label for="pmEngineerSearch">Project Engineers</label><div class="pm-engineer-picker"><div class="pm-engineer-chips" data-pm-engineer-chips></div><input id="pmEngineerSearch" data-pm-engineer-search type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="pmEngineerOptions" aria-expanded="false" placeholder="Search Login Access names"><div id="pmEngineerOptions" class="pm-engineer-options" role="listbox" hidden></div></div></div><label>Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="contractValue" value="${esc(project.contractValue || "")}"></label><label>Target Handover<input type="date" name="targetHandover" value="${esc(project.targetHandover)}"></label><label class="wide">Payment Note<textarea name="paymentSummary" rows="2">${esc(project.paymentSummary)}</textarea></label><label class="wide">Project Notes<textarea name="notes" rows="3">${esc(project.notes)}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${project.id ? "Save Changes" : "Create Project"}</button></div></form></div>`);
-    const modal = root.querySelector(".pm-modal-backdrop");
     renderEngineerPicker();
-    api("/api/settings").then(response => {
-      if (!modal.isConnected) return;
-      state.engineerUsers = (response.settings?.users || []).filter(user => user.active !== false && user.id && user.name);
-      state.selectedEngineers = state.selectedEngineers.map(selected => {
-        const current = state.engineerUsers.find(user => user.id === selected.id);
-        return current ? { id: current.id, name: current.name } : selected;
-      });
-      if (!project.id && ["mts", "poonly"].includes(String(response.user?.role || "").toLowerCase().replace(/\s+/g, ""))) {
-        const current = state.engineerUsers.find(user => user.id === response.user.id) || response.user;
-        state.requiredEngineerId = current.id;
-        if (!state.selectedEngineers.some(user => user.id === current.id)) state.selectedEngineers.push({ id: current.id, name: current.name });
-      }
-      if (state.modal === "project") renderEngineerPicker();
-    }).catch(error => {
-      if (modal.isConnected && state.modal === "project") {
-        root.querySelector("#pmEngineerOptions").textContent = `Could not load Login Access users: ${error.message}`;
-        state.engineerPickerOpen = true;
-        root.querySelector("#pmEngineerOptions").hidden = false;
-      }
-    });
   }
 
   function renderEngineerPicker() {
@@ -594,29 +580,17 @@
     const item = index === null ? null : state.project?.followUps[index];
     if (index !== null && !item) return;
     state.modal = "followup";
-    state.followUpUsers = null;
-    root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal pm-small-modal" data-pm-form="followup" data-pm-index="${index ?? ""}"><div class="pm-modal-head"><div><h2>${item ? "Edit Follow-up" : "Add Follow-up"}</h2><p>Make the next action explicit.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Date<input type="date" name="date" required value="${esc(item?.date || "")}"></label><label>Assigned To<select name="assignedUserId" data-pm-followup-assignee disabled><option>Loading Login Access names...</option></select></label><label class="wide">Subject<input name="subject" required placeholder="What needs to happen?" value="${esc(item?.subject || "")}"></label><label>Priority<select name="priority">${options(["High", "Medium", "Low"], item?.priority || "Medium")}</select></label><label>Status<select name="status">${options(["Pending", "In Progress", "Finished"], item?.status || "Pending")}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(item?.notes || "")}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${item ? "Save Changes" : "Add Follow-up"}</button></div></form></div>`);
-    const modal = root.querySelector(".pm-modal-backdrop");
-    api("/api/settings").then(response => {
-      if (!modal.isConnected || state.modal !== "followup") return;
-      const users = (response.settings?.users || []).filter(user => user.active !== false && user.id && user.name)
-        .sort((a, b) => a.name.localeCompare(b.name));
-      state.followUpUsers = users;
-      const nameMatches = users.filter(user => user.name.trim().toLowerCase() === String(item?.assigned || "").trim().toLowerCase());
-      const selectedId = item?.assignedUserId || (nameMatches.length === 1 ? nameMatches[0].id : "");
-      const hasSelection = users.some(user => user.id === selectedId);
-      const legacySelection = Boolean(item?.assigned) && !hasSelection;
-      const select = modal.querySelector("[data-pm-followup-assignee]");
-      select.innerHTML = `<option value="" ${!selectedId && !legacySelection ? "selected" : ""}>Unassigned</option>${users.map(user => {
-        const duplicateName = users.some(other => other.id !== user.id && other.name.toLowerCase() === user.name.toLowerCase());
-        return `<option value="${esc(user.id)}" ${selectedId === user.id ? "selected" : ""}>${esc(user.name)}${duplicateName ? ` (${esc(user.email || user.id)})` : ""}</option>`;
-      }).join("")}${legacySelection ? `<option value="__legacy__" selected>${esc(item.assigned)} (existing)</option>` : ""}`;
-      select.disabled = false;
-    }).catch(error => {
-      if (!modal.isConnected) return;
-      modal.querySelector("[data-pm-followup-assignee]").innerHTML = `<option>Could not load Login Access names</option>`;
-      toast(error.message);
-    });
+    const users = [...state.loginUsers].sort((a, b) => a.name.localeCompare(b.name));
+    state.followUpUsers = users;
+    const nameMatches = users.filter(user => user.name.trim().toLowerCase() === String(item?.assigned || "").trim().toLowerCase());
+    const selectedId = item?.assignedUserId || (nameMatches.length === 1 ? nameMatches[0].id : "");
+    const hasSelection = users.some(user => user.id === selectedId);
+    const legacySelection = Boolean(item?.assigned) && !hasSelection;
+    const assigneeOptions = `<option value="" ${!selectedId && !legacySelection ? "selected" : ""}>Unassigned</option>${users.map(user => {
+      const duplicateName = users.some(other => other.id !== user.id && other.name.toLowerCase() === user.name.toLowerCase());
+      return `<option value="${esc(user.id)}" ${selectedId === user.id ? "selected" : ""}>${esc(user.name)}${duplicateName ? ` (${esc(user.email || user.id)})` : ""}</option>`;
+    }).join("")}${legacySelection ? `<option value="__legacy__" selected>${esc(item.assigned)} (existing)</option>` : ""}`;
+    root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal pm-small-modal" data-pm-form="followup" data-pm-index="${index ?? ""}"><div class="pm-modal-head"><div><h2>${item ? "Edit Follow-up" : "Add Follow-up"}</h2><p>Make the next action explicit.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Date<input type="date" name="date" required value="${esc(item?.date || "")}"></label><label>Assigned To<select name="assignedUserId" data-pm-followup-assignee>${assigneeOptions}</select></label><label class="wide">Subject<input name="subject" required placeholder="What needs to happen?" value="${esc(item?.subject || "")}"></label><label>Priority<select name="priority">${options(["High", "Medium", "Low"], item?.priority || "Medium")}</select></label><label>Status<select name="status">${options(["Pending", "In Progress", "Finished"], item?.status || "Pending")}</select></label><label class="wide">Notes<textarea name="notes" rows="3">${esc(item?.notes || "")}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${item ? "Save Changes" : "Add Follow-up"}</button></div></form></div>`);
   }
 
   function closeFollowUpMenu() {
@@ -1032,6 +1006,12 @@
     if (!form) return;
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
+    const submitButton = form.querySelector('button[type="submit"]');
+    const submitLabel = submitButton?.textContent;
+    if (submitButton && ["project", "followup"].includes(form.dataset.pmForm)) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Saving...";
+    }
     try {
       if (form.dataset.pmForm === "project") {
         const payload = { ...(state.project ? projectPayload(state.project) : {}), ...data, projectEngineers: state.selectedEngineers, contractValue: Number(data.contractValue || 0) };
@@ -1076,7 +1056,13 @@
         await saveProjectPayload(projectPayload(next), index === null ? "Follow-up added" : "Follow-up updated");
       }
       root.querySelector(".pm-modal-backdrop")?.remove(); state.modal = "";
-    } catch (error) { form.querySelector('button[type="submit"]')?.removeAttribute("disabled"); toast(error.message); }
+    } catch (error) {
+      if (submitButton?.isConnected) {
+        submitButton.disabled = false;
+        submitButton.textContent = submitLabel;
+      }
+      toast(error.message);
+    }
   }
 
   root.addEventListener("click", onClick);
