@@ -26,6 +26,7 @@ let deliveryResize = null;
 let purchaseState = null;
 let purchaseScreen = "form";
 let purchaseDraft = null;
+let purchaseProjectNames = null;
 let purchaseRevisionPoNoLock = "";
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
@@ -336,14 +337,18 @@ async function init() {
   if (!authenticated) return;
   applyRoleAccess();
   if (isPoOnlyUser()) {
-    await showPurchaseOrders("list");
+    if (location.pathname.match(/^\/projects(?:\/[^/]+)?\/?$/)) await showProjects(location.pathname.split("/")[2] || "");
+    else await showPurchaseOrders("list");
     warmViewData();
     return;
   }
   await loadSalesCrm().catch(() => {});
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
-  if (projectId) {
+  const projectManagementPath = location.pathname.match(/^\/projects(?:\/([^/]+))?\/?$/);
+  if (projectManagementPath) {
+    await showProjects(projectManagementPath[1] || "");
+  } else if (projectId) {
     await loadProject(projectId);
   } else {
     await showSalesDesk("dashboard");
@@ -361,6 +366,10 @@ function bindShell() {
     if (!canAccessModule("inventory")) return showLockedModuleToast();
     if (toggleActiveSidebarGroup("inventory")) return;
     showInventory("dashboard");
+  });
+  $("#projectsBtn").addEventListener("click", () => {
+    if (!canAccessModule("projects")) return showLockedModuleToast();
+    showProjects();
   });
   $("#documentsBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
@@ -531,7 +540,14 @@ function isPoOnlyUser() {
 
 function canAccessModule(moduleName) {
   if (!isPoOnlyUser()) return true;
+  if (moduleName === "projects") return true;
   return moduleName === "purchase" || moduleName === "area";
+}
+
+function hideProjectManagementView() {
+  $("#projectsView")?.classList.add("hidden");
+  $("#projectsBtn")?.classList.remove("active");
+  document.querySelector(".topbar")?.classList.remove("projects-active");
 }
 
 function showLockedModuleToast() {
@@ -578,6 +594,7 @@ function applyRoleAccess() {
   applySidebarSubnavVisibility();
   $("#purchaseOrdersBtn")?.classList.toggle("active", activeView === "purchaseOrders");
   $("#areaCalculationBtn")?.classList.toggle("active", activeView === "areaCalculation");
+  $("#projectsBtn")?.classList.toggle("active", activeView === "projects");
 }
 
 function applyAppSettings() {
@@ -780,6 +797,7 @@ function hasWorkflowSourceUpload() {
 async function showDocuments() {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   activeView = "documents";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   renderViewActions();
   $("#canvasView").classList.add("hidden");
@@ -807,9 +825,45 @@ async function showDocuments() {
   await loadProjectList();
 }
 
+async function showProjects(projectId = "", tab = "overview") {
+  if (!canAccessModule("projects")) return showLockedModuleToast();
+  activeView = "projects";
+  document.querySelector(".topbar")?.classList.add("projects-active");
+  setCanvasActionsVisible(false);
+  renderViewActions();
+  $("#canvasView").classList.add("hidden");
+  $("#documentsView").classList.add("hidden");
+  $("#inventoryView").classList.add("hidden");
+  $("#purchaseOrdersView").classList.add("hidden");
+  $("#areaCalculationView").classList.add("hidden");
+  $("#salesDeskView").classList.add("hidden");
+  $("#settingsView").classList.add("hidden");
+  $("#projectsView").classList.remove("hidden");
+  $("#newProjectBtn").classList.remove("active");
+  $("#workflowCanvasBtn").classList.remove("active");
+  $("#dxWorkflowBtn").classList.remove("active");
+  $("#documentsBtn").classList.remove("active");
+  $("#projectsBtn").classList.add("active");
+  $("#inventoryBtn").classList.remove("active");
+  $("#purchaseOrdersBtn").classList.remove("active");
+  $("#areaCalculationBtn").classList.remove("active");
+  $("#salesDeskBtn").classList.remove("active");
+  $("#settingsBtn").classList.remove("active");
+  $("#projectSubnav").classList.add("hidden");
+  $("#inventorySubnav").classList.add("hidden");
+  $("#salesDeskSubnav").classList.add("hidden");
+  $("#pageTitle").textContent = "Projects";
+  $("#projectMeta").textContent = "Monitor project progress, pending works, payments and follow-ups.";
+  applySidebarSubnavVisibility();
+  if (window.projectManagement?.open) await window.projectManagement.open(projectId, tab);
+}
+
+window.showProjects = showProjects;
+
 function showCanvas(mode = "") {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   activeView = "canvas";
+  hideProjectManagementView();
   setCanvasActionsVisible(true);
   renderViewActions();
   $("#documentsView").classList.add("hidden");
@@ -842,6 +896,7 @@ function setWorkflowSubnavActive(mode = "") {
 async function showInventory(screen = "dashboard") {
   if (!canAccessModule("inventory")) return showPurchaseOrders("list");
   activeView = "inventory";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   inventoryScreen = screen;
   renderViewActions();
@@ -888,6 +943,7 @@ async function showInventory(screen = "dashboard") {
 
 async function showPurchaseOrders(screen = "form") {
   activeView = "purchaseOrders";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   purchaseScreen = screen;
   renderViewActions();
@@ -914,7 +970,9 @@ async function showPurchaseOrders(screen = "form") {
   $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
   const needsInitialPurchase = !purchaseState;
+  const projectNamesPromise = screen === "form" ? loadPurchaseProjectNames() : Promise.resolve();
   if (needsInitialPurchase) await loadPurchaseOrders().catch(() => {});
+  await projectNamesPromise;
   if (!purchaseDraft) purchaseDraft = newPurchaseDraft();
   renderPurchaseOrders();
   if (!needsInitialPurchase) refreshPurchaseOrdersInBackground();
@@ -923,6 +981,7 @@ async function showPurchaseOrders(screen = "form") {
 async function showAreaCalculation(mode = "detail") {
   if (!canAccessModule("area")) return showLockedModuleToast();
   activeView = "areaCalculation";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   areaCalculationMode = mode;
   renderViewActions();
@@ -986,6 +1045,7 @@ function refreshWorkflowTitleSpinner() {
 async function showSalesDesk(screen = "dashboard") {
   if (!canAccessModule("sales")) return showPurchaseOrders("list");
   activeView = "salesDesk";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   salesDeskScreen = screen;
   renderViewActions();
@@ -1038,6 +1098,7 @@ async function showSalesDesk(screen = "dashboard") {
 async function showSettings() {
   if (!canAccessModule("settings")) return showPurchaseOrders("list");
   activeView = "settings";
+  hideProjectManagementView();
   setCanvasActionsVisible(false);
   renderViewActions();
   $("#canvasView").classList.add("hidden");
@@ -6109,6 +6170,16 @@ function csvCell(value) {
   return /[",\n]/.test(text) ? `"${text}"` : text;
 }
 
+async function loadPurchaseProjectNames() {
+  try {
+    const projects = await api("/api/project-management/projects");
+    purchaseProjectNames = [...new Set(projects.map(project => String(project.name || "").trim()).filter(Boolean))];
+  } catch (error) {
+    console.warn("Could not load project names for purchase orders", error);
+    purchaseProjectNames = null;
+  }
+}
+
 async function loadPurchaseOrders(options = {}) {
   const force = !!options.force;
   if (!force && purchaseState && Date.now() - purchaseLoadedAt < viewDataRefreshMs) return purchaseState;
@@ -6874,6 +6945,7 @@ function purchaseOrderFormHtml(po) {
   const suppliers = purchaseState?.suppliers || [];
   return `
     <datalist id="poSupplierList">${suppliers.map(supplier => `<option value="${escapeHtml(supplier.supplierName)}"></option>`).join("")}</datalist>
+    <datalist id="poProjectList">${(purchaseProjectNames || []).map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
     <datalist id="poPaymentTermOptions">${paymentTermOptions.map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist>
     <div class="po-form-grid">
       <label>Supplier Name<input list="poSupplierList" data-po-field="supplierName" ${poInputAttrs("supplier-name")} value="${escapeHtml(po.supplierName)}"></label>
@@ -6881,7 +6953,7 @@ function purchaseOrderFormHtml(po) {
       <label>Purchase Representative<input data-po-field="purchaseRepresentative" ${poInputAttrs("purchase-representative")} value="${escapeHtml(po.purchaseRepresentative || currentUser?.name || "")}"></label>
       <label class="wide-field">Supplier Address<textarea data-po-field="supplierAddress" ${poInputAttrs("supplier-address")}>${escapeHtml(po.supplierAddress)}</textarea></label>
       <label>PO Date<input data-po-field="poDate" ${poInputAttrs("po-date")} placeholder="DD-MM-YYYY" value="${formatInventoryDate(po.poDate)}"></label>
-      <label>Project Name<input data-po-field="projectName" ${poInputAttrs("project-name")} value="${escapeHtml(po.projectName)}"></label>
+      <label>Project Name<input list="poProjectList" data-po-field="projectName" ${poInputAttrs("project-name")} placeholder="Select or type a project" value="${escapeHtml(po.projectName)}"></label>
       <label>TRN<input data-po-field="trn" ${poInputAttrs("trn")} value="${escapeHtml(po.trn)}"></label>
       <label>Payment Terms${paymentTermFieldHtml(po.paymentTerms, "po")}</label>
     </div>
@@ -9382,6 +9454,17 @@ function handlePurchaseMenuAction(action, idValue) {
   }
   if (action === "delete-po-supplier") return deletePurchaseSupplier(idValue);
 }
+
+window.openPurchaseOrder = async orderId => {
+  try {
+    await showPurchaseOrders("list");
+    await loadPurchaseOrders({ force: true });
+    if (!(purchaseState?.orders || []).some(order => order.id === orderId)) return toast("Purchase order not found");
+    return handlePurchaseMenuAction("edit-po", orderId);
+  } catch (error) {
+    toast(error.message || "Could not open purchase order");
+  }
+};
 
 function handlePurchaseInput(event) {
   const input = event.target;

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HVAC Workflow App</title>
   <link rel="stylesheet" href="/styles.css?v=20260727-area-ypiece-fix">
+  <link rel="stylesheet" href="/projects.css?v=20261006-projects-style-2">
 </head>
 <body class="auth-pending">
   <aside class="sidebar">
@@ -40,6 +41,7 @@
     </div>
     <button id="purchaseOrdersBtn" class="nav-button">Purchase Orders</button>
     <button id="areaCalculationBtn" class="nav-button">Area Calculation</button>
+    <button id="projectsBtn" class="nav-button">Projects</button>
     <div class="sidebar-footer">
       <button id="settingsBtn" class="nav-button">Settings</button>
       <button id="logoutBtn" class="nav-button">Logout</button>
@@ -84,6 +86,10 @@
 
     <section id="salesDeskView" class="inventory-view hidden">
       <div id="salesDeskRoot"></div>
+    </section>
+
+    <section id="projectsView" class="projects-view hidden">
+      <div id="projectsRoot"></div>
     </section>
 
     <section id="settingsView" class="inventory-view hidden">
@@ -142,6 +148,7 @@
     </article>
   </template>
 
+  <script src="/projects-module.js?v=20261006-projects"></script>
   <script src="/app.js?v=20260727-area-ypiece-fix"></script>
 </body>
 </html>

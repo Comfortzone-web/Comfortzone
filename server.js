@@ -4,6 +4,7 @@ const path = require("path");
 const crypto = require("crypto");
 const zlib = require("zlib");
 const { spawnSync } = require("child_process");
+const { calculateProjectProgress } = require("./project-progress");
 let createClient = null;
 try {
   ({ createClient } = require("@supabase/supabase-js"));
@@ -19,8 +20,8 @@ try {
 
 loadLocalEnv();
 
-const PORT = process.env.PORT || 4173;
-const HOST = process.env.HOST || "0.0.0.0";
+const PORTS = [5175, 5176, 5177, 8085];
+const HOST = "0.0.0.0";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, "public");
@@ -43,6 +44,8 @@ const SALES_CRM_FILE = path.join(DATA, "sales-crm.json");
 const SALES_QUOTATION_PDF_SCRIPT = path.join(ROOT, "scripts", "sales_quotation_pdf.py");
 const SETTINGS_FILE = path.join(DATA, "settings.json");
 const SETTINGS_UPLOADS = path.join(DATA, "settings-uploads");
+const PROJECT_MANAGEMENT_FILE = path.join(DATA, "project-management.json");
+const PROJECT_DOCUMENT_CATEGORIES = ["Shop Drawings", "Submittals", "Correspondence", "Payment", "Testing & Commissioning", "Handover"];
 const PYTHON_EXE = process.env.PYTHON_EXE || "C:\\Users\\HP\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\python\\python.exe";
 const PDFTOPPM_EXE = process.env.PDFTOPPM_EXE || "C:\\Users\\HP\\.cache\\codex-runtimes\\codex-primary-runtime\\dependencies\\native\\poppler\\Library\\bin\\pdftoppm.exe";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -303,6 +306,282 @@ async function writeSettings(settings) {
   await writeStore("settings", SETTINGS_FILE, settings);
 }
 
+const PROJECT_MILESTONES = ["Documentation", "Procurement", "Installation", "Testing", "Handover"];
+const PROJECT_INSTALLATION_STATUSES = ["completed", "in_progress", "issue", "not_started"];
+const PROJECT_DASHBOARD_COMPLETION_MS = 24 * 60 * 60 * 1000;
+
+function projectManagementIsCompleted(status) {
+  return /^(finished|completed)$/i.test(cleanCell(status || ""));
+}
+
+function projectManagementDashboardItemVisible(item, now = Date.now()) {
+  if (!projectManagementIsCompleted(item.status)) return true;
+  const completedAt = Date.parse(item.completedAt || item.updatedAt || "");
+  return Number.isFinite(completedAt) && now - completedAt < PROJECT_DASHBOARD_COMPLETION_MS;
+}
+
+function projectInstallationStatus(value, legacyValue = "") {
+  const direct = cleanCell(value || "").toLowerCase();
+  if (PROJECT_INSTALLATION_STATUSES.includes(direct)) return direct;
+  const text = cleanCell(value || legacyValue || "").toLowerCase();
+  if (/^(completed|finished|received|approved)$/.test(text)) return "completed";
+  if (/^(in progress|started|submitted|revised)$/.test(text)) return "in_progress";
+  if (/^(issue|rejected|blocked|failed|delayed|on hold)$/.test(text)) return "issue";
+  return "not_started";
+}
+
+function projectManagementDefaultSubmittals() {
+  return ["Material Submittal", "HVAC Drawings", "Technical Data"].map(item => ({
+    id: id(), item, status: "Pending", comments: "", updatedAt: new Date().toISOString()
+  }));
+}
+
+function projectManagementDefaultInstallation() {
+  return [
+    "Ducting & Insulation", "Copper / CHW Piping", "AC Drain Piping", "Air Outlets",
+    "IDU Installation", "ODU / FAHU / ERV", "Fans", "Control Panel",
+    "Mouth Connections", "Thermostats", "Cladding"
+  ].map(item => ({
+    id: id(), item, lpo_status: "not_started", delivered_status: "not_started", installation_status: "not_started", progress: 0, comments: "", updatedAt: new Date().toISOString()
+  }));
+}
+
+function projectManagementDefaultInstallationChecklist() {
+  return [
+    ["Site access confirmed", "completed"], ["Material availability verified", "completed"], ["LPOs confirmed", "completed"],
+    ["Delivery schedule confirmed", "in_progress"], ["Installation team assigned", "not_started"], ["Testing schedule confirmed", "not_started"],
+    ["Commissioning planned", "not_started"], ["Handover documents ready", "not_started"]
+  ].map(([item, status]) => ({ id: id(), item, status, updatedAt: new Date().toISOString() }));
+}
+
+function projectManagementDefaultTesting() {
+  return ["Pre-Commissioning", "Testing", "Commissioning", "Handover"].map(activity => ({
+    id: id(), activity, status: "Not Started", comments: "", updatedAt: new Date().toISOString()
+  }));
+}
+
+function projectManagementContractWithVat(contractValue) {
+  return Number((Number(contractValue || 0) * 1.05).toFixed(2));
+}
+
+function projectManagementDefaultPayments() {
+  return [{
+    id: id(), milestone: "Advance Payment", percentage: 0, amount: "", dueDate: "",
+    status: "Pending", comments: "", updatedAt: new Date().toISOString()
+  }];
+}
+
+function projectManagementNormalizeProject(input = {}, options = {}) {
+  const now = new Date().toISOString();
+  const contractValue = Math.max(0, Number(input.contractValue || 0) || 0);
+  const contractWithVat = projectManagementContractWithVat(contractValue);
+  const normalized = {
+    id: cleanCell(input.id || id()),
+    code: cleanCell(input.code || ""),
+    name: cleanCell(input.name || "Untitled Project"),
+    customer: cleanCell(input.customer || ""),
+    consultant: cleanCell(input.consultant || ""),
+    contact: cleanCell(input.contact || ""),
+    phone: cleanCell(input.phone || ""),
+    email: cleanCell(input.email || ""),
+    location: cleanCell(input.location || ""),
+    projectEngineers: Array.isArray(input.projectEngineers) ? [...new Map(input.projectEngineers.map(item => ({
+      id: cleanCell(item?.id || ""), name: cleanCell(item?.name || "")
+    })).filter(item => item.id && item.name).map(item => [item.id, item])).values()] : [],
+    contractValue,
+    notes: cleanCell(input.notes || ""),
+    paymentSummary: cleanCell(input.paymentSummary || ""),
+    paymentStatus: cleanCell(input.paymentStatus || ""),
+    targetHandover: cleanCell(input.targetHandover || ""),
+    status: cleanCell(input.status || "Active") || "Active",
+    currentStage: cleanCell(input.currentStage || "Documentation") || "Documentation",
+    progressOverride: input.progressOverride === "" || input.progressOverride === null || input.progressOverride === undefined ? null : Math.min(100, Math.max(0, Number(input.progressOverride) || 0)),
+    createdAt: cleanCell(input.createdAt || now),
+    updatedAt: cleanCell(input.updatedAt || now),
+    createdBy: cleanCell(input.createdBy || options.user?.name || ""),
+    submittals: Array.isArray(input.submittals) && input.submittals.length ? input.submittals.map(item => ({
+      id: cleanCell(item.id || id()), item: cleanCell(item.item || ""), status: cleanCell(item.status || "Pending") || "Pending",
+      comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+    })).filter(item => item.item) : projectManagementDefaultSubmittals(),
+    installationItems: Array.isArray(input.installationItems) && input.installationItems.length ? input.installationItems.map(item => ({
+      id: cleanCell(item.id || id()), item: cleanCell(item.item || item.workItem || ""),
+      lpo_status: projectInstallationStatus(item.lpo_status, item.lpo), delivered_status: projectInstallationStatus(item.delivered_status, item.delivered),
+      installation_status: projectInstallationStatus(item.installation_status, item.installation || item.installationStatus),
+      progress: Math.min(100, Math.max(0, item.progress === "" || item.progress === null || item.progress === undefined ? Number(String(item.comments || "").match(/(\d{1,3})\s*%/)?.[1] || 0) : Number(item.progress) || 0)),
+      priority: cleanCell(item.priority || "Medium") || "Medium", dueDate: cleanCell(item.dueDate || ""), comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+    })).filter(item => item.item) : projectManagementDefaultInstallation(),
+    installationChecklist: Array.isArray(input.installationChecklist) && input.installationChecklist.length ? input.installationChecklist.map(item => ({
+      id: cleanCell(item.id || id()), item: cleanCell(item.item || ""), status: projectInstallationStatus(item.status), updatedAt: cleanCell(item.updatedAt || now)
+    })).filter(item => item.item) : projectManagementDefaultInstallationChecklist(),
+    installationNotes: Array.isArray(input.installationNotes) ? input.installationNotes.map(item => ({
+      id: cleanCell(item.id || id()), note: cleanCell(item.note || item.text || ""), date: cleanCell(item.date || now.slice(0, 10)),
+      createdBy: cleanCell(item.createdBy || item.userName || ""), createdAt: cleanCell(item.createdAt || now), updatedAt: cleanCell(item.updatedAt || now)
+    })).filter(item => item.note) : [],
+    testingItems: Array.isArray(input.testingItems) && input.testingItems.length ? input.testingItems.map(item => ({
+      id: cleanCell(item.id || id()), activity: cleanCell(item.activity || item.item || ""), status: cleanCell(item.status || "Not Started") || "Not Started",
+      comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+    })).filter(item => item.activity) : projectManagementDefaultTesting(),
+    payments: Array.isArray(input.payments) ? input.payments.map(item => {
+      const amount = item.amount === "" ? "" : Number(Math.max(0, Number(item.amount ?? contractValue * (Number(item.percentage) || 0) / 100) || 0).toFixed(2));
+      return {
+        id: cleanCell(item.id || id()), milestone: cleanCell(item.milestone || ""),
+        percentage: contractWithVat ? Number((Number(amount || 0) / contractWithVat * 100).toFixed(2)) : 0,
+        amount, dueDate: cleanCell(item.dueDate || ""),
+        status: cleanCell(item.status || "Pending") || "Pending", comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+      };
+    }).filter(item => item.milestone) : projectManagementDefaultPayments(),
+    followUps: Array.isArray(input.followUps) ? input.followUps.map(item => ({
+      id: cleanCell(item.id || id()), date: cleanCell(item.date || ""), subject: cleanCell(item.subject || ""),
+      assigned: cleanCell(item.assigned || ""), assignedUserId: cleanCell(item.assignedUserId || ""),
+      status: cleanCell(item.status || "Pending") || "Pending", priority: cleanCell(item.priority || "Medium") || "Medium",
+      notes: cleanCell(item.notes || ""), createdAt: cleanCell(item.createdAt || now), updatedAt: cleanCell(item.updatedAt || now),
+      completedAt: cleanCell(item.completedAt || "")
+    })).filter(item => item.subject) : [],
+    pendingWorkItems: Array.isArray(input.pendingWorkItems) ? input.pendingWorkItems.map(item => ({
+      id: cleanCell(item.id || id()), type: "Manual", workItem: cleanCell(item.workItem || item.item || ""),
+      status: cleanCell(item.status || "Pending") || "Pending", priority: cleanCell(item.priority || "Medium") || "Medium", dueDate: cleanCell(item.dueDate || ""),
+      completedAt: cleanCell(item.completedAt || "")
+    })).filter(item => item.workItem) : [],
+    pendingWorkOverrides: input.pendingWorkOverrides && typeof input.pendingWorkOverrides === "object" && !Array.isArray(input.pendingWorkOverrides)
+      ? Object.fromEntries(Object.entries(input.pendingWorkOverrides).map(([key, value]) => [cleanCell(key), {
+        ...(value?.workItem !== undefined ? { workItem: cleanCell(value.workItem) } : {}),
+        ...(value?.status !== undefined ? { status: cleanCell(value.status) } : {}),
+        ...(value?.dueDate !== undefined ? { dueDate: cleanCell(value.dueDate) } : {}),
+        ...(value?.completedAt !== undefined ? { completedAt: cleanCell(value.completedAt) } : {}),
+        ...(value?.deleted ? { deleted: true } : {})
+      }])) : {},
+    documents: Array.isArray(input.documents) ? input.documents.map(item => ({
+      id: cleanCell(item.id || id()), projectId: cleanCell(item.projectId || input.id || ""),
+      originalName: cleanCell(item.originalName || item.name || ""), storedName: cleanCell(item.storedName || ""),
+      category: cleanCell(item.category || "Uncategorized"),
+      mimeType: cleanCell(item.mimeType || "application/octet-stream"), size: Number(item.size || 0) || 0, uploadedBy: cleanCell(item.uploadedBy || ""),
+      uploadedAt: cleanCell(item.uploadedAt || item.createdAt || now)
+    })).filter(item => item.originalName && item.storedName) : [],
+    documentFolders: Array.isArray(input.documentFolders) ? [...new Set(input.documentFolders.map(cleanCell).filter(Boolean))] : [],
+    hiddenDocumentCategories: Array.isArray(input.hiddenDocumentCategories)
+      ? [...new Set(input.hiddenDocumentCategories.map(cleanCell).filter(name => PROJECT_DOCUMENT_CATEGORIES.includes(name)))] : [],
+    activityHistory: Array.isArray(input.activityHistory) ? input.activityHistory.map(item => ({
+      id: cleanCell(item.id || id()), action: cleanCell(item.action || "Updated"), details: cleanCell(item.details || ""),
+      userId: cleanCell(item.userId || ""), userName: cleanCell(item.userName || ""), createdAt: cleanCell(item.createdAt || now)
+    })) : []
+  };
+  return normalized;
+}
+
+function projectManagementDerived(project) {
+  const documentationComplete = project.submittals.length > 0 && project.submittals.every(item => /^approved$/i.test(item.status));
+  const procurementComplete = project.installationItems.length > 0 && project.installationItems.every(item => item.lpo_status === "completed");
+  const installationComplete = project.installationItems.length > 0 && project.installationItems.every(item => item.installation_status === "completed");
+  const testingComplete = project.testingItems.length > 0 && project.testingItems.every(item => /^(completed|finished)$/i.test(item.status));
+  const handoverComplete = testingComplete && (project.currentStage === "Handover" || project.status === "Completed");
+  const milestoneState = { Documentation: documentationComplete, Procurement: procurementComplete, Installation: installationComplete, Testing: testingComplete, Handover: handoverComplete };
+  const progress = calculateProjectProgress(project);
+  let nextMilestone = PROJECT_MILESTONES.find((milestone, index) => ![documentationComplete, procurementComplete, installationComplete, testingComplete, handoverComplete][index]) || "Completed";
+  const installationStarted = project.installationItems.some(item => ["in_progress", "completed"].includes(item.installation_status));
+  const testingStarted = project.testingItems.some(item => /^(in progress|started|completed|finished)$/i.test(item.status));
+  if (!testingComplete && testingStarted) nextMilestone = "Testing";
+  else if (!installationComplete && installationStarted) nextMilestone = "Installation";
+  const contractWithVat = projectManagementContractWithVat(project.contractValue);
+  const receivedRows = project.payments.filter(item => /^received$/i.test(item.status.trim()));
+  const received = Number(receivedRows.reduce((sum, item) => sum + Number(item.amount || 0), 0).toFixed(2));
+  const hasRecordedPayment = receivedRows.length > 0;
+  const pendingPayment = Math.max(0, Number((contractWithVat - received).toFixed(2)));
+  const paymentStatus = `AED ${received.toLocaleString("en-AE", { maximumFractionDigits: 2 })} Received`;
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueFollowUp = project.followUps.some(item => !projectManagementIsCompleted(item.status) && item.date && item.date < today);
+  const rejectedDocumentation = project.submittals.some(item => /rejected/i.test(`${item.status} ${item.comments}`));
+  const explicitIssueText = /\b(?:PENDING|FOLLOW[- ]?UP|BLOCKED|DELAY|WAITING|APPROVAL|VARIATION|PAYMENT|ARRANGE MATERIALS|SERVICE|COMMISSIONING|DELIVERY)\b/i;
+  const flaggedInstallation = project.installationItems.filter(item => item.installation_status === "issue" || /^(high|critical)$/i.test(item.priority || "") || explicitIssueText.test(item.comments || ""));
+  const rawPendingWorks = [];
+  const noteItems = String(project.notes || "").split(/\r?\n/).map(item => cleanCell(item)).filter(Boolean);
+  noteItems.forEach((item, index) => rawPendingWorks.push({ id: `${project.id}-note-${index}`, type: "Project Action", workItem: item, priority: /\b(?:BLOCKED|CRITICAL|DELAY|PAYMENT)\b/i.test(item) ? "High" : "Medium", status: "Pending", dueDate: "" }));
+  if (rejectedDocumentation) project.submittals.filter(item => /rejected/i.test(`${item.status} ${item.comments}`)).forEach(item => rawPendingWorks.push({ id: item.id, type: "Documentation", workItem: item.item, priority: "High", status: "Pending", dueDate: "" }));
+  flaggedInstallation.forEach(item => rawPendingWorks.push({ id: item.id, type: "Installation", workItem: item.item, priority: item.priority || "Medium", status: item.installation_status === "in_progress" ? "In Progress" : "Pending", dueDate: item.dueDate || "" }));
+  rawPendingWorks.push(...(project.pendingWorkItems || []));
+  const pendingWorkRows = rawPendingWorks.map(item => ({ ...item, ...(project.pendingWorkOverrides?.[item.id] || {}) })).filter(item => !item.deleted);
+  const pendingWorks = pendingWorkRows.filter(item => !projectManagementIsCompleted(item.status));
+  const criticalPendingWork = pendingWorks.some(item => /^(high|critical)$/i.test(item.priority || ""));
+  const health = project.status === "Completed" ? "On Track" : overdueFollowUp || criticalPendingWork || rejectedDocumentation ? "Needs Attention" : "On Track";
+  return {
+    milestones: milestoneState,
+    progress, nextMilestone, receivedPayment: received, receivedPaymentKnown: hasRecordedPayment, paymentStatus, pendingPayment, health,
+    needsAttention: health !== "On Track", pendingWorkRows, pendingWorks, pendingWorkCount: pendingWorks.length,
+    activeFollowUpCount: project.followUps.filter(item => !projectManagementIsCompleted(item.status)).length,
+    readyForHandover: progress >= 80 && !handoverComplete
+  };
+}
+
+function projectManagementView(project) {
+  const normalized = projectManagementNormalizeProject(project);
+  const derived = projectManagementDerived(normalized);
+  return { ...normalized, currentStage: derived.nextMilestone, derived };
+}
+
+function normalizeProjectManagementStore(parsed = {}) {
+  return { projects: Array.isArray(parsed.projects) ? parsed.projects.map(project => projectManagementNormalizeProject(project)).sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) : [] };
+}
+
+async function readProjectManagement() {
+  return readStore("project-management", PROJECT_MANAGEMENT_FILE, () => ({ projects: [] }), normalizeProjectManagementStore);
+}
+
+async function writeProjectManagement(store) {
+  await writeStore("project-management", PROJECT_MANAGEMENT_FILE, normalizeProjectManagementStore(store));
+}
+
+function projectManagementActivity(project, user, action, details) {
+  project.activityHistory = [{ id: id(), action, details: cleanCell(details || ""), userId: cleanCell(user?.id || ""), userName: cleanCell(user?.name || ""), createdAt: new Date().toISOString() }, ...(project.activityHistory || [])].slice(0, 200);
+}
+
+function projectManagementCanViewProject(project, user) {
+  return !isPoOnly(user) || (project.projectEngineers || []).some(engineer => engineer.id === user.id);
+}
+
+function projectManagementFollowUpAssignedTo(item, user, loginUsers) {
+  if (item.assignedUserId) return item.assignedUserId === user.id;
+  const name = cleanCell(item.assigned || "").toLowerCase();
+  return Boolean(name) && name === cleanCell(user.name).toLowerCase()
+    && loginUsers.filter(candidate => candidate.active !== false && cleanCell(candidate.name).toLowerCase() === name).length === 1;
+}
+
+function projectManagementSyncFollowUpAssignees(next, previous, loginUsers) {
+  for (const item of next.followUps) {
+    if (!item.assignedUserId) continue;
+    const user = loginUsers.find(candidate => candidate.id === item.assignedUserId && candidate.active !== false);
+    if (user) item.assigned = user.name;
+    else if (!previous?.followUps.some(old => old.id === item.id && old.assignedUserId === item.assignedUserId)) return false;
+  }
+  return true;
+}
+
+function projectManagementDashboard(store, query = {}, user, loginUsers = []) {
+  const q = cleanCell(query.q || "").toLowerCase();
+  const visibleProjects = store.projects.filter(project => projectManagementCanViewProject(project, user)).map(projectManagementView).filter(project => {
+    if (!q) return true;
+    return [project.code, project.name, project.customer, project.location, project.contact].join(" ").toLowerCase().includes(q);
+  });
+  const assignedFollowUps = project => project.followUps.filter(item => projectManagementFollowUpAssignedTo(item, user, loginUsers));
+  const now = Date.now();
+  const followUps = visibleProjects.flatMap(project => assignedFollowUps(project).filter(item => projectManagementDashboardItemVisible(item, now)).map(item => ({ ...item, projectId: project.id, projectName: project.name }))).sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const pendingWorks = visibleProjects.flatMap(project => project.derived.pendingWorkRows.filter(item => projectManagementDashboardItemVisible(item, now)).map(item => ({ ...item, projectId: project.id, projectName: project.name })));
+  const projects = visibleProjects.map(project => ({ ...project, followUps: [], derived: {
+    ...project.derived, activeFollowUpCount: assignedFollowUps(project).filter(item => !projectManagementIsCompleted(item.status)).length
+  } }));
+  const activeProjects = visibleProjects.filter(project => project.status !== "Completed");
+  const averageProgress = projects.length ? Math.round(projects.reduce((sum, project) => sum + project.derived.progress, 0) / projects.length) : 0;
+  return {
+    projects, followUps, pendingWorks, permissions: { canCreateProject: !isPoOnly(user) },
+    kpis: {
+      totalProjects: projects.length, averageProgress,
+      needsAttention: activeProjects.filter(project => project.derived.needsAttention).length,
+      pendingFollowUps: projects.reduce((sum, project) => sum + project.derived.activeFollowUpCount, 0),
+      paymentPending: activeProjects.reduce((sum, project) => sum + project.derived.pendingPayment, 0),
+      paymentProjects: activeProjects.filter(project => project.derived.pendingPayment > 0).length,
+      readyForHandover: projects.filter(project => project.derived.readyForHandover).length
+    }
+  };
+}
+
 function publicSettings(settings) {
   return {
     company: settings.company,
@@ -395,6 +674,7 @@ function canPoOnlyAccessPath(req, pathname) {
   if (req.method === "GET" && pathname.startsWith("/api/settings/uploads/")) return true;
   if (pathname.startsWith("/api/purchase-orders")) return true;
   if (pathname.startsWith("/api/area-calculations")) return true;
+  if (pathname.startsWith("/api/project-management")) return true;
   return false;
 }
 
@@ -1893,7 +2173,9 @@ function todayDisplayDate() {
 
 function serveStatic(req, res) {
   const urlPath = decodeURIComponent(new URL(req.url, `http://${req.headers.host}`).pathname);
-  const target = urlPath === "/" ? path.join(PUBLIC, "index.html") : path.join(PUBLIC, urlPath);
+  const target = urlPath === "/" || urlPath === "/projects" || urlPath.startsWith("/projects/")
+    ? path.join(PUBLIC, "index.html")
+    : path.join(PUBLIC, urlPath);
   const normalized = path.normalize(target);
   if (!normalized.startsWith(PUBLIC) || !fs.existsSync(normalized) || fs.statSync(normalized).isDirectory()) {
     return notFound(res);
@@ -1907,6 +2189,320 @@ function serveStatic(req, res) {
     "Cache-Control": cacheControl
   });
   res.end(fs.readFileSync(normalized));
+}
+
+function projectManagementDocumentCategories(project) {
+  return [...new Set([
+    ...PROJECT_DOCUMENT_CATEGORIES.filter(name => !(project.hiddenDocumentCategories || []).includes(name)),
+    ...(project.documentFolders || []),
+    ...(project.documents || []).map(item => item.category || "Uncategorized"),
+    "Uncategorized"
+  ])];
+}
+
+async function handleProjectManagementApi(req, res, parts, url, user) {
+  const store = await readProjectManagement();
+  const projectId = parts[2] === "projects" ? decodeURIComponent(parts[3] || "") : "";
+  const projectIndex = projectId ? store.projects.findIndex(item => item.id === projectId) : -1;
+  const project = projectIndex >= 0 ? store.projects[projectIndex] : null;
+
+  if (req.method === "GET" && parts[2] === "dashboard") {
+    const settings = await readSettings();
+    return send(res, 200, projectManagementDashboard(store, Object.fromEntries(url.searchParams.entries()), user, settings.users));
+  }
+
+  if (req.method === "GET" && parts[2] === "projects" && parts.length === 3) {
+    const settings = await readSettings();
+    const dashboard = projectManagementDashboard(store, Object.fromEntries(url.searchParams.entries()), user, settings.users);
+    return send(res, 200, dashboard.projects);
+  }
+
+  if (req.method === "POST" && parts[2] === "projects" && parts.length === 3) {
+    if (isPoOnly(user)) return send(res, 403, { error: "PO Only users cannot create projects" });
+    const body = await readJson(req);
+    const next = projectManagementNormalizeProject({ ...body, id: id(), createdBy: user.name, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { user });
+    const settings = await readSettings();
+    if (!projectManagementSyncFollowUpAssignees(next, null, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
+    projectManagementActivity(next, user, "Project created", `Created ${next.name}`);
+    store.projects.unshift(next);
+    await writeProjectManagement(store);
+    return send(res, 201, projectManagementView(next));
+  }
+
+  if (!project) return notFound(res);
+  if (!projectManagementCanViewProject(project, user)) return notFound(res);
+
+  if (req.method === "GET" && parts[2] === "projects" && parts.length === 4) {
+    return send(res, 200, projectManagementView(project));
+  }
+
+  if (parts[2] === "projects" && parts[4] === "pending-works") {
+    if (req.method === "POST" && parts.length === 5) {
+      const row = { id: id(), type: "Manual", workItem: "New pending work", status: "Pending", priority: "Medium", dueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) };
+      project.pendingWorkItems.push(row);
+      project.updatedAt = new Date().toISOString();
+      projectManagementActivity(project, user, "Pending work added", row.workItem);
+      await writeProjectManagement(store);
+      return send(res, 201, projectManagementView(project));
+    }
+    if (parts.length === 6 && (req.method === "PATCH" || req.method === "DELETE")) {
+      const workId = decodeURIComponent(parts[5]);
+      const source = projectManagementDerived(project).pendingWorkRows.find(item => item.id === workId);
+      if (!source) return notFound(res);
+      if (req.method === "DELETE") {
+        if (source.type === "Manual") {
+          project.pendingWorkItems = project.pendingWorkItems.filter(item => item.id !== workId);
+          delete project.pendingWorkOverrides[workId];
+        } else project.pendingWorkOverrides[workId] = { ...(project.pendingWorkOverrides[workId] || {}), deleted: true };
+        project.updatedAt = new Date().toISOString();
+        projectManagementActivity(project, user, "Pending work deleted", source.workItem);
+        await writeProjectManagement(store);
+        return send(res, 200, projectManagementView(project));
+      }
+      const body = await readJson(req);
+      const field = body.field;
+      if (!(["status", "workItem"].includes(field))) return send(res, 400, { error: "Invalid pending work field" });
+      const value = cleanCell(body.value || "");
+      if (field === "status" && !["Pending", "In Progress", "Completed"].includes(value)) return send(res, 400, { error: "Invalid pending work status" });
+      if (field === "workItem" && !value) return send(res, 400, { error: "Work item cannot be empty" });
+      const now = new Date().toISOString();
+      const override = { ...(project.pendingWorkOverrides[workId] || {}), [field]: value };
+      if (field === "status") override.completedAt = projectManagementIsCompleted(value)
+        ? (projectManagementIsCompleted(source.status) ? source.completedAt || "" : now)
+        : "";
+      project.pendingWorkOverrides[workId] = override;
+      project.updatedAt = now;
+      projectManagementActivity(project, user, "Pending work updated", `${source.workItem}: ${field} changed to ${value}`);
+      await writeProjectManagement(store);
+      return send(res, 200, projectManagementView(project));
+    }
+  }
+
+  if (req.method === "PUT" && parts[2] === "projects" && parts.length === 4) {
+    const body = await readJson(req);
+    const next = projectManagementNormalizeProject({ ...project, ...body, id: project.id, createdAt: project.createdAt, createdBy: project.createdBy }, { user });
+    const settings = await readSettings();
+    if (!projectManagementSyncFollowUpAssignees(next, project, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
+    next.activityHistory = project.activityHistory || [];
+    const now = new Date().toISOString();
+    next.followUps.forEach(item => {
+      const previous = project.followUps.find(row => row.id === item.id);
+      item.completedAt = projectManagementIsCompleted(item.status)
+        ? (previous && projectManagementIsCompleted(previous.status) ? previous.completedAt || previous.updatedAt || "" : now)
+        : "";
+    });
+    let installationActivityAdded = false;
+    next.installationItems.forEach((item, index) => {
+      const previous = project.installationItems[index] || project.installationItems.find(candidate => candidate.id === item.id);
+      if (!previous) return;
+      const changes = [
+        ["LPO", "lpo_status"], ["Delivered", "delivered_status"], ["Installation", "installation_status"]
+      ].filter(([, field]) => previous[field] !== item[field]);
+      if (previous.progress !== item.progress) changes.push(["Progress", "progress"]);
+      if (previous.comments !== item.comments) changes.push(["Comments", "comments"]);
+      if (!changes.length) return;
+      item.updatedAt = now;
+      changes.forEach(([label, field]) => {
+        const value = item[field];
+        const display = field.endsWith("_status") ? ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" }[value] || "Not Started") : field === "progress" ? `${value}%` : "updated";
+        projectManagementActivity(next, user, "Installation update", `${item.item}: ${label} changed to ${display}`);
+      });
+      installationActivityAdded = true;
+    });
+    next.installationChecklist.forEach((item, index) => {
+      const previous = project.installationChecklist?.[index] || project.installationChecklist?.find(candidate => candidate.id === item.id);
+      if (!previous || previous.status === item.status) return;
+      item.updatedAt = now;
+      const display = ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" }[item.status] || "Not Started");
+      projectManagementActivity(next, user, "Installation checklist updated", `${item.item}: status changed to ${display}`);
+      installationActivityAdded = true;
+    });
+    const previousNotes = project.installationNotes || [];
+    next.installationNotes.forEach(item => {
+      if (previousNotes.some(previous => previous.id === item.id && previous.note === item.note)) return;
+      projectManagementActivity(next, user, "Installation note added", item.note);
+      installationActivityAdded = true;
+    });
+    if (!installationActivityAdded) projectManagementActivity(next, user, "Project updated", "Project details or progress were updated");
+    next.updatedAt = now;
+    store.projects[projectIndex] = next;
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(next));
+  }
+
+  if (req.method === "DELETE" && parts[2] === "projects" && parts.length === 4) {
+    for (const document of project.documents || []) await deleteUpload(`project-management/${project.id}`, document.storedName);
+    store.projects.splice(projectIndex, 1);
+    await writeProjectManagement(store);
+    return send(res, 200, { ok: true });
+  }
+
+  if (parts[4] === "document-folders" && req.method === "POST" && parts.length === 5) {
+    const body = await readJson(req);
+    const name = cleanCell(body.name || "");
+    if (!name || name === "." || name === ".." || name.length > 80 || /[\\/\x00-\x1f]/.test(name)) return send(res, 400, { error: "Enter a valid folder name" });
+    const categories = projectManagementDocumentCategories(project);
+    if (categories.some(category => category.toLowerCase() === name.toLowerCase())) return send(res, 400, { error: "Folder already exists" });
+    const defaultCategory = PROJECT_DOCUMENT_CATEGORIES.find(category => category.toLowerCase() === name.toLowerCase());
+    if (defaultCategory) project.hiddenDocumentCategories = project.hiddenDocumentCategories.filter(category => category !== defaultCategory);
+    else project.documentFolders.push(name);
+    project.updatedAt = new Date().toISOString();
+    projectManagementActivity(project, user, "Document folder created", name);
+    await writeProjectManagement(store);
+    return send(res, 201, projectManagementView(project));
+  }
+
+  if (parts[4] === "document-folders" && req.method === "PATCH" && parts.length === 5) {
+    const body = await readJson(req);
+    const oldName = cleanCell(body.oldName || "");
+    const requestedName = cleanCell(body.newName || "");
+    const categories = projectManagementDocumentCategories(project);
+    if (!oldName || oldName === "Uncategorized" || !categories.includes(oldName)) return send(res, 400, { error: "Select a valid folder to rename" });
+    if (!requestedName || requestedName === "." || requestedName === ".." || requestedName.length > 80 || /[\\/\x00-\x1f]/.test(requestedName)) return send(res, 400, { error: "Enter a valid folder name" });
+    const builtInName = PROJECT_DOCUMENT_CATEGORIES.find(name => name.toLowerCase() === requestedName.toLowerCase());
+    const newName = builtInName || requestedName;
+    if (newName === oldName) return send(res, 200, projectManagementView(project));
+    if (categories.some(name => name !== oldName && name.toLowerCase() === newName.toLowerCase())) return send(res, 400, { error: "Folder already exists" });
+    project.documents.forEach(document => {
+      if (document.category === oldName) document.category = newName;
+    });
+    project.documentFolders = project.documentFolders.map(name => name === oldName ? newName : name).filter(name => !PROJECT_DOCUMENT_CATEGORIES.includes(name));
+    if (PROJECT_DOCUMENT_CATEGORIES.includes(oldName)) project.hiddenDocumentCategories.push(oldName);
+    if (builtInName) project.hiddenDocumentCategories = project.hiddenDocumentCategories.filter(name => name !== builtInName);
+    else if (!project.documentFolders.includes(newName)) project.documentFolders.push(newName);
+    project.updatedAt = new Date().toISOString();
+    projectManagementActivity(project, user, "Document folder renamed", `${oldName} → ${newName}`);
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(project));
+  }
+
+  if (parts[4] === "document-folders" && req.method === "DELETE" && parts.length === 5) {
+    const body = await readJson(req);
+    const names = Array.isArray(body.names) ? [...new Set(body.names.map(cleanCell))] : [];
+    const categories = projectManagementDocumentCategories(project);
+    if (!names.length || names.some(name => name === "Uncategorized" || !categories.includes(name))) {
+      return send(res, 400, { error: "Select valid folders to delete" });
+    }
+    project.documents.forEach(document => {
+      if (names.includes(document.category)) document.category = "Uncategorized";
+    });
+    project.documentFolders = project.documentFolders.filter(name => !names.includes(name));
+    project.hiddenDocumentCategories = [...new Set([
+      ...(project.hiddenDocumentCategories || []),
+      ...names.filter(name => PROJECT_DOCUMENT_CATEGORIES.includes(name))
+    ])];
+    project.updatedAt = new Date().toISOString();
+    projectManagementActivity(project, user, "Document folders deleted", names.join(", "));
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(project));
+  }
+
+  if (parts[4] === "documents" && req.method === "POST" && parts.length === 5) {
+    try {
+      const buffer = await collect(req);
+      const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
+      const filePart = multipart.find(item => item.filename);
+      if (!filePart) return send(res, 400, { error: "No file uploaded" });
+      const category = cleanCell(multipart.find(item => item.name === "category")?.body.toString("utf8") || "Uncategorized");
+      const categories = projectManagementDocumentCategories(project);
+      if (!categories.includes(category)) return send(res, 400, { error: "Invalid document category" });
+      const documentId = id();
+      const storedName = `${documentId}-${safeName(filePart.filename)}`;
+      await saveUpload(`project-management/${project.id}`, storedName, filePart.body, filePart.mimeType);
+      const document = {
+        id: documentId, projectId: project.id, originalName: filePart.filename, storedName, category, mimeType: filePart.mimeType,
+        size: filePart.body.length, uploadedBy: user.name, uploadedAt: new Date().toISOString()
+      };
+      const next = projectManagementNormalizeProject({ ...project, documents: [document, ...(project.documents || [])] });
+      next.activityHistory = project.activityHistory || [];
+      projectManagementActivity(next, user, "Document uploaded", `${filePart.filename} was added`);
+      next.updatedAt = new Date().toISOString();
+      store.projects[projectIndex] = next;
+      await writeProjectManagement(store);
+      return send(res, 201, document);
+    } catch (error) {
+      return send(res, 500, { error: error.message || "Document upload failed" });
+    }
+  }
+
+  if (parts[4] === "documents" && parts[5] === "download-all" && req.method === "GET" && parts.length === 6) {
+    const entries = {};
+    const zipSegment = value => safeName(value).replace(/^\.+/, "_") || "file";
+    const selectedIds = url.searchParams.getAll("id");
+    const documents = selectedIds.length ? (project.documents || []).filter(document => selectedIds.includes(document.id)) : (project.documents || []);
+    for (const document of documents) {
+      const bytes = await readUpload(`project-management/${project.id}`, document.storedName);
+      if (!bytes) return send(res, 404, { error: `File missing: ${document.originalName}` });
+      const category = zipSegment(document.category || "Uncategorized");
+      const filename = zipSegment(document.originalName);
+      let entryName = `${category}/${filename}`;
+      if (entries[entryName]) entryName = `${category}/${document.id.slice(0, 8)}-${filename}`;
+      entries[entryName] = { data: bytes };
+    }
+    const archive = zipEntries(entries);
+    res.writeHead(200, {
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${safeName(project.code || project.name || "project")}-documents.zip"`,
+      "Content-Length": archive.length,
+      "Cache-Control": "no-store"
+    });
+    return res.end(archive);
+  }
+
+  if (parts[4] === "documents" && parts[5] && req.method === "GET" && parts.length === 6) {
+    const document = (project.documents || []).find(item => item.id === decodeURIComponent(parts[5]));
+    if (!document) return notFound(res);
+    const bytes = await readUpload(`project-management/${project.id}`, document.storedName);
+    if (!bytes) return notFound(res);
+    const mimeType = document.mimeType || "application/octet-stream";
+    const previewable = /^(application\/pdf|image\/(png|jpeg|gif|webp)|text\/plain)$/i.test(mimeType);
+    const disposition = url.searchParams.get("download") === "1" || !previewable ? "attachment" : "inline";
+    res.writeHead(200, {
+      "Content-Type": mimeType,
+      "Content-Disposition": `${disposition}; filename="${safeName(document.originalName)}"`,
+      "Content-Length": bytes.length,
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff"
+    });
+    return res.end(bytes);
+  }
+
+  if (parts[4] === "documents" && parts[5] && req.method === "PATCH" && parts.length === 6) {
+    const document = (project.documents || []).find(item => item.id === decodeURIComponent(parts[5]));
+    if (!document) return notFound(res);
+    const body = await readJson(req);
+    if (body.originalName !== undefined) {
+      const name = cleanCell(body.originalName);
+      if (!name || name === "." || name === ".." || name.length > 255 || /[\\/\x00-\x1f]/.test(name)) return send(res, 400, { error: "Enter a valid document name" });
+      document.originalName = name;
+    }
+    if (body.category !== undefined) {
+      const category = cleanCell(body.category);
+      const categories = projectManagementDocumentCategories(project);
+      if (!categories.includes(category)) return send(res, 400, { error: "Invalid document category" });
+      document.category = category;
+    }
+    project.updatedAt = new Date().toISOString();
+    projectManagementActivity(project, user, "Document updated", document.originalName);
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(project));
+  }
+
+  if (parts[4] === "documents" && parts[5] && req.method === "DELETE" && parts.length === 6) {
+    const documentId = decodeURIComponent(parts[5]);
+    const document = (project.documents || []).find(item => item.id === documentId);
+    if (!document) return notFound(res);
+    await deleteUpload(`project-management/${project.id}`, document.storedName);
+    const next = projectManagementNormalizeProject({ ...project, documents: (project.documents || []).filter(item => item.id !== documentId) });
+    next.activityHistory = project.activityHistory || [];
+    projectManagementActivity(next, user, "Document deleted", `${document.originalName} was removed`);
+    next.updatedAt = new Date().toISOString();
+    store.projects[projectIndex] = next;
+    await writeProjectManagement(store);
+    return send(res, 200, { ok: true });
+  }
+
+  return notFound(res);
 }
 
 async function handleApi(req, res) {
@@ -1947,6 +2543,10 @@ async function handleApi(req, res) {
 
   if (isPoOnly(user) && !canPoOnlyAccessPath(req, url.pathname)) {
     return sendPoOnlyForbidden(res);
+  }
+
+  if (parts[0] === "api" && parts[1] === "project-management") {
+    return handleProjectManagementApi(req, res, parts, url, user);
   }
 
   if (req.method === "GET" && url.pathname === "/api/settings") {
@@ -8614,7 +9214,24 @@ const server = http.createServer((req, res) => {
 if (process.env.VERCEL) {
   module.exports = (req, res) => server.emit("request", req, res);
 } else {
-  server.listen(PORT, HOST, () => {
-    console.log(`HVAC Workflow App running at http://127.0.0.1:${PORT}`);
-  });
+  const listenOnAvailablePort = (index = 0) => {
+    const port = PORTS[index];
+    if (!port) throw new Error("No available development server port (tried 5175, 5176, 5177, 8085)");
+
+    const onError = error => {
+      server.removeListener("listening", onListening);
+      if (error.code === "EADDRINUSE") return listenOnAvailablePort(index + 1);
+      throw error;
+    };
+    const onListening = () => {
+      server.removeListener("error", onError);
+      console.log(`HVAC Workflow App running at http://127.0.0.1:${port} (bound to ${HOST})`);
+    };
+
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, HOST);
+  };
+
+  listenOnAvailablePort();
 }
