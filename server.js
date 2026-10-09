@@ -375,6 +375,18 @@ function projectManagementDefaultPayments() {
   }];
 }
 
+function projectManagementNormalizePaymentRows(rows, contractValue, contractWithVat, now) {
+  return rows.map(item => {
+    const amount = item.amount === "" ? "" : Number(Math.max(0, Number(item.amount ?? contractValue * (Number(item.percentage) || 0) / 100) || 0).toFixed(2));
+    return {
+      id: cleanCell(item.id || id()), milestone: cleanCell(item.milestone || ""),
+      percentage: contractWithVat ? Number((Number(amount || 0) / contractWithVat * 100).toFixed(2)) : 0,
+      amount, dueDate: cleanCell(item.dueDate || ""),
+      status: cleanCell(item.status || "Pending") || "Pending", comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+    };
+  });
+}
+
 function projectManagementNormalizeProject(input = {}, options = {}) {
   const now = new Date().toISOString();
   const contractValue = Math.max(0, Number(input.contractValue || 0) || 0);
@@ -425,15 +437,8 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
       id: cleanCell(item.id || id()), activity: cleanCell(item.activity || item.item || ""), status: cleanCell(item.status || "Not Started") || "Not Started",
       comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
     })).filter(item => item.activity) : projectManagementDefaultTesting(),
-    payments: Array.isArray(input.payments) ? input.payments.map(item => {
-      const amount = item.amount === "" ? "" : Number(Math.max(0, Number(item.amount ?? contractValue * (Number(item.percentage) || 0) / 100) || 0).toFixed(2));
-      return {
-        id: cleanCell(item.id || id()), milestone: cleanCell(item.milestone || ""),
-        percentage: contractWithVat ? Number((Number(amount || 0) / contractWithVat * 100).toFixed(2)) : 0,
-        amount, dueDate: cleanCell(item.dueDate || ""),
-        status: cleanCell(item.status || "Pending") || "Pending", comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
-      };
-    }).filter(item => item.milestone) : projectManagementDefaultPayments(),
+    payments: Array.isArray(input.payments) ? projectManagementNormalizePaymentRows(input.payments, contractValue, contractWithVat, now).filter(item => item.milestone) : projectManagementDefaultPayments(),
+    variationPayments: Array.isArray(input.variationPayments) ? projectManagementNormalizePaymentRows(input.variationPayments, contractValue, contractWithVat, now) : [],
     followUps: Array.isArray(input.followUps) ? input.followUps.map(item => ({
       id: cleanCell(item.id || id()), date: cleanCell(item.date || ""), subject: cleanCell(item.subject || ""),
       assigned: cleanCell(item.assigned || ""), assignedUserId: cleanCell(item.assignedUserId || ""),

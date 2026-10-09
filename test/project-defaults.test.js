@@ -40,6 +40,7 @@ test("new projects start with one blank advance payment and not-started testing"
     assert.equal(project.payments[0].milestone, "Advance Payment");
     assert.equal(project.payments[0].amount, "");
     assert.equal(project.payments[0].percentage, 0);
+    assert.deepEqual(project.variationPayments, []);
     assert.deepEqual(project.testingItems.map(item => item.status), ["Not Started", "Not Started", "Not Started", "Not Started"]);
     assert.equal(project.derived.progress, 0);
 
@@ -52,6 +53,35 @@ test("new projects start with one blank advance payment and not-started testing"
     assert.equal(project.payments[0].amount, 123.45);
     assert.equal(project.testingItems[1].status, "In Progress");
     assert.equal(project.testingItems[0].status, "Not Started");
+
+    project.variationPayments = [
+      { id: "variation-blank", milestone: "", amount: "", dueDate: "", status: "Pending", comments: "" },
+      { id: "variation-received", milestone: "Additional works", amount: 500.25, dueDate: "", status: "Received", comments: "" }
+    ];
+    project = await (await request(endpoint, "PUT", project)).json();
+    assert.equal(project.variationPayments.length, 2);
+    assert.equal(project.variationPayments[0].milestone, "");
+    assert.equal(project.variationPayments[0].amount, "");
+    assert.equal(project.variationPayments[1].amount, 500.25);
+    assert.equal(project.derived.receivedPayment, 0);
+    assert.equal(project.derived.pendingPayment, 1050000);
+    let dashboard = await (await request("/api/project-management/dashboard", "GET")).json();
+    assert.equal(dashboard.kpis.paymentPending, 1050000);
+    assert.equal(dashboard.projects[0].derived.receivedPayment, 0);
+
+    project.payments[0].status = "Received";
+    project = await (await request(endpoint, "PUT", project)).json();
+    assert.equal(project.derived.receivedPayment, 123.45);
+    assert.equal(project.derived.pendingPayment, 1049876.55);
+    dashboard = await (await request("/api/project-management/dashboard", "GET")).json();
+    assert.equal(dashboard.kpis.paymentPending, 1049876.55);
+    project.variationPayments.splice(0, 1);
+    project = await (await request(endpoint, "PUT", project)).json();
+    assert.equal(project.variationPayments.length, 1);
+    project.variationPayments.splice(0, 1);
+    project = await (await request(endpoint, "PUT", project)).json();
+    assert.deepEqual(project.variationPayments, []);
+    assert.equal(project.derived.receivedPayment, 123.45);
   } finally {
     server.kill();
     if (server.exitCode === null) await new Promise(resolve => server.once("exit", resolve));

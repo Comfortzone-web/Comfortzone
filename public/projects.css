@@ -471,6 +471,8 @@
 .pm-installation-summary .pm-compact-row > span:nth-child(n+3):nth-child(-n+5) { justify-self: center; }
 .pm-payment-summary .pm-compact-row { grid-template-columns: minmax(120px, 1.5fr) 42px minmax(95px, 1fr) 88px; }
 .pm-payment-summary .pm-compact-row > span:nth-child(2) { color: #536987; }
+.pm-variation-summary .pm-compact-row { grid-template-columns: minmax(0, 1.4fr) minmax(90px, 1fr) 78px; }
+.pm-variation-summary .pm-compact-row > span:nth-child(2) { white-space: nowrap; }
 .pm-payment-table { min-width: 1000px; table-layout: fixed; }
 .pm-payment-table th, .pm-payment-table td { padding: 7px 8px; }
 .pm-payment-table th:nth-child(1), .pm-payment-table td:nth-child(1) { width: 4%; text-align: center; }
@@ -481,12 +483,23 @@
 .pm-payment-table th:nth-child(6), .pm-payment-table td:nth-child(6) { width: 12%; }
 .pm-payment-table th:nth-child(7), .pm-payment-table td:nth-child(7) { width: calc(33% - 36px); }
 .pm-payment-table th:nth-child(8), .pm-payment-table td:nth-child(8) { width: 36px; }
+.pm-variation-table { min-width: 900px; }
+.pm-variation-table th:nth-child(1), .pm-variation-table td:nth-child(1) { width: 4%; }
+.pm-variation-table th:nth-child(2), .pm-variation-table td:nth-child(2) { width: 21%; }
+.pm-variation-table th:nth-child(3), .pm-variation-table td:nth-child(3) { width: 13%; }
+.pm-variation-table th:nth-child(4), .pm-variation-table td:nth-child(4) { width: 12%; text-align: left; }
+.pm-variation-table th:nth-child(5), .pm-variation-table td:nth-child(5) { width: 12%; }
+.pm-variation-table th:nth-child(6), .pm-variation-table td:nth-child(6) { width: calc(38% - 36px); }
+.pm-variation-table th:nth-child(7), .pm-variation-table td:nth-child(7) { width: 36px; }
 .pm-payment-table input, .pm-payment-table select { min-height: 36px; }
 .pm-payment-percentage { display: block; color: #334861; font-weight: 600; }
 .pm-payment-table .pm-payment-delete { width: 24px; height: 24px; }
 .pm-payment-table .pm-payment-delete svg { width: 12px; height: 12px; }
 .pm-payment-summary .pm-pill.pending { background: #ffeded; color: #c53030; }
 .pm-payment-summary .pm-pill.proforma-sent { background: #e9f2ff; color: #155dca; }
+.pm-payment-stack { display: grid; gap: 12px; }
+.pm-payment-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.pm-payment-actions button { white-space: nowrap; }
 .pm-payment-panel .pm-payment-outstanding { color: #c53030; font-weight: 700; }
 .pm-command-grid .pm-table-empty { padding: 18px !important; }
 
