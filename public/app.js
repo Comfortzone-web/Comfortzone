@@ -1240,7 +1240,10 @@ function settingsUsersCard() {
     <section class="inventory-card settings-card">
       <div class="inventory-topbar">
         <div><h2>Login Access</h2><p class="inventory-muted">Only active users can login with their email and password.</p></div>
-        <button class="primary-button" data-add-settings-user>Add User</button>
+        <div class="settings-user-actions">
+          <button class="ghost-button" data-save-settings-users>Save</button>
+          <button class="primary-button" data-add-settings-user>Add User</button>
+        </div>
       </div>
       <table class="inventory-table">
         <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
@@ -1283,6 +1286,7 @@ async function handleSettingsClick(event) {
     return;
   }
   if (target.dataset.saveCompany) return saveSettingsCompany(target.dataset.saveCompany);
+  if (target.dataset.saveSettingsUsers !== undefined) return saveSettingsUsers(target);
   if (target.dataset.addSettingsUser !== undefined) {
     $("#settingsNewUser")?.classList.remove("hidden");
     $("#settingsNewUserName")?.focus();
@@ -1363,6 +1367,30 @@ async function saveSettingsUser(userId, password = "") {
   settingsDraft = structuredClone(appSettings);
   renderSettings();
   toast("User saved");
+}
+
+async function saveSettingsUsers(button) {
+  const changedUsers = settingsDraft.users.filter(user => {
+    const saved = appSettings.users.find(item => item.id === user.id);
+    return saved && ["name", "role", "email", "active"].some(field => user[field] !== saved[field]);
+  });
+  if (!changedUsers.length) return toast("No changes to save");
+  button.disabled = true;
+  try {
+    const response = await api("/api/settings/users/batch", {
+      method: "PUT",
+      body: JSON.stringify({ users: changedUsers })
+    });
+    appSettings = response.settings;
+    settingsDraft = structuredClone(appSettings);
+    currentUser = response.user;
+    renderSettings();
+    toast("Login access saved");
+  } catch (error) {
+    alert(error.message || "Could not save login access");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function saveNewSettingsUser() {

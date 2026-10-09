@@ -3946,6 +3946,13 @@ td[contenteditable="true"]:focus {
   min-width: 0;
 }
 
+.settings-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .settings-logo-row {
   display: flex;
   align-items: center;

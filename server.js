@@ -2668,6 +2668,37 @@ async function handleApi(req, res) {
     return send(res, 200, { user, settings: publicSettings(settings) });
   }
 
+  if (req.method === "PUT" && url.pathname === "/api/settings/users/batch") {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const body = await readJson(req);
+    if (!Array.isArray(body.users) || !body.users.length) return send(res, 400, { error: "No users to save" });
+    const settings = await readSettings();
+    const updates = new Map();
+    for (const entry of body.users) {
+      const existing = settings.users.find(item => item.id === entry.id);
+      if (!existing || updates.has(entry.id)) return send(res, 400, { error: "Invalid user update" });
+      const name = cleanCell(entry.name || "");
+      const email = cleanCell(entry.email || "").toLowerCase();
+      const role = cleanCell(entry.role || "");
+      if (!name || !email) return send(res, 400, { error: "Name and email are required" });
+      if (!["Admin", "Staff", "MTS"].includes(role)) return send(res, 400, { error: "Invalid role" });
+      updates.set(entry.id, { ...existing, name, email, role, active: entry.active !== false });
+    }
+    const nextUsers = settings.users.map(entry => updates.get(entry.id) || entry);
+    const emails = nextUsers.map(entry => cleanCell(entry.email).toLowerCase());
+    if (new Set(emails).size !== emails.length) return send(res, 400, { error: "Email addresses must be unique" });
+    if (!nextUsers.some(entry => entry.role === "Admin" && entry.active !== false)) {
+      return send(res, 400, { error: "At least one active Admin is required" });
+    }
+    settings.users = nextUsers;
+    await writeSettings(settings);
+    const updatedUser = nextUsers.find(entry => entry.id === user.id);
+    return send(res, 200, {
+      user: { id: updatedUser.id, name: updatedUser.name, role: updatedUser.role, email: updatedUser.email },
+      settings: publicSettings(settings)
+    });
+  }
+
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/settings\/users\/[^/]+$/)) {
     if (!isAdmin(user)) return sendForbidden(res);
     const userId = decodeURIComponent(parts[3]);
