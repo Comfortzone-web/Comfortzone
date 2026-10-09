@@ -694,10 +694,8 @@ function staffNextEnquiryNo(user, leads = []) {
 
 function staffNextQuotationNo(user, quotations = []) {
   const prefix = `CZ-QTN-${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
-  const numbers = quotations.filter(quote => !quotationRevisionNo(quote))
-    .map(quote => String(quote.no || quote.quotationNo || "").startsWith(prefix)
-      ? Number(String(quote.no || quote.quotationNo).slice(prefix.length)) : NaN).filter(Number.isFinite);
-  return `${prefix}${String(Math.max(0, ...numbers) + 1).padStart(3, "0")}`;
+  const ownQuotes = quotations.filter(quote => staffOwns(quote, user));
+  return nextAvailableSalesQuotationNo(`${prefix}001`, ownQuotes);
 }
 
 function staffOwns(item, user) {
@@ -3052,42 +3050,26 @@ async function handleApi(req, res) {
     if (isStaff(user) && collection === "leads" && existingIndex < 0) {
       item.enquiryNo = staffNextEnquiryNo(user, store.leads);
     }
-    if (isStaff(user) && collection === "quotations" && existingIndex < 0) {
+    if (collection === "quotations" && existingIndex < 0) {
       const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
-      const ownBase = store.quotations.some(quote => staffOwns(quote, user) && cleanSalesQuotationBaseNo(quote.no || quote.quotationNo) === baseNo);
-      if (item.revisionNo && ownBase) {
-        item.no = `${baseNo}-R${nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations)}`;
-      } else {
-        item.no = staffNextQuotationNo(user, store.quotations);
-        item.revisionNo = 0;
-        item.revision = "Fresh Quote";
+      if (isStaff(user) && item.revisionNo && !store.quotations.some(quote => staffOwns(quote, user)
+        && cleanSalesQuotationBaseNo(quote.no || quote.quotationNo) === baseNo)) {
+        return send(res, 403, { error: "Staff can revise their own quotations only" });
       }
-      item.quotationNo = item.no;
-      item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
-    }
-    if (collection === "quotations" && existingIndex < 0 && !isStaff(user)) {
-      const submittedQuoteNo = cleanCell(item.no || item.quotationNo || "");
-      const submittedIsRevision = /-R\d+$/i.test(submittedQuoteNo);
-      const exactQuotationExists = (store.quotations || []).some(quote => (
-        inventoryNorm(quote.no || quote.quotationNo || "") === inventoryNorm(submittedQuoteNo)
-      ));
-      const nextQuotationNo = nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
-      const submittedIsBehind = !submittedIsRevision && quotationNoSequenceValue(submittedQuoteNo) < quotationNoSequenceValue(nextQuotationNo);
-      const submittedPatternDiffers = !submittedIsRevision && submittedQuoteNo && quotationNoPatternKey(submittedQuoteNo) !== quotationNoPatternKey(nextQuotationNo);
-      if (submittedIsRevision && exactQuotationExists) {
-        const baseNo = cleanSalesQuotationBaseNo(item.baseQuotationNo || item.no || item.quotationNo || "");
-        const revisionNo = nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations);
-        item.no = `${baseNo}-R${revisionNo}`;
-        item.quotationNo = item.no;
-        item.baseQuotationNo = baseNo;
-        item.revisionNo = revisionNo;
-        item.revision = `Revision R${revisionNo}`;
-      } else if (!submittedIsRevision && (exactQuotationExists || submittedIsBehind || submittedPatternDiffers)) {
-        item.no = nextQuotationNo;
+      if (!requestedQuotationNo) {
+        item.no = isStaff(user)
+          ? staffNextQuotationNo(user, store.quotations)
+          : nextAvailableSalesQuotationNo(store.settings.nextQuotationNo, store.quotations);
         item.quotationNo = item.no;
         item.baseQuotationNo = cleanSalesQuotationBaseNo(item.no);
-        item.revisionNo = 0;
-        item.revision = item.revision || "Fresh Quote";
+      }
+      const submittedQuoteNo = cleanCell(item.no || item.quotationNo || "");
+      if ((store.quotations || []).some(quote => inventoryNorm(quote.no || quote.quotationNo || "") === inventoryNorm(submittedQuoteNo))) {
+        if (!item.revisionNo) return send(res, 409, { error: `Quotation number ${submittedQuoteNo} already exists` });
+        item.no = `${baseNo}-R${nextAvailableSalesQuotationRevisionNo(baseNo, store.quotations)}`;
+        item.quotationNo = item.no;
+        item.revisionNo = Number(item.no.match(/-R(\d+)$/i)[1]);
+        item.revision = `Revision R${item.revisionNo}`;
       }
     }
     if (collection === "leads" && existingIndex < 0 && hadIncomingId && item.enquiryNo && !isStaff(user)) {
