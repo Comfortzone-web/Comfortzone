@@ -3,7 +3,7 @@
   if (!root) return;
 
   const state = { dashboard: null, dashboardQuery: "", dashboardRequest: 0, project: null, tab: "overview", search: "", filter: "all", modal: "", loginUser: null, loginUsers: [], engineerUsers: null, selectedEngineers: [], requiredEngineerId: "", engineerPickerOpen: false, followUpUsers: null,
-    lpoOrders: null, lpoUploads: [], lpoError: "", lpoRequest: 0, lpoViewId: "",
+    lpoOrders: null, lpoUploads: [], lpoError: "", lpoRequest: 0, lpoViewId: "", lpoSearch: "",
     documentSearch: "", documentType: "all", documentCategory: "all", documentUploader: "all", selectedDocumentIds: new Set(), pendingDocumentFile: null,
     folderSelectMode: false, selectedFolderNames: new Set(), renamingFolderName: "", dashboardViewAll: "", dashboardModalSearch: "", dashboardListItems: null, dashboardListError: "",
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
@@ -74,6 +74,7 @@
         state.lpoUploads = [];
         state.lpoError = "";
         state.lpoRequest++;
+        state.lpoSearch = "";
         state.documentSearch = "";
         state.documentType = "all";
         state.documentCategory = "all";
@@ -377,13 +378,42 @@
     return `<section class="pm-panel"><div class="pm-panel-head"><div><h2>Follow-ups</h2><p>Capture the next conversation or site action before it gets lost.</p></div><button class="pm-primary" data-pm-action="add-followup">＋ Add Follow-up</button></div><div class="pm-table-wrap"><table class="pm-table pm-followups-table"><thead><tr><th>Date</th><th>Subject</th><th>Assigned</th><th>Status</th><th>Priority</th><th aria-label="Actions"></th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="pm-table-empty">No follow-ups yet.</td></tr>`}</tbody></table></div></section>`;
   }
 
-  function lposTab() {
-    const orders = state.lpoOrders;
-    const rows = orders?.map((order, index) => `<tr><td>${index + 1}</td><td><button class="pm-lpo-link" type="button" data-pm-action="open-lpo" data-pm-lpo-id="${esc(order.id)}">${esc(order.poNo || "-")}</button><small>${date(order.poDate)}</small></td><td>${esc(order.supplierName || "-")}</td><td>${esc(order.purchaseRepresentative || "-")}</td><td>${Number(order.grandTotal || 0).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td>${pill(order.status)}</td><td><button class="pm-lpo-view" type="button" data-pm-action="view-lpo" data-pm-lpo-id="${esc(order.id)}" aria-label="View ${esc(order.poNo || "purchase order")}">View</button></td></tr>`).join("");
+  function filteredLpos() {
+    const query = state.lpoSearch.trim().toLowerCase();
+    if (!query) return state.lpoOrders || [];
+    return (state.lpoOrders || []).filter(order => [
+      order.poNo, order.poDate, date(order.poDate), order.supplierName,
+      order.purchaseRepresentative, order.quotationNo, order.status,
+      ...(order.items || []).flatMap(item => [item.description, item.modelNo])
+    ].join(" ").toLowerCase().includes(query));
+  }
+
+  function lpoRows() {
+    const orders = filteredLpos();
+    const rows = orders.map((order, index) => `<tr><td>${index + 1}</td><td><button class="pm-lpo-link" type="button" data-pm-action="open-lpo" data-pm-lpo-id="${esc(order.id)}">${esc(order.poNo || "-")}</button><small>${date(order.poDate)}</small></td><td>${esc(order.supplierName || "-")}</td><td>${esc(order.purchaseRepresentative || "-")}</td><td>${Number(order.grandTotal || 0).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td><td>${pill(order.status)}</td><td><button class="pm-lpo-view" type="button" data-pm-action="view-lpo" data-pm-lpo-id="${esc(order.id)}" aria-label="View ${esc(order.poNo || "purchase order")}">View</button></td></tr>`).join("");
     const empty = state.lpoError
       ? `Could not load purchase orders. <button class="pm-link" type="button" data-pm-action="retry-lpos">Retry</button>`
-      : orders ? "No created purchase orders for this project." : "Loading purchase orders...";
-    return `<section class="pm-panel pm-lpo-panel"><div class="pm-panel-head"><div><h2>LPO's ${orders ? `<em>${orders.length}</em>` : ""}</h2><p>Purchase orders created for this project.</p></div></div><div class="pm-table-wrap"><table class="pm-table pm-lpo-table"><thead><tr><th>#</th><th>LPO No. / Date</th><th>Supplier</th><th>Purchase Rep</th><th>Grand Total (AED)</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows || `<tr><td colspan="7" class="pm-table-empty">${empty}</td></tr>`}</tbody></table></div></section>`;
+      : state.lpoOrders ? state.lpoSearch.trim() ? "No LPOs match your search." : "No created purchase orders for this project." : "Loading purchase orders...";
+    return rows || `<tr><td colspan="7" class="pm-table-empty">${empty}</td></tr>`;
+  }
+
+  function lpoFooter() {
+    if (!state.lpoOrders || state.lpoError) return "";
+    const orders = filteredLpos();
+    const totalCents = orders.reduce((sum, order) => sum + Math.round(Number(order.grandTotal || 0) * 100), 0);
+    const count = state.lpoSearch.trim() ? `${orders.length} of ${state.lpoOrders.length} LPOs` : `${orders.length} LPOs`;
+    return `<tr><td colspan="4" class="pm-lpo-total-label"><strong>${state.lpoSearch.trim() ? "Filtered Total" : "Grand Total"}</strong><small>${count}</small></td><td class="pm-lpo-total-amount">${moneyWithCents(totalCents / 100)}</td><td colspan="2"></td></tr>`;
+  }
+
+  function lposTab() {
+    return `<section class="pm-panel pm-lpo-panel"><div class="pm-panel-head"><div><h2>LPO's ${state.lpoOrders ? `<em>${state.lpoOrders.length}</em>` : ""}</h2><p>Purchase orders created for this project.</p></div><label class="pm-search pm-lpo-search"><span aria-hidden="true">⌕</span><input data-pm-lpo-search type="search" placeholder="Search LPOs..." aria-label="Search LPOs" value="${esc(state.lpoSearch)}"></label></div><div class="pm-table-wrap"><table class="pm-table pm-lpo-table"><thead><tr><th>#</th><th>LPO No. / Date</th><th>Supplier</th><th>Purchase Rep</th><th>Grand Total (AED)</th><th>Status</th><th>Action</th></tr></thead><tbody>${lpoRows()}</tbody><tfoot>${lpoFooter()}</tfoot></table></div></section>`;
+  }
+
+  function renderLpoResults() {
+    const table = root.querySelector(".pm-lpo-table");
+    if (!table) return;
+    table.tBodies[0].innerHTML = lpoRows();
+    table.tFoot.innerHTML = lpoFooter();
   }
 
   async function loadProjectLpos() {
@@ -406,7 +436,9 @@
       if (request !== state.lpoRequest || state.project?.id !== project.id || state.tab !== "lpos") return;
       state.lpoError = error.message;
     }
-    root.querySelector(".pm-detail-content").innerHTML = lposTab();
+    const heading = root.querySelector(".pm-lpo-panel h2");
+    if (heading && state.lpoOrders) heading.innerHTML = `LPO's <em>${state.lpoOrders.length}</em>`;
+    renderLpoResults();
   }
 
   function openLpoModal(orderId) {
@@ -980,6 +1012,11 @@
   }
 
   function onInput(event) {
+    if (event.target.matches("[data-pm-lpo-search]")) {
+      state.lpoSearch = event.target.value;
+      renderLpoResults();
+      return;
+    }
     if (event.target.matches("[data-pm-dashboard-list-search]")) {
       state.dashboardModalSearch = event.target.value;
       renderDashboardListResults();

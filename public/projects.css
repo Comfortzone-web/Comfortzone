@@ -427,7 +427,15 @@
 .pm-lpo-link:hover { text-decoration: underline; }
 .pm-lpo-link:focus-visible { outline: 2px solid #0874ff; outline-offset: 3px; }
 .pm-lpo-panel .pm-panel-head em { background: #e7f0ff; color: #155dca; }
+.pm-lpo-search { flex: 0 1 320px; width: min(320px, 42%); }
 .pm-lpo-table .pm-pill.created { background: #e0f6ea; color: #078c5e; }
+.pm-lpo-table tfoot td { padding: 12px; border-top: 2px solid #d5e2f2; background: #f5f8fd; }
+.pm-lpo-table tfoot td:first-child { width: auto; text-align: right; }
+.pm-lpo-table tfoot td:nth-child(2) { width: auto; text-align: center; }
+.pm-lpo-table tfoot td:last-child { width: auto; }
+.pm-lpo-total-label strong { color: #19345d; font-size: 12px; }
+.pm-lpo-total-label small { color: #6b7d99; font-size: 11px; }
+.pm-lpo-total-amount { color: #0b214a !important; font-size: 13px; font-weight: 750; white-space: nowrap; }
 .pm-lpo-view { padding: 5px 10px; border: 1px solid #cbdcf3; border-radius: 5px; background: #fff; color: #1264d4; font: inherit; font-weight: 650; cursor: pointer; }
 .pm-lpo-view:hover { background: #f2f7ff; }
 .pm-lpo-view:focus-visible { outline: 2px solid #0874ff; outline-offset: 2px; }
@@ -455,6 +463,7 @@
 .pm-lpo-totals .pm-lpo-grand { padding-top: 8px; border-top: 1px solid #dce6f2; }
 .pm-lpo-grand dt, .pm-lpo-grand dd { color: #0b214a; font-size: 13px; font-weight: 750; }
 @media (max-width: 700px) { .pm-lpo-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }.pm-lpo-bottom { grid-template-columns: 1fr; }.pm-lpo-totals { max-width: 320px; margin-left: auto; } }
+@media (max-width: 700px) { .pm-lpo-panel .pm-panel-head { flex-wrap: wrap; }.pm-lpo-search { flex: 1 1 100%; width: 100%; } }
 @media (max-width: 480px) { .pm-lpo-details { grid-template-columns: 1fr; }.pm-lpo-modal .pm-modal-head { padding: 14px; }.pm-lpo-modal-body { padding: 14px; } }
 .pm-followup-more { display: inline-grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 1px solid #d5e1f0; border-radius: 6px; background: #fff; color: #426184; font-size: 20px; line-height: 1; cursor: pointer; }
 .pm-followup-more:hover, .pm-followup-more[aria-expanded="true"] { border-color: #a9c9f1; background: #f2f7ff; color: #0968e8; }
