@@ -688,11 +688,21 @@ function staffNumberPrefix(user) {
 function staffNextEnquiryNo(user, leads = []) {
   const prefix = `EN${String(new Date().getFullYear()).slice(-2)}-${staffNumberPrefix(user)}-`;
   const ownLeads = leads.filter(lead => staffOwns(lead, user));
-  const standardNumbers = ownLeads.filter(lead => salesEnquiryNumberParts(lead.enquiryNo));
-  if (standardNumbers.length) return nextAvailableSalesEnquiryNo("", standardNumbers, leads);
-  const numbers = ownLeads.map(lead => String(lead.enquiryNo || "").startsWith(prefix)
-    ? Number(String(lead.enquiryNo).slice(prefix.length)) : NaN).filter(Number.isFinite);
-  return `${prefix}${String(Math.max(1000, ...numbers) + 1).padStart(4, "0")}`;
+  const numbered = ownLeads.map((lead, index) => {
+    const match = cleanCell(lead.enquiryNo).match(/^(.*?)(\d+)$/);
+    if (!match || !match[1].includes(String(new Date().getFullYear()).slice(-2))) return null;
+    const createdAt = Date.parse(lead.createdAt || "");
+    return { prefix: match[1], number: Number(match[2]), width: match[2].length,
+      sortValue: Number.isFinite(createdAt) ? createdAt : -index };
+  }).filter(Boolean);
+  const latest = numbered.reduce((best, item) => !best || item.sortValue > best.sortValue ? item : best, null);
+  if (!latest) return `${prefix}1001`;
+  const series = numbered.filter(item => inventoryNorm(item.prefix) === inventoryNorm(latest.prefix));
+  const width = Math.max(...series.map(item => item.width));
+  let number = Math.max(...series.map(item => item.number)) + 1;
+  const used = new Set(leads.map(lead => inventoryNorm(lead.enquiryNo)));
+  while (used.has(inventoryNorm(`${latest.prefix}${String(number).padStart(width, "0")}`))) number += 1;
+  return `${latest.prefix}${String(number).padStart(width, "0")}`;
 }
 
 function staffNextQuotationNo(user, quotations = []) {
@@ -2161,7 +2171,7 @@ function salesEnquiryNumberParts(value) {
   return { number: Number(match[1]) || 0, width: Math.max(4, match[1].length) };
 }
 
-function nextAvailableSalesEnquiryNo(current, leads = [], usedLeads = leads) {
+function nextAvailableSalesEnquiryNo(current, leads = []) {
   const year = String(new Date().getFullYear()).slice(-2);
   let maxNumber = 1000;
   let width = 4;
@@ -2174,7 +2184,7 @@ function nextAvailableSalesEnquiryNo(current, leads = [], usedLeads = leads) {
   const currentParts = salesEnquiryNumberParts(current);
   if (currentParts && currentParts.number > maxNumber) maxNumber = currentParts.number - 1;
   let next = `EN${year}-${String(maxNumber + 1).padStart(width, "0")}`;
-  const used = new Set((usedLeads || []).map(lead => inventoryNorm(cleanSalesEnquiryNo(lead.enquiryNo) || lead.enquiryNo)).filter(Boolean));
+  const used = new Set((leads || []).map(lead => inventoryNorm(cleanSalesEnquiryNo(lead.enquiryNo) || lead.enquiryNo)).filter(Boolean));
   let guard = 0;
   while (used.has(inventoryNorm(next)) && guard < 10000) {
     next = nextSalesEnquiryNoFrom(next);

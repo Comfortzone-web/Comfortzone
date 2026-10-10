@@ -111,6 +111,19 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
     assert.match(bobView.settings.nextEnquiryNo, /^EN\d{2}-S[A-Z0-9]+-1001$/);
     assert.equal(bobView.quotations.length, 0);
     assert.equal(bobView.leads.length, 0);
+    const bobGenerated = await save(bob, "/api/sales-crm/leads", {
+      customer: "Bob First Customer", projectDescription: "Bob First Project"
+    });
+    assert.match(bobGenerated.leads[0].enquiryNo, /^EN\d{2}-S[A-Z0-9]+-1001$/);
+    for (const number of [101, 102]) {
+      const result = await save(bob, "/api/sales-crm/leads", {
+        enquiryNo: `ENQ-${year}-${number}`, customer: `Bob Customer ${number}`, projectDescription: `Bob Project ${number}`
+      });
+      assert.equal(result.leads[0].enquiryNo, `ENQ-${year}-${number}`);
+    }
+    const bobNext = await (await request(bob, "/api/sales-crm")).json();
+    assert.equal(bobNext.settings.nextEnquiryNo, `ENQ-${year}-103`);
+    assert.equal((await (await request(alice, "/api/sales-crm")).json()).settings.nextEnquiryNo, `EN${year}-2202`);
     const bobQuote = await save(bob, "/api/sales-crm/quotations", {
       no: `CZ-QTN-${year}-001`, customer: "Bob Customer", items: []
     });
