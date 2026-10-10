@@ -1886,7 +1886,7 @@ function salesLeadsHtml() {
       </div>
       ${salesLeadFiltersOpen ? salesLeadFilterPanel() : ""}
       <div class="pipeline-body ${detailOpen ? "has-detail" : ""} ${salesLeadViewMode !== "table" ? `lead-view-${salesLeadViewMode}` : ""}">
-        <section class="pipeline-table-card">
+        <section class="pipeline-table-card quotation-table-card">
           <div class="pipeline-tabs-row">
             <div class="pipeline-tabs">
               ${salesLeadTabButton("all", "All Enquiries")}
@@ -1941,21 +1941,17 @@ function salesLeadRow(lead) {
       <td><strong>${escapeHtml(lead.projectDescription)}</strong><br><span>${escapeHtml(lead.plotNo || lead.location)}</span></td>
       <td>${salesProductBadge(lead.productType)}</td>
       <td>${salesBadge(lead.status)}</td>
-      <td>${lead.estimatedValue ? Number(lead.estimatedValue).toLocaleString("en-US") : ""}</td>
+      <td>${lead.estimatedValue ? Number(lead.estimatedValue).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
       <td>${escapeHtml(lead.salesPerson)}</td>
-      <td>
-        <div class="pipeline-row-actions">
-          <button title="View" data-sales-action="view-lead" data-sales-id="${escapeHtml(lead.id)}">View</button>
-          <button title="Edit" data-sales-action="edit-lead" data-sales-id="${escapeHtml(lead.id)}">Edit</button>
-          ${rowMenu([
+      <td>${rowMenu([
+            { label: "View", action: "view-lead", id: lead.id },
+            { label: "Edit", action: "edit-lead", id: lead.id },
             { label: "Create Costing", action: "lead-costing", id: lead.id },
             { label: "Create Customer", action: "lead-to-customer", id: lead.id },
             { label: "Create Workflow", action: "lead-create-workflow", id: lead.id },
             { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
             { label: "Delete", action: "delete-lead", id: lead.id, danger: true }
-          ])}
-        </div>
-      </td>
+          ])}</td>
     </tr>
   `;
 }
@@ -1963,7 +1959,7 @@ function salesLeadRow(lead) {
 function salesLeadTableViewHtml(rows) {
   return `
     <div class="pipeline-table-wrap">
-      <table class="sales-table sales-pipeline-table">
+      <table class="sales-table quotation-table sales-pipeline-table">
         <thead><tr><th>Enquiry No</th><th>Customer / Contractor</th><th>Project / Description</th><th>Product Type</th><th>Status</th><th>Value (AED)</th><th>Sales Person</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(lead => salesLeadRow(lead)).join("") || `<tr><td colspan="8" class="pipeline-empty">No enquiries found.</td></tr>`}</tbody>
       </table>
@@ -2257,7 +2253,7 @@ function salesLeadFilterPanel() {
       ${salesFilterSelect("salesPerson", "Sales Person", salesPeople)}
       ${salesFilterSelect("productType", "Product Type", productOptions)}
       ${salesFilterSelect("status", "Status", statusOptions)}
-      <label>Date Received<input data-sales-lead-filter-field="receivedDate" placeholder="DD/MM/YYYY" value="${escapeHtml(salesLeadFilters.receivedDate)}"></label>
+      <label>Date Received<input type="date" data-sales-lead-filter-field="receivedDate" value="${nativeDateValue(salesLeadFilters.receivedDate)}"></label>
       <label>Finalizing Month<input data-sales-lead-filter-field="finalizingMonth" placeholder="May 2026" value="${escapeHtml(salesLeadFilters.finalizingMonth)}"></label>
       <label>Min Value<input data-sales-lead-filter-field="minValue" inputmode="decimal" value="${escapeHtml(salesLeadFilters.minValue)}"></label>
       <label>Max Value<input data-sales-lead-filter-field="maxValue" inputmode="decimal" value="${escapeHtml(salesLeadFilters.maxValue)}"></label>
@@ -2467,7 +2463,7 @@ function requireSavedSalesCustomer(name, context = "Customer") {
 function salesCustomersHtml() {
   const data = salesData();
   const customers = data.customers || [];
-  const rows = salesFilter(customers, ["name", "type", "contact", "phone", "email", "address", "trn"]);
+  const rows = salesFilter(customers, ["name", "type", "contact", "phone", "email", "address", "detail", "trn", "salesPerson"]);
   const commercialCount = customers.filter(customer => customerTypeKey(customer) === "commercial").length;
   const residentialCount = customers.filter(customer => customerTypeKey(customer) === "residential").length;
   const quotationTotal = (data.quotations || []).reduce((sum, quote) => sum + Number(quote.amount || 0), 0);
@@ -2480,31 +2476,32 @@ function salesCustomersHtml() {
       ${salesKpi("Residential Clients", residentialCount.toLocaleString(), "Private", "customers")}
       ${salesKpi("Revenue / Client", salesCompactMoney(revenuePerClient), "Average", "value")}
     </div>
-    <section class="sales-card">
-      <table class="sales-table sales-customers-table">
+    <section class="quotation-table-card sales-customers-card">
+      <table class="sales-table quotation-table sales-customers-table">
         <colgroup>
           <col class="customer-name-col">
           <col class="customer-contact-col">
-          <col class="customer-details-col">
           <col class="customer-address-col">
           <col class="customer-trn-col">
+          <col class="customer-sales-col">
           <col class="customer-actions-col">
         </colgroup>
-        <thead><tr><th>Customer / Company Name</th><th>Contact Person</th><th>Contact Details</th><th>Address</th><th>TRN Number</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Customer / Company Name</th><th>Contact Person</th><th>Address</th><th>TRN Number</th><th>Sales Person</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(customer => `
           <tr>
-            <td><div class="customer-name-cell">${salesAvatar(customer.icon)}<div><strong>${escapeHtml(customer.name)}</strong><span>${escapeHtml(customer.type)}</span></div></div></td>
-            <td><strong>${escapeHtml(customer.contact)}</strong><br><span>${escapeHtml(customer.role)}</span></td>
-            <td>${escapeHtml(customer.phone)}<br><span>${escapeHtml(customer.email)}</span></td>
-            <td>${escapeHtml(customer.detail)}</td>
-            <td>${escapeHtml(customer.trn)}</td>
+            <td><strong>${escapeHtml(customer.name || "-")}</strong><span class="customer-subline">${escapeHtml(customer.type || "-")}</span></td>
+            <td class="customer-contact-cell">${customer.contact ? `<strong>${escapeHtml(customer.contact)}</strong>` : ""}${customer.phone ? `<span>${escapeHtml(customer.phone)}</span>` : ""}${customer.email ? `<span>${escapeHtml(customer.email)}</span>` : ""}${!customer.contact && !customer.phone && !customer.email ? "-" : ""}</td>
+            <td>${escapeHtml(customer.detail || customer.address || "-")}${customer.detail && customer.address && customer.detail !== customer.address ? `<span class="customer-subline">${escapeHtml(customer.address)}</span>` : ""}</td>
+            <td>${escapeHtml(customer.trn || "-")}</td>
+            <td>${escapeHtml(customer.salesPerson || "-")}</td>
             <td>${rowMenu([
               { label: "History", action: "customer-history", id: customer.id },
               { label: "Edit", action: "edit-customer", id: customer.id },
               { label: "Delete", action: "delete-customer", id: customer.id, danger: true }
             ])}</td>
-          </tr>`).join("")}</tbody>
+          </tr>`).join("") || '<tr><td colspan="6" class="sales-customers-empty">No customers found.</td></tr>'}</tbody>
       </table>
+      <div class="quotation-table-footer"><span>Showing ${rows.length.toLocaleString()} of ${customers.length.toLocaleString()} customers</span></div>
     </section>
   `;
 }
@@ -2593,6 +2590,11 @@ function formatSalesDateInput(value) {
   const parsed = parseSalesDate(text);
   if (!parsed) return text;
   return `${String(parsed.getDate()).padStart(2, "0")}/${String(parsed.getMonth() + 1).padStart(2, "0")}/${parsed.getFullYear()}`;
+}
+
+function nativeDateValue(value) {
+  const parsed = parseSalesDate(value);
+  return parsed ? salesDateKey(parsed) : "";
 }
 
 const SALES_PROJECT_TABS = [
@@ -2744,7 +2746,7 @@ function salesProjectDetailField(label, key, value = "", type = "text", options 
     const selectedValue = String(value || "");
     return `<label>${escapeHtml(label)}<select data-project-detail-field="${escapeHtml(key)}">${options.map(option => `<option ${selectedValue === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   }
-  return `<label>${escapeHtml(label)}<input data-project-detail-field="${escapeHtml(key)}" ${type === "dateText" ? `inputmode="numeric" placeholder="DD/MM/YYYY"` : ""} value="${escapeHtml(value || "")}"></label>`;
+  return `<label>${escapeHtml(label)}<input data-project-detail-field="${escapeHtml(key)}" ${type === "dateText" ? 'type="date"' : ""} value="${type === "dateText" ? nativeDateValue(value) : escapeHtml(value || "")}"></label>`;
 }
 
 function salesProjectBoqTableHtml(project, boqRows) {
@@ -2879,7 +2881,7 @@ function salesProjectDrawerField(label, key, value = "", options = null, type = 
   if (type === "checkbox") {
     return `<label class="sales-project-check ${className}"><input type="checkbox" data-project-drawer-field="${escapeHtml(key)}" ${value ? "checked" : ""}> ${escapeHtml(label)}</label>`;
   }
-  return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="${escapeHtml(key)}" ${type === "dateText" ? `inputmode="numeric" placeholder="DD/MM/YYYY"` : ""} value="${escapeHtml(value || "")}"></label>`;
+  return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="${escapeHtml(key)}" ${type === "dateText" ? 'type="date"' : ""} value="${type === "dateText" ? nativeDateValue(value) : escapeHtml(value || "")}"></label>`;
 }
 
 function salesProjectDrawerBoqRowHtml(row = {}, index = 0) {
@@ -3582,7 +3584,7 @@ function salesCreateQuotationHtml() {
           <div class="sales-card-title"><h3>Quotation Details</h3>${salesBadge(salesQuotationDraft.status || "Draft")}</div>
           <div class="sales-form-grid">
           <label>Quotation No<input data-sales-quote-field="quotationNo" value="${escapeHtml(salesQuotationDraft.quotationNo)}"></label>
-          <label>Quotation Date<input data-sales-quote-field="quotationDate" value="${escapeHtml(salesQuotationDraft.quotationDate)}"></label>
+          <label>Quotation Date<input type="date" data-sales-quote-field="quotationDate" value="${nativeDateValue(salesQuotationDraft.quotationDate)}"></label>
           <label>Validity<select data-sales-quote-field="validity">${["7 Days", "15 Days", "30 Days"].map(v => `<option ${salesQuotationDraft.validity === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
           <label>Sales Person<input data-sales-quote-field="salesperson" value="${escapeHtml(salesQuotationDraft.salesperson)}"></label>
           <label>Customer Name<input data-sales-quote-field="customer" list="salesQuoteCustomerList" placeholder="Type to search customer..." value="${escapeHtml(salesQuotationDraft.customer || "")}"><datalist id="salesQuoteCustomerList">${salesCustomerNames().map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist></label>
@@ -3769,8 +3771,8 @@ function salesOrderBookFilterPanel(orders) {
       </label>
       ${orderBookFilterSelect("Date Range", "dateRange", ["", "This Month", "Last Month", "Custom Range"])}
       ${salesOrderBookFilters.dateRange === "Custom Range" ? `
-        <label>From<input data-sales-order-book-filter-field="startDate" inputmode="numeric" placeholder="DD/MM/YYYY" value="${escapeHtml(salesOrderBookFilters.startDate)}"></label>
-        <label>To<input data-sales-order-book-filter-field="endDate" inputmode="numeric" placeholder="DD/MM/YYYY" value="${escapeHtml(salesOrderBookFilters.endDate)}"></label>
+        <label>From<input type="date" data-sales-order-book-filter-field="startDate" value="${nativeDateValue(salesOrderBookFilters.startDate)}"></label>
+        <label>To<input type="date" data-sales-order-book-filter-field="endDate" value="${nativeDateValue(salesOrderBookFilters.endDate)}"></label>
       ` : ""}
       ${orderBookFilterSelect("Order Status", "orderStatus", ["", ...orderBookStatuses()])}
       ${orderBookFilterSelect("Payment Status", "paymentStatus", ["", "Not Paid", "Advance Paid", "Partially Paid", "Fully Paid"])}
@@ -4224,7 +4226,7 @@ function orderBookInvoiceRowHtml(invoice = {}) {
   }));
   return `
     <tr data-order-invoice-row data-invoice-payload="${payload}">
-      <td><input data-order-invoice-field="invoiceDate" placeholder="DD/MM/YYYY" value="${escapeHtml(formatSalesDateInput(invoice.invoiceDate || invoice.date || ""))}"></td>
+      <td><input type="date" data-order-invoice-field="invoiceDate" value="${nativeDateValue(invoice.invoiceDate || invoice.date || "")}"></td>
       <td><input data-order-invoice-field="totalAmount" inputmode="decimal" value="${escapeHtml(invoice.totalAmount ? String(invoice.totalAmount) : "")}"></td>
       <td><input data-order-invoice-field="remarks" value="${escapeHtml(invoice.remarks || "")}"></td>
       <td><span class="order-book-file-pill">${escapeHtml(invoice.fileName || invoice.invoiceNo || "Manual entry")}</span></td>
@@ -4241,7 +4243,7 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
     const listId = `order-book-${key}-${Math.random().toString(36).slice(2)}`;
     return `<label>${escapeHtml(label)}<input ${attrs} list="${listId}" value="${escapeHtml(value || "")}"><datalist id="${listId}">${uniqueValues(options).map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>`;
   }
-  if (type === "dateText") return `<label>${escapeHtml(label)}<input ${attrs} inputmode="numeric" placeholder="DD/MM/YYYY" value="${escapeHtml(formatSalesDateInput(value || ""))}"></label>`;
+  if (type === "dateText") return `<label>${escapeHtml(label)}<input type="date" ${attrs} value="${nativeDateValue(value)}"></label>`;
   if (type === "money") return `<label>${escapeHtml(label)}<input ${attrs} inputmode="decimal" value="${escapeHtml(value ? String(value) : "")}"></label>`;
   return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}"></label>`;
 }
@@ -4400,7 +4402,8 @@ function fillOrderBookField(modal, key, value) {
   if (value === undefined || value === null || value === "") return;
   const field = modal.querySelector(`[data-order-book-field="${CSS.escape(key)}"]`);
   if (!field) return;
-  field.value = ["valueWithoutVat", "vatAmount", "orderValue", "paymentReceived"].includes(key) ? salesNumber(value) || "" : value;
+  field.value = field.type === "date" ? nativeDateValue(value)
+    : ["valueWithoutVat", "vatAmount", "orderValue", "paymentReceived"].includes(key) ? salesNumber(value) || "" : value;
 }
 
 async function scanOrderBookAttachmentInvoice(modal) {
@@ -4418,7 +4421,7 @@ async function scanOrderBookAttachmentInvoice(modal) {
       if (field && value !== undefined && value !== null && value !== "") field.value = value;
     };
     set("invoiceNo", invoice.invoiceNo || "");
-    set("invoiceDate", formatSalesDateInput(invoice.invoiceDate || todaySalesDateInput()));
+    set("invoiceDate", nativeDateValue(invoice.invoiceDate || todaySalesDateInput()));
     set("totalAmount", salesNumber(invoice.totalAmount) || "");
     if (status) status.textContent = invoice.totalAmount ? "Invoice scanned. Verify before saving." : "Invoice scanned, but amount was unclear. Enter amount manually.";
   } catch (error) {
@@ -4442,12 +4445,12 @@ function openOrderBookAttachment(orderId, kind) {
         <label class="span-two">File<input type="file" id="orderBookFileInput" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"></label>
         ${isPo ? `
           <label>PO No<input data-order-attach-field="poNo" value="${escapeHtml(order.po?.poNo || "")}"></label>
-          <label>PO Date<input data-order-attach-field="poDate" placeholder="DD/MM/YYYY" value="${escapeHtml(order.po?.poDate || order.date || "")}"></label>
+          <label>PO Date<input type="date" data-order-attach-field="poDate" value="${nativeDateValue(order.po?.poDate || order.date || "")}"></label>
           <label>PO Value<input data-order-attach-field="poValue" inputmode="decimal" value="${escapeHtml(order.po?.poValue || order.orderValue || "")}"></label>
           <label class="span-two">Job Description<input data-order-attach-field="jobDescription" value="${escapeHtml(order.jobDescription || "")}"></label>
         ` : `
           <label>Invoice No<input data-order-attach-field="invoiceNo"></label>
-          <label>Invoice Date<input data-order-attach-field="invoiceDate" placeholder="DD/MM/YYYY" value="${escapeHtml(todaySalesDateInput())}"></label>
+          <label>Invoice Date<input type="date" data-order-attach-field="invoiceDate" value="${nativeDateValue(todaySalesDateInput())}"></label>
           <label>Amount Excl. VAT<input data-order-attach-field="amountExVat" inputmode="decimal"></label>
           <label>VAT Amount<input data-order-attach-field="vatAmount" inputmode="decimal"></label>
           <label>Total Amount<input data-order-attach-field="totalAmount" inputmode="decimal"></label>
@@ -5082,13 +5085,13 @@ function handleSalesInput(event) {
   }
   if (event.target.dataset.salesOrderBookFilterField) {
     const key = event.target.dataset.salesOrderBookFilterField;
-    const cursor = event.target.selectionStart || 0;
+    const cursor = event.target.type === "date" ? 0 : event.target.selectionStart || 0;
     salesOrderBookFilters[key] = event.target.value;
     renderSalesDesk();
     const input = document.querySelector(`[data-sales-order-book-filter-field="${CSS.escape(key)}"]`);
     if (input && input.tagName === "INPUT") {
       input.focus();
-      input.setSelectionRange(cursor, cursor);
+      if (input.type !== "date") input.setSelectionRange(cursor, cursor);
     }
     return;
   }
@@ -5339,7 +5342,8 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
     ...salesQuotationDraft,
     no: requestedQuotationNo,
     quotationNo: requestedQuotationNo,
-    date: salesQuotationDraft.quotationDate,
+    date: formatSalesDateInput(salesQuotationDraft.quotationDate),
+    quotationDate: formatSalesDateInput(salesQuotationDraft.quotationDate),
     status,
     requestedQuotationNo
   };
@@ -5695,7 +5699,7 @@ function salesLeadField(key, label, value = "", type = "text", options = {}) {
     return `<label>${labelHtml}<input ${attrs} list="${listId}" value="${escapeHtml(value || "")}"><datalist id="${listId}">${values.map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>`;
   }
   if (type === "dateText") {
-    return `<label>${labelHtml}<input ${attrs} inputmode="numeric" placeholder="DD/MM/YYYY" value="${escapeHtml(formatSalesDateInput(value || ""))}"></label>`;
+    return `<label>${labelHtml}<input type="date" ${attrs} value="${nativeDateValue(value)}"></label>`;
   }
   if (type === "money") {
     return `<label>${labelHtml}<input ${attrs} inputmode="decimal" placeholder="AED" value="${escapeHtml(value ? String(value) : "")}"></label>`;
@@ -5751,7 +5755,7 @@ function openSalesLeadFollowUp(leadId) {
         <button class="mini-button" data-close-sales-modal>Close</button>
       </div>
       <div class="form-grid sales-modal-grid">
-        <label>Date<input data-follow-field="date" inputmode="numeric" placeholder="DD/MM/YYYY" value="${todaySalesDateInput()}"></label>
+        <label>Date<input type="date" data-follow-field="date" value="${nativeDateValue(todaySalesDateInput())}"></label>
         <label>Type<select data-follow-field="type">${salesFollowUpTypes().map(type => `<option>${escapeHtml(type)}</option>`).join("")}</select></label>
         <label class="span-two">Note<textarea data-follow-field="note"></textarea></label>
         <label>Updated By<input data-follow-field="updatedBy" value="${escapeHtml(currentUser?.name || lead.salesPerson || "")}"></label>
@@ -5847,7 +5851,7 @@ function salesFormField(field, value = "") {
     return `<label class="span-two">${escapeHtml(field.label)}<textarea ${common}>${escapeHtml(value || "")}</textarea></label>`;
   }
   if (field.type === "dateText") {
-    return `<label>${escapeHtml(field.label)}<input ${common} inputmode="numeric" placeholder="DD/MM/YYYY" value="${escapeHtml(formatSalesDateInput(value || ""))}"></label>`;
+    return `<label>${escapeHtml(field.label)}<input type="date" ${common} value="${nativeDateValue(value)}"></label>`;
   }
   if (field.type === "money") {
     return `<label>${escapeHtml(field.label)}<input ${common} type="number" min="0" step="0.01" inputmode="decimal" placeholder="AED" value="${escapeHtml(sanitizeSalesMoneyInput(value || ""))}"></label>`;
@@ -5879,12 +5883,12 @@ function salesFormConfig(collection) {
       title: "Customer",
       requiredMessage: "Customer name is required.",
       required: item => !!item.name,
-      blank: () => ({ name: "", type: "Commercial", contact: "", role: "", phone: "", email: "", address: "", detail: "", trn: "" }),
+      blank: () => ({ name: "", type: "Commercial", contact: "", role: "", salesPerson: currentUser?.name || "", phone: "", email: "", address: "", detail: "", trn: "" }),
       fields: [
         { key: "name", label: "Customer / Company Name" },
         { key: "type", label: "Type", type: "select", options: ["Commercial", "Residential", "Maintenance", "Private"] },
         { key: "contact", label: "Contact Person" },
-        { key: "role", label: "Role" },
+        { key: "salesPerson", label: "Sales Person" },
         { key: "phone", label: "Phone" },
         { key: "email", label: "Email" },
         { key: "detail", label: "Address Details" },
@@ -6200,6 +6204,7 @@ function exportSalesCsv(collection) {
   const rows = salesData()[collection] || [];
   if (!rows.length) return toast("No records to export");
   const columns = Object.keys(rows[0]).filter(key => !["items", "invoices", "payments", "timeline", "po"].includes(key));
+  if (collection === "customers" && !columns.includes("salesPerson")) columns.push("salesPerson");
   const csv = [
     columns.join(","),
     ...rows.map(row => columns.map(column => csvCell(row[column])).join(","))
@@ -6999,7 +7004,7 @@ function purchaseOrderFormHtml(po) {
       <label>Reference No<input data-po-field="quotationNo" ${poInputAttrs("reference-no")} value="${escapeHtml(po.quotationNo)}"></label>
       <label>Purchase Representative<input data-po-field="purchaseRepresentative" ${poInputAttrs("purchase-representative")} value="${escapeHtml(po.purchaseRepresentative || currentUser?.name || "")}"></label>
       <label class="wide-field">Supplier Address<textarea data-po-field="supplierAddress" ${poInputAttrs("supplier-address")}>${escapeHtml(po.supplierAddress)}</textarea></label>
-      <label>PO Date<input data-po-field="poDate" ${poInputAttrs("po-date")} placeholder="DD-MM-YYYY" value="${formatInventoryDate(po.poDate)}"></label>
+      <label>PO Date<input type="date" data-po-field="poDate" ${poInputAttrs("po-date")} value="${nativeDateValue(po.poDate)}"></label>
       <div class="po-project-field">
         <label for="poProjectInput">Project Name</label>
         <div class="po-project-picker">
@@ -7926,7 +7931,7 @@ function detailsBody() {
       input.setAttribute("list", "workflowProjectList");
       input.placeholder = "Type to search project";
     }
-    input.value = state.details[key] || "";
+    input.value = key === "date" ? nativeDateValue(state.details[key]) : state.details[key] || "";
     input.addEventListener("input", () => {
       if (key === "customer") {
         if (!input.value.trim()) {
@@ -8648,7 +8653,7 @@ function supplierDnMenuItems(dn) {
 function supplierVerificationHtml(dn) {
   return `
     <div class="form-grid">
-      <label>Uploaded Date<input data-supplier-field="uploadedDate" value="${formatInventoryDate(dn.uploadedDate || "")}"></label>
+      <label>Uploaded Date<input type="date" data-supplier-field="uploadedDate" value="${nativeDateValue(dn.uploadedDate || "")}"></label>
       <label>Supplier DN No.<input data-supplier-field="supplierDnNo" value="${escapeHtml(dn.supplierDnNo || "")}"></label>
       <label>Project Name<input data-supplier-field="projectName" value="${escapeHtml(dn.projectName || "")}"></label>
     </div>
@@ -8778,7 +8783,7 @@ function deliveryFormHtml(dn) {
   return `
     <div class="form-grid">
       <label>DN No.<input id="dnNoInput" value="${escapeHtml(dn.dnNo)}"></label>
-      <label>Date<input id="dnDateInput" placeholder="DD-MM-YYYY" value="${formatInventoryDate(dn.date)}"></label>
+      <label>Date<input type="date" id="dnDateInput" value="${nativeDateValue(dn.date)}"></label>
       <label>Customer Name<input id="customerNameInput" list="customerList" value="${escapeHtml(dn.customerName)}"></label>
       <label>Contact Person<input id="contactInput" value="${escapeHtml(dn.contactPerson)}"></label>
       <label>Phone<input id="phoneInput" value="${escapeHtml(dn.phone)}"></label>

@@ -57,6 +57,12 @@ test("Staff owns sales records and can only view purchase orders", { timeout: 30
     const bob = await addStaff("Bob", "bob@example.test");
     assert.deepEqual((await read(alice, "/api/settings")).settings.users, []);
 
+    const customer = await save(alice, "/api/sales-crm/customers", { name: "Alice Client", contact: "Site Contact", role: "Engineer" });
+    const savedCustomer = customer.customers.find(item => item.name === "Alice Client");
+    assert.equal(savedCustomer.salesPerson, "Alice");
+    assert.equal(savedCustomer.role, "Engineer");
+    assert.equal((await read(admin, "/api/sales-crm")).customers.find(item => item.name === "Alice Client").salesPerson, "Alice");
+
     const aliceLead = await save(alice, "/api/sales-crm/leads", { customer: "A", projectDescription: "A project" });
     const bobLead = await save(bob, "/api/sales-crm/leads", { customer: "B", projectDescription: "B project" });
     assert.equal(aliceLead.leads.length, 1);

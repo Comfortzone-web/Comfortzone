@@ -1304,6 +1304,7 @@ function inventoryCustomerToSalesCustomer(customer, existing = null) {
     type: cleanCell(existing?.type || customer.type || "Commercial"),
     contact: cleanCell(customer.contactPerson || customer.contact || ""),
     role: cleanCell(existing?.role || customer.role || ""),
+    salesPerson: cleanCell(existing?.salesPerson || customer.salesPerson || ""),
     phone: cleanCell(customer.phone || ""),
     email: cleanCell(customer.email || ""),
     address: cleanCell(customer.address || ""),
@@ -1881,6 +1882,7 @@ function normalizeSalesItem(collection, input, store) {
       type: cleanCell(base.type || "Commercial"),
       contact: cleanCell(base.contact || ""),
       role: cleanCell(base.role || ""),
+      salesPerson: cleanCell(base.salesPerson || ""),
       phone: cleanCell(base.phone || ""),
       email: cleanCell(base.email || ""),
       address: cleanCell(base.address || ""),
@@ -3062,6 +3064,9 @@ async function handleApi(req, res) {
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
+    if (collection === "customers" && existingIndex < 0 && !item.salesPerson) {
+      item.salesPerson = cleanCell(user.name || "");
+    }
     if (isStaff(user) && ["leads", "quotations"].includes(collection) && existingIndex >= 0
       && !staffOwns(store[collection][existingIndex], user)) return sendForbidden(res);
     if (isStaff(user) && ["leads", "quotations"].includes(collection)) item.ownerId = user.id;
