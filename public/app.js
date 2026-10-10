@@ -1096,15 +1096,7 @@ async function showSalesDesk(screen = "dashboard") {
   document.querySelectorAll("[data-sales-view]").forEach(button => {
     button.classList.toggle("active", button.dataset.salesView === screen);
   });
-  const topbarConfig = salesDeskTopbarConfig();
-  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!topbarConfig);
-  if (topbarConfig) {
-    $("#pageTitle").innerHTML = `<span>Sales Desk</span><b>&lt;</b><strong>${escapeHtml(topbarConfig.title)}</strong>`;
-    $("#projectMeta").textContent = topbarConfig.subtitle;
-  } else {
-    $("#pageTitle").textContent = "Sales Desk";
-    $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
-  }
+  syncSalesDeskTopbar();
   // Costing loads its own compact customer/model data, so do not block it on the full CRM payload.
   const needsInitialSales = !salesCrmState && screen !== "costing";
   if (needsInitialSales) await loadSalesCrm().catch(() => {});
@@ -1469,7 +1461,15 @@ function nextSalesEnquiryNoDefault() {
 
 function salesDeskTopbarConfig() {
   if (activeView !== "salesDesk") return null;
-  if (salesDeskScreen === "quotation" && salesQuotationMode === "create") return null;
+  if (salesDeskScreen === "quotation" && salesQuotationMode === "create") {
+    const canDownloadPdf = !!salesQuotationDraft?.id && String(salesQuotationDraft.status || "").toLowerCase() !== "draft";
+    return {
+      title: "Create New Quotation",
+      subtitle: "Prepare a quotation inside Sales Desk.",
+      search: "",
+      actions: `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-secondary quote-download-pdf" data-sales-action="download-created-quote-pdf" ${canDownloadPdf ? "" : "disabled title=\"Create the quotation to download its PDF\""}>Download PDF</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary quote-create-button" data-sales-action="send-quote">Create Quotation</button>`
+    };
+  }
   const configs = {
     dashboard: {
       title: "Dashboard",
@@ -1519,6 +1519,18 @@ function salesDeskTopbarConfig() {
     }
   };
   return configs[salesDeskScreen] || null;
+}
+
+function syncSalesDeskTopbar() {
+  const config = salesDeskTopbarConfig();
+  document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!config);
+  if (config) {
+    $("#pageTitle").innerHTML = `<span>Sales Desk</span><b>&lt;</b><strong>${escapeHtml(config.title)}</strong>`;
+    $("#projectMeta").textContent = config.subtitle;
+  } else {
+    $("#pageTitle").textContent = "Sales Desk";
+    $("#projectMeta").textContent = "CRM workspace from lead to quotation.";
+  }
 }
 
 function costingTopbarActions() {
@@ -1579,6 +1591,7 @@ function inventoryTopbarConfig() {
 }
 
 function renderSalesDesk() {
+  syncSalesDeskTopbar();
   renderViewActions();
   const root = $("#salesDeskRoot");
   const html = {
@@ -3446,7 +3459,14 @@ function sortQuotationsByRevision(rows, allQuotes = []) {
 
 function salesQuotationListHtml() {
   const quotations = salesData().quotations || [];
-  const searchedRows = salesFilter(quotations, ["no", "customer", "project", "location", "status"]);
+  const query = salesSearchQuery.trim().toLowerCase();
+  const searchedRows = query ? quotations.filter(quote => {
+    const descriptions = Array.isArray(quote.items) ? quote.items.map(item => item?.description || "") : [];
+    return [
+      quote.no, quote.quotationNo, quote.customer, quote.project, quote.location, quote.status,
+      quote.salesperson, quote.salesPerson, quote.preparedBy, ...descriptions
+    ].join(" ").toLowerCase().includes(query);
+  }) : quotations;
   const tabRows = searchedRows.filter(quote => {
     if (salesQuotationTab === "all") return true;
     return String(quote.status || "").toLowerCase() === salesQuotationTab;
@@ -3555,11 +3575,12 @@ function salesCreateQuotationHtml() {
   const showCombineRefnets = salesQuoteCanShowRefnetToggle();
   const quoteUnitOptions = ["Nos", "Sets", "Meters", "Units", "Lot"];
   return `
-    ${salesPageHeader("Create New Quotation", "Prepare a quotation inside Sales Desk.", `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary" data-sales-action="send-quote">Create</button>`)}
+    <div class="sales-quote-create-page">
     <div class="sales-quote-layout">
-      <section class="sales-card">
-        <div class="sales-card-title"><h3>Quotation Details</h3>${salesBadge("Draft")}</div>
-        <div class="sales-form-grid">
+      <div class="sales-quote-main">
+        <section class="sales-card sales-quote-details-card">
+          <div class="sales-card-title"><h3>Quotation Details</h3>${salesBadge(salesQuotationDraft.status || "Draft")}</div>
+          <div class="sales-form-grid">
           <label>Quotation No<input data-sales-quote-field="quotationNo" value="${escapeHtml(salesQuotationDraft.quotationNo)}"></label>
           <label>Quotation Date<input data-sales-quote-field="quotationDate" value="${escapeHtml(salesQuotationDraft.quotationDate)}"></label>
           <label>Validity<select data-sales-quote-field="validity">${["7 Days", "15 Days", "30 Days"].map(v => `<option ${salesQuotationDraft.validity === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
@@ -3569,17 +3590,19 @@ function salesCreateQuotationHtml() {
           <label>Payment Terms<input data-sales-quote-field="paymentTerms" value="${escapeHtml(salesQuotationDraft.paymentTerms)}"></label>
           <label>Availability<input data-sales-quote-field="deliveryTime" value="${escapeHtml(salesQuotationDraft.deliveryTime || "To be discussed")}"></label>
           <label>Enquiry no<input data-sales-quote-field="warranty" value="${escapeHtml(salesQuotationDraft.warranty === "1 Year" ? "" : salesQuotationDraft.warranty || "")}"></label>
-        </div>
-        <datalist id="salesQuoteModelList">
-          ${modelOptions.map(item => `<option value="${escapeHtml(salesQuoteModelDisplay(item))}"></option>`).join("")}
-        </datalist>
-        <div class="sales-card-title quote-item-breakdown-title">
-          <h3>Item Breakdown</h3>
-          ${showCombineRefnets ? `<label class="quote-refnet-toggle"><input type="checkbox" data-sales-quote-combine-refnets ${salesQuotationDraft.combineRefnets ? "checked" : ""}><span>Combine Refnets</span></label>` : ""}
-        </div>
-        <table class="sales-table sales-quote-table">
+          </div>
+        </section>
+        <section class="sales-card sales-quote-items-card">
+          <datalist id="salesQuoteModelList">
+            ${modelOptions.map(item => `<option value="${escapeHtml(salesQuoteModelDisplay(item))}"></option>`).join("")}
+          </datalist>
+          <div class="sales-card-title quote-item-breakdown-title">
+            <h3>Item Breakdown</h3>
+            ${showCombineRefnets ? `<label class="quote-refnet-toggle"><input type="checkbox" data-sales-quote-combine-refnets ${salesQuotationDraft.combineRefnets ? "checked" : ""}><span>Combine Refnets</span></label>` : ""}
+          </div>
+          <div class="sales-quote-table-wrap"><table class="sales-table sales-quote-table">
           <colgroup><col class="quote-col-description"><col class="quote-col-qty"><col class="quote-col-unit"><col class="quote-col-price"><col class="quote-col-action"></colgroup>
-          <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Price</th><th></th></tr></thead>
+          <thead><tr><th>Description</th><th>Qty</th><th>Unit</th><th>Price (AED)</th><th>Action</th></tr></thead>
           <tbody>${salesQuotationDraft.items.map((item, index) => `
             <tr>
               <td><input data-suggestion-list="salesQuoteModelList" data-sales-quote-line="${index}" data-field="description" placeholder="Type model no..." value="${escapeHtml(item.description)}"></td>
@@ -3588,19 +3611,25 @@ function salesCreateQuotationHtml() {
               <td><input type="number" min="0" step="0.01" data-sales-quote-line="${index}" data-field="unitPrice" value="${Number(item.unitPrice || 0).toFixed(2)}"></td>
               <td><button data-sales-delete-quote-line="${index}">Delete</button></td>
             </tr>`).join("")}</tbody>
-        </table>
-        <div class="inventory-actions quote-item-actions"><button class="ghost-button" data-sales-action="add-quote-item">Add Item</button></div>
-        <div class="sales-notes-block">
-          <div class="sales-notes-heading">
-            <span>Additional Remarks / Notes</span>
-            <div class="quote-template-toggle" aria-label="Quotation template">
-              ${["VRV", "FAHU"].map(type => `<button type="button" class="${quoteType === type ? "active" : ""}" data-sales-quote-preset="${type}">${type}</button>`).join("")}
+          </table></div>
+          <div class="inventory-actions quote-item-actions"><button class="ghost-button" data-sales-action="add-quote-item">+ Add Item</button></div>
+        </section>
+        <section class="sales-card sales-quote-notes-card">
+          <div class="sales-notes-block">
+            <div class="sales-notes-heading">
+              <h3>Additional Remarks / Notes</h3>
+              <div class="quote-template-toggle" aria-label="Quotation template">
+                ${["VRV", "FAHU"].map(type => `<button type="button" class="${quoteType === type ? "active" : ""}" data-sales-quote-preset="${type}">${type}</button>`).join("")}
+              </div>
             </div>
+            <textarea data-sales-quote-field="notes">${escapeHtml(salesQuotationDraft.notes)}</textarea>
           </div>
-          <textarea data-sales-quote-field="notes">${escapeHtml(salesQuotationDraft.notes)}</textarea>
-        </div>
-        <label class="sales-notes">Terms &amp; Conditions<textarea data-sales-quote-field="terms">${escapeHtml(salesQuotationDraft.terms || "")}</textarea></label>
-      </section>
+        </section>
+        <section class="sales-card sales-quote-terms-card">
+          <h3>Terms &amp; Conditions</h3>
+          <label class="sales-notes"><span class="sr-only">Terms &amp; Conditions</span><textarea data-sales-quote-field="terms">${escapeHtml(salesQuotationDraft.terms || "")}</textarea></label>
+        </section>
+      </div>
       <div class="sales-quote-side">
         <aside class="sales-card sales-summary-card">
           <h3>Financial Summary</h3>
@@ -3608,9 +3637,10 @@ function salesCreateQuotationHtml() {
           <div><span>Discount</span><input data-sales-quote-field="discount" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${Number(salesQuotationDraft.discount || 0)}"></div>
           <div><span>VAT (5%)</span><strong data-sales-summary="vat">${salesMoney(vat)}</strong></div>
           <div class="sales-total"><span>Grand Total</span><strong data-sales-summary="total">${salesMoney(total)}</strong></div>
+          ${salesQuotationDraft.sourceCostingSheetId ? `<button class="sales-costing-sheet-link" data-costing-action="open-linked-sheet" data-costing-sheet-id="${escapeHtml(salesQuotationDraft.sourceCostingSheetId)}">Costing Sheet</button>` : ""}
         </aside>
-        ${salesQuotationDraft.sourceCostingSheetId ? `<button class="sales-costing-sheet-link" data-costing-action="open-linked-sheet" data-costing-sheet-id="${escapeHtml(salesQuotationDraft.sourceCostingSheetId)}">Costing Sheet</button>` : ""}
       </div>
+    </div>
     </div>
   `;
 }
@@ -4904,6 +4934,9 @@ async function handleSalesClick(event) {
   }
   if (action === "save-quote") return saveSalesQuotation("Draft", target);
   if (action === "send-quote") return saveSalesQuotation("Sent", target);
+  if (action === "download-created-quote-pdf" && salesQuotationDraft?.id && String(salesQuotationDraft.status || "").toLowerCase() !== "draft") {
+    return downloadSalesQuotationPdf(salesQuotationDraft.id);
+  }
   if (action === "preview-quote") previewSalesQuotation(target.dataset.salesId);
   if (action === "pdf-quote") downloadSalesQuotationPdf(target.dataset.salesId);
   if (action === "copy-quote" || action === "revision-quote") return createSalesQuotationRevision(target.dataset.salesId);
@@ -5289,7 +5322,7 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
   const originalButtonText = triggerButton?.textContent || "";
   if (triggerButton) {
     triggerButton.disabled = true;
-    triggerButton.textContent = status === "Sent" ? "Sending..." : "Saving...";
+    triggerButton.textContent = status === "Sent" ? "Creating..." : "Saving...";
   }
   const quotationNoInput = document.querySelector('[data-sales-quote-field="quotationNo"]');
   const visibleQuotationNo = String(quotationNoInput?.value || "").trim();
@@ -5314,11 +5347,19 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
     salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
     const savedQuote = (salesCrmState.quotations || []).find(item => item.id === salesCrmState.savedItemId) || quote;
     markLeadQuoteSentFromQuotation(savedQuote).catch(error => console.warn(error));
-    salesQuotationMode = "list";
-    salesQuotationDraft = null;
+    if (status === "Sent") {
+      salesQuotationDraft = {
+        ...structuredClone(savedQuote),
+        quotationNo: savedQuote.no || savedQuote.quotationNo || requestedQuotationNo,
+        quotationDate: savedQuote.date || salesQuotationDraft.quotationDate
+      };
+    } else {
+      salesQuotationMode = "list";
+      salesQuotationDraft = null;
+    }
     salesQuotationRevisionNoLock = "";
     renderSalesDesk();
-    toast(status === "Sent" ? "Quotation marked as sent" : "Quotation saved");
+    toast(status === "Sent" ? "Quotation created" : "Quotation saved");
   } catch (error) {
     toast(error.message || "Could not save quotation");
     if (triggerButton) {
@@ -6249,6 +6290,7 @@ function renderViewActions() {
   const salesTopbar = salesDeskTopbarConfig();
   const inventoryTopbar = inventoryTopbarConfig();
   document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar || activeView === "areaCalculation");
+  document.querySelector(".topbar")?.classList.toggle("inventory-shell", !!inventoryTopbar);
   actions.classList.add("hidden");
   actions.innerHTML = "";
   if (salesTopbar) {
@@ -6770,7 +6812,7 @@ function purchaseOrderListHtml() {
         </div>
         <input id="poSearchInput" type="search" placeholder="Search PO, supplier, quotation, project..." value="${escapeHtml(purchaseSearchQuery)}">
       </div>
-      <table class="inventory-table po-list-table">
+      <table class="inventory-table inventory-list-table po-list-table">
         <colgroup>
           <col class="po-list-col-no">
           <col class="po-list-col-supplier">
@@ -6951,7 +6993,6 @@ function purchaseOrderFormHtml(po) {
   const suppliers = purchaseState?.suppliers || [];
   return `
     <datalist id="poSupplierList">${suppliers.map(supplier => `<option value="${escapeHtml(supplier.supplierName)}"></option>`).join("")}</datalist>
-    <datalist id="poProjectList">${(purchaseProjectNames || []).map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
     <datalist id="poPaymentTermOptions">${paymentTermOptions.map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist>
     <div class="po-form-grid">
       <label>Supplier Name<input list="poSupplierList" data-po-field="supplierName" ${poInputAttrs("supplier-name")} value="${escapeHtml(po.supplierName)}"></label>
@@ -6959,7 +7000,17 @@ function purchaseOrderFormHtml(po) {
       <label>Purchase Representative<input data-po-field="purchaseRepresentative" ${poInputAttrs("purchase-representative")} value="${escapeHtml(po.purchaseRepresentative || currentUser?.name || "")}"></label>
       <label class="wide-field">Supplier Address<textarea data-po-field="supplierAddress" ${poInputAttrs("supplier-address")}>${escapeHtml(po.supplierAddress)}</textarea></label>
       <label>PO Date<input data-po-field="poDate" ${poInputAttrs("po-date")} placeholder="DD-MM-YYYY" value="${formatInventoryDate(po.poDate)}"></label>
-      <label>Project Name<input list="poProjectList" data-po-field="projectName" ${poInputAttrs("project-name")} placeholder="Select or type a project" value="${escapeHtml(po.projectName)}"></label>
+      <div class="po-project-field">
+        <label for="poProjectInput">Project Name</label>
+        <div class="po-project-picker">
+          <div class="po-project-entry">
+            ${purchaseProjectNamesFromValue(po.projectName).map((name, index) => `<span class="po-project-chip">${escapeHtml(name)}<button type="button" data-po-project-remove="${index}" aria-label="Remove ${escapeHtml(name)}">&times;</button></span>`).join("")}
+            <input id="poProjectInput" data-po-project-input ${poInputAttrs("project-name")} role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="poProjectSuggestions" placeholder="${purchaseProjectNamesFromValue(po.projectName).length < 3 ? "Select or type a project" : "Up to 3 projects selected"}" ${purchaseProjectNamesFromValue(po.projectName).length >= 3 ? "disabled" : ""}>
+          </div>
+          <div id="poProjectSuggestions" class="po-project-suggestions hidden" role="listbox"></div>
+        </div>
+        <span class="po-project-hint">Add up to 3 projects. Press comma or Enter to add a custom name.</span>
+      </div>
       <label>TRN<input data-po-field="trn" ${poInputAttrs("trn")} value="${escapeHtml(po.trn)}"></label>
       <label>Payment Terms${paymentTermFieldHtml(po.paymentTerms, "po")}</label>
     </div>
@@ -7155,6 +7206,86 @@ function refreshPurchaseTotals() {
 function bindPurchaseEvents() {
   const supplierInput = document.querySelector('[data-po-field="supplierName"]');
   supplierInput?.addEventListener("change", () => applyPurchaseSupplierToDraft(supplierInput.value));
+  const projectInput = document.querySelector('#poProjectInput');
+  const projectPicker = projectInput?.closest('.po-project-picker');
+  if (!projectInput || isStaffUser()) return;
+  projectInput.addEventListener('focus', () => updatePurchaseProjectSuggestions(projectInput));
+  projectInput.addEventListener('keydown', event => {
+    if (event.key === ',' || event.key === 'Enter') {
+      event.preventDefault();
+      commitPurchaseProjectInput(projectInput, true);
+      return;
+    }
+    if (event.key === 'Escape') hidePurchaseProjectSuggestions(projectInput);
+    if (event.key === 'ArrowDown') {
+      const first = projectPicker.querySelector('.po-project-suggestions button');
+      if (first) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+  projectPicker.addEventListener('focusout', () => {
+    setTimeout(() => {
+      if (!projectPicker.contains(document.activeElement)) hidePurchaseProjectSuggestions(projectInput);
+    }, 0);
+  });
+}
+
+function purchaseProjectNamesFromValue(value) {
+  return [...new Set(String(value || '').split(',').map(name => name.trim()).filter(Boolean))].slice(0, 3);
+}
+
+function commitPurchaseProjectInput(input, keepFocus) {
+  const value = String(input?.value || '').trim().replace(/,+$/, '').trim();
+  const projects = purchaseProjectNamesFromValue(purchaseDraft?.projectName);
+  if (!value) return hidePurchaseProjectSuggestions(input);
+  if (projects.length >= 3) {
+    toast('Up to 3 projects can be added.');
+    input.value = '';
+    hidePurchaseProjectSuggestions(input);
+    return;
+  }
+  if (!projects.some(name => name.toLowerCase() === value.toLowerCase())) projects.push(value);
+  purchaseDraft.projectName = projects.join(', ');
+  if (keepFocus) renderPurchaseOrdersKeepingInputFocus('poProjectInput', '');
+  else renderPurchaseOrders();
+}
+
+function hidePurchaseProjectSuggestions(input) {
+  input.setAttribute('aria-expanded', 'false');
+  input.closest('.po-project-picker')?.querySelector('.po-project-suggestions')?.classList.add('hidden');
+}
+
+function updatePurchaseProjectSuggestions(input) {
+  const list = input.closest('.po-project-picker')?.querySelector('.po-project-suggestions');
+  if (!list) return;
+  const query = input.value.trim().toLowerCase();
+  const selected = new Set(purchaseProjectNamesFromValue(purchaseDraft?.projectName).map(name => name.toLowerCase()));
+  const matches = purchaseProjectNamesFromValue(purchaseDraft?.projectName).length < 3
+    ? (purchaseProjectNames || []).filter(name => !selected.has(name.toLowerCase()) && name.toLowerCase().includes(query)).slice(0, 8)
+    : [];
+  list.innerHTML = matches.map(name => `<button type="button" role="option" class="po-project-option" data-project-name="${escapeHtml(name)}">${escapeHtml(name)}</button>`).join('');
+  list.classList.toggle('hidden', !matches.length);
+  input.setAttribute('aria-expanded', matches.length ? 'true' : 'false');
+  list.querySelectorAll('button').forEach(button => {
+    button.addEventListener('pointerdown', event => event.preventDefault());
+    button.addEventListener('click', () => {
+      input.value = button.dataset.projectName;
+      commitPurchaseProjectInput(input, true);
+    });
+    button.addEventListener('keydown', event => {
+      const options = [...list.querySelectorAll('button')];
+      const index = options.indexOf(button);
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        options[index + (event.key === 'ArrowDown' ? 1 : -1)]?.focus();
+      } else if (event.key === 'Escape') {
+        hidePurchaseProjectSuggestions(input);
+        input.focus();
+      }
+    });
+  });
 }
 
 function applyPurchaseSupplierToDraft(name) {
@@ -8390,9 +8521,9 @@ function inventoryDashboardHtml() {
       <div class="kpi-card"><span>Total Free Stock</span><strong>${totalFreeStock}</strong><span>Free Stock After Reserved</span></div>
     </div>
     <div class="inventory-grid">
-      <div class="inventory-card">
-        <h3>Stock Overview</h3>
-        <table class="inventory-table dashboard-stock-table"><thead><tr><th>Model No.</th><th>Warehouse Qty</th><th>Reserved Qty</th><th>Free Stock</th></tr></thead><tbody>
+      <div class="inventory-card inventory-list-card">
+        <div class="inventory-list-heading"><h3>Stock Overview</h3></div>
+        <table class="inventory-table inventory-list-table dashboard-stock-table"><thead><tr><th>Model No.</th><th>Warehouse Qty</th><th>Reserved Qty</th><th>Free Stock</th></tr></thead><tbody>
           ${dashboardStockOverviewRowsHtml()}
         </tbody></table>
       </div>
@@ -8417,7 +8548,7 @@ function dashboardStockOverviewRowsHtml() {
   return overviewStock.map(item => {
     const reservedQty = Number(item.reservedQty || 0);
     const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
-    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description"> - ${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
+    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description">${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
   }).join("") || `<tr><td colspan="4">${query ? "No matching models found." : "No stock yet."}</td></tr>`;
 }
 
@@ -8435,8 +8566,9 @@ function supplierDnViewHtml() {
       <div class="inventory-title"><h2>Supplier DN</h2><p>Latest 5 stock-in records and upload verification.</p></div>
       <div class="inventory-search"><input id="supplierSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
-    <div class="inventory-card">
-      <table class="inventory-table supplier-dn-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+    <div class="inventory-card inventory-list-card">
+      <div class="inventory-list-heading"><h3>Supplier DNs</h3><span>${latestDns.length} recent record${latestDns.length === 1 ? "" : "s"}</span></div>
+      <table class="inventory-table inventory-list-table supplier-dn-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
         ${supplierDnRows(latestDns)}
       </tbody></table>
     </div>
@@ -8458,8 +8590,9 @@ function supplierDnAllViewHtml() {
       <div class="inventory-title"><h2>Supplier DN</h2><p>All uploaded and manual stock entries.</p></div>
       <div class="inventory-search"><input id="supplierAllSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
-    <div class="inventory-card">
-      <table class="inventory-table supplier-dn-all-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+    <div class="inventory-card inventory-list-card">
+      <div class="inventory-list-heading"><h3>All Supplier DNs</h3><span>${dns.length} record${dns.length === 1 ? "" : "s"} in this view</span></div>
+      <table class="inventory-table inventory-list-table supplier-dn-all-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
         ${supplierDnRows(pageRows)}
       </tbody></table>
       ${supplierDnPagination(dns.length, pageSize, supplierAllPage)}
@@ -8540,8 +8673,12 @@ function deliveryNoteViewHtml() {
   return `
     <div>
       <div class="inventory-topbar"><div class="inventory-title"><h2>Outbound Delivery Note</h2><p>Create, manage, and track outbound delivery notes.</p></div><div class="inventory-search"><input id="deliverySearchInput" placeholder="Search delivery note..." value="${escapeHtml(deliverySearchQuery)}"></div></div>
-      <div class="inventory-card">
-        <table class="inventory-table delivery-list-table"><thead><tr><th>DN No.</th><th>Customer / Project</th><th>Delivery Location</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
+      <div class="inventory-card inventory-list-card">
+        <div class="inventory-list-heading">
+          <h3>All Delivery Notes</h3>
+          <span>${notes.length} note${notes.length === 1 ? "" : "s"} in this view</span>
+        </div>
+        <table class="inventory-table inventory-list-table delivery-list-table"><thead><tr><th>DN No.</th><th>Customer / Project</th><th>Delivery Location</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
           ${deliveryNoteRows(visibleNotes)}
         </tbody></table>
         <div id="deliveryPagination">${deliveryNotePagination(notes.length, pageSize, deliveryListPage, search, visibleNotes.length)}</div>
@@ -8564,7 +8701,7 @@ function deliveryNoteRows(notes) {
     if (norm(note.status) === "DRAFT") {
       menuItems.push({ label: "Delete", action: "delete-delivery", id: note.id, danger: true });
     }
-    return `<tr><td><strong>${escapeHtml(note.dnNo || "—")}</strong><br><span class="inventory-muted delivery-list-secondary">${escapeHtml(formatInventoryDate(note.date))}</span></td><td><span>${escapeHtml(customerName)}</span><br><span class="inventory-muted delivery-list-secondary">${escapeHtml(projectName)}</span></td><td><span>${escapeHtml(deliveryLocation)}</span><br><span class="inventory-muted delivery-list-secondary">Contact: ${escapeHtml(contactPerson)}</span></td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu(menuItems)}</td></tr>`;
+    return `<tr><td><strong class="delivery-list-primary">${escapeHtml(note.dnNo || "—")}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(formatInventoryDate(note.date))}</span></td><td><strong class="delivery-list-primary">${escapeHtml(customerName)}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(projectName)}</span></td><td><span class="delivery-list-primary">${escapeHtml(deliveryLocation)}</span><span class="inventory-muted delivery-list-secondary">Contact: ${escapeHtml(contactPerson)}</span></td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu(menuItems)}</td></tr>`;
   }).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
 }
 
@@ -8761,9 +8898,9 @@ function stockViewHtml() {
       <div class="inventory-title"><h2>Stock</h2><p>Manage AC unit model master and view full stock details.</p></div>
       <div class="inventory-search"><input id="stockSearchInput" placeholder="Search model or description"></div>
     </div>
-    <div class="inventory-card stock-full-card">
-      <h3>Full Stock Details</h3>
-      <table class="inventory-table stock-details-table"><thead><tr><th>Model No.</th><th>Description</th><th>Current Qty</th><th>Reserved Qty</th><th>Free Stock</th><th>Action</th></tr></thead><tbody>
+    <div class="inventory-card inventory-list-card stock-full-card">
+      <div class="inventory-list-heading"><h3>Full Stock Details</h3><span>${stock.length} model${stock.length === 1 ? "" : "s"}</span></div>
+      <table class="inventory-table inventory-list-table stock-details-table"><thead><tr><th>Model No.</th><th>Description</th><th>Current Qty</th><th>Reserved Qty</th><th>Free Stock</th><th>Action</th></tr></thead><tbody>
         ${stock.map(item => {
           const reservedQty = Number(item.reservedQty || 0);
           const freeStock = Number(item.qty || 0) - reservedQty;
@@ -9406,6 +9543,12 @@ function exportAreaCalculationExcel() {
 function handlePurchaseClick(event) {
   const target = event.target.closest("button");
   if (!target || !$("#purchaseOrdersRoot").contains(target)) return;
+  if (target.dataset.poProjectRemove !== undefined) {
+    const projects = purchaseProjectNamesFromValue(purchaseDraft?.projectName);
+    projects.splice(Number(target.dataset.poProjectRemove), 1);
+    purchaseDraft.projectName = projects.join(', ');
+    return renderPurchaseOrders();
+  }
   if (target.dataset.rowMenu !== undefined) {
     const menu = target.closest(".row-menu").querySelector(".row-menu-list");
     document.querySelectorAll(".row-menu-list").forEach(list => {
@@ -9503,7 +9646,21 @@ function handlePurchaseInput(event) {
   }
   if (input.dataset.poField) {
     const key = input.dataset.poField;
+    if (key === 'projectName') {
+      if (input.value.split(',').length > 3) {
+        input.value = purchaseDraft.projectName || '';
+        toast('Select up to 3 projects.');
+        return;
+      }
+      purchaseDraft.projectName = input.value;
+      updatePurchaseProjectSuggestions(input);
+      return;
+    }
     purchaseDraft[key] = key.toLowerCase().includes("date") ? parseInventoryDate(input.value) : input.value;
+    return;
+  }
+  if (input.dataset.poProjectInput !== undefined) {
+    updatePurchaseProjectSuggestions(input);
     return;
   }
   if (input.dataset.poLine) {
@@ -9556,6 +9713,14 @@ async function uploadPurchaseQuotation() {
 
 async function savePurchaseDraft(createOfficial) {
   if (!purchaseDraft.supplierName.trim()) return alert("Supplier Name is required.");
+  const projects = purchaseProjectNamesFromValue(purchaseDraft.projectName);
+  const pendingProject = String(document.querySelector('#poProjectInput')?.value || '').trim();
+  if (pendingProject && !projects.some(name => name.toLowerCase() === pendingProject.toLowerCase())) {
+    if (projects.length >= 3) return alert('Select up to 3 projects.');
+    projects.push(pendingProject);
+  }
+  if (projects.length > 3) return alert('Select up to 3 projects.');
+  purchaseDraft.projectName = projects.join(', ');
   purchaseDraft.items = (purchaseDraft.items || []).filter(item => item.description || item.modelNo || Number(item.qty || 0) || Number(item.unitPrice || 0));
   if (!purchaseDraft.items.length) return alert("Add at least one item.");
   const visiblePoNoInput = document.querySelector('[data-po-field="poNo"]');

@@ -399,7 +399,7 @@
       const projectName = String(project.name || "").trim().replace(/\s+/g, " ").toLowerCase();
       state.lpoOrders = (purchaseOrders.orders || []).filter(order =>
         String(order.status || "").toLowerCase() === "created"
-        && String(order.projectName || "").trim().replace(/\s+/g, " ").toLowerCase() === projectName
+        && String(order.projectName || "").split(",").some(name => name.trim().replace(/\s+/g, " ").toLowerCase() === projectName)
       ).sort((a, b) => String(b.poDate || "").localeCompare(String(a.poDate || "")));
       state.lpoUploads = purchaseOrders.uploads || [];
     } catch (error) {

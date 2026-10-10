@@ -784,7 +784,10 @@ function defaultInventory() {
 }
 
 function normalizeInventory(parsed = {}) {
-  return { ...defaultInventory(), ...parsed };
+  const inventory = { ...defaultInventory(), ...parsed };
+  inventory.settings = { ...defaultInventory().settings, ...(parsed.settings || {}) };
+  inventory.settings.nextDeliveryNo = nextDeliveryNoFromLatest(inventory.deliveryNotes, inventory.settings.nextDeliveryNo);
+  return inventory;
 }
 
 async function readInventory() {
@@ -3636,6 +3639,9 @@ async function handleApi(req, res) {
     const body = await readJson(req);
     const deliveryNote = normalizeDeliveryNote(body, inventory);
     const existingIndex = inventory.deliveryNotes.findIndex(dn => dn.id === deliveryNote.id);
+    if (inventory.deliveryNotes.some(dn => dn.id !== deliveryNote.id && inventoryNorm(dn.dnNo) === inventoryNorm(deliveryNote.dnNo))) {
+      return send(res, 409, { error: `Delivery Note ${deliveryNote.dnNo} already exists.` });
+    }
     const issuing = deliveryNote.status === "Issued" || deliveryNote.status === "Delivered";
     if (issuing) {
       const availabilityInventory = { ...inventory, deliveryNotes: inventory.deliveryNotes.filter(dn => dn.id !== deliveryNote.id) };
@@ -3648,7 +3654,7 @@ async function handleApi(req, res) {
     }
     if (existingIndex >= 0) inventory.deliveryNotes[existingIndex] = deliveryNote;
     else inventory.deliveryNotes.unshift(deliveryNote);
-    inventory.settings.nextDeliveryNo = nextDeliveryNoFrom(deliveryNote.dnNo || inventory.settings.nextDeliveryNo);
+    inventory.settings.nextDeliveryNo = nextDeliveryNoFromLatest(inventory.deliveryNotes, inventory.settings.nextDeliveryNo);
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));
   }
@@ -3672,6 +3678,7 @@ async function handleApi(req, res) {
       return send(res, 400, { error: "Only draft Delivery Notes can be deleted." });
     }
     inventory.deliveryNotes = (inventory.deliveryNotes || []).filter(item => item.id !== deliveryNoteId);
+    inventory.settings.nextDeliveryNo = nextDeliveryNoFromLatest(inventory.deliveryNotes, inventory.settings.nextDeliveryNo);
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));
   }
@@ -5697,6 +5704,15 @@ function nextDeliveryNoFrom(current) {
   const prefix = match[1];
   const number = match[2];
   return `${prefix}${String(Number(number) + 1).padStart(number.length, "0")}`;
+}
+
+function nextDeliveryNoFromLatest(notes, fallback) {
+  if (!notes?.length) return fallback || "DN-2057";
+  const latestNumber = String(notes[0].dnNo || "");
+  let next = /\d+$/.test(latestNumber) ? nextDeliveryNoFrom(latestNumber) : (fallback || "DN-2057");
+  const used = new Set(notes.map(note => inventoryNorm(note.dnNo)));
+  while (used.has(inventoryNorm(next))) next = nextDeliveryNoFrom(next);
+  return next;
 }
 
 function nextPoNoFrom(current) {
