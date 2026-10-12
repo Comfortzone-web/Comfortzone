@@ -559,7 +559,7 @@ function isStaffUser() {
 }
 
 function canAccessModule(moduleName) {
-  if (isStaffUser() && ["projects", "area", "settings"].includes(moduleName)) return false;
+  if (isStaffUser() && ["projects", "area", "settings", "purchase"].includes(moduleName)) return false;
   if (!isPoOnlyUser()) return true;
   if (moduleName === "projects") return true;
   return moduleName === "purchase" || moduleName === "area";
@@ -603,12 +603,13 @@ function applySidebarSubnavVisibility() {
 
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
-  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn"];
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "purchaseOrdersBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn"];
   lockIds.forEach(id => {
     const button = document.getElementById(id);
     if (!button) return;
     const locked = !canAccessModule(id === "settingsBtn" ? "settings"
       : id === "projectsBtn" ? "projects" : id === "areaCalculationBtn" ? "area"
+      : id === "purchaseOrdersBtn" ? "purchase"
       : id === "inventoryBtn" ? "inventory" : id === "salesDeskBtn" ? "sales" : "workflow");
     button.disabled = locked;
     button.classList.toggle("locked-nav", locked);
@@ -966,6 +967,7 @@ async function showInventory(screen = "dashboard") {
 }
 
 async function showPurchaseOrders(screen = "form") {
+  if (!canAccessModule("purchase")) return showLockedModuleToast();
   activeView = "purchaseOrders";
   hideProjectManagementView();
   setCanvasActionsVisible(false);

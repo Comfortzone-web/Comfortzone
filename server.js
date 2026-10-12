@@ -2629,10 +2629,8 @@ async function handleApi(req, res) {
     if (url.pathname.startsWith("/api/project-management") || url.pathname.startsWith("/api/area-calculations")) {
       return send(res, 403, { error: "Staff cannot access Projects or Area Calculation" });
     }
-    if (url.pathname.startsWith("/api/purchase-orders")
-      && req.method !== "GET"
-      && !(req.method === "POST" && url.pathname === "/api/purchase-orders/pdf")) {
-      return send(res, 403, { error: "Staff can view Purchase Orders only" });
+    if (url.pathname.startsWith("/api/purchase-orders")) {
+      return send(res, 403, { error: "Staff cannot access Purchase Orders" });
     }
   }
 

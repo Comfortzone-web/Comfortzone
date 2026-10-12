@@ -14,7 +14,7 @@ async function freePort() {
   return port;
 }
 
-test("Staff owns sales records and can only view purchase orders", { timeout: 30000 }, async () => {
+test("Staff owns sales records and cannot access purchase orders", { timeout: 30000 }, async () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cz-staff-access-"));
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -101,7 +101,8 @@ test("Staff owns sales records and can only view purchase orders", { timeout: 30
     assert.equal((await request(alice, "/api/sales-crm/quotations", json({ ...bobQuote.quotations[0], status: "Sent" }))).status, 403);
 
     await save(admin, "/api/purchase-orders", { supplierName: "Supplier A", projectName: "Project A" });
-    assert.equal((await request(alice, "/api/purchase-orders")).status, 200);
+    assert.equal((await request(alice, "/api/purchase-orders")).status, 403);
+    assert.equal((await request(alice, "/api/purchase-orders/suppliers")).status, 403);
     assert.equal((await request(alice, "/api/purchase-orders", json({ supplierName: "Bad" }))).status, 403);
     assert.equal((await request(alice, "/api/purchase-orders/suppliers", json({ supplierName: "Bad" }))).status, 403);
     assert.equal((await request(alice, "/api/area-calculations")).status, 403);
