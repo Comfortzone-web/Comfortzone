@@ -2023,13 +2023,16 @@ td[contenteditable="true"]:focus {
 
 .sales-customers-card { --quote-border: #d8e3f3; }
 .sales-customers-table { table-layout: fixed; min-width: 860px; }
-.sales-customers-table .customer-name-col { width: 29%; }
-.sales-customers-table .customer-contact-col { width: 23%; }
-.sales-customers-table .customer-address-col { width: 18%; }
-.sales-customers-table .customer-trn-col { width: 13%; }
-.sales-customers-table .customer-sales-col { width: 10%; }
+.sales-customers-table .customer-name-col { width: 32%; }
+.sales-customers-table .customer-contact-col { width: 17%; }
+.sales-customers-table .customer-address-col { width: 21%; }
+.sales-customers-table .customer-trn-col { width: 10%; }
+.sales-customers-table .customer-sales-col { width: 13%; }
 .sales-customers-table .customer-actions-col { width: 7%; }
 .sales-customers-table th, .sales-customers-table td { overflow-wrap: anywhere; word-break: normal; }
+.sales-customers-table td:first-child strong { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.sales-customers-table td:nth-child(3) { white-space: normal; overflow-wrap: anywhere; line-height: 1.45; }
+.sales-customers-table th:nth-child(5), .sales-customers-table td:nth-child(5) { text-align: center; }
 .sales-customers-table th:last-child, .sales-customers-table td:last-child { text-align: center; white-space: nowrap; }
 .sales-customers-table .customer-subline, .sales-customers-table .customer-contact-cell span { display: block; margin-top: 3px; }
 .sales-customers-table .customer-contact-cell span { overflow-wrap: anywhere; }
