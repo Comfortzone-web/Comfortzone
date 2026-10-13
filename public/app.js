@@ -6830,7 +6830,7 @@ function purchaseOrderListHtml() {
         </colgroup>
         <thead><tr><th>PO No.</th><th>Supplier</th><th>Project Name</th><th>Purchase Rep</th><th>Grand Total</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
-          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${escapeHtml(order.purchaseRepresentative || "-")}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${rowMenu(isStaffUser() ? [{label:"View",action:"view-po",id:order.id},{label:"Download",action:"download-po",id:order.id}] : [{label:"Edit",action:"edit-po",id:order.id},{label:"Revision",action:"revision-po",id:order.id},{label:"Download",action:"download-po",id:order.id},{label:"Delete",action:"delete-po",id:order.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
+          ${orders.map(order => `<tr><td><strong>${escapeHtml(order.poNo || "Draft")}</strong><br><span class="inventory-muted">${formatInventoryDate(order.poDate)}</span></td><td>${escapeHtml(order.supplierName || "-")}</td><td>${escapeHtml(order.projectName || "-")}</td><td>${escapeHtml(order.purchaseRepresentative || "-")}</td><td>${money(order.grandTotal)}</td><td>${statusPill(order.status)}</td><td>${purchaseOrderActionMenu(order)}</td></tr>`).join("") || `<tr><td colspan="7">No purchase orders saved.</td></tr>`}
         </tbody>
       </table>
     </section>
@@ -9547,8 +9547,10 @@ function exportAreaCalculationExcel() {
 }
 
 function handlePurchaseClick(event) {
+  if (event.target.matches(".po-lpo-backdrop")) return closePurchaseOrderViewModal();
   const target = event.target.closest("button");
   if (!target || !$("#purchaseOrdersRoot").contains(target)) return;
+  if (target.dataset.poViewClose !== undefined) return closePurchaseOrderViewModal();
   if (target.dataset.poProjectRemove !== undefined) {
     const projects = purchaseProjectNamesFromValue(purchaseDraft?.projectName);
     projects.splice(Number(target.dataset.poProjectRemove), 1);
@@ -9592,8 +9594,9 @@ function removePurchaseAttachment() {
 
 function handlePurchaseMenuAction(action, idValue) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
-  if (action === "edit-po" || action === "view-po") {
-    if (isStaffUser() && action !== "view-po") return;
+  if (action === "view-po") return openPurchaseOrderViewModal(idValue);
+  if (action === "edit-po") {
+    if (isStaffUser()) return;
     const order = (purchaseState.orders || []).find(item => item.id === idValue);
     if (!order) return;
     purchaseRevisionPoNoLock = "";
@@ -9611,6 +9614,31 @@ function handlePurchaseMenuAction(action, idValue) {
     if (supplier) return openPurchaseSupplierModal(supplier);
   }
   if (action === "delete-po-supplier") return deletePurchaseSupplier(idValue);
+}
+
+function purchaseOrderActionMenu(order) {
+  const items = [{ label: "View", action: "view-po", id: order.id }];
+  if (!isStaffUser()) items.push({ label: "Edit", action: "edit-po", id: order.id }, { label: "Revision", action: "revision-po", id: order.id });
+  items.push({ label: "Download", action: "download-po", id: order.id });
+  if (!isStaffUser()) items.push({ label: "Delete", action: "delete-po", id: order.id, danger: true });
+  return rowMenu(items);
+}
+
+function openPurchaseOrderViewModal(orderId) {
+  const order = (purchaseState?.orders || []).find(item => item.id === orderId);
+  if (!order) return toast("Purchase order not found");
+  const detail = (label, value) => `<div><dt>${label}</dt><dd>${escapeHtml(value || "-")}</dd></div>`;
+  const itemRows = (order.items || []).map((item, index) => `<tr><td>${index + 1}</td><td><strong>${escapeHtml(item.description || "-")}</strong>${item.modelNo ? `<small>Model: ${escapeHtml(item.modelNo)}</small>` : ""}</td><td>${escapeHtml(item.qty ?? 0)}</td><td>${money(item.unitPrice)}</td><td>${escapeHtml(item.vatPercent ?? 0)}%</td><td>${money(item.amount || Number(item.qty || 0) * Number(item.unitPrice || 0))}</td></tr>`).join("");
+  const upload = (purchaseState.uploads || []).find(item => item.id === order.sourceUploadId);
+  const attachmentUrl = upload ? `/api/purchase-orders/uploads/${encodeURIComponent(upload.id)}` : "";
+  const statusClass = String(order.status || "Draft").toLowerCase().replace(/[^a-z]+/g, "-");
+  const modal = `<div class="pm-modal-backdrop pm-lpo-backdrop po-lpo-backdrop"><section class="pm-modal pm-lpo-modal" role="dialog" aria-modal="true" aria-labelledby="poViewModalTitle"><div class="pm-modal-head"><div><h2 id="poViewModalTitle">${escapeHtml(order.poNo || "Purchase Order")}</h2><p>${formatInventoryDate(order.poDate)} · ${escapeHtml(order.projectName || "-")}</p></div><div class="pm-lpo-modal-head-actions"><span class="pm-pill ${statusClass}">${escapeHtml(order.status || "Draft")}</span><button type="button" class="pm-close" data-po-view-close aria-label="Close purchase order details">×</button></div></div><div class="pm-lpo-modal-body"><dl class="pm-lpo-details">${detail("Supplier", order.supplierName)}${detail("Supplier Address", order.supplierAddress)}${detail("Supplier TRN", order.trn)}${detail("Project", order.projectName)}${detail("Purchase Representative", order.purchaseRepresentative)}${detail("Reference No.", order.quotationNo)}${order.quotationDate ? detail("Reference Date", formatInventoryDate(order.quotationDate)) : ""}${detail("Payment Terms", order.paymentTerms)}${order.deliveryTerms ? detail("Delivery Terms", order.deliveryTerms) : ""}${order.revision ? detail("Revision", order.revision) : ""}</dl><section class="pm-lpo-section"><h3>Items</h3><div class="pm-table-wrap"><table class="pm-table pm-lpo-items"><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>VAT</th><th>Amount</th></tr></thead><tbody>${itemRows || `<tr><td colspan="6" class="pm-table-empty">No items.</td></tr>`}</tbody></table></div></section><div class="pm-lpo-bottom"><div class="pm-lpo-extras">${order.notes ? `<section class="pm-lpo-section"><h3>Notes</h3><p>${escapeHtml(order.notes)}</p></section>` : ""}${upload ? `<section class="pm-lpo-section"><h3>Source Attachment</h3><a href="${attachmentUrl}" target="_blank" rel="noopener">${escapeHtml(upload.originalName || "View attachment")}</a></section>` : ""}</div><dl class="pm-lpo-totals">${detail("Subtotal", money(order.subtotal))}${detail("Discount", money(order.discount))}${detail("After Discount", money(order.totalAfterDiscount))}${detail("VAT", money(order.vatTotal))}<div class="pm-lpo-grand"><dt>Grand Total</dt><dd>${money(order.grandTotal)}</dd></div></dl></div></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-po-view-close>Close</button></div></section></div>`;
+  $("#purchaseOrdersRoot").insertAdjacentHTML("beforeend", modal);
+  $("#purchaseOrdersRoot .po-lpo-backdrop [data-po-view-close]")?.focus();
+}
+
+function closePurchaseOrderViewModal() {
+  $("#purchaseOrdersRoot .po-lpo-backdrop")?.remove();
 }
 
 window.openPurchaseOrder = async orderId => {
