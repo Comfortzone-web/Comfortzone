@@ -98,6 +98,10 @@ test("MTS users see only tagged projects and each dashboard shows only assigned 
     assert.equal(aliceView.permissions.canCreateProject, true);
     const aliceList = await (await request(aliceCookie, "/api/project-management/projects")).json();
     assert.deepEqual(aliceList.map(project => project.id), [aliceProject.id]);
+    const purchaseNamesResponse = await request(aliceCookie, "/api/purchase-orders/project-names");
+    assert.equal(purchaseNamesResponse.status, 200);
+    assert.deepEqual(await purchaseNamesResponse.json(), ["Alice project", "Bob project", "Untagged project"]);
+    assert.equal((await request(staffCookie, "/api/purchase-orders/project-names")).status, 403);
     const aliceDetail = await request(aliceCookie, `/api/project-management/projects/${aliceProject.id}`);
     assert.equal(aliceDetail.status, 200);
     assert.equal((await aliceDetail.json()).followUps.length, 5);

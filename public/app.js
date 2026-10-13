@@ -6221,8 +6221,7 @@ function csvCell(value) {
 
 async function loadPurchaseProjectNames() {
   try {
-    const projects = await api("/api/project-management/projects");
-    purchaseProjectNames = [...new Set(projects.map(project => String(project.name || "").trim()).filter(Boolean))];
+    purchaseProjectNames = await api("/api/purchase-orders/project-names");
   } catch (error) {
     console.warn("Could not load project names for purchase orders", error);
     purchaseProjectNames = null;

@@ -2788,6 +2788,12 @@ async function handleApi(req, res) {
     return send(res, 200, await inventoryView(await readInventory()));
   }
 
+  if (req.method === "GET" && url.pathname === "/api/purchase-orders/project-names") {
+    const store = await readProjectManagement();
+    const names = [...new Set(store.projects.map(project => cleanCell(project.name)).filter(Boolean))];
+    return send(res, 200, names.sort((a, b) => a.localeCompare(b)));
+  }
+
   if (req.method === "GET" && url.pathname === "/api/purchase-orders") {
     return send(res, 200, purchaseOrderView(await readPurchaseOrders()));
   }
