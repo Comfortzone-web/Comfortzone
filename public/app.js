@@ -346,7 +346,10 @@ async function init() {
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
   const projectManagementPath = location.pathname.match(/^\/projects(?:\/([^/]+))?\/?$/);
-  if (projectManagementPath && canAccessModule("projects")) {
+  const maintenancePath = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
+  if (maintenancePath && canAccessModule("maintenance")) {
+    await showMaintenance(maintenancePath[1] || "dashboard", maintenancePath[2] || "", false);
+  } else if (projectManagementPath && canAccessModule("projects")) {
     await showProjects(projectManagementPath[1] || "");
   } else if (projectId) {
     await loadProject(projectId);
@@ -370,6 +373,22 @@ function bindShell() {
   $("#projectsBtn").addEventListener("click", () => {
     if (!canAccessModule("projects")) return showLockedModuleToast();
     showProjects();
+  });
+  $("#maintenanceBtn").addEventListener("click", () => {
+    if (!canAccessModule("maintenance")) return showLockedModuleToast();
+    if (toggleActiveSidebarGroup("maintenance")) return;
+    showMaintenance("dashboard");
+  });
+  document.querySelectorAll("[data-maintenance-view]").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!canAccessModule("maintenance")) return showLockedModuleToast();
+      collapsedSidebarGroups.delete("maintenance");
+      showMaintenance(button.dataset.maintenanceView);
+    });
+  });
+  window.addEventListener("popstate", () => {
+    const match = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
+    if (match && canAccessModule("maintenance")) showMaintenance(match[1] || "dashboard", match[2] || "", false);
   });
   $("#documentsBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
@@ -559,6 +578,7 @@ function isStaffUser() {
 }
 
 function canAccessModule(moduleName) {
+  if (moduleName === "maintenance") return ["ADMIN", "MTS"].includes(norm(currentUser?.role));
   if (isStaffUser() && ["projects", "area", "settings", "purchase"].includes(moduleName)) return false;
   if (!isPoOnlyUser()) return true;
   if (moduleName === "projects") return true;
@@ -566,9 +586,13 @@ function canAccessModule(moduleName) {
 }
 
 function hideProjectManagementView() {
+  window.maintenanceModule?.dismiss?.();
   $("#projectsView")?.classList.add("hidden");
   $("#projectsBtn")?.classList.remove("active");
   document.querySelector(".topbar")?.classList.remove("projects-active");
+  $("#maintenanceView")?.classList.add("hidden");
+  $("#maintenanceBtn")?.classList.remove("active");
+  $(".app-shell")?.classList.remove("maintenance-mode");
 }
 
 function showLockedModuleToast() {
@@ -579,6 +603,7 @@ function activeSidebarGroup() {
   if (activeView === "salesDesk") return "sales";
   if (activeView === "inventory") return "inventory";
   if (activeView === "canvas" || activeView === "documents") return "workflow";
+  if (activeView === "maintenance") return "maintenance";
   return "";
 }
 
@@ -599,15 +624,17 @@ function applySidebarSubnavVisibility() {
   $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "sales" || collapsedSidebarGroups.has("sales"));
   $("#projectSubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "workflow" || collapsedSidebarGroups.has("workflow"));
   $("#inventorySubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "inventory" || collapsedSidebarGroups.has("inventory"));
+  $("#maintenanceSubnav")?.classList.toggle("hidden", activeGroup !== "maintenance" || collapsedSidebarGroups.has("maintenance"));
+  $("#maintenanceBtn")?.setAttribute("aria-expanded", String(activeGroup === "maintenance" && !collapsedSidebarGroups.has("maintenance")));
 }
 
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
-  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "purchaseOrdersBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn"];
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "purchaseOrdersBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn", "maintenanceBtn"];
   lockIds.forEach(id => {
     const button = document.getElementById(id);
     if (!button) return;
-    const locked = !canAccessModule(id === "settingsBtn" ? "settings"
+    const locked = !canAccessModule(id === "maintenanceBtn" ? "maintenance" : id === "settingsBtn" ? "settings"
       : id === "projectsBtn" ? "projects" : id === "areaCalculationBtn" ? "area"
       : id === "purchaseOrdersBtn" ? "purchase"
       : id === "inventoryBtn" ? "inventory" : id === "salesDeskBtn" ? "sales" : "workflow");
@@ -620,6 +647,7 @@ function applyRoleAccess() {
   $("#purchaseOrdersBtn")?.classList.toggle("active", activeView === "purchaseOrders");
   $("#areaCalculationBtn")?.classList.toggle("active", activeView === "areaCalculation");
   $("#projectsBtn")?.classList.toggle("active", activeView === "projects");
+  $("#maintenanceBtn")?.classList.toggle("active", activeView === "maintenance");
 }
 
 function applyAppSettings() {
@@ -852,6 +880,9 @@ async function showDocuments() {
 
 async function showProjects(projectId = "", tab = "overview") {
   if (!canAccessModule("projects")) return showLockedModuleToast();
+  $("#maintenanceView").classList.add("hidden");
+  $(".app-shell").classList.remove("maintenance-mode");
+  $("#maintenanceBtn").classList.remove("active");
   activeView = "projects";
   document.querySelector(".topbar")?.classList.add("projects-active");
   setCanvasActionsVisible(false);
@@ -884,6 +915,29 @@ async function showProjects(projectId = "", tab = "overview") {
 }
 
 window.showProjects = showProjects;
+
+async function showMaintenance(page = "dashboard", recordId = "", navigate = true) {
+  if (!canAccessModule("maintenance")) return showLockedModuleToast();
+  activeView = "maintenance";
+  setCanvasActionsVisible(false);
+  renderViewActions();
+  document.querySelector(".topbar")?.classList.remove("projects-active");
+  $(".app-shell").classList.add("maintenance-mode");
+  ["canvasView", "documentsView", "inventoryView", "purchaseOrdersView", "areaCalculationView", "salesDeskView", "projectsView", "settingsView"]
+    .forEach(id => $("#" + id)?.classList.add("hidden"));
+  $("#maintenanceView").classList.remove("hidden");
+  document.querySelectorAll(".sidebar .nav-button").forEach(button => button.classList.remove("active"));
+  $("#maintenanceBtn").classList.add("active");
+  applySidebarSubnavVisibility();
+  document.querySelectorAll("[data-maintenance-view]").forEach(button => button.classList.toggle("active", button.dataset.maintenanceView === page));
+  if (navigate) {
+    const nextPath = `/maintenance/${page}${recordId ? `/${encodeURIComponent(recordId)}` : ""}`;
+    if (location.pathname !== nextPath) history.pushState({}, "", nextPath);
+  }
+  await window.maintenanceModule?.open(page, recordId);
+}
+
+window.showMaintenance = showMaintenance;
 
 function showCanvas(mode = "") {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");

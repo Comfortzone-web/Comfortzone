@@ -1,0 +1,14 @@
+{
+  "name": "Comfort Zone AC Field Service",
+  "short_name": "CZ Field",
+  "description": "Maintenance jobs and service reports for Comfort Zone technicians",
+  "start_url": "/field/",
+  "scope": "/field/",
+  "display": "standalone",
+  "background_color": "#f5f8fc",
+  "theme_color": "#101d38",
+  "icons": [
+    { "src": "/field/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/field/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -6,6 +6,7 @@
   <title>HVAC Workflow App</title>
   <link rel="stylesheet" href="/styles.css?v=20260727-area-ypiece-fix">
   <link rel="stylesheet" href="/projects.css?v=20261006-projects-style-2">
+  <link rel="stylesheet" href="/maintenance.css?v=20261016-report-fields">
 </head>
 <body class="auth-pending">
   <aside class="sidebar">
@@ -42,6 +43,15 @@
     <button id="purchaseOrdersBtn" class="nav-button">Purchase Orders</button>
     <button id="areaCalculationBtn" class="nav-button">Area Calculation</button>
     <button id="projectsBtn" class="nav-button">Projects</button>
+    <button id="maintenanceBtn" class="nav-button maintenance-nav-button" aria-expanded="false">Maintenance <span class="maintenance-chevron" aria-hidden="true"></span></button>
+    <div id="maintenanceSubnav" class="subnav maintenance-subnav hidden">
+      <button data-maintenance-view="dashboard">Dashboard</button>
+      <button data-maintenance-view="amc">AMC Register</button>
+      <button data-maintenance-view="schedule">PM Schedule</button>
+      <button data-maintenance-view="work-orders">Work Orders</button>
+      <button data-maintenance-view="technicians">Technicians</button>
+      <button data-maintenance-view="reports">Service Reports</button>
+    </div>
     <div class="sidebar-footer">
       <button id="settingsBtn" class="nav-button">Settings</button>
       <button id="logoutBtn" class="nav-button">Logout</button>
@@ -90,6 +100,10 @@
 
     <section id="projectsView" class="projects-view hidden">
       <div id="projectsRoot"></div>
+    </section>
+
+    <section id="maintenanceView" class="maintenance-view hidden">
+      <div id="maintenanceRoot"></div>
     </section>
 
     <section id="settingsView" class="inventory-view hidden">
@@ -149,6 +163,7 @@
   </template>
 
   <script src="/projects-module.js?v=20261006-projects"></script>
-  <script src="/app.js?v=20260727-area-ypiece-fix"></script>
+  <script src="/maintenance.js?v=20261016-report-fields"></script>
+  <script src="/app.js?v=20261020-maintenance-role"></script>
 </body>
 </html>

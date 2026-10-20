@@ -21,6 +21,8 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   fs.writeFileSync(path.join(temp, "server.js"), source.replace("const PORTS = [5175, 5176, 5177, 8085];", `const PORTS = [${port}];`));
   fs.copyFileSync(path.join(__dirname, "..", "project-progress.js"), path.join(temp, "project-progress.js"));
+  fs.copyFileSync(path.join(__dirname, "..", "maintenance-api.js"), path.join(temp, "maintenance-api.js"));
+  fs.copyFileSync(path.join(__dirname, "..", "maintenance-store.js"), path.join(temp, "maintenance-store.js"));
   const server = spawn(process.execPath, ["server.js"], {
     cwd: temp, env: { ...process.env, SUPABASE_URL: "", SUPABASE_KEY: "" }, stdio: ["ignore", "pipe", "pipe"]
   });

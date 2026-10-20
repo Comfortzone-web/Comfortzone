@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const zlib = require("zlib");
 const { spawnSync } = require("child_process");
 const { calculateProjectProgress } = require("./project-progress");
+const { createMaintenanceApi } = require("./maintenance-api");
 let createClient = null;
 try {
   ({ createClient } = require("@supabase/supabase-js"));
@@ -110,6 +111,7 @@ const mimeTypes = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -2255,7 +2257,9 @@ function todayDisplayDate() {
 
 function serveStatic(req, res) {
   const urlPath = decodeURIComponent(new URL(req.url, `http://${req.headers.host}`).pathname);
-  const target = urlPath === "/" || urlPath === "/projects" || urlPath.startsWith("/projects/")
+  const target = urlPath === "/field" || urlPath === "/field/"
+    ? path.join(PUBLIC, "field", "index.html")
+    : urlPath === "/" || urlPath === "/projects" || urlPath.startsWith("/projects/") || urlPath === "/maintenance" || urlPath.startsWith("/maintenance/")
     ? path.join(PUBLIC, "index.html")
     : path.join(PUBLIC, urlPath);
   const normalized = path.normalize(target);
@@ -2589,6 +2593,7 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const parts = url.pathname.split("/").filter(Boolean);
+  if (parts[0] === "api" && parts[1] === "field") return maintenanceApi.routeField(req, res, url);
   const user = await sessionUser(req);
 
   if (req.method === "GET" && url.pathname === "/api/auth/me") {
@@ -2621,6 +2626,8 @@ async function handleApi(req, res) {
   }
 
   if (!user) return sendAuthRequired(res);
+
+  if (parts[0] === "api" && parts[1] === "maintenance") return maintenanceApi.routeOffice(req, res, url, user);
 
   if (isPoOnly(user) && !canPoOnlyAccessPath(req, url.pathname)) {
     return sendPoOnlyForbidden(res);
@@ -9349,6 +9356,11 @@ function escapeXml(value) {
 function money(value) {
   return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+const maintenanceApi = createMaintenanceApi({
+  dataDir: DATA, supabase, supabaseTable: SUPABASE_TABLE, send, readJson, collect, parseMultipart,
+  saveUpload, readUpload, deleteUpload, readSettings, PDFDocument
+});
 
 const server = http.createServer((req, res) => {
   if (req.url.startsWith("/api/")) {
