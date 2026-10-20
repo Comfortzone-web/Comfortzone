@@ -15,6 +15,9 @@
   const moneyWithCents = value => `AED ${Number(value || 0).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const vatInclusiveAmount = value => Number((Number(value || 0) * 1.05).toFixed(2));
   const paymentPercentage = (amount, contractValue) => vatInclusiveAmount(contractValue) > 0 ? Number((Number(amount || 0) / vatInclusiveAmount(contractValue) * 100).toFixed(2)) : 0;
+  const variationPaymentReceived = project => Number((project.variationPayments || []).reduce((sum, item) =>
+    /^(received|paid)$/i.test(String(item.status || "").trim()) ? sum + Number(item.amount || 0) : sum, 0).toFixed(2));
+  const variationPaymentOutstanding = project => Math.max(0, Number((vatInclusiveAmount(project.variationContractValue) - variationPaymentReceived(project)).toFixed(2)));
   const progressTone = value => {
     const percent = Number(value) || 0;
     if (percent <= 10) return "red";
@@ -30,7 +33,7 @@
   const dateTime = value => value ? new Date(value).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-";
   const statusClass = value => String(value || "pending").toLowerCase().replace(/[^a-z]+/g, "-");
   const pill = value => `<span class="pm-pill ${statusClass(value)}">${esc(value || "Pending")}</span>`;
-  const statusSelect = (collection, index, field, values, selected) => `<select class="pm-status-select pm-status-${statusClass(selected)}" data-pm-item="${collection}" data-pm-index="${index}" data-pm-field="${field}">${options(values, selected)}</select>`;
+  const statusSelect = (collection, index, field, values, selected, disabled = false) => `<select class="pm-status-select pm-status-${statusClass(selected)}" data-pm-item="${collection}" data-pm-index="${index}" data-pm-field="${field}" ${disabled ? "disabled" : ""}>${options(values, selected)}</select>`;
   const pendingStatusSelect = (id, selected) => `<select class="pm-status-select pm-status-${statusClass(selected)}" data-pm-pending-field="status" data-pm-pending-id="${esc(id)}">${options(["Pending", "In Progress", "Completed"], selected)}</select>`;
   const initials = value => String(value || "CZ").trim().split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase();
   const toast = message => {
@@ -262,8 +265,12 @@
     const contractWithVat = vatInclusiveAmount(project.contractValue);
     const receivedPercent = contractWithVat ? Math.min(100, d.receivedPayment / contractWithVat * 100) : 0;
     const pendingPaymentPercent = contractWithVat ? `${Math.max(0, Math.round(100 - receivedPercent))}% Pending` : "Pending amount not specified";
+    const variationContractWithVat = vatInclusiveAmount(project.variationContractValue);
+    const variationReceived = variationPaymentReceived(project);
+    const variationReceivedPercent = variationContractWithVat > 0 ? Math.min(100, variationReceived / variationContractWithVat * 100) : 0;
+    const variationPendingPercent = variationContractWithVat > 0 ? `${Math.max(0, Math.round(100 - variationReceivedPercent))}% Pending` : "Variation contract value not set";
     return `<div class="pm-detail-head"><div><div class="pm-breadcrumb"><button data-pm-action="back">Projects</button><span>›</span><b>${esc(project.code || project.name)}</b></div><h1>${esc(project.code ? `${project.code} – ${project.name}` : project.name)}</h1><p>Client: ${esc(project.customer || "-")} · Consultant: ${esc(project.consultant || "-")} ${project.location ? `· Location: ${esc(project.location)}` : "· Location: -"}</p></div><div class="pm-detail-actions"><button class="pm-secondary" data-pm-action="back">← Back to Projects</button><button class="pm-secondary" data-pm-action="edit-project">✎ Edit Project</button><button class="pm-secondary" data-pm-action="delete-project">...</button>${pill(project.status)}</div></div>
-      <div class="pm-detail-kpis"><div class="pm-detail-progress"><div class="pm-ring pm-progress-${progressTone(d.progress)}" style="--pm-progress:${d.progress}%"><strong>${d.progress}%</strong></div><div><b>Project Progress</b><span>${esc(d.nextMilestone === "Completed" ? "Ready for handover" : `Next: ${d.nextMilestone}`)}</span></div></div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus)}</strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Target Handover</span><strong>${date(project.targetHandover)}</strong><small>${project.targetHandover ? `${Math.max(0, Math.ceil((new Date(`${project.targetHandover}T00:00:00`) - new Date()) / 86400000))} days left` : "Set a target date"}</small></div></div>`;
+      <div class="pm-detail-kpis"><div class="pm-detail-progress"><div class="pm-ring pm-progress-${progressTone(d.progress)}" style="--pm-progress:${d.progress}%"><strong>${d.progress}%</strong></div><div><b>Project Progress</b><span>${esc(d.nextMilestone === "Completed" ? "Ready for handover" : `Next: ${d.nextMilestone}`)}</span></div></div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus)}</strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Variation Payment (Incl VAT)</span><strong>${moneyWithCents(variationReceived)} Received</strong><div class="pm-mini-progress pm-variation-progress"><i style="width:${variationReceivedPercent}%"></i></div><small>${esc(variationPendingPercent)}</small></div></div>`;
   }
 
   function renderDetail() {
@@ -353,7 +360,7 @@
 
   function installationTab(project) {
     const completed = project.installationItems.filter(item => item.installation_status === "completed").length;
-    return `<div class="pm-installation-layout"><section class="pm-panel pm-installation-main"><div class="pm-panel-head"><div><h2>Installation Progress</h2><p>Track and manage all installation work items for this project. ${completed} of ${project.installationItems.length} completed.</p></div><button class="pm-primary" data-pm-action="add-row" data-pm-section="installationItems">＋ Add Work Item</button></div><div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-installation-table"><thead><tr><th>#</th><th>Work Item</th><th>LPO</th><th>Delivery</th><th>Installation</th><th>Comments</th><th>Actions</th></tr></thead><tbody>${project.installationItems.map((item, index) => `<tr><td>${index + 1}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="item" value="${esc(item.item)}"></td><td>${checkpointIcon(item.lpo_status, "lpo_status", index)}</td><td>${checkpointIcon(item.delivered_status, "delivered_status", index)}</td><td>${checkpointIcon(item.installation_status, "installation_status", index)}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="comments" value="${esc(item.comments)}"></td><td><button class="pm-row-action" type="button" title="Delete work item" aria-label="Delete work item" data-pm-action="delete-row" data-pm-section="installationItems" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`).join("") || `<tr><td colspan="7" class="pm-table-empty">No installation work items yet.</td></tr>`}</tbody></table></div></section>${installationUpdatesPanel(project)}</div>`;
+    return `<section class="pm-panel pm-installation-main"><div class="pm-panel-head"><div><h2>Installation Progress</h2><p>Track and manage all installation work items for this project. ${completed} of ${project.installationItems.length} completed.</p></div><button class="pm-primary" data-pm-action="add-row" data-pm-section="installationItems">＋ Add Work Item</button></div><div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-installation-table"><thead><tr><th>#</th><th>Work Item</th><th>LPO</th><th>Delivery</th><th>Installation</th><th>Comments</th><th>Actions</th></tr></thead><tbody>${project.installationItems.map((item, index) => `<tr><td>${index + 1}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="item" value="${esc(item.item)}"></td><td>${checkpointIcon(item.lpo_status, "lpo_status", index)}</td><td>${checkpointIcon(item.delivered_status, "delivered_status", index)}</td><td>${checkpointIcon(item.installation_status, "installation_status", index)}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="comments" value="${esc(item.comments)}"></td><td><button class="pm-row-action" type="button" title="Delete work item" aria-label="Delete work item" data-pm-action="delete-row" data-pm-section="installationItems" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`).join("") || `<tr><td colspan="7" class="pm-table-empty">No installation work items yet.</td></tr>`}</tbody></table></div></section>`;
   }
 
   function testingTab(project) {
@@ -364,21 +371,76 @@
     const variation = section === "variationPayments";
     const rows = (project[section] || []).map((item, index) => {
       const label = item.milestone || `${section === "variationPayments" ? "variation payment" : "payment"} ${index + 1}`;
-      return `<tr><td>${index + 1}</td><td><input data-pm-item="${section}" data-pm-index="${index}" data-pm-field="milestone" value="${esc(item.milestone)}" aria-label="Payment details ${index + 1}"></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amount" value="${esc(item.amount)}" aria-label="Amount for ${esc(label)}"></td>${variation ? "" : `<td><output class="pm-payment-percentage">${item.amount === "" ? "" : `${paymentPercentage(item.amount, project.contractValue)}%`}</output></td>`}<td><input type="date" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="dueDate" value="${esc(item.dueDate)}" aria-label="Payment date for ${esc(label)}"></td><td>${statusSelect(section, index, "status", ["Pending", "Proforma sent", "Received"], item.status === "Paid" ? "Received" : item.status)}</td><td><input data-pm-item="${section}" data-pm-index="${index}" data-pm-field="comments" value="${esc(item.comments)}" aria-label="Comments for ${esc(label)}"></td><td class="pm-delete-cell"><button class="pm-row-action pm-payment-delete" type="button" title="Delete payment row" aria-label="Delete ${esc(label)}" data-pm-action="delete-row" data-pm-section="${section}" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`;
+      const invoice = item.invoice;
+      const invoicePending = invoice?.status === "review";
+      const amountLocked = /^(received|paid)$/i.test(String(item.status || "").trim()) || Boolean(invoice);
+      const paymentSection = variation ? "variation-payments" : "payments";
+      const fileInput = `<input class="pm-invoice-file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,application/pdf,image/*" data-pm-invoice-input data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}" aria-label="Upload invoice for ${esc(label)}">`;
+      const invoiceCell = invoice
+        ? `<div class="pm-invoice-attached"><strong title="${esc(invoice.originalName)}">${esc(invoice.originalName)}</strong><div class="pm-invoice-meta"><small class="${invoicePending ? "pm-invoice-review-note" : ""}">${invoicePending ? "Needs review" : "Invoice confirmed"}</small><div class="pm-invoice-actions"><button type="button" data-pm-action="preview-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Preview</button><button type="button" data-pm-action="download-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Download</button>${invoicePending ? `<button type="button" class="pm-invoice-verify" data-pm-action="review-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Verify</button>` : ""}</div></div></div>`
+        : `<button type="button" class="pm-invoice-upload" data-pm-action="choose-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}"><span aria-hidden="true">↑</span> Upload Invoice</button>${fileInput}`;
+      const amountAttrs = amountLocked ? `disabled title="${invoicePending ? "Verify the invoice to confirm its amounts" : "Received amount is locked"}"` : "";
+      return `<tr><td>${index + 1}</td><td><input data-pm-item="${section}" data-pm-index="${index}" data-pm-field="milestone" value="${esc(item.milestone)}" aria-label="Payment details ${index + 1}"></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amountWithoutVat" value="${esc(item.amountWithoutVat ?? "")}" aria-label="Amount without VAT for ${esc(label)}" ${amountAttrs}></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amount" value="${esc(item.amount)}" aria-label="Amount including VAT for ${esc(label)}" ${amountAttrs}></td>${variation ? "" : `<td><output class="pm-payment-percentage">${item.amount === "" ? "" : `${paymentPercentage(item.amount, project.contractValue)}%`}</output></td>`}<td><input type="date" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="dueDate" value="${esc(item.dueDate)}" aria-label="Payment date for ${esc(label)}" ${invoice ? "disabled" : ""}></td><td>${statusSelect(section, index, "status", ["Pending", "Proforma sent", "Received"], item.status === "Paid" ? "Received" : item.status, Boolean(invoice))}</td><td class="pm-invoice-cell">${invoiceCell}</td><td class="pm-delete-cell"><button class="pm-row-action pm-payment-delete" type="button" title="Delete payment row" aria-label="Delete ${esc(label)}" data-pm-action="delete-row" data-pm-section="${section}" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`;
     }).join("");
-    return `<div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-payment-table${variation ? " pm-variation-table" : ""}"><thead><tr><th>#</th><th>Payment Details</th><th>Amount (AED) Incl VAT</th>${variation ? "" : "<th>%</th>"}<th>Payment Date</th><th>Status</th><th>Comments</th><th class="pm-delete-col"></th></tr></thead><tbody>${rows || `<tr><td colspan="${variation ? 7 : 8}" class="pm-table-empty">No payment milestones yet.</td></tr>`}</tbody></table></div>`;
+    return `<div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-payment-table${variation ? " pm-variation-table" : ""}"><colgroup><col span="${variation ? 7 : 8}"><col class="pm-payment-action-col"></colgroup><thead><tr><th>#</th><th>Payment Details</th><th>Amount (AED) Without VAT</th><th>Amount (AED) Incl VAT</th>${variation ? "" : "<th>%</th>"}<th>Payment Date</th><th>Status</th><th>Upload Invoice</th><th class="pm-delete-col"></th></tr></thead><tbody>${rows || `<tr><td colspan="${variation ? 8 : 9}" class="pm-table-empty">No payment milestones yet.</td></tr>`}</tbody></table></div>`;
   }
 
   function paymentTab(project) {
     const variation = (project.variationPayments || []).length
-      ? `<section class="pm-panel pm-payment-panel"><div class="pm-panel-head"><h2>Variation Payment</h2></div>${paymentTable(project, "variationPayments")}</section>`
+      ? `<section class="pm-panel pm-payment-panel"><div class="pm-panel-head"><div><h2>Variation Payment</h2><p>The outstanding variation payment is ${Number(project.variationContractValue) > 0 ? `<strong class="pm-payment-outstanding">${moneyWithCents(variationPaymentOutstanding(project))} Incl VAT</strong>` : "not specified (set the variation contract value)"}.</p></div></div>${paymentTable(project, "variationPayments")}</section>`
       : "";
     return `<div class="pm-payment-stack"><section class="pm-panel pm-payment-panel"><div class="pm-panel-head"><div><h2>Payment Terms</h2><p>The outstanding payment for the project is <strong class="pm-payment-outstanding">${moneyWithCents(project.derived.pendingPayment)} Incl VAT</strong>.</p></div><div class="pm-payment-actions"><button class="pm-secondary" data-pm-action="add-row" data-pm-section="variationPayments">＋ Add Variation Payment</button><button class="pm-secondary" data-pm-action="add-row" data-pm-section="payments">＋ Add Payment</button></div></div>${paymentTable(project, "payments")}</section>${variation}</div>`;
   }
 
+  function invoicePath(section, rowId) {
+    return `/api/project-management/projects/${encodeURIComponent(state.project.id)}/${section}/${encodeURIComponent(rowId)}/invoice`;
+  }
+
+  function paymentRow(section, rowId) {
+    return state.project?.[section === "payments" ? "payments" : "variationPayments"]?.find(item => item.id === rowId);
+  }
+
+  function openInvoiceReview(section, rowId) {
+    const row = paymentRow(section, rowId);
+    if (row?.invoice?.status !== "review") return;
+    state.modal = "invoice-review";
+    root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal pm-small-modal pm-invoice-review-modal" data-pm-form="invoice-review" data-pm-section="${section}" data-pm-row-id="${esc(rowId)}"><div class="pm-modal-head"><div><h2>Verify invoice</h2><p>${esc(row.invoice.originalName)}</p></div><button type="button" class="pm-close" data-pm-action="close-modal" aria-label="Close">×</button></div><div class="pm-invoice-review-body"><p>${esc(row.invoice.reviewMessage || "Check the invoice against the values below before confirming.")}</p><button type="button" class="pm-secondary" data-pm-action="preview-invoice" data-pm-section="${section}" data-pm-row-id="${esc(rowId)}">Preview invoice</button><div class="pm-form-grid"><label>Amount (AED) Without VAT<input type="number" name="amountWithoutVat" min="0.01" step="0.01" required value="${esc(row.amountWithoutVat ?? "")}"></label><label>Amount (AED) Incl VAT<input type="number" name="amount" min="0.01" step="0.01" required value="${esc(row.amount ?? "")}"></label><label>Invoice Date<input type="date" name="dueDate" required value="${esc(row.dueDate || "")}"></label></div></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button type="submit" class="pm-primary">Confirm Invoice</button></div></form></div>`);
+  }
+
+  async function uploadInvoice(input) {
+    const file = input.files?.[0];
+    if (!file || !state.project) return;
+    const section = input.dataset.pmSection;
+    const rowId = input.dataset.pmRowId;
+    if (file.size > 15 * 1024 * 1024) { toast("Invoice file must be 15 MB or smaller"); return; }
+    const key = `${section}:${rowId}`;
+    if (state.invoiceBusy === key) return;
+    state.invoiceBusy = key;
+    const cell = input.closest(".pm-invoice-cell");
+    cell?.classList.add("pm-invoice-processing");
+    const button = cell?.querySelector('[data-pm-action="choose-invoice"]');
+    if (button) { button.disabled = true; button.textContent = "Processing invoice..."; }
+    try {
+      await projectSaveQueue;
+      const form = new FormData();
+      form.append("file", file);
+      state.project = await api(invoicePath(section, rowId), { method: "POST", body: form });
+      renderDetail();
+      if (paymentRow(section, rowId)?.invoice?.status === "review") {
+        toast("Invoice needs verification");
+        openInvoiceReview(section, rowId);
+      } else toast("Invoice processed and payment received");
+    } catch (error) {
+      toast(error.message);
+      renderDetail();
+    } finally {
+      state.invoiceBusy = "";
+    }
+  }
+
   function followUpsTab(project) {
     const rows = project.followUps.map((item, index) => `<tr><td>${date(item.date)}</td><td><strong>${esc(item.subject)}</strong><small>${esc(item.notes)}</small></td><td>${esc(item.assigned || "Unassigned")}</td><td>${pill(item.status)}</td><td>${pill(item.priority)}</td><td><button class="pm-followup-more" type="button" aria-label="More actions for ${esc(item.subject)}" aria-haspopup="menu" aria-expanded="false" data-pm-action="followup-menu" data-pm-index="${index}">⋯</button></td></tr>`).join("");
-    return `<section class="pm-panel"><div class="pm-panel-head"><div><h2>Follow-ups</h2><p>Capture the next conversation or site action before it gets lost.</p></div><button class="pm-primary" data-pm-action="add-followup">＋ Add Follow-up</button></div><div class="pm-table-wrap"><table class="pm-table pm-followups-table"><thead><tr><th>Date</th><th>Subject</th><th>Assigned</th><th>Status</th><th>Priority</th><th aria-label="Actions"></th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="pm-table-empty">No follow-ups yet.</td></tr>`}</tbody></table></div></section>`;
+    return `<div class="pm-followups-layout"><section class="pm-panel pm-followups-main"><div class="pm-panel-head"><div><h2>Follow-ups</h2><p>Capture the next conversation or site action before it gets lost.</p></div><button class="pm-primary" data-pm-action="add-followup">＋ Add Follow-up</button></div><div class="pm-table-wrap"><table class="pm-table pm-followups-table"><thead><tr><th>Date</th><th>Subject</th><th>Assigned</th><th>Status</th><th>Priority</th><th aria-label="Actions"></th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="pm-table-empty">No follow-ups yet.</td></tr>`}</tbody></table></div></section>${installationUpdatesPanel(project)}</div>`;
   }
 
   function filteredLpos() {
@@ -595,7 +657,7 @@
       state.selectedEngineers.push({ id: state.loginUser.id, name: state.loginUser.name });
     }
     state.engineerPickerOpen = false;
-    root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal" data-pm-form="project"><div class="pm-modal-head"><div><h2>${project.id ? "Edit Project" : "New Project"}</h2><p>Start with the project identity. The standard HVAC checklists will be created automatically.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Project Code<input name="code" value="${esc(project.code)}" placeholder="Optional"></label><label>Project Name<input name="name" required value="${esc(project.name === "Untitled Project" ? "" : project.name)}"></label><label>Customer<input name="customer" value="${esc(project.customer)}"></label><label>Consultant<input name="consultant" value="${esc(project.consultant)}"></label><label>Contact Person<input name="contact" value="${esc(project.contact)}"></label><label>Phone<input name="phone" value="${esc(project.phone)}"></label><label>Email<input type="email" name="email" value="${esc(project.email)}"></label><label>Status<select name="status">${options(["Active", "On Hold", "Completed"], project.status || "Active")}</select></label><label class="wide">Location<input name="location" value="${esc(project.location)}"></label><div class="wide pm-engineer-field"><label for="pmEngineerSearch">Project Engineers</label><div class="pm-engineer-picker"><div class="pm-engineer-chips" data-pm-engineer-chips></div><input id="pmEngineerSearch" data-pm-engineer-search type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="pmEngineerOptions" aria-expanded="false" placeholder="Search Login Access names"><div id="pmEngineerOptions" class="pm-engineer-options" role="listbox" hidden></div></div></div><label>Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="contractValue" value="${esc(project.contractValue || "")}"></label><label>Target Handover<input type="date" name="targetHandover" value="${esc(project.targetHandover)}"></label><label class="wide">Payment Note<textarea name="paymentSummary" rows="2">${esc(project.paymentSummary)}</textarea></label><label class="wide">Project Notes<textarea name="notes" rows="3">${esc(project.notes)}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${project.id ? "Save Changes" : "Create Project"}</button></div></form></div>`);
+    root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal" data-pm-form="project"><div class="pm-modal-head"><div><h2>${project.id ? "Edit Project" : "New Project"}</h2><p>Start with the project identity. The standard HVAC checklists will be created automatically.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Project Code<input name="code" value="${esc(project.code)}" placeholder="Optional"></label><label>Project Name<input name="name" required value="${esc(project.name === "Untitled Project" ? "" : project.name)}"></label><label>Customer<input name="customer" value="${esc(project.customer)}"></label><label>Consultant<input name="consultant" value="${esc(project.consultant)}"></label><label>Contact Person<input name="contact" value="${esc(project.contact)}"></label><label>Phone<input name="phone" value="${esc(project.phone)}"></label><label>Email<input type="email" name="email" value="${esc(project.email)}"></label><label>Status<select name="status">${options(["Active", "On Hold", "Completed"], project.status || "Active")}</select></label><label class="wide">Location<input name="location" value="${esc(project.location)}"></label><div class="wide pm-engineer-field"><label for="pmEngineerSearch">Project Engineers</label><div class="pm-engineer-picker"><div class="pm-engineer-chips" data-pm-engineer-chips></div><input id="pmEngineerSearch" data-pm-engineer-search type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="pmEngineerOptions" aria-expanded="false" placeholder="Search Login Access names"><div id="pmEngineerOptions" class="pm-engineer-options" role="listbox" hidden></div></div></div><label>Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="contractValue" value="${esc(project.contractValue || "")}"></label><label>Target Handover<input type="date" name="targetHandover" value="${esc(project.targetHandover)}"></label><label>Variation Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="variationContractValue" value="${esc(project.variationContractValue || "")}"></label><label>Payment Note<input name="paymentSummary" value="${esc(project.paymentSummary)}"></label><label class="wide">Project Notes<textarea name="notes" rows="3">${esc(project.notes)}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${project.id ? "Save Changes" : "Create Project"}</button></div></form></div>`);
     renderEngineerPicker();
   }
 
@@ -686,8 +748,16 @@
     const field = input.dataset.pmField;
     const next = structuredClone(state.project);
     if (!next[collection]?.[index]) return;
+    const payment = ["payments", "variationPayments"].includes(collection);
+    if (payment && next[collection][index].invoice && field !== "milestone") return;
+    if (payment && ["amount", "amountWithoutVat"].includes(field) && /^(received|paid)$/i.test(String(next[collection][index].status || "").trim())) return;
     next[collection][index][field] = input.value;
-    if ((collection === "payments" || collection === "variationPayments") && field === "amount") next[collection][index].percentage = paymentPercentage(input.value, Number(next.contractValue || 0));
+    if (payment && ["amount", "amountWithoutVat"].includes(field)) {
+      const row = next[collection][index];
+      if (field === "amountWithoutVat") row.amount = input.value === "" ? "" : Number((Number(input.value) * 1.05).toFixed(2));
+      else row.amountWithoutVat = input.value === "" ? "" : Number((Number(input.value) / 1.05).toFixed(2));
+      row.percentage = paymentPercentage(row.amount, Number(next.contractValue || 0));
+    }
     await saveProjectPayload(projectPayload(next), "Project progress saved");
   }
 
@@ -771,6 +841,17 @@
       return;
     }
     const action = target.dataset.pmAction;
+    if (action === "choose-invoice") {
+      const input = root.querySelector(`[data-pm-invoice-input][data-pm-section="${target.dataset.pmSection}"][data-pm-row-id="${target.dataset.pmRowId}"]`);
+      input?.click();
+      return;
+    }
+    if (action === "preview-invoice" || action === "download-invoice") {
+      const url = invoicePath(target.dataset.pmSection, target.dataset.pmRowId) + (action === "download-invoice" ? "?download=1" : "");
+      window.open(url, "_blank", "noopener");
+      return;
+    }
+    if (action === "review-invoice") return openInvoiceReview(target.dataset.pmSection, target.dataset.pmRowId);
     if (action === "retry-lpos") return loadProjectLpos();
     if (action === "view-lpo") return openLpoModal(target.dataset.pmLpoId);
     if (action === "close-lpo") return closeLpoModal();
@@ -952,7 +1033,7 @@
         const match = /^Variation\s+(\d+)$/i.exec(String(item.milestone || "").trim());
         return Math.max(highest, match ? Number(match[1]) : 0);
       }, next.variationPayments.length) + 1 : 0;
-      const row = section === "submittals" ? { id: crypto.randomUUID(), item: "New Submittal", status: "Pending", comments: "" } : section === "installationItems" ? { id: crypto.randomUUID(), item: "New Work Item", lpo_status: "not_started", delivered_status: "not_started", installation_status: "not_started", progress: 0, comments: "" } : section === "testingItems" ? { id: crypto.randomUUID(), activity: "New Activity", status: "Not Started", comments: "" } : { id: crypto.randomUUID(), milestone: section === "variationPayments" ? `Variation ${variationNumber}` : "New Milestone", percentage: 0, amount: "", dueDate: "", status: "Pending", comments: "" };
+      const row = section === "submittals" ? { id: crypto.randomUUID(), item: "New Submittal", status: "Pending", comments: "" } : section === "installationItems" ? { id: crypto.randomUUID(), item: "New Work Item", lpo_status: "not_started", delivered_status: "not_started", installation_status: "not_started", progress: 0, comments: "" } : section === "testingItems" ? { id: crypto.randomUUID(), activity: "New Activity", status: "Not Started", comments: "" } : { id: crypto.randomUUID(), milestone: section === "variationPayments" ? `Variation ${variationNumber}` : "New Milestone", percentage: 0, amountWithoutVat: "", amount: "", dueDate: "", status: "Pending", comments: "" };
       next[section].push(row); await saveProjectPayload(projectPayload(next), section === "variationPayments" ? "Variation payment added" : "Checklist row added"); return;
     }
     if (action === "delete-row") {
@@ -973,6 +1054,7 @@
 
   async function onChange(event) {
     const target = event.target;
+    if (target.matches("[data-pm-invoice-input]")) return uploadInvoice(target);
     if (target.matches("[data-pm-folder-select]")) {
       if (target.checked) state.selectedFolderNames.add(target.dataset.pmFolderSelect);
       else state.selectedFolderNames.delete(target.dataset.pmFolderSelect);
@@ -1048,13 +1130,20 @@
     const data = Object.fromEntries(new FormData(form).entries());
     const submitButton = form.querySelector('button[type="submit"]');
     const submitLabel = submitButton?.textContent;
-    if (submitButton && ["project", "followup"].includes(form.dataset.pmForm)) {
+    if (submitButton && ["project", "followup", "invoice-review"].includes(form.dataset.pmForm)) {
       submitButton.disabled = true;
       submitButton.textContent = "Saving...";
     }
     try {
-      if (form.dataset.pmForm === "project") {
-        const payload = { ...(state.project ? projectPayload(state.project) : {}), ...data, projectEngineers: state.selectedEngineers, contractValue: Number(data.contractValue || 0) };
+      if (form.dataset.pmForm === "invoice-review") {
+        await projectSaveQueue;
+        state.project = await api(`${invoicePath(form.dataset.pmSection, form.dataset.pmRowId)}/confirm`, {
+          method: "POST", body: JSON.stringify({ ...data, invoiceId: paymentRow(form.dataset.pmSection, form.dataset.pmRowId)?.invoice?.id })
+        });
+        renderDetail();
+        toast("Invoice verified and payment received");
+      } else if (form.dataset.pmForm === "project") {
+        const payload = { ...(state.project ? projectPayload(state.project) : {}), ...data, projectEngineers: state.selectedEngineers, contractValue: Number(data.contractValue || 0), variationContractValue: Number(data.variationContractValue || 0) };
         await saveProjectPayload(payload, state.project?.id ? "Project details saved" : "Project created");
       } else if (form.dataset.pmForm.startsWith("document-")) {
         const mode = form.dataset.pmForm.slice("document-".length);

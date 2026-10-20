@@ -372,21 +372,86 @@ function projectManagementContractWithVat(contractValue) {
 
 function projectManagementDefaultPayments() {
   return [{
-    id: id(), milestone: "Advance Payment", percentage: 0, amount: "", dueDate: "",
+    id: id(), milestone: "Advance Payment", percentage: 0, amountWithoutVat: "", amount: "", dueDate: "",
     status: "Pending", comments: "", updatedAt: new Date().toISOString()
   }];
+}
+
+function projectManagementNormalizeInvoice(invoice) {
+  if (!invoice?.id || !invoice?.storedName) return null;
+  return {
+    id: cleanCell(invoice.id), originalName: cleanCell(invoice.originalName), storedName: cleanCell(invoice.storedName),
+    mimeType: cleanCell(invoice.mimeType), size: Number(invoice.size) || 0,
+    uploadedAt: cleanCell(invoice.uploadedAt), uploadedBy: cleanCell(invoice.uploadedBy),
+    status: invoice.status === "confirmed" ? "confirmed" : "review",
+    reviewMessage: cleanCell(invoice.reviewMessage || ""),
+    verifiedAt: cleanCell(invoice.verifiedAt || ""), verifiedBy: cleanCell(invoice.verifiedBy || "")
+  };
 }
 
 function projectManagementNormalizePaymentRows(rows, contractValue, contractWithVat, now) {
   return rows.map(item => {
     const amount = item.amount === "" ? "" : Number(Math.max(0, Number(item.amount ?? contractValue * (Number(item.percentage) || 0) / 100) || 0).toFixed(2));
+    const amountWithoutVat = item.amountWithoutVat === "" || (item.amountWithoutVat == null && amount === "") ? ""
+      : Number(Math.max(0, Number(item.amountWithoutVat ?? Number(amount || 0) / 1.05) || 0).toFixed(2));
     return {
       id: cleanCell(item.id || id()), milestone: cleanCell(item.milestone || ""),
       percentage: contractWithVat ? Number((Number(amount || 0) / contractWithVat * 100).toFixed(2)) : 0,
-      amount, dueDate: cleanCell(item.dueDate || ""),
-      status: cleanCell(item.status || "Pending") || "Pending", comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
+      amountWithoutVat, amount, dueDate: cleanCell(item.dueDate || ""),
+      status: cleanCell(item.status || "Pending") || "Pending", comments: cleanCell(item.comments || ""),
+      invoice: projectManagementNormalizeInvoice(item.invoice), updatedAt: cleanCell(item.updatedAt || now)
     };
   });
+}
+
+function projectManagementInvoiceDate(value) {
+  const date = parseServerDate(value);
+  if (!date) return "";
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : "";
+}
+
+function projectManagementInvoiceValues(input = {}) {
+  const amountWithoutVat = parseLooseNumber(input.amountWithoutVat);
+  const amount = parseLooseNumber(input.amountInclVat);
+  const dueDate = projectManagementInvoiceDate(input.invoiceDate);
+  const valid = amountWithoutVat > 0 && amount >= amountWithoutVat && Boolean(dueDate);
+  return { amountWithoutVat: amountWithoutVat > 0 ? Number(amountWithoutVat.toFixed(2)) : "",
+    amount: amount > 0 ? Number(amount.toFixed(2)) : "", dueDate,
+    needsReview: !valid || input.needsReview === true,
+    message: cleanCell(input.message || (valid ? "" : "Check both amounts and the invoice date before confirming.")) };
+}
+
+function projectManagementInvoiceMime(filePart) {
+  const bytes = filePart.body;
+  if (bytes.subarray(0, 5).toString() === "%PDF-") return "application/pdf";
+  if (bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return "image/png";
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "image/jpeg";
+  if (/^GIF8[79]a$/.test(bytes.subarray(0, 6).toString())) return "image/gif";
+  if (bytes.subarray(0, 4).toString() === "RIFF" && bytes.subarray(8, 12).toString() === "WEBP") return "image/webp";
+  return "";
+}
+
+async function projectManagementExtractInvoice(filePart) {
+  if (!process.env.OPENAI_API_KEY) return projectManagementInvoiceValues({ message: "Automatic extraction is unavailable. Verify the invoice manually." });
+  const mime = filePart.mimeType;
+  const data = filePart.body.toString("base64");
+  const content = [{ type: "input_text", text: "Read this payment invoice. Return the exact AED amount before VAT, exact AED total including VAT, and invoice date in YYYY-MM-DD. Use empty strings when any field is missing or ambiguous. Do not infer the pre-VAT amount from the total. Set needsReview true if multiple totals or dates conflict, the scan is unclear, or any field is uncertain. Return JSON only." }];
+  if (mime === "application/pdf") content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${data}` });
+  else content.push({ type: "input_image", image_url: `data:${mime};base64,${data}` });
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_MODEL, input: [{ role: "user", content }], temperature: 0,
+      text: { format: { type: "json_schema", name: "project_payment_invoice", strict: true, schema: {
+        type: "object", additionalProperties: false,
+        properties: { amountWithoutVat: { type: "string" }, amountInclVat: { type: "string" }, invoiceDate: { type: "string" }, needsReview: { type: "boolean" }, message: { type: "string" } },
+        required: ["amountWithoutVat", "amountInclVat", "invoiceDate", "needsReview", "message"]
+      } } }
+    }), signal: AbortSignal.timeout(45000)
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(json.error?.message || "Invoice extraction failed");
+  return projectManagementInvoiceValues(JSON.parse(extractResponseText(json)));
 }
 
 function projectManagementNormalizeProject(input = {}, options = {}) {
@@ -407,6 +472,7 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
       id: cleanCell(item?.id || ""), name: cleanCell(item?.name || "")
     })).filter(item => item.id && item.name).map(item => [item.id, item])).values()] : [],
     contractValue,
+    variationContractValue: Math.max(0, Number(input.variationContractValue || 0) || 0),
     notes: cleanCell(input.notes || ""),
     paymentSummary: cleanCell(input.paymentSummary || ""),
     paymentStatus: cleanCell(input.paymentStatus || ""),
@@ -538,6 +604,12 @@ async function readProjectManagement() {
 
 async function writeProjectManagement(store) {
   await writeStore("project-management", PROJECT_MANAGEMENT_FILE, normalizeProjectManagementStore(store));
+}
+
+async function writeProjectManagementInvoice(store) {
+  const normalized = normalizeProjectManagementStore(store);
+  if (USE_SUPABASE) await writeSupabaseValue("project-management", normalized);
+  else fs.writeFileSync(PROJECT_MANAGEMENT_FILE, JSON.stringify(normalized, null, 2));
 }
 
 function projectManagementActivity(project, user, action, details) {
@@ -2322,6 +2394,77 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     return send(res, 200, projectManagementView(project));
   }
 
+  if (["payments", "variation-payments"].includes(parts[4]) && parts[6] === "invoice") {
+    const section = parts[4] === "payments" ? "payments" : "variationPayments";
+    const row = project[section].find(item => item.id === decodeURIComponent(parts[5] || ""));
+    if (!row) return notFound(res);
+    const scope = `project-management/${project.id}/invoices`;
+    if (req.method === "GET" && parts.length === 7) {
+      if (!row.invoice) return notFound(res);
+      const bytes = await readUpload(scope, row.invoice.storedName);
+      if (!bytes) return notFound(res);
+      res.writeHead(200, {
+        "Content-Type": row.invoice.mimeType,
+        "Content-Disposition": `${url.searchParams.get("download") === "1" ? "attachment" : "inline"}; filename="${safeName(row.invoice.originalName)}"`,
+        "Content-Length": bytes.length, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"
+      });
+      return res.end(bytes);
+    }
+    if (req.method === "POST" && parts.length === 7) {
+      if (Number(req.headers["content-length"] || 0) > 15 * 1024 * 1024) return send(res, 413, { error: "Invoice file must be 15 MB or smaller" });
+      const multipart = parseMultipart(await collect(req), req.headers["content-type"] || "");
+      const filePart = multipart.find(item => item.filename);
+      if (!filePart) return send(res, 400, { error: "Choose a PDF or image invoice" });
+      if (filePart.body.length > 15 * 1024 * 1024) return send(res, 413, { error: "Invoice file must be 15 MB or smaller" });
+      const mimeType = projectManagementInvoiceMime(filePart);
+      if (!mimeType) return send(res, 400, { error: "Only PDF, PNG, JPEG, GIF, and WebP invoices are supported" });
+      const invoiceId = id();
+      const storedName = `${invoiceId}-${safeName(filePart.filename)}`;
+      const previousInvoice = row.invoice;
+      try {
+        await saveUpload(scope, storedName, filePart.body, mimeType);
+        const detected = await projectManagementExtractInvoice({ ...filePart, mimeType }).catch(() => projectManagementInvoiceValues({ message: "Invoice extraction was unsuccessful. Verify the values manually." }));
+        const now = new Date().toISOString();
+        row.amountWithoutVat = detected.amountWithoutVat;
+        row.amount = detected.amount;
+        row.dueDate = detected.dueDate;
+        row.status = detected.needsReview ? "Pending" : "Received";
+        row.invoice = { id: invoiceId, originalName: safeName(filePart.filename), storedName, mimeType, size: filePart.body.length,
+          uploadedAt: now, uploadedBy: user.name, status: detected.needsReview ? "review" : "confirmed", reviewMessage: detected.message,
+          verifiedAt: detected.needsReview ? "" : now, verifiedBy: detected.needsReview ? "" : user.name };
+        row.updatedAt = now;
+        project.updatedAt = now;
+        projectManagementActivity(project, user, detected.needsReview ? "Invoice needs review" : "Invoice processed", `${row.milestone}: ${filePart.filename}`);
+        await writeProjectManagementInvoice(store);
+      } catch (error) {
+        await deleteUpload(scope, storedName).catch(() => {});
+        return send(res, 500, { error: error.message || "Invoice upload failed" });
+      }
+      if (previousInvoice) await deleteUpload(scope, previousInvoice.storedName).catch(error => console.error(error));
+      return send(res, 200, projectManagementView(project));
+    }
+    if (req.method === "POST" && parts[7] === "confirm" && parts.length === 8) {
+      if (row.invoice?.status !== "review") return send(res, 409, { error: "No invoice is awaiting review" });
+      const body = await readJson(req);
+      if (body.invoiceId !== row.invoice.id) return send(res, 409, { error: "Invoice has changed. Review the latest upload." });
+      const values = projectManagementInvoiceValues({ amountWithoutVat: body.amountWithoutVat, amountInclVat: body.amount, invoiceDate: body.dueDate });
+      if (values.needsReview) return send(res, 400, { error: values.message });
+      row.amountWithoutVat = values.amountWithoutVat;
+      row.amount = values.amount;
+      row.dueDate = values.dueDate;
+      row.status = "Received";
+      row.invoice.status = "confirmed";
+      row.invoice.verifiedAt = new Date().toISOString();
+      row.invoice.verifiedBy = user.name;
+      row.invoice.reviewMessage = "";
+      row.updatedAt = row.invoice.verifiedAt;
+      project.updatedAt = row.invoice.verifiedAt;
+      projectManagementActivity(project, user, "Invoice verified", `${row.milestone}: ${row.invoice.originalName}`);
+      await writeProjectManagementInvoice(store);
+      return send(res, 200, projectManagementView(project));
+    }
+  }
+
   if (parts[2] === "projects" && parts[4] === "pending-works") {
     if (req.method === "POST" && parts.length === 5) {
       const row = { id: id(), type: "Manual", workItem: "New pending work", status: "Pending", priority: "Medium", dueDate: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()) };
@@ -2368,6 +2511,26 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     const body = await readJson(req);
     const next = projectManagementNormalizeProject({ ...project, ...body, id: project.id, createdAt: project.createdAt, createdBy: project.createdBy }, { user });
     if (!projectManagementSyncFollowUpAssignees(next, project, settings.users)) return send(res, 400, { error: "Select an active Login Access user for each assigned follow-up" });
+    const removedInvoices = [];
+    for (const section of ["payments", "variationPayments"]) {
+      const previousRows = new Map(project[section].map(row => [row.id, row]));
+      for (const row of next[section]) {
+        const previous = previousRows.get(row.id);
+        row.invoice = previous?.invoice || null;
+        if (previous?.invoice?.status === "confirmed") {
+          row.amountWithoutVat = previous.amountWithoutVat;
+          row.amount = previous.amount;
+          row.dueDate = previous.dueDate;
+          row.status = "Received";
+          row.percentage = previous.percentage;
+        } else if (previous?.invoice?.status === "review") {
+          row.status = "Pending";
+        }
+      }
+      for (const row of project[section]) {
+        if (row.invoice && !next[section].some(candidate => candidate.id === row.id)) removedInvoices.push(row.invoice);
+      }
+    }
     next.activityHistory = project.activityHistory || [];
     const now = new Date().toISOString();
     next.followUps.forEach(item => {
@@ -2412,11 +2575,15 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     next.updatedAt = now;
     store.projects[projectIndex] = next;
     await writeProjectManagement(store);
+    for (const invoice of removedInvoices) await deleteUpload(`project-management/${project.id}/invoices`, invoice.storedName);
     return send(res, 200, projectManagementView(next));
   }
 
   if (req.method === "DELETE" && parts[2] === "projects" && parts.length === 4) {
     for (const document of project.documents || []) await deleteUpload(`project-management/${project.id}`, document.storedName);
+    for (const row of [...project.payments, ...project.variationPayments]) {
+      if (row.invoice) await deleteUpload(`project-management/${project.id}/invoices`, row.invoice.storedName);
+    }
     store.projects.splice(projectIndex, 1);
     await writeProjectManagement(store);
     return send(res, 200, { ok: true });
