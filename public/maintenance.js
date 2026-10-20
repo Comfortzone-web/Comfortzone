@@ -23,6 +23,7 @@
     workOrderFilters: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" }
   };
   let lastRenderKey = "", lastRenderedDrawer = "", drawerReturnFocus = null;
+  let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null;
   const icon = (name, className = "") => `<img class="maint-icon ${className}" src="/assets/maintenance-icons/${name}.svg" alt="" aria-hidden="true">`;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const day = value => value ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
@@ -55,9 +56,28 @@
     return response.headers.get("Content-Type")?.includes("application/json") ? response.json() : response.blob();
   }
 
-  async function refresh() {
-    state.data = await request("/api/maintenance/summary");
-    render();
+  async function refresh({ background = false } = {}) {
+    const requestId = ++latestRequest;
+    const data = await request("/api/maintenance/summary");
+    if (requestId !== latestRequest) return;
+    state.data = data;
+    lastLoadedAt = Date.now();
+    if (!background || !state.drawer) render();
+  }
+
+  function prefetch() {
+    if (state.data) return Promise.resolve();
+    if (!prefetchPromise) {
+      const requestId = latestRequest;
+      const pending = request("/api/maintenance/summary").then(data => {
+        if (requestId === latestRequest && !state.data) {
+          state.data = data;
+          lastLoadedAt = Date.now();
+        }
+      }).finally(() => { if (prefetchPromise === pending) prefetchPromise = null; });
+      prefetchPromise = pending;
+    }
+    return prefetchPromise;
   }
 
   async function open(page = "dashboard", recordId = "") {
@@ -84,8 +104,20 @@
       state.status.technicians = "all"; state.technicianAvailability = "all";
       state.search.technicians = ""; state.technicianDirectorySearch = "";
     }
+    if (state.data) {
+      render();
+      if (Date.now() - lastLoadedAt > 15000 && !backgroundRefresh) {
+        const pending = refresh({ background: true }).catch(handleError).finally(() => { if (backgroundRefresh === pending) backgroundRefresh = null; });
+        backgroundRefresh = pending;
+      }
+      return;
+    }
     root.innerHTML = `<div class="maint-loading">Loading Maintenance...</div>`;
-    try { await refresh(); }
+    try {
+      if (prefetchPromise) await prefetchPromise.catch(() => {});
+      if (state.data) render();
+      else await refresh();
+    }
     catch (error) { root.innerHTML = `<div class="maint-error">${esc(error.message)} <button data-action="refresh">Retry</button></div>`; }
   }
 
@@ -1728,7 +1760,9 @@
     }
   });
 
-  window.maintenanceModule = { open, refresh, dismiss() { state.drawer = ""; document.body.classList.remove("maint-drawer-open"); } };
+  window.maintenanceModule = { open, refresh, prefetch,
+    reset() { latestRequest++; state.data = null; lastLoadedAt = 0; prefetchPromise = null; backgroundRefresh = null; },
+    dismiss() { state.drawer = ""; document.body.classList.remove("maint-drawer-open"); } };
   let pmResizeTimer;
   window.addEventListener?.("resize", () => {
     if (state.page !== "schedule" || !state.data) return;

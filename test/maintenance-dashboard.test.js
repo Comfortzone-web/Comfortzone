@@ -23,6 +23,7 @@ test("dashboard renders live data and keeps its controls connected", async () =>
   };
   const listeners = {};
   const routes = [];
+  let summaryRequests = 0;
   const scroller = { scrollTop: 0 };
   const root = {
     innerHTML: "",
@@ -35,10 +36,19 @@ test("dashboard renders live data and keeps its controls connected", async () =>
     document: { querySelector: () => root, body: { classList: { remove() {}, toggle() {} } }, scrollingElement: scroller,
       activeElement: null, addEventListener() {} },
     window: { scrollY: 0, scrollTo() {}, showMaintenance: (...args) => routes.push(args) },
-    fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => summary }),
+    fetch: async () => { summaryRequests++; return { ok: true, headers: { get: () => "application/json" }, json: async () => summary }; },
     crypto: webcrypto, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
+  await context.window.maintenanceModule.prefetch();
+  assert.equal(root.innerHTML, "");
+  await context.window.maintenanceModule.open("dashboard");
+  assert.equal(summaryRequests, 1);
+  assert.doesNotMatch(root.innerHTML, /Loading Maintenance/);
+  await context.window.maintenanceModule.open("amc");
+  assert.match(root.innerHTML, /AMC Register/);
+  assert.doesNotMatch(root.innerHTML, /Loading Maintenance/);
+  assert.equal(summaryRequests, 1);
   await context.window.maintenanceModule.open("dashboard");
 
   assert.match(root.innerHTML, /class="maint-dashboard"/);

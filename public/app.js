@@ -336,6 +336,7 @@ async function init() {
   const authenticated = await loadAuth();
   if (!authenticated) return;
   applyRoleAccess();
+  if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(error => console.warn(error));
   if (isPoOnlyUser()) {
     if (location.pathname.match(/^\/projects(?:\/[^/]+)?\/?$/)) await showProjects(location.pathname.split("/")[2] || "");
     else await showProjects();
@@ -527,6 +528,7 @@ async function login(event) {
     appSettings = auth.settings;
     applyAppSettings();
     applyRoleAccess();
+    if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(error => console.warn(error));
     hideLogin();
     if (isPoOnlyUser()) {
       await showProjects();
@@ -559,6 +561,7 @@ function warmViewData() {
 
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
+  window.maintenanceModule?.reset?.();
   currentUser = null;
   salesCrmState = null;
   costingState = null;
