@@ -63,8 +63,8 @@ test("completed follow-ups and pending works remain on the dashboard for 24 hour
     let project = await created.json();
     const base = `/api/project-management/projects/${project.id}`;
     const dashboard = async () => (await request("/api/project-management/dashboard")).json();
-    project.submittals = [{ id: "progress-submitted", item: "Drawing", status: "Submitted" }];
-    project.installationItems = [{ id: "progress-installation", item: "Ducting", lpo_status: "completed", delivered_status: "in_progress", installation_status: "not_started" }];
+    project.submittals = [{ id: "progress-submitted", item: "Drawing", status: "Approved" }];
+    project.installationItems = [{ id: "progress-installation", item: "Ducting", boqQty: 100, lpoQty: 100, deliveredQty: 50, installedQty: 0 }];
     project.testingItems = [{ id: "progress-testing", activity: "Testing", status: "In Progress" }];
     const progressUpdate = await request(base, json("PUT", project));
     assert.equal(progressUpdate.status, 200);

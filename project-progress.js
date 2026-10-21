@@ -1,26 +1,34 @@
-const INSTALLATION_CHECKPOINTS = ["lpo_status", "delivered_status", "installation_status"];
+const PROGRESS_PARTS = 5;
 
-function statusCredit(value, completed, partial) {
-  const status = String(value || "").trim().toLowerCase();
-  if (completed.includes(status)) return 1;
-  return partial.includes(status) ? 0.5 : 0;
+function completedFraction(items, completed) {
+  return items.length ? items.filter(completed).length / items.length : 0;
+}
+
+function quantityFraction(items, field) {
+  if (!items.length) return 0;
+  const measured = items.filter(item => Number(item.boqQty) > 0);
+  const totalBoq = measured.reduce((sum, item) => sum + Number(item.boqQty), 0);
+  if (!totalBoq) return 0;
+  const completed = measured.reduce((sum, item) => {
+    const quantity = Number(item[field]);
+    return sum + Math.min(Number(item.boqQty), Number.isFinite(quantity) ? Math.max(0, quantity) : 0);
+  }, 0);
+  return completed / totalBoq * measured.length / items.length;
 }
 
 function calculateProjectProgress(project) {
-  const submittals = project.submittals || [];
-  const installationItems = project.installationItems || [];
-  const testingItems = project.testingItems || [];
-  const total = submittals.length + installationItems.length * INSTALLATION_CHECKPOINTS.length + testingItems.length;
-  if (!total) return 0;
-
-  const submittalCredits = submittals.reduce((sum, item) =>
-    sum + statusCredit(item.status, ["approved"], ["submitted"]), 0);
-  const installationCredits = installationItems.reduce((sum, item) =>
-    sum + INSTALLATION_CHECKPOINTS.reduce((rowSum, field) =>
-      rowSum + statusCredit(item[field], ["completed"], ["in_progress"]), 0), 0);
-  const testingCredits = testingItems.reduce((sum, item) =>
-    sum + statusCredit(item.status, ["finished", "completed"], ["in progress"]), 0);
-  return Math.round((submittalCredits + installationCredits + testingCredits) / total * 100);
+  const submittals = (project.submittals || []).filter(item => item.item);
+  const installationItems = (project.installationItems || []).filter(item => item.item || item.itemNo);
+  const testingItems = (project.testingItems || []).filter(item => item.activity || item.item);
+  const parts = [
+    completedFraction(submittals, item => /^approved$/i.test(String(item.status || "").trim())),
+    quantityFraction(installationItems, "lpoQty"),
+    quantityFraction(installationItems, "deliveredQty"),
+    quantityFraction(installationItems, "installedQty"),
+    completedFraction(testingItems, item => /^(finished|completed)$/i.test(String(item.status || "").trim()))
+  ];
+  const rounded = Math.round(parts.reduce((sum, part) => sum + part, 0) / PROGRESS_PARTS * 100);
+  return rounded === 100 && parts.some(part => part < 1) ? 99 : rounded;
 }
 
 module.exports = { calculateProjectProgress };

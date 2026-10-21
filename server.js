@@ -342,14 +342,22 @@ function projectManagementDefaultSubmittals() {
   }));
 }
 
-function projectManagementDefaultInstallation() {
-  return [
-    "Ducting & Insulation", "Copper / CHW Piping", "AC Drain Piping", "Air Outlets",
-    "IDU Installation", "ODU / FAHU / ERV", "Fans", "Control Panel",
-    "Mouth Connections", "Thermostats", "Cladding"
-  ].map(item => ({
-    id: id(), item, lpo_status: "not_started", delivered_status: "not_started", installation_status: "not_started", progress: 0, comments: "", updatedAt: new Date().toISOString()
-  }));
+const PROJECT_DEFAULT_BOQ_CATEGORIES = [
+  "AIR CONDITIONING UNITS", "DUCTING & INSULATION", "REFRIGERANT PIPE", "FLEXIBLE DUCT",
+  "LOUVERS", "DAMPERS", "CLADDING", "AIR INLET & OUTLET", "EXHAUST FAN",
+  "THERMOSTAT", "CONTROL PANEL"
+];
+
+function projectManagementQuantity(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Number(number.toFixed(3))) : "";
+}
+
+function projectManagementQuantityStatus(quantity, total) {
+  const value = Number(quantity || 0);
+  if (value <= 0) return "not_started";
+  return Number(total) > 0 && value >= Number(total) ? "completed" : "in_progress";
 }
 
 function projectManagementDefaultInstallationChecklist() {
@@ -456,10 +464,26 @@ async function projectManagementExtractInvoice(filePart) {
 
 function projectManagementNormalizeProject(input = {}, options = {}) {
   const now = new Date().toISOString();
+  const projectId = cleanCell(input.id || id());
   const contractValue = Math.max(0, Number(input.contractValue || 0) || 0);
   const contractWithVat = projectManagementContractWithVat(contractValue);
+  const boqDefaultsVersion = Number(input.boqDefaultsVersion) === 1 ? 1 : 0;
+  const boqCategories = Array.isArray(input.boqCategories) ? input.boqCategories.map(category => ({
+    id: cleanCell(category.id || id()), name: cleanCell(category.name || "")
+  })) : Array.isArray(input.installationItems) && input.installationItems.length
+    ? [{ id: `${projectId}-general`, name: "General Works" }] : [];
+  if (!boqDefaultsVersion) {
+    const existingNames = new Set(boqCategories.map(category => category.name.toLowerCase().replace(/\s+/g, " ")));
+    for (const name of PROJECT_DEFAULT_BOQ_CATEGORIES) {
+      if (existingNames.has(name.toLowerCase())) continue;
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      boqCategories.push({ id: `${projectId}-boq-${slug}`, name });
+    }
+  }
+  const defaultCategoryId = boqCategories[0]?.id || "";
+  const installationItems = Array.isArray(input.installationItems) ? input.installationItems : [];
   const normalized = {
-    id: cleanCell(input.id || id()),
+    id: projectId,
     code: cleanCell(input.code || ""),
     name: cleanCell(input.name || "Untitled Project"),
     customer: cleanCell(input.customer || ""),
@@ -487,13 +511,27 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
       id: cleanCell(item.id || id()), item: cleanCell(item.item || ""), status: cleanCell(item.status || "Pending") || "Pending",
       comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
     })).filter(item => item.item) : projectManagementDefaultSubmittals(),
-    installationItems: Array.isArray(input.installationItems) && input.installationItems.length ? input.installationItems.map(item => ({
+    boqCategories,
+    boqDefaultsVersion: 1,
+    installationItems: installationItems.map(item => {
+      const boqQty = projectManagementQuantity(item.boqQty);
+      const lpoQty = projectManagementQuantity(item.lpoQty);
+      const deliveredQty = projectManagementQuantity(item.deliveredQty);
+      const installedQty = projectManagementQuantity(item.installedQty);
+      const hasTrackedQuantity = [lpoQty, deliveredQty, installedQty].some(value => value !== "");
+      return {
       id: cleanCell(item.id || id()), item: cleanCell(item.item || item.workItem || ""),
-      lpo_status: projectInstallationStatus(item.lpo_status, item.lpo), delivered_status: projectInstallationStatus(item.delivered_status, item.delivered),
-      installation_status: projectInstallationStatus(item.installation_status, item.installation || item.installationStatus),
+      categoryId: boqCategories.some(category => category.id === item.categoryId) ? item.categoryId : defaultCategoryId,
+      itemNo: cleanCell(item.itemNo || ""), unit: cleanCell(item.unit || ""), boqQty,
+      rate: projectManagementQuantity(item.rate), remarks: cleanCell(item.remarks || ""),
+      lpoQty, deliveredQty, installedQty,
+      lpo_status: hasTrackedQuantity ? projectManagementQuantityStatus(lpoQty, boqQty) : projectInstallationStatus(item.lpo_status, item.lpo),
+      delivered_status: hasTrackedQuantity ? projectManagementQuantityStatus(deliveredQty, boqQty) : projectInstallationStatus(item.delivered_status, item.delivered),
+      installation_status: hasTrackedQuantity ? projectManagementQuantityStatus(installedQty, boqQty) : projectInstallationStatus(item.installation_status, item.installation || item.installationStatus),
       progress: Math.min(100, Math.max(0, item.progress === "" || item.progress === null || item.progress === undefined ? Number(String(item.comments || "").match(/(\d{1,3})\s*%/)?.[1] || 0) : Number(item.progress) || 0)),
       priority: cleanCell(item.priority || "Medium") || "Medium", dueDate: cleanCell(item.dueDate || ""), comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
-    })).filter(item => item.item) : projectManagementDefaultInstallation(),
+      };
+    }),
     installationChecklist: Array.isArray(input.installationChecklist) && input.installationChecklist.length ? input.installationChecklist.map(item => ({
       id: cleanCell(item.id || id()), item: cleanCell(item.item || ""), status: projectInstallationStatus(item.status), updatedAt: cleanCell(item.updatedAt || now)
     })).filter(item => item.item) : projectManagementDefaultInstallationChecklist(),
@@ -547,14 +585,16 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
 
 function projectManagementDerived(project) {
   const documentationComplete = project.submittals.length > 0 && project.submittals.every(item => /^approved$/i.test(item.status));
-  const procurementComplete = project.installationItems.length > 0 && project.installationItems.every(item => item.lpo_status === "completed");
-  const installationComplete = project.installationItems.length > 0 && project.installationItems.every(item => item.installation_status === "completed");
+  const activeInstallationItems = project.installationItems.filter(item => item.item || item.itemNo ||
+    ["lpo_status", "delivered_status", "installation_status"].some(field => item[field] && item[field] !== "not_started"));
+  const procurementComplete = activeInstallationItems.length > 0 && activeInstallationItems.every(item => item.lpo_status === "completed");
+  const installationComplete = activeInstallationItems.length > 0 && activeInstallationItems.every(item => item.installation_status === "completed");
   const testingComplete = project.testingItems.length > 0 && project.testingItems.every(item => /^(completed|finished)$/i.test(item.status));
   const handoverComplete = testingComplete && (project.currentStage === "Handover" || project.status === "Completed");
   const milestoneState = { Documentation: documentationComplete, Procurement: procurementComplete, Installation: installationComplete, Testing: testingComplete, Handover: handoverComplete };
   const progress = calculateProjectProgress(project);
   let nextMilestone = PROJECT_MILESTONES.find((milestone, index) => ![documentationComplete, procurementComplete, installationComplete, testingComplete, handoverComplete][index]) || "Completed";
-  const installationStarted = project.installationItems.some(item => ["in_progress", "completed"].includes(item.installation_status));
+  const installationStarted = activeInstallationItems.some(item => ["in_progress", "completed"].includes(item.installation_status));
   const testingStarted = project.testingItems.some(item => /^(in progress|started|completed|finished)$/i.test(item.status));
   if (!testingComplete && testingStarted) nextMilestone = "Testing";
   else if (!installationComplete && installationStarted) nextMilestone = "Installation";
@@ -1823,23 +1863,23 @@ function xlsxZipEntries(buffer) {
   return entries;
 }
 
-function xlsxColumnIndex(reference = "") {
+function xlsxReferenceColumnIndex(reference = "") {
   const letters = String(reference).match(/[A-Z]+/i)?.[0]?.toUpperCase() || "";
   return [...letters].reduce((value, char) => value * 26 + char.charCodeAt(0) - 64, 0) - 1;
 }
 
-function xlsxTableRows(buffer) {
-  const entries = xlsxZipEntries(buffer);
+function xlsxTableRows(buffer, sheetPath = "xl/worksheets/sheet1.xml", providedEntries) {
+  const entries = providedEntries || xlsxZipEntries(buffer);
   const sharedXml = entries.get("xl/sharedStrings.xml")?.toString("utf8") || "";
   const shared = [...sharedXml.matchAll(/<si[^>]*>([\s\S]*?)<\/si>/g)].map(match => decodeXmlText(match[1]));
-  const sheet = entries.get("xl/worksheets/sheet1.xml")?.toString("utf8") || "";
+  const sheet = entries.get(sheetPath)?.toString("utf8") || "";
   const rows = [];
   for (const rowMatch of sheet.matchAll(/<row[^>]*>([\s\S]*?)<\/row>/g)) {
     const row = [];
     for (const cellMatch of rowMatch[1].matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/g)) {
       const attrs = cellMatch[1];
       const body = cellMatch[2];
-      const column = xlsxColumnIndex(/\br="([^"]+)"/.exec(attrs)?.[1] || "");
+      const column = xlsxReferenceColumnIndex(/\br="([^"]+)"/.exec(attrs)?.[1] || "");
       const type = /\bt="([^"]+)"/.exec(attrs)?.[1] || "";
       const raw = /<v[^>]*>([\s\S]*?)<\/v>/.exec(body)?.[1] ?? /<t[^>]*>([\s\S]*?)<\/t>/.exec(body)?.[1] ?? "";
       row[column] = type === "s" ? (shared[Number(raw)] || "") : decodeXmlText(raw);
@@ -1849,7 +1889,7 @@ function xlsxTableRows(buffer) {
   return rows;
 }
 
-function csvTableRows(text = "") {
+function csvTableRows(text = "", delimiter = ",") {
   return String(text).replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map(line => {
     const cells = [];
     let value = "", quoted = false;
@@ -1857,12 +1897,131 @@ function csvTableRows(text = "") {
       const char = line[index];
       if (char === '"' && line[index + 1] === '"') { value += '"'; index++; }
       else if (char === '"') quoted = !quoted;
-      else if (char === "," && !quoted) { cells.push(value.trim()); value = ""; }
+      else if (char === delimiter && !quoted) { cells.push(value.trim()); value = ""; }
       else value += char;
     }
     cells.push(value.trim());
     return cells;
   });
+}
+
+function projectManagementImportBoq(project, filePart) {
+  const extension = path.extname(filePart.filename || "").toLowerCase();
+  if (![".csv", ".xlsx"].includes(extension)) throw new Error("Choose a CSV or XLSX BOQ file");
+  const tables = extension === ".csv" ? (() => {
+    const content = filePart.body.toString("utf8");
+    const sample = content.split(/\r?\n/).slice(0, 20).join("\n");
+    const delimiter = [",", ";", "\t"].sort((a, b) => sample.split(b).length - sample.split(a).length)[0];
+    return [csvTableRows(content, delimiter)];
+  })() : (() => {
+    const entries = xlsxZipEntries(filePart.body);
+    return [...entries.keys()].filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+      .sort((a, b) => Number(a.match(/sheet(\d+)/)[1]) - Number(b.match(/sheet(\d+)/)[1]))
+      .map(name => xlsxTableRows(filePart.body, name, entries));
+  })();
+  const key = value => cleanCell(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const names = {
+    itemNo: ["itemno", "itemnumber", "itemref", "reference", "ref", "no", "sno", "slno", "serialno"],
+    item: ["description", "itemdescription", "materialsworkdescription", "workdescription", "materialdescription", "particulars", "item", "scopeofwork"],
+    unit: ["unit", "uom", "unitofmeasure", "measurementunit"],
+    boqQty: ["boqquantity", "boqqty", "quantity", "qty", "billquantity", "billqty", "contractquantity", "estimatedquantity"],
+    rate: ["rate", "rateaed", "unitrate", "unitprice", "priceperunit", "rateperunit"],
+    remarks: ["remarks", "remark", "notes", "comments", "specification"]
+  };
+  const fieldForHeader = value => {
+    const name = key(value);
+    if (!name) return "";
+    for (const [field, aliases] of Object.entries(names)) if (aliases.includes(name)) return field;
+    if (/^(serial|sl|sr|item)(number|no|code|ref)$/.test(name)) return "itemNo";
+    if (/description|particular|scopeofwork/.test(name) && !/projectdescription|descriptionofproject/.test(name)) return "item";
+    if (/^(uom|unitofmeasure|measurementunit)/.test(name)) return "unit";
+    if (/(boq|bill|contract|estimated|total)?(qty|quantity)$/.test(name) && !/ordered|delivered|installed/.test(name)) return "boqQty";
+    if (/(unit)?(rate|price)/.test(name) && !/amount|total/.test(name)) return "rate";
+    if (/remark|comment|note/.test(name)) return "remarks";
+    return "";
+  };
+  let table = [], headerIndex = -1, columns = {}, bestScore = -1;
+  for (const candidate of tables) {
+    if (candidate.length > 20000) throw new Error("BOQ has too many rows (maximum 20,000)");
+    for (let index = 0; index < Math.min(candidate.length, 50); index++) {
+      const found = Object.fromEntries(Object.keys(names).map(field => [field, -1]));
+      candidate[index].forEach((value, column) => {
+        const field = fieldForHeader(value);
+        if (field && found[field] < 0) found[field] = column;
+      });
+      const additional = [found.itemNo, found.unit, found.boqQty, found.rate].filter(column => column >= 0).length;
+      if (found.item < 0 || (!additional && candidate.length - index < 3)) continue;
+      const score = additional * 3 + (found.remarks >= 0 ? 1 : 0) + Math.min(candidate.length - index - 1, 10) / 10;
+      if (score > bestScore) { table = candidate; headerIndex = index; columns = found; bestScore = score; }
+    }
+  }
+  if (headerIndex < 0) {
+    for (const candidate of tables) {
+      const sample = candidate.slice(0, 80);
+      const width = Math.max(0, ...sample.map(row => row.length));
+      const numeric = index => sample.filter(row => /^[-+]?\d[\d,]*(?:\.\d+)?$/.test(cleanCell(row[index]))).length;
+      const text = index => sample.filter(row => /[a-z]{3}/i.test(cleanCell(row[index])) && !fieldForHeader(row[index])).length;
+      const numericColumns = Array.from({ length: width }, (_, index) => index).filter(index => numeric(index) >= 2);
+      if (!numericColumns.length) continue;
+      const item = Array.from({ length: width }, (_, index) => index).sort((a, b) => text(b) - text(a))[0];
+      if (text(item) < 2) continue;
+      const itemNo = Array.from({ length: item }, (_, index) => index).find(index =>
+        sample.filter(row => /^[a-z]{1,5}[-./]?\d+[a-z0-9.-]*$/i.test(cleanCell(row[index]))).length >= 2);
+      const unit = Array.from({ length: width }, (_, index) => index).find(index => index !== item &&
+        sample.filter(row => /^(nos?|pcs?|ea|sqm|m2|mtr|m|kg|lsum|lot|set|sets)$/i.test(cleanCell(row[index]))).length >= 2);
+      const quantityColumns = numericColumns.filter(index => index > item && index !== unit);
+      const found = { item, itemNo: itemNo ?? -1, unit: unit ?? -1, boqQty: quantityColumns[0] ?? -1,
+        rate: quantityColumns[1] ?? -1, remarks: -1 };
+      const score = text(item) + quantityColumns.length;
+      if (score > bestScore) { table = candidate; headerIndex = -1; columns = found; bestScore = score; }
+    }
+  }
+  if (!table.length) throw new Error("Could not identify BOQ items. Include a description column or item descriptions with numeric quantities.");
+  const existingCategories = project.boqCategories || [];
+  const categories = [];
+  const rows = [];
+  const matched = new Set();
+  const findCategory = name => existingCategories.find(category => key(category.name) === key(name));
+  let category = null;
+  const ensureCategory = name => {
+    const existing = findCategory(name);
+    const found = categories.find(item => item.id === existing?.id || key(item.name) === key(name));
+    if (found) return found;
+    const next = { id: existing?.id || id(), name };
+    categories.push(next);
+    return next;
+  };
+  const number = value => {
+    const raw = cleanCell(value || "");
+    return /\d/.test(raw) ? projectManagementQuantity(parseLooseNumber(raw)) : "";
+  };
+  for (const source of table.slice(headerIndex + 1)) {
+    const value = field => columns[field] >= 0 ? cleanCell(source[columns[field]] ?? "") : "";
+    const itemNo = value("itemNo"), description = value("item"), unit = value("unit");
+    const boqQty = number(value("boqQty")), rate = number(value("rate")), remarks = value("remarks");
+    if (!itemNo && !description && !unit && boqQty === "" && rate === "" && !remarks) continue;
+    if (fieldForHeader(description) === "item" &&
+      (!unit || fieldForHeader(unit) === "unit") && boqQty === "" && rate === "") continue;
+    if (/^(grand\s*)?total\b|^sub\s*total\b/i.test(description)) continue;
+    const heading = !unit && boqQty === "" && rate === "" && !remarks && (description || itemNo)
+      && (/^\d+(?:\.\d+)*[.)]?$/.test(itemNo) || (!itemNo && description === description.toUpperCase() && /[A-Z]{3}/.test(description)));
+    if (heading) { category = ensureCategory(description || itemNo); continue; }
+    if (!description && !itemNo) continue;
+    category ||= ensureCategory(existingCategories[0]?.name || "General Works");
+    const previous = project.installationItems.find(item => !matched.has(item.id) && (
+      (itemNo && key(item.itemNo) === key(itemNo)) ||
+      (description && key(item.item) === key(description) && (item.categoryId === category.id || !item.itemNo))
+    ));
+    if (previous) matched.add(previous.id);
+    rows.push({ ...(previous || {}), id: previous?.id || id(), categoryId: category.id,
+      itemNo: itemNo || previous?.itemNo || "", item: description || previous?.item || "",
+      unit: unit || previous?.unit || "", boqQty: boqQty === "" ? previous?.boqQty ?? "" : boqQty,
+      rate: rate === "" ? previous?.rate ?? "" : rate, remarks: remarks || previous?.remarks || "" });
+  }
+  if (!rows.length) throw new Error("No BOQ item rows were found in the file.");
+  for (const original of existingCategories) if (!categories.some(item => item.id === original.id)) categories.push(original);
+  for (const original of project.installationItems) if (!matched.has(original.id)) rows.push(original);
+  return { boqCategories: categories, installationItems: rows, importedCount: rows.length - (project.installationItems.length - matched.size) };
 }
 
 function parseCostingPriceListUpload(filePart) {
@@ -2394,6 +2553,24 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     return send(res, 200, projectManagementView(project));
   }
 
+  if (req.method === "POST" && parts[2] === "projects" && parts[4] === "boq" && parts[5] === "import" && parts.length === 6) {
+    if (Number(req.headers["content-length"] || 0) > 5 * 1024 * 1024) return send(res, 413, { error: "BOQ file must be 5 MB or smaller" });
+    const multipart = parseMultipart(await collect(req), req.headers["content-type"] || "");
+    const filePart = multipart.find(item => item.filename);
+    if (!filePart) return send(res, 400, { error: "Choose a CSV or XLSX BOQ file" });
+    if (filePart.body.length > 5 * 1024 * 1024) return send(res, 413, { error: "BOQ file must be 5 MB or smaller" });
+    let imported;
+    try { imported = projectManagementImportBoq(project, filePart); }
+    catch (error) { return send(res, 400, { error: error.message }); }
+    const next = projectManagementNormalizeProject({ ...project, boqCategories: imported.boqCategories,
+      installationItems: imported.installationItems, updatedAt: new Date().toISOString() });
+    next.activityHistory = project.activityHistory || [];
+    projectManagementActivity(next, user, "BOQ imported", `${imported.importedCount} items from ${filePart.filename}`);
+    store.projects[projectIndex] = next;
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(next));
+  }
+
   if (["payments", "variation-payments"].includes(parts[4]) && parts[6] === "invoice") {
     const section = parts[4] === "payments" ? "payments" : "variationPayments";
     const row = project[section].find(item => item.id === decodeURIComponent(parts[5] || ""));
@@ -2540,11 +2717,12 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
         : "";
     });
     let installationActivityAdded = false;
-    next.installationItems.forEach((item, index) => {
-      const previous = project.installationItems[index] || project.installationItems.find(candidate => candidate.id === item.id);
+    next.installationItems.forEach(item => {
+      const previous = project.installationItems.find(candidate => candidate.id === item.id);
       if (!previous) return;
       const changes = [
-        ["LPO", "lpo_status"], ["Delivered", "delivered_status"], ["Installation", "installation_status"]
+        ["LPO", "lpo_status"], ["Delivered", "delivered_status"], ["Installation", "installation_status"],
+        ["BOQ quantity", "boqQty"], ["LPO quantity", "lpoQty"], ["Delivered quantity", "deliveredQty"], ["Installed quantity", "installedQty"]
       ].filter(([, field]) => previous[field] !== item[field]);
       if (previous.progress !== item.progress) changes.push(["Progress", "progress"]);
       if (previous.comments !== item.comments) changes.push(["Comments", "comments"]);
@@ -2552,7 +2730,7 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
       item.updatedAt = now;
       changes.forEach(([label, field]) => {
         const value = item[field];
-        const display = field.endsWith("_status") ? ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" }[value] || "Not Started") : field === "progress" ? `${value}%` : "updated";
+        const display = field.endsWith("_status") ? ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" }[value] || "Not Started") : field === "progress" ? `${value}%` : ["boqQty", "lpoQty", "deliveredQty", "installedQty"].includes(field) ? String(value || 0) : "updated";
         projectManagementActivity(next, user, "Installation update", `${item.item}: ${label} changed to ${display}`);
       });
       installationActivityAdded = true;

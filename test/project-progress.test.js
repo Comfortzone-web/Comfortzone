@@ -2,44 +2,51 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const { calculateProjectProgress } = require("../project-progress");
 
-test("combines full and half credits across all tracked rows", () => {
+test("combines approvals, BOQ quantities, and finished testing as five equal parts", () => {
   const project = {
-    submittals: [{ status: "Approved" }, { status: "Pending" }],
-    installationItems: [{ lpo_status: "completed", delivered_status: "completed", installation_status: "in_progress" }],
-    testingItems: [{ status: "Finished" }, { status: "Pending" }]
+    submittals: [{ item: "Drawing", status: "Approved" }, { item: "Material", status: "Pending" }],
+    installationItems: [{ item: "Duct", boqQty: 100, lpoQty: 100, deliveredQty: 50, installedQty: 25 }],
+    testingItems: [{ activity: "Pressure", status: "Finished" }, { activity: "Commissioning", status: "Pending" }]
   };
-  assert.equal(calculateProjectProgress(project), 64);
+  assert.equal(calculateProjectProgress(project), 55);
 });
 
-test("submitted documentation earns half credit", () => {
-  assert.equal(calculateProjectProgress({ submittals: [{ status: "Submitted" }] }), 50);
-  assert.equal(calculateProjectProgress({ submittals: [{ status: " submitted " }] }), 50);
-  assert.equal(calculateProjectProgress({ submittals: [{ status: "Rejected" }] }), 0);
+test("submittals count only when approved and testing counts only when finished", () => {
+  assert.equal(calculateProjectProgress({ submittals: [{ item: "Drawing", status: "Submitted" }] }), 0);
+  assert.equal(calculateProjectProgress({ submittals: [{ item: "Drawing", status: "Approved" }] }), 20);
+  assert.equal(calculateProjectProgress({ testingItems: [{ activity: "Pressure", status: "In Progress" }] }), 0);
+  assert.equal(calculateProjectProgress({ testingItems: [{ activity: "Pressure", status: "Finished" }] }), 20);
 });
 
-test("each orange installation checkpoint earns half credit", () => {
+test("quantities are capped per BOQ row so over-ordering cannot hide an incomplete row", () => {
   assert.equal(calculateProjectProgress({
-    installationItems: [{ lpo_status: "in_progress", delivered_status: "in_progress", installation_status: "in_progress" }]
-  }), 50);
-  assert.equal(calculateProjectProgress({
-    installationItems: [{ lpo_status: "completed", delivered_status: "issue", installation_status: "in_progress" }]
-  }), 50);
+    installationItems: [
+      { item: "Duct", boqQty: 100, lpoQty: 200 },
+      { item: "Pipe", boqQty: 100, lpoQty: 0 }
+    ]
+  }), 10);
 });
 
-test("in-progress testing earns half credit", () => {
-  assert.equal(calculateProjectProgress({ testingItems: [{ status: "In Progress" }] }), 50);
-  assert.equal(calculateProjectProgress({ testingItems: [{ status: "Pending" }] }), 0);
+test("an item without BOQ quantity prevents full completion and blank rows do not count", () => {
+  const complete = {
+    submittals: [{ item: "Drawing", status: "Approved" }],
+    installationItems: [{ item: "Duct", boqQty: 10, lpoQty: 10, deliveredQty: 10, installedQty: 10 }],
+    testingItems: [{ activity: "Pressure", status: "Finished" }]
+  };
+  assert.equal(calculateProjectProgress(complete), 100);
+  assert.equal(calculateProjectProgress({ ...complete, installationItems: [...complete.installationItems, { item: "Pipe" }] }), 70);
+  assert.equal(calculateProjectProgress({ ...complete, installationItems: [...complete.installationItems, { item: "" }] }), 100);
 });
 
-test("returns 100 only when every tracked item is complete", () => {
+test("returns 100 only when all five project parts are complete", () => {
   assert.equal(calculateProjectProgress({
-    submittals: [{ status: "Approved" }],
-    installationItems: [{ lpo_status: "completed", delivered_status: "completed", installation_status: "completed" }],
-    testingItems: [{ status: "Finished" }]
+    submittals: [{ item: "Drawing", status: "Approved" }],
+    installationItems: [{ item: "Duct", boqQty: 10, lpoQty: 10, deliveredQty: 10, installedQty: 10 }],
+    testingItems: [{ activity: "Pressure", status: "Finished" }]
   }), 100);
 });
 
-test("supports legacy Completed testing status and empty projects", () => {
-  assert.equal(calculateProjectProgress({ testingItems: [{ status: "Completed" }] }), 100);
+test("supports Completed testing status and empty projects", () => {
+  assert.equal(calculateProjectProgress({ testingItems: [{ activity: "Pressure", status: "Completed" }] }), 20);
   assert.equal(calculateProjectProgress({}), 0);
 });

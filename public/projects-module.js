@@ -6,9 +6,12 @@
     lpoOrders: null, lpoUploads: [], lpoError: "", lpoRequest: 0, lpoViewId: "", lpoSearch: "",
     documentSearch: "", documentType: "all", documentCategory: "all", documentUploader: "all", selectedDocumentIds: new Set(), pendingDocumentFile: null,
     folderSelectMode: false, selectedFolderNames: new Set(), renamingFolderName: "", dashboardViewAll: "", dashboardModalSearch: "", dashboardListItems: null, dashboardListError: "",
+    boqSearch: "", installationSearch: "", collapsedBoqCategories: new Set(), boqImportBusy: false,
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
   let projectSaveQueue = Promise.resolve();
   let projectSaveVersion = 0;
+  let gridDragItemId = "";
+  let gridDragCategoryId = "";
   const documentCategories = ["Shop Drawings", "Submittals", "Correspondence", "Payment", "Testing & Commissioning", "Handover"];
   const esc = value => String(value ?? "").replace(/[&<>\"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
   const money = value => `AED ${Number(value || 0).toLocaleString("en-AE", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
@@ -257,7 +260,21 @@
       const pendingLabel = contractWithVat > 0 ? `${Math.max(0, Math.round(100 - receivedPercent))}% pending` : "Contract value not set";
       return `<tr data-pm-open-project="${esc(project.id)}"><td>${index + 1}</td><td><button class="pm-project-name-link" type="button" data-pm-open-project="${esc(project.id)}" aria-label="Open ${esc(project.name)}"><strong>${esc(project.code || project.name)}</strong></button><small>${esc(project.code ? project.name : project.customer || "-")}</small></td><td><div class="pm-progress pm-progress-${progressTone(derived.progress)}"><span><i style="width:${derived.progress}%"></i></span><b>${derived.progress}%</b></div></td><td><span class="pm-project-stage pm-project-stage-${statusClass(derived.nextMilestone)}">${esc(derived.nextMilestone)}</span></td><td><div class="pm-payment-progress"><strong class="${received > 0 ? "pm-payment-received" : "pm-payment-unreceived"}">${moneyWithCents(received)}</strong><span class="pm-payment-progress-track" role="progressbar" aria-label="Payment received for ${esc(project.name)}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(receivedPercent)}"><i style="width:${receivedPercent}%"></i></span><small>Received · ${pendingLabel}</small></div></td><td><span class="pm-project-count pm-project-pending-${pendingTone}">${derived.pendingWorkCount}</span></td><td><span class="pm-project-count pm-project-followup-${followUpTone}">${derived.activeFollowUpCount}</span></td><td>${dateTime(project.updatedAt)}</td></tr>`;
     }).join("");
-    return `<div class="pm-table-wrap pm-all-projects-table"><table class="pm-table"><thead><tr><th>#</th><th>Project</th><th>Progress</th><th>Current Stage</th><th>Payment Progress</th><th>Pending Works</th><th>Follow-ups</th><th>Last Updated</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="pm-table-empty">No projects match this filter. Create a project to get started.</td></tr>`}</tbody></table></div>`;
+    return `<div class="pm-table-wrap pm-all-projects-table"><table class="pm-table"><thead><tr><th>#</th><th>Project</th><th>Project Progress</th><th>Current Stage</th><th>Payment Progress</th><th>Pending Works</th><th>Follow-ups</th><th>Last Updated</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="pm-table-empty">No projects match this filter. Create a project to get started.</td></tr>`}</tbody></table></div>`;
+  }
+
+  function installationQuantityTotals(items) {
+    const totals = { boq: 0, ordered: 0, delivered: 0, installed: 0 };
+    for (const item of items || []) {
+      const boq = Number(item.boqQty);
+      if (!Number.isFinite(boq) || boq <= 0) continue;
+      totals.boq += boq;
+      for (const [key, field] of [["ordered", "lpoQty"], ["delivered", "deliveredQty"], ["installed", "installedQty"]]) {
+        const quantity = Number(item[field]);
+        if (Number.isFinite(quantity) && quantity > 0) totals[key] += quantity;
+      }
+    }
+    return totals;
   }
 
   function detailHeader(project) {
@@ -269,18 +286,26 @@
     const variationReceived = variationPaymentReceived(project);
     const variationReceivedPercent = variationContractWithVat > 0 ? Math.min(100, variationReceived / variationContractWithVat * 100) : 0;
     const variationPendingPercent = variationContractWithVat > 0 ? `${Math.max(0, Math.round(100 - variationReceivedPercent))}% Pending` : "Variation contract value not set";
+    const quantityTotals = installationQuantityTotals(project.installationItems);
+    const quantityKpis = ["ordered", "delivered", "installed"].map(key => {
+      const percent = quantityTotals.boq ? quantityTotals[key] / quantityTotals.boq * 100 : 0;
+      const displayedPercent = percent >= 100 ? Math.round(percent) : percent > 0 ? Math.max(1, Math.floor(percent)) : 0;
+      const label = key[0].toUpperCase() + key.slice(1);
+      return `<div class="pm-quantity-metric"><div class="pm-ring pm-quantity-ring-${key}${percent >= 100 ? " pm-quantity-ring-complete" : ""}" style="--pm-progress:${Math.min(100, percent)}%" role="img" aria-label="${label}: ${displayedPercent}% of BOQ"><strong aria-hidden="true">${displayedPercent}%</strong></div><b>${label}</b></div>`;
+    }).join("");
     return `<div class="pm-detail-head"><div><div class="pm-breadcrumb"><button data-pm-action="back">Projects</button><span>›</span><b>${esc(project.code || project.name)}</b></div><h1>${esc(project.code ? `${project.code} – ${project.name}` : project.name)}</h1><p>Client: ${esc(project.customer || "-")} · Consultant: ${esc(project.consultant || "-")} ${project.location ? `· Location: ${esc(project.location)}` : "· Location: -"}</p></div><div class="pm-detail-actions"><button class="pm-secondary" data-pm-action="back">← Back to Projects</button><button class="pm-secondary" data-pm-action="edit-project">✎ Edit Project</button><button class="pm-secondary" data-pm-action="delete-project">...</button>${pill(project.status)}</div></div>
-      <div class="pm-detail-kpis"><div class="pm-detail-progress"><div class="pm-ring pm-progress-${progressTone(d.progress)}" style="--pm-progress:${d.progress}%"><strong>${d.progress}%</strong></div><div><b>Project Progress</b><span>${esc(d.nextMilestone === "Completed" ? "Ready for handover" : `Next: ${d.nextMilestone}`)}</span></div></div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus)}</strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Variation Payment (Incl VAT)</span><strong>${moneyWithCents(variationReceived)} Received</strong><div class="pm-mini-progress pm-variation-progress"><i style="width:${variationReceivedPercent}%"></i></div><small>${esc(variationPendingPercent)}</small></div></div>`;
+      <div class="pm-detail-kpis"><div class="pm-detail-quantity-kpi" aria-label="Overall BOQ quantity progress">${quantityKpis}</div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus)}</strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Variation Payment (Incl VAT)</span><strong>${moneyWithCents(variationReceived)} Received</strong><div class="pm-mini-progress pm-variation-progress"><i style="width:${variationReceivedPercent}%"></i></div><small>${esc(variationPendingPercent)}</small></div></div>`;
   }
 
   function renderDetail() {
     const project = state.project;
     if (!project) return open();
-    root.innerHTML = `${detailHeader(project)}<nav class="pm-tabs">${["overview", "information", "installation", "pending", "payment", "followups", "lpos", "documents", "activity"].map(tab => `<button class="${state.tab === tab ? "active" : ""}" data-pm-tab="${tab}">${tab === "information" ? "Project Information" : tab === "followups" ? "Follow-ups" : tab === "lpos" ? "LPO's" : tab === "activity" ? "Activity History" : tab === "installation" ? "Installation Progress" : tab === "pending" ? "Pending Works" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}</nav><div class="pm-detail-content">${detailTab(project)}</div>`;
+    root.innerHTML = `${detailHeader(project)}<nav class="pm-tabs">${["overview", "information", "boq", "installation", "pending", "payment", "followups", "lpos", "documents", "activity"].map(tab => `<button class="${state.tab === tab ? "active" : ""}" data-pm-tab="${tab}">${tab === "information" ? "Project Information" : tab === "boq" ? "BOQ" : tab === "followups" ? "Follow-ups" : tab === "lpos" ? "LPO's" : tab === "activity" ? "Activity History" : tab === "installation" ? "Installation Progress" : tab === "pending" ? "Pending Works" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}</nav><div class="pm-detail-content">${detailTab(project)}</div>`;
   }
 
   function detailTab(project) {
     if (state.tab === "information") return informationTab(project);
+    if (state.tab === "boq") return boqTab(project);
     if (state.tab === "installation") return installationTab(project);
     if (state.tab === "pending") return pendingWorksTab(project);
     if (state.tab === "payment") return paymentTab(project);
@@ -295,14 +320,37 @@
     const variation = (project.variationPayments || []).length
       ? `<section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Variation Payment</h2><button class="pm-link" data-pm-tab="payment">View All →</button></div>${compactVariationPayments(project)}</section>`
       : "";
-    return `<div class="pm-command-grid"><div class="pm-command-main"><section class="pm-panel pm-command-docs"><div class="pm-panel-head"><div><h2>Documentation / Submittals</h2><p>${project.submittals.filter(item => /^approved$/i.test(item.status)).length} of ${project.submittals.length} approved</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactSubmittals(project)}</section><section class="pm-panel pm-command-installation"><div class="pm-panel-head"><div><h2>Installation Progress</h2><p>${project.installationItems.filter(item => item.installation_status === "completed").length} of ${project.installationItems.length} rows completed</p></div><button class="pm-link" data-pm-tab="installation">View All Installation Items →</button></div>${compactInstallation(project)}</section><section class="pm-panel pm-command-testing"><div class="pm-panel-head"><div><h2>Testing & Commissioning</h2><p>${project.testingItems.filter(item => /^(finished|completed)$/i.test(item.status)).length} of ${project.testingItems.length} finished</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactTesting(project)}</section></div><aside class="pm-command-side"><section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Payment Terms</h2><button class="pm-link" data-pm-tab="payment">View All Payment Terms →</button></div>${compactPayments(project)}</section>${variation}<section class="pm-panel pm-command-followups"><div class="pm-panel-head"><div><h2>Follow-ups <em>${project.followUps.length}</em></h2><p>Latest actions requiring attention</p></div><button class="pm-link" data-pm-tab="followups">View All Follow-ups →</button></div>${compactFollowUps(project)}</section></aside></div>`;
+    const installationRows = installationOverviewRows(project);
+    return `<div class="pm-command-grid"><div class="pm-command-main"><section class="pm-panel pm-command-docs"><div class="pm-panel-head"><div><h2>Documentation / Submittals</h2><p>${project.submittals.filter(item => /^approved$/i.test(item.status)).length} of ${project.submittals.length} approved</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactSubmittals(project)}</section><section class="pm-panel pm-command-installation"><div class="pm-panel-head"><span class="pm-installation-heading-icon" aria-hidden="true"></span><div class="pm-installation-heading"><h2>Installation Progress</h2><p>${installationRows.filter(row => row.installed >= 100 && row.hasBoq).length} of ${installationRows.length} categories complete</p></div><button class="pm-installation-view" data-pm-tab="installation">View Full Installation <span aria-hidden="true">→</span></button></div>${compactInstallation(installationRows)}</section><section class="pm-panel pm-command-testing"><div class="pm-panel-head"><div><h2>Testing & Commissioning</h2><p>${project.testingItems.filter(item => /^(finished|completed)$/i.test(item.status)).length} of ${project.testingItems.length} finished</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactTesting(project)}</section></div><aside class="pm-command-side"><section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Payment Terms</h2><button class="pm-link" data-pm-tab="payment">View All Payment Terms →</button></div>${compactPayments(project)}</section>${variation}<section class="pm-panel pm-command-followups"><div class="pm-panel-head"><div><h2>Follow-ups <em>${project.followUps.length}</em></h2><p>Latest actions requiring attention</p></div><button class="pm-link" data-pm-tab="followups">View All Follow-ups →</button></div>${compactFollowUps(project)}</section></aside></div>`;
   }
 
   function compactSubmittals(project) { return `<div class="pm-compact-table"><div class="pm-compact-row pm-compact-head"><span>Item</span><span>Status</span><span>Comments</span></div>${project.submittals.slice(0, 4).map(item => `<div class="pm-compact-row"><span>${esc(item.item)}</span><span>${pill(item.status)}</span><small>${esc(item.comments || "-")}</small></div>`).join("")}</div>`; }
   function compactFollowUps(project) { const items = project.followUps.filter(item => !/^(finished|completed)$/i.test(item.status)).slice(0, 6); return `<div class="pm-followup-timeline">${items.map(item => `<div class="pm-followup-item"><span class="pm-followup-dot"></span><div><div class="pm-followup-meta"><b>${date(item.date)}</b>${pill(item.status)}</div><strong>${esc(item.subject)}</strong><small>${esc(item.notes || "-")}</small><small>Assigned: ${esc(item.assigned || "Unassigned")}</small></div></div>`).join("") || `<div class="pm-table-empty">No active follow-ups.</div>`}</div>`; }
   function checkpointSvg(status) { return status === "completed" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3.1 3.1L15 6.5"></path></svg>` : status === "in_progress" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10"></path></svg>` : status === "issue" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg>` : ""; }
   function checkpointIcon(value, field = "", index = "") { const status = ["completed", "in_progress", "issue", "not_started"].includes(value) ? value : "not_started"; const label = ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" })[status]; if (!field) return `<span class="pm-checkpoint pm-checkpoint-${status}" title="${label}">${checkpointSvg(status)}</span>`; return `<button type="button" class="pm-checkpoint pm-checkpoint-${status}" title="${label}" aria-label="${label}" data-pm-checkpoint="${field}" data-pm-index="${index}">${checkpointSvg(status)}</button>`; }
-  function compactInstallation(project) { return `<div class="pm-compact-table pm-installation-summary"><div class="pm-compact-row pm-compact-head"><span>#</span><span>Work Item</span><span>LPO</span><span>Delivery</span><span>Installation</span><span>Comments</span></div>${project.installationItems.map((item, index) => `<div class="pm-compact-row"><span>${index + 1}</span><span>${esc(item.item)}</span><span>${checkpointIcon(item.lpo_status)}</span><span>${checkpointIcon(item.delivered_status)}</span><span>${checkpointIcon(item.installation_status)}</span><small>${esc(item.comments || "-")}</small></div>`).join("")}</div>`; }
+  function installationOverviewRows(project) {
+    return (project.boqCategories || []).map((category, index) => {
+      const items = project.installationItems.filter(item => item.categoryId === category.id && Number(item.boqQty) > 0);
+      const boqQty = items.reduce((sum, item) => sum + Number(item.boqQty), 0);
+      const percent = field => boqQty ? items.reduce((sum, item) =>
+        sum + Math.max(0, Number(item[field]) || 0), 0) / boqQty * 100 : 0;
+      return { name: category.name || `Category ${index + 1}`, hasBoq: items.length > 0,
+        ordered: percent("lpoQty"), delivered: percent("deliveredQty"), installed: percent("installedQty") };
+    });
+  }
+
+  function compactInstallation(rows) {
+    const displayPercent = value => `${value > 0 ? Math.max(1, Math.round(value)) : 0}%`;
+    const circle = (value, label) => {
+      const tone = value >= 100 ? "complete" : value > 50 ? "three-quarter" : value > 25 ? "half" : value > 0 ? "early" : "empty";
+      return `<span class="pm-installation-circle ${tone}" role="img" aria-label="${label}: ${displayPercent(value)} of BOQ" title="${label}: ${displayPercent(value)} of BOQ"></span>`;
+    };
+    return `<div class="pm-compact-table pm-installation-summary"><div class="pm-compact-row pm-compact-head"><span>#</span><span>Work Item</span><span>Ordered</span><span>Delivered</span><span>Installed</span><span>Progress</span></div>${rows.map((row, index) => {
+      const progress = Math.min(100, row.installed);
+      const tone = row.installed >= 75 ? "high" : row.installed > 0 ? "partial" : "empty";
+      return `<div class="pm-compact-row pm-installation-row"><span>${index + 1}</span><span title="${esc(row.name)}">${esc(row.name)}</span><span>${circle(row.ordered, "Ordered")}</span><span>${circle(row.delivered, "Delivered")}</span><span>${circle(row.installed, "Installed")}</span><span class="pm-installation-progress ${tone}"><span class="pm-installation-progress-track"><i style="width:${progress}%"></i></span><b>${displayPercent(row.installed)}</b></span></div>`;
+    }).join("") || `<div class="pm-table-empty">No installation categories yet.</div>`}</div>`;
+  }
   function compactPayments(project) { return `<div class="pm-compact-table pm-payment-summary"><div class="pm-compact-row pm-compact-head"><span>Payment Details</span><span>%</span><span>Amount</span><span>Status</span></div>${project.payments.slice(0, 5).map(item => `<div class="pm-compact-row"><span>${esc(item.milestone)}</span><span>${item.amount === "" ? "-" : `${paymentPercentage(item.amount, project.contractValue)}%`}</span><span>${item.amount === "" ? "-" : money(item.amount)}</span><span>${pill(item.status)}</span></div>`).join("")}</div>`; }
   function compactVariationPayments(project) { return `<div class="pm-compact-table pm-variation-summary"><div class="pm-compact-row pm-compact-head"><span>Payment Details</span><span>Amount</span><span>Status</span></div>${project.variationPayments.map(item => `<div class="pm-compact-row"><span>${esc(item.milestone)}</span><span>${item.amount === "" ? "-" : moneyWithCents(item.amount)}</span><span>${pill(item.status)}</span></div>`).join("")}</div>`; }
   function compactTesting(project) { return `<div class="pm-compact-table"><div class="pm-compact-row pm-compact-head"><span>Activity</span><span>Status</span><span>Comments</span></div>${project.testingItems.slice(0, 4).map(item => `<div class="pm-compact-row"><span>${esc(item.activity)}</span><span>${pill(item.status)}</span><small>${esc(item.comments || "-")}</small></div>`).join("")}</div>`; }
@@ -358,9 +406,47 @@
     return `<div class="pm-installation-side">${installationChecklistPanel(project)}${installationNotesPanel(project)}</div>`;
   }
 
+  function quantityDisplay(value) { return value === "" || value === undefined || value === null ? "" : Number(value).toLocaleString("en-AE", { maximumFractionDigits: 3 }); }
+  function boqGridInput(item, field, label, numeric = false) {
+    return `<input data-pm-grid-field="${field}" data-pm-row-id="${esc(item.id)}" aria-label="${esc(label)}" ${numeric ? 'type="number" min="0" step="any" inputmode="decimal"' : 'type="text"'} value="${esc(item[field] ?? "")}">`;
+  }
+  function boqDescriptionInput(item, label) {
+    const description = [item.itemNo, item.item].filter(Boolean).join(" ");
+    return `<input data-pm-grid-field="description" data-pm-row-id="${esc(item.id)}" aria-label="${esc(label)}" type="text" value="${esc(description)}">`;
+  }
+  function projectGridRows(project, kind) {
+    const query = (kind === "boq" ? state.boqSearch : state.installationSearch).trim().toLowerCase();
+    const colCount = kind === "boq" ? 7 : 9;
+    const rows = (project.boqCategories || []).map((category, categoryIndex) => {
+      const items = project.installationItems.filter(item => item.categoryId === category.id);
+      const matchesCategory = category.name.toLowerCase().includes(query);
+      const visible = query && !matchesCategory ? items.filter(item => [item.itemNo, item.item, item.unit, item.remarks, item.comments].some(value => String(value || "").toLowerCase().includes(query))) : items;
+      if (query && !matchesCategory && !visible.length) return "";
+      const collapsed = state.collapsedBoqCategories.has(category.id) && !query;
+      const itemRows = collapsed ? "" : visible.map((item, visibleIndex) => {
+        const rowNumber = `${categoryIndex + 1}.${items.indexOf(item) + 1}`;
+        const addButton = item === visible.at(-1) ? `<button type="button" class="pm-grid-add" data-pm-action="add-boq-row" data-pm-category-id="${esc(category.id)}" title="Add item to ${esc(category.name || "category")}" aria-label="Add item to ${esc(category.name || "category")}"></button>` : "";
+        const rowClass = `pm-grid-item${kind === "boq" && visibleIndex % 2 ? " pm-grid-item-shaded" : ""}${addButton ? " pm-grid-item-last" : ""}`;
+        if (kind === "boq") {
+          const amount = item.boqQty === "" || item.rate === "" ? "" : Number(item.boqQty) * Number(item.rate);
+          return `<tr class="${rowClass}" data-pm-grid-row="${esc(item.id)}"><td><span class="pm-grid-drag-handle" draggable="true" data-pm-grid-handle="${esc(item.id)}" title="Drag to move item" aria-label="Drag item ${rowNumber} to reorder">${rowNumber}</span>${addButton}</td><td>${boqDescriptionInput(item, `Materials/work description ${rowNumber}`)}</td><td>${boqGridInput(item, "unit", `Unit ${rowNumber}`)}</td><td>${boqGridInput(item, "boqQty", `BOQ quantity ${rowNumber}`, true)}</td><td>${boqGridInput(item, "rate", `Rate ${rowNumber}`, true)}</td><td><output data-pm-amount>${amount === "" ? "-" : moneyWithCents(amount)}</output></td><td class="pm-grid-last-cell">${boqGridInput(item, "remarks", `Remarks ${rowNumber}`)}<button type="button" class="pm-grid-delete" data-pm-action="delete-boq-row" data-pm-row-id="${esc(item.id)}" title="Delete item" aria-label="Delete item ${rowNumber}">×</button></td></tr>`;
+        }
+        const balance = item.boqQty === "" ? "" : Number(item.boqQty) - Number(item.installedQty || 0);
+        const balanceTone = balance === "" ? "" : balance <= 0 ? "done" : balance <= Number(item.boqQty) * .25 ? "low" : "open";
+        return `<tr class="${rowClass}" data-pm-grid-row="${esc(item.id)}"><td><span class="pm-grid-drag-handle" draggable="true" data-pm-grid-handle="${esc(item.id)}" title="Drag to move item" aria-label="Drag item ${rowNumber} to reorder">${rowNumber}</span>${addButton}</td><td>${boqDescriptionInput(item, `Materials/work description ${rowNumber}`)}</td><td>${boqGridInput(item, "unit", `Unit ${rowNumber}`)}</td><td>${quantityDisplay(item.boqQty) || "-"}</td><td class="pm-grid-quantity-green">${boqGridInput(item, "lpoQty", `Ordered quantity ${rowNumber}`, true)}</td><td class="pm-grid-quantity-green">${boqGridInput(item, "deliveredQty", `Delivered quantity ${rowNumber}`, true)}</td><td class="pm-grid-quantity-green">${boqGridInput(item, "installedQty", `Installed quantity ${rowNumber}`, true)}</td><td><output class="pm-grid-balance ${balanceTone}" data-pm-balance>${balance === "" ? "-" : quantityDisplay(balance)}</output></td><td class="pm-grid-last-cell">${boqGridInput(item, "comments", `Comments ${rowNumber}`)}<button type="button" class="pm-grid-delete" data-pm-action="delete-boq-row" data-pm-row-id="${esc(item.id)}" title="Delete item" aria-label="Delete item ${rowNumber}">×</button></td></tr>`;
+      }).join("");
+      const emptyAddButton = collapsed || !visible.length ? `<button type="button" class="pm-grid-add pm-grid-category-add" data-pm-action="add-boq-row" data-pm-category-id="${esc(category.id)}" title="Add item to ${esc(category.name || "category")}" aria-label="Add item to ${esc(category.name || "category")}"></button>` : "";
+      return `<tr class="pm-grid-category" data-pm-grid-category="${esc(category.id)}"><td colspan="${colCount}"><div class="pm-grid-category-content"><button type="button" class="pm-grid-collapse${collapsed ? " is-collapsed" : ""}" data-pm-action="toggle-boq-category" data-pm-category-id="${esc(category.id)}" aria-label="${collapsed ? "Expand" : "Collapse"} ${esc(category.name || "category")}" aria-expanded="${!collapsed}"><span aria-hidden="true"></span></button><span class="pm-grid-category-handle" draggable="true" data-pm-grid-category-handle="${esc(category.id)}" title="Drag to move category" aria-label="Drag category ${categoryIndex + 1} to reorder">${categoryIndex + 1}.</span><input data-pm-category-name data-pm-category-id="${esc(category.id)}" aria-label="Category ${categoryIndex + 1} name" placeholder="Category name" value="${esc(category.name)}"><button type="button" class="pm-grid-category-delete" data-pm-action="delete-boq-category" data-pm-category-id="${esc(category.id)}" title="Delete category" aria-label="Delete ${esc(category.name || "category")}">×</button></div>${emptyAddButton}</td></tr>${itemRows}`;
+    }).join("");
+    return rows || `<tr><td colspan="${colCount}" class="pm-table-empty">${query ? "No matching BOQ items." : "No categories yet. Add an item to begin."}</td></tr>`;
+  }
+
+  function boqTab(project) {
+    return `<section class="pm-panel pm-grid-panel"><div class="pm-panel-head"><div><h2>BOQ</h2><p>Original consultant BOQ and project quantities.</p></div><div class="pm-grid-tools"><input type="search" data-pm-grid-search="boq" value="${esc(state.boqSearch)}" placeholder="Search by item, description or reference" aria-label="Search BOQ"><button type="button" class="pm-secondary" data-pm-action="choose-boq-import">↑ Import BOQ</button><input type="file" data-pm-boq-file accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden><button type="button" class="pm-primary" data-pm-action="add-boq-category">＋ Add Item</button></div></div><div class="pm-table-wrap"><table class="pm-table pm-quantity-table pm-boq-table"><thead><tr><th>#</th><th>Materials/work Description</th><th>Unit</th><th>BOQ Quantity</th><th>Rate (AED)</th><th>Amount (AED)</th><th>Remarks</th></tr></thead><tbody>${projectGridRows(project, "boq")}</tbody></table></div></section>`;
+  }
+
   function installationTab(project) {
-    const completed = project.installationItems.filter(item => item.installation_status === "completed").length;
-    return `<section class="pm-panel pm-installation-main"><div class="pm-panel-head"><div><h2>Installation Progress</h2><p>Track and manage all installation work items for this project. ${completed} of ${project.installationItems.length} completed.</p></div><button class="pm-primary" data-pm-action="add-row" data-pm-section="installationItems">＋ Add Work Item</button></div><div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-installation-table"><thead><tr><th>#</th><th>Work Item</th><th>LPO</th><th>Delivery</th><th>Installation</th><th>Comments</th><th>Actions</th></tr></thead><tbody>${project.installationItems.map((item, index) => `<tr><td>${index + 1}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="item" value="${esc(item.item)}"></td><td>${checkpointIcon(item.lpo_status, "lpo_status", index)}</td><td>${checkpointIcon(item.delivered_status, "delivered_status", index)}</td><td>${checkpointIcon(item.installation_status, "installation_status", index)}</td><td><input data-pm-item="installationItems" data-pm-index="${index}" data-pm-field="comments" value="${esc(item.comments)}"></td><td><button class="pm-row-action" type="button" title="Delete work item" aria-label="Delete work item" data-pm-action="delete-row" data-pm-section="installationItems" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`).join("") || `<tr><td colspan="7" class="pm-table-empty">No installation work items yet.</td></tr>`}</tbody></table></div></section>`;
+    return `<section class="pm-panel pm-grid-panel"><div class="pm-panel-head"><div><h2>Installation Progress</h2><p>Track project quantities against BOQ and monitor site execution.</p></div><div class="pm-grid-tools"><input type="search" data-pm-grid-search="installation" value="${esc(state.installationSearch)}" placeholder="Search by item, description or reference" aria-label="Search installation items"><button type="button" class="pm-primary" data-pm-action="add-boq-category">＋ Add Item</button></div></div><div class="pm-table-wrap"><table class="pm-table pm-quantity-table pm-installation-table"><thead><tr><th>#</th><th>Materials/work Description</th><th>Unit</th><th>BOQ Qty</th><th>Ordered Qty</th><th>Delivered Qty</th><th>Installed Qty</th><th>Balance Qty</th><th>Comments</th></tr></thead><tbody>${projectGridRows(project, "installation")}</tbody></table></div></section>`;
   }
 
   function testingTab(project) {
@@ -708,7 +794,7 @@
     root.querySelector(".pm-followup-menu button")?.focus();
   }
 
-  async function saveProjectPayload(payload, message = "Project updated") {
+  async function saveProjectPayload(payload, message = "Project updated", { quiet = false, renderOptimistic = false } = {}) {
     const projectId = state.project?.id;
     if (!projectId) {
       state.project = await api("/api/project-management/projects", { method: "POST", body: JSON.stringify(payload) });
@@ -719,14 +805,14 @@
     const version = ++projectSaveVersion;
     const previous = state.project;
     state.project = { ...previous, ...payload };
+    if (renderOptimistic) renderDetail();
     const request = projectSaveQueue.then(() => api(`/api/project-management/projects/${encodeURIComponent(projectId)}`, { method: "PUT", body: JSON.stringify(payload) }));
     projectSaveQueue = request.catch(() => {});
     try {
       const response = await request;
       if (state.project?.id !== projectId || version !== projectSaveVersion) return;
       state.project = response;
-      toast(message);
-      renderDetail();
+      if (!quiet) { toast(message); renderDetail(); }
     } catch (error) {
       if (state.project?.id === projectId && version === projectSaveVersion) {
         state.project = await api(`/api/project-management/projects/${encodeURIComponent(projectId)}`).catch(() => previous);
@@ -740,6 +826,167 @@
     const { derived: _derived, ...payload } = project;
     return payload;
   }
+
+  function newBoqRow(categoryId) {
+    return { id: crypto.randomUUID(), categoryId, itemNo: "", item: "", unit: "", boqQty: "", rate: "", remarks: "",
+      lpoQty: "", deliveredQty: "", installedQty: "", comments: "", lpo_status: "not_started",
+      delivered_status: "not_started", installation_status: "not_started", progress: 0 };
+  }
+
+  async function updateProjectGrid(input) {
+    const next = structuredClone(state.project);
+    if (input.matches("[data-pm-category-name]")) {
+      const category = next.boqCategories.find(item => item.id === input.dataset.pmCategoryId);
+      if (!category || category.name === input.value.trim()) return;
+      category.name = input.value.trim();
+    } else {
+      const item = next.installationItems.find(row => row.id === input.dataset.pmRowId);
+      const field = input.dataset.pmGridField;
+      if (!item) return;
+      if (field === "description") {
+        const prefix = item.itemNo ? `${item.itemNo} ` : "";
+        const description = [item.itemNo, item.item].filter(Boolean).join(" ");
+        if (input.value === description) return;
+        if (prefix && input.value.startsWith(prefix)) item.item = input.value.slice(prefix.length);
+        else { item.itemNo = ""; item.item = input.value; }
+        await saveProjectPayload(projectPayload(next), "BOQ saved", { quiet: true });
+        return;
+      }
+      const value = ["boqQty", "rate", "lpoQty", "deliveredQty", "installedQty"].includes(field)
+        ? (input.value === "" ? "" : Math.max(0, Number(input.value))) : input.value;
+      if (item[field] === value) return;
+      item[field] = value;
+    }
+    await saveProjectPayload(projectPayload(next), "BOQ saved", { quiet: true });
+  }
+
+  async function importProjectBoq(input) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file || state.boqImportBusy) return;
+    if (file.size > 5 * 1024 * 1024) { toast("BOQ file must be 5 MB or smaller"); return; }
+    state.boqImportBusy = true;
+    const button = root.querySelector('[data-pm-action="choose-boq-import"]');
+    if (button) { button.disabled = true; button.textContent = "Importing..."; }
+    try {
+      await projectSaveQueue;
+      const form = new FormData();
+      form.append("file", file);
+      state.project = await api(`/api/project-management/projects/${encodeURIComponent(state.project.id)}/boq/import`, { method: "POST", body: form });
+      state.collapsedBoqCategories.clear();
+      renderDetail();
+      toast("BOQ imported");
+    } catch (error) {
+      if (button?.isConnected) { button.disabled = false; button.textContent = "↑ Import BOQ"; }
+      toast(error.message);
+    } finally { state.boqImportBusy = false; }
+  }
+
+  function renderProjectGridRows() {
+    const tbody = root.querySelector(".pm-quantity-table tbody");
+    if (tbody && state.project) tbody.innerHTML = projectGridRows(state.project, state.tab);
+  }
+
+  function clearGridDrag() {
+    root.querySelectorAll(".pm-grid-dragging, .pm-grid-drop-before, .pm-grid-drop-after, .pm-grid-drop-category, .pm-grid-drop-target")
+      .forEach(row => row.classList.remove("pm-grid-dragging", "pm-grid-drop-before", "pm-grid-drop-after", "pm-grid-drop-category", "pm-grid-drop-target"));
+    gridDragItemId = "";
+    gridDragCategoryId = "";
+  }
+
+  function gridDropLocation(event) {
+    const row = event.target.closest("tr[data-pm-grid-row], tr[data-pm-grid-category]");
+    if (!row || !root.contains(row)) return null;
+    if (gridDragCategoryId) {
+      if (!row.dataset.pmGridCategory || row.dataset.pmGridCategory === gridDragCategoryId) return null;
+      const after = event.clientY > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+      let marker = row;
+      if (after) while (marker.nextElementSibling && !marker.nextElementSibling.dataset.pmGridCategory) marker = marker.nextElementSibling;
+      return { row: marker, targetRow: row, categoryId: row.dataset.pmGridCategory, after };
+    }
+    if (row.dataset.pmGridCategory) return { row, categoryId: row.dataset.pmGridCategory };
+    if (row.dataset.pmGridRow === gridDragItemId) return null;
+    const after = event.clientY > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+    return { row, targetId: row.dataset.pmGridRow, after };
+  }
+
+  function moveProjectGridRow(sourceId, destination) {
+    const next = structuredClone(state.project);
+    const before = next.installationItems.map(item => `${item.id}:${item.categoryId}`);
+    const sourceIndex = next.installationItems.findIndex(item => item.id === sourceId);
+    if (sourceIndex < 0) return null;
+    const [source] = next.installationItems.splice(sourceIndex, 1);
+    if (destination.targetId) {
+      const targetIndex = next.installationItems.findIndex(item => item.id === destination.targetId);
+      if (targetIndex < 0) return null;
+      source.categoryId = next.installationItems[targetIndex].categoryId;
+      next.installationItems.splice(targetIndex + Number(destination.after), 0, source);
+    } else {
+      if (!next.boqCategories.some(category => category.id === destination.categoryId)) return null;
+      source.categoryId = destination.categoryId;
+      const firstIndex = next.installationItems.findIndex(item => item.categoryId === destination.categoryId);
+      next.installationItems.splice(firstIndex < 0 ? next.installationItems.length : firstIndex, 0, source);
+    }
+    const unchanged = before.every((entry, index) => entry === `${next.installationItems[index].id}:${next.installationItems[index].categoryId}`);
+    return unchanged ? null : next;
+  }
+
+  function moveProjectGridCategory(sourceId, destination) {
+    const next = structuredClone(state.project);
+    const sourceIndex = next.boqCategories.findIndex(category => category.id === sourceId);
+    if (sourceIndex < 0) return null;
+    const [source] = next.boqCategories.splice(sourceIndex, 1);
+    const targetIndex = next.boqCategories.findIndex(category => category.id === destination.categoryId);
+    if (targetIndex < 0) return null;
+    next.boqCategories.splice(targetIndex + Number(destination.after), 0, source);
+    return next.boqCategories.every((category, index) => category.id === state.project.boqCategories[index].id) ? null : next;
+  }
+
+  root.addEventListener("dragstart", event => {
+    const handle = event.target.closest("[data-pm-grid-handle], [data-pm-grid-category-handle]");
+    if (!handle || !state.project) return;
+    gridDragItemId = handle.dataset.pmGridHandle || "";
+    gridDragCategoryId = handle.dataset.pmGridCategoryHandle || "";
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", gridDragItemId || gridDragCategoryId);
+    handle.closest("tr")?.classList.add("pm-grid-dragging");
+  });
+  root.addEventListener("dragover", event => {
+    if (!gridDragItemId && !gridDragCategoryId) return;
+    const destination = gridDropLocation(event);
+    root.querySelectorAll(".pm-grid-drop-before, .pm-grid-drop-after, .pm-grid-drop-category, .pm-grid-drop-target")
+      .forEach(row => row.classList.remove("pm-grid-drop-before", "pm-grid-drop-after", "pm-grid-drop-category", "pm-grid-drop-target"));
+    if (!destination) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    destination.row.classList.add(gridDragCategoryId || destination.targetId ? destination.after ? "pm-grid-drop-after" : "pm-grid-drop-before" : "pm-grid-drop-category");
+    destination.targetRow?.classList.add("pm-grid-drop-target");
+    const scroller = root.closest(".projects-view");
+    if (scroller && scroller.scrollHeight > scroller.clientHeight) {
+      const bounds = scroller.getBoundingClientRect();
+      const distance = event.clientY < bounds.top + 48 ? -12 : event.clientY > bounds.bottom - 48 ? 12 : 0;
+      if (distance) scroller.scrollTop += distance;
+    }
+  });
+  root.addEventListener("drop", event => {
+    if (!gridDragItemId && !gridDragCategoryId) return;
+    const destination = gridDropLocation(event);
+    if (!destination) { clearGridDrag(); return; }
+    event.preventDefault();
+    const sourceId = gridDragItemId;
+    const sourceCategoryId = gridDragCategoryId;
+    clearGridDrag();
+    if (sourceCategoryId) {
+      const next = moveProjectGridCategory(sourceCategoryId, destination);
+      if (next) saveProjectPayload(projectPayload(next), "Category moved", { quiet: true, renderOptimistic: true }).catch(error => toast(error.message));
+      return;
+    }
+    const next = moveProjectGridRow(sourceId, destination);
+    if (!next) return;
+    state.collapsedBoqCategories.delete(destination.categoryId || next.installationItems.find(item => item.id === sourceId)?.categoryId);
+    saveProjectPayload(projectPayload(next), "Item moved", { quiet: true, renderOptimistic: true }).catch(error => toast(error.message));
+  });
+  root.addEventListener("dragend", clearGridDrag);
 
   async function updateItem(input) {
     if (!state.project) return;
@@ -841,6 +1088,44 @@
       return;
     }
     const action = target.dataset.pmAction;
+    if (action === "toggle-boq-category") {
+      const id = target.dataset.pmCategoryId;
+      if (state.collapsedBoqCategories.has(id)) state.collapsedBoqCategories.delete(id);
+      else state.collapsedBoqCategories.add(id);
+      renderProjectGridRows();
+      return;
+    }
+    if (action === "add-boq-category" || action === "add-boq-row") {
+      const next = structuredClone(state.project);
+      let categoryId = target.dataset.pmCategoryId;
+      if (action === "add-boq-category") {
+        categoryId = crypto.randomUUID();
+        next.boqCategories.push({ id: categoryId, name: "" });
+      }
+      const row = newBoqRow(categoryId);
+      const lastIndex = next.installationItems.findLastIndex(item => item.categoryId === categoryId);
+      next.installationItems.splice(lastIndex < 0 ? next.installationItems.length : lastIndex + 1, 0, row);
+      if (state.tab === "boq") state.boqSearch = "";
+      else state.installationSearch = "";
+      state.collapsedBoqCategories.delete(categoryId);
+      const saving = saveProjectPayload(projectPayload(next), "Item added", { quiet: true, renderOptimistic: true });
+      root.querySelector(action === "add-boq-category" ? `[data-pm-category-name][data-pm-category-id="${categoryId}"]` : `[data-pm-grid-row="${row.id}"] input`)?.focus();
+      await saving.catch(error => toast(error.message));
+      return;
+    }
+    if (action === "delete-boq-row" || action === "delete-boq-category") {
+      const category = state.project.boqCategories.find(item => item.id === target.dataset.pmCategoryId);
+      const message = action === "delete-boq-category" ? `Delete ${category?.name || "this category"} and its items?` : "Delete this BOQ item?";
+      if (!confirm(message)) return;
+      const next = structuredClone(state.project);
+      if (action === "delete-boq-category") {
+        next.boqCategories = next.boqCategories.filter(item => item.id !== target.dataset.pmCategoryId);
+        next.installationItems = next.installationItems.filter(item => item.categoryId !== target.dataset.pmCategoryId);
+      } else next.installationItems = next.installationItems.filter(item => item.id !== target.dataset.pmRowId);
+      await saveProjectPayload(projectPayload(next), "Item deleted").catch(error => toast(error.message));
+      return;
+    }
+    if (action === "choose-boq-import") { root.querySelector("[data-pm-boq-file]")?.click(); return; }
     if (action === "choose-invoice") {
       const input = root.querySelector(`[data-pm-invoice-input][data-pm-section="${target.dataset.pmSection}"][data-pm-row-id="${target.dataset.pmRowId}"]`);
       input?.click();
@@ -1054,6 +1339,8 @@
 
   async function onChange(event) {
     const target = event.target;
+    if (target.matches("[data-pm-boq-file]")) return importProjectBoq(target);
+    if (target.matches("[data-pm-grid-field], [data-pm-category-name]")) return updateProjectGrid(target).catch(error => toast(error.message));
     if (target.matches("[data-pm-invoice-input]")) return uploadInvoice(target);
     if (target.matches("[data-pm-folder-select]")) {
       if (target.checked) state.selectedFolderNames.add(target.dataset.pmFolderSelect);
@@ -1097,6 +1384,30 @@
   }
 
   function onInput(event) {
+    if (event.target.matches("[data-pm-grid-search]")) {
+      state[event.target.dataset.pmGridSearch === "boq" ? "boqSearch" : "installationSearch"] = event.target.value;
+      renderProjectGridRows();
+      return;
+    }
+    if (event.target.matches("[data-pm-grid-field]")) {
+      const row = event.target.closest(".pm-grid-item");
+      if (event.target.dataset.pmGridField === "boqQty" || event.target.dataset.pmGridField === "rate") {
+        const qty = row?.querySelector('[data-pm-grid-field="boqQty"]')?.value;
+        const rate = row?.querySelector('[data-pm-grid-field="rate"]')?.value;
+        const amount = row?.querySelector("[data-pm-amount]");
+        if (amount) amount.textContent = qty === "" || rate === "" ? "-" : moneyWithCents(Number(qty) * Number(rate));
+      }
+      if (event.target.dataset.pmGridField === "installedQty") {
+        const item = state.project?.installationItems.find(candidate => candidate.id === event.target.dataset.pmRowId);
+        const balance = row?.querySelector("[data-pm-balance]");
+        if (item && balance) {
+          const value = item.boqQty === "" ? null : Number(item.boqQty) - Number(event.target.value || 0);
+          balance.textContent = value === null ? "-" : quantityDisplay(value);
+          balance.className = `pm-grid-balance ${value === null ? "" : value <= 0 ? "done" : value <= Number(item.boqQty) * .25 ? "low" : "open"}`;
+        }
+      }
+      return;
+    }
     if (event.target.matches("[data-pm-lpo-search]")) {
       state.lpoSearch = event.target.value;
       renderLpoResults();
