@@ -487,6 +487,21 @@
 .pm-lpo-totals dd { margin: 0; color: #19345d; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .pm-lpo-totals .pm-lpo-grand { padding-top: 8px; border-top: 1px solid #dce6f2; }
 .pm-lpo-grand dt, .pm-lpo-grand dd { color: #0b214a; font-size: 13px; font-weight: 750; }
+.delivery-view-modal .pm-modal-head > div:first-child { min-width: 0; }
+.delivery-view-modal .pm-modal-head h2, .delivery-view-modal .pm-modal-head p { overflow-wrap: anywhere; }
+.delivery-view-modal .pm-lpo-modal-head-actions { flex: 0 0 auto; }
+.delivery-view-close { display: grid; place-items: center; width: 30px; height: 30px; padding: 5px; border-radius: 6px; }
+.delivery-view-close:hover { background: #edf3fa; }
+.delivery-view-close img { width: 18px; height: 18px; }
+.delivery-view-section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.delivery-view-section-head span { color: #64758d; font-size: 11px; }
+.delivery-view-items { min-width: 0; table-layout: fixed; }
+.delivery-view-items th, .delivery-view-items td { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+.delivery-view-items th:first-child, .delivery-view-items td:first-child { width: 42px; text-align: center; }
+.delivery-view-items th:nth-child(2), .delivery-view-items td:nth-child(2) { width: 24%; }
+.delivery-view-items th:last-child, .delivery-view-items td:last-child { width: 68px; text-align: center; }
+.delivery-view-total { display: flex; justify-content: flex-end; align-items: center; gap: 20px; padding: 12px; border-top: 1px solid #dce6f2; background: #f8faff; color: #36527c; font-size: 12px; }
+.delivery-view-total strong { color: #0b214a; font-size: 13px; }
 @media (max-width: 700px) { .pm-lpo-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }.pm-lpo-bottom { grid-template-columns: 1fr; }.pm-lpo-totals { max-width: 320px; margin-left: auto; } }
 @media (max-width: 700px) { .pm-lpo-panel .pm-panel-head { flex-wrap: wrap; }.pm-lpo-search { flex: 1 1 100%; width: 100%; } }
 @media (max-width: 480px) { .pm-lpo-details { grid-template-columns: 1fr; }.pm-lpo-modal .pm-modal-head { padding: 14px; }.pm-lpo-modal-body { padding: 14px; } }

@@ -1997,7 +1997,7 @@ function salesLeadRow(lead) {
     <tr class="${lead.id === salesLeadDetailId ? "selected" : ""}" data-sales-lead-row="${escapeHtml(lead.id)}">
       <td><button class="pipeline-link" data-sales-action="view-lead" data-sales-id="${escapeHtml(lead.id)}">${escapeHtml(lead.enquiryNo)}</button><br><span>${escapeHtml(lead.receivedDate)}</span></td>
       <td><div class="pipeline-cell-stack"><strong class="pipeline-customer">${escapeHtml(lead.customer)}</strong>${customerLines}</div></td>
-      <td><strong>${escapeHtml(lead.projectDescription)}</strong><br><span>${escapeHtml(lead.plotNo || lead.location)}</span></td>
+      <td><strong class="pipeline-project-description">${escapeHtml(lead.projectDescription)}</strong><span class="pipeline-project-location">${escapeHtml(lead.plotNo || lead.location)}</span></td>
       <td>${salesProductBadge(lead.productType)}</td>
       <td>${salesBadge(lead.status)}</td>
       <td>${lead.estimatedValue ? Number(lead.estimatedValue).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-"}</td>
@@ -2210,7 +2210,7 @@ function salesLeadSplitInfoCard(title, rows, extraClass = "") {
   return `
     <section class="lead-split-info-card ${escapeHtml(extraClass)}">
       <h4>${escapeHtml(title)}</h4>
-      <dl>${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}</dl>
+      <dl>${rows.map(([label, value]) => `<div class="${label === "Project / Description" ? "lead-split-description-field" : ""}"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "-")}</dd></div>`).join("")}</dl>
     </section>
   `;
 }
@@ -8757,6 +8757,7 @@ function deliveryNoteRows(notes) {
     const deliveryLocation = String(note.deliveryLocation || "").trim() || "—";
     const contactPerson = String(note.contactPerson || "").trim() || "—";
     const menuItems = [
+      { label: "View", action: "view-delivery", id: note.id },
       { label: "Edit", action: "edit-delivery", id: note.id },
       { label: "Download", action: "download-delivery", id: note.id },
       { label: "Cancel", action: "cancel-delivery", id: note.id, danger: true }
@@ -8834,37 +8835,71 @@ function customerListViewHtml() {
   `;
 }
 
+function deliveryStockItem(modelNo) {
+  return (inventoryState?.dashboard?.stock || []).find(item => norm(item.modelNo) === norm(modelNo));
+}
+
+function deliveryReservationRows(stockItem) {
+  const rows = (stockItem?.reservations || []).map(entry => ({
+    customerName: entry.customerName || "",
+    projectName: entry.projectName || "",
+    qty: Math.max(0, Number(entry.qty || 0))
+  })).filter(entry => entry.qty > 0);
+  const unassignedQty = Math.max(0, Number(stockItem?.reservedQty || 0) - rows.reduce((sum, entry) => sum + entry.qty, 0));
+  if (unassignedQty) rows.push({ customerName: "", projectName: "", qty: unassignedQty });
+  return rows;
+}
+
+function deliveryAllowedQty(stockItem, customerName, noteId = "") {
+  if (!stockItem) return 0;
+  const existing = (inventoryState?.deliveryNotes || []).find(note => note.id === noteId && ["ISSUED", "DELIVERED"].includes(norm(note.status)));
+  const restoredQty = (existing?.lines || []).reduce((sum, line) => sum + (norm(line.modelNo) === norm(stockItem.modelNo) ? Number(line.qtyGoingOut || 0) : 0), 0);
+  const ownedQty = deliveryReservationRows(stockItem).reduce((sum, entry) => sum + (entry.customerName && norm(entry.customerName) === norm(customerName) ? entry.qty : 0), 0);
+  return Math.max(0, Number(stockItem.qty || 0) + restoredQty - Math.max(0, Number(stockItem.reservedQty || 0) - ownedQty));
+}
+
 function deliveryFormHtml(dn) {
   const customers = inventoryState.customers || [];
   const stock = inventoryState.dashboard.stock || [];
   const customerProjects = deliveryProjectsForCustomer(dn.customerName);
   return `
-    <div class="form-grid">
-      <label>DN No.<input id="dnNoInput" value="${escapeHtml(dn.dnNo)}"></label>
-      <label>Date<input type="date" id="dnDateInput" value="${nativeDateValue(dn.date)}"></label>
-      <label>Customer Name<input id="customerNameInput" list="customerList" value="${escapeHtml(dn.customerName)}"></label>
-      <label>Contact Person<input id="contactInput" value="${escapeHtml(dn.contactPerson)}"></label>
-      <label>Phone<input id="phoneInput" value="${escapeHtml(dn.phone)}"></label>
-      <label>Delivery Location<input id="locationInput" value="${escapeHtml(dn.deliveryLocation)}"></label>
-      <label>Project Name<input id="projectInput" list="deliveryProjectList" placeholder="Type/select active project" value="${escapeHtml(dn.projectName)}"></label>
-    </div>
+    <section class="delivery-section delivery-information">
+      <h3><span class="delivery-section-icon"><img src="/assets/maintenance-icons/file-text.svg" alt=""></span>Delivery Information</h3>
+      <div class="form-grid delivery-form-grid">
+        <label><span>DN No. <span class="delivery-required">*</span></span><input id="dnNoInput" value="${escapeHtml(dn.dnNo)}"></label>
+        <label><span>Date <span class="delivery-required">*</span></span><span class="delivery-field-control"><img src="/assets/maintenance-icons/calendar-days.svg" alt=""><input type="date" id="dnDateInput" value="${nativeDateValue(dn.date)}"></span></label>
+        <label><span>Customer Name <span class="delivery-required">*</span></span><span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="customerNameInput" list="customerList" value="${escapeHtml(dn.customerName)}"></span></label>
+        <label>Contact Person<span class="delivery-field-control"><img src="/assets/maintenance-icons/user-round.svg" alt=""><input id="contactInput" value="${escapeHtml(dn.contactPerson)}" placeholder="Enter contact person"></span></label>
+        <label>Phone<span class="delivery-field-control"><img src="/assets/maintenance-icons/phone.svg" alt=""><input id="phoneInput" value="${escapeHtml(dn.phone)}" placeholder="Enter phone number"></span></label>
+        <label>Delivery Location<span class="delivery-field-control"><img src="/assets/maintenance-icons/map-pin.svg" alt=""><input id="locationInput" value="${escapeHtml(dn.deliveryLocation)}" placeholder="Enter delivery location"></span></label>
+        <label>Project Name<span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="projectInput" list="deliveryProjectList" placeholder="Type/select active project" value="${escapeHtml(dn.projectName)}"></span></label>
+      </div>
+    </section>
     <datalist id="customerList">${customers.map(c => `<option value="${escapeHtml(c.customerName)}"></option>`).join("")}</datalist>
     <datalist id="deliveryProjectList">${customerProjects.map(project => `<option value="${escapeHtml(project)}"></option>`).join("")}</datalist>
     <datalist id="modelList">${stock.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description)}</option>`).join("")}</datalist>
-    <h3>Item Details</h3>
-    <table class="inventory-table delivery-line-table">
+    <section class="delivery-section delivery-items-section">
+    <h3><span class="delivery-section-icon"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""></span>Item Details</h3>
+    <div class="delivery-line-scroll"><table class="inventory-table delivery-line-table">
       <colgroup>
         <col class="delivery-col-model">
         <col class="delivery-col-description">
         <col class="delivery-col-available">
+        <col class="delivery-col-reserved">
         <col class="delivery-col-qty">
         <col class="delivery-col-action">
       </colgroup>
-      <thead><tr><th>MODEL NO.</th><th>DESCRIPTION</th><th>AVAILABLE QTY</th><th>QTY</th><th>ACTION</th></tr></thead><tbody>
-      ${(dn.lines || []).map((line, index) => `<tr><td><input data-suggestion-list="modelList" data-delivery-model-line="${index}" value="${escapeHtml(line.modelNo)}"></td><td>${escapeHtml(line.description)}</td><td>${line.availableQty}</td><td><input type="number" min="1" max="${line.availableQty}" data-delivery-line="${index}" value="${line.qtyGoingOut}"></td><td><button class="danger-button" data-remove-delivery-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="5">No items added.</td></tr>`}
-    </tbody></table>
-    <div class="inventory-actions" style="justify-content:flex-start"><button class="ghost-button" id="addDeliveryLineBtn">Add Row</button></div>
-    <div class="inventory-actions"><button class="ghost-button" id="saveDraftBtn">Save Draft</button><button class="primary-button" id="issueDeliveryBtn">Create</button><button class="ghost-button" id="downloadDraftPdfBtn">Download PDF</button></div>
+      <thead><tr><th>MODEL NO.</th><th>DESCRIPTION</th><th>STOCK</th><th>RESERVED</th><th>QTY</th><th><span class="sr-only">Remove</span></th></tr></thead><tbody>
+      ${(dn.lines || []).map((line, index) => {
+        const stockItem = deliveryStockItem(line.modelNo);
+        const reservedQty = Number(stockItem?.reservedQty || 0);
+        const allowedQty = deliveryAllowedQty(stockItem, dn.customerName, dn.id);
+        return `<tr><td><input data-suggestion-list="modelList" data-delivery-model-line="${index}" value="${escapeHtml(line.modelNo)}"></td><td>${escapeHtml(line.description)}</td><td><span class="delivery-stock-value">${Number(stockItem?.qty ?? line.availableQty)}</span></td><td>${reservedQty ? `<button type="button" class="delivery-reserved-value" data-delivery-reservation-line="${index}" title="View reservation details" aria-label="View reservations for ${escapeHtml(line.modelNo)}">${reservedQty}</button>` : `<span class="delivery-reserved-value">0</span>`}</td><td><input type="number" min="1" max="${allowedQty}" data-delivery-line="${index}" title="${allowedQty} unit(s) available for this customer" value="${line.qtyGoingOut}"></td><td><button class="danger-button delivery-remove-line" data-remove-delivery-line="${index}" title="Remove row" aria-label="Remove row"><img src="/assets/maintenance-icons/x.svg" alt=""></button></td></tr>`;
+      }).join("") || `<tr><td colspan="6" class="delivery-empty-line">No items added.</td></tr>`}
+    </tbody></table></div>
+    <div class="inventory-actions delivery-add-row"><button class="ghost-button" id="addDeliveryLineBtn"><img src="/assets/maintenance-icons/plus.svg" alt="">Add Row</button></div>
+    </section>
+    <div class="inventory-actions delivery-modal-footer"><button class="ghost-button" id="saveDraftBtn"><img src="/assets/maintenance-icons/save.svg" alt="">Save Draft</button><button class="primary-button" id="issueDeliveryBtn"><img src="/assets/maintenance-icons/check.svg" alt="">Create</button><button class="ghost-button" id="downloadDraftPdfBtn"><img src="/assets/maintenance-icons/download.svg" alt="">Download PDF</button></div>
   `;
 }
 
@@ -8877,11 +8912,11 @@ function openDeliveryModal(note = null) {
   modal.innerHTML = `
     <div class="modal delivery-note-modal">
       <div class="inventory-topbar">
-        <div><h2>${note ? "Edit Delivery Note" : "Create Delivery Note"}</h2><p class="inventory-muted">Create and issue outbound delivery notes.</p></div>
+        <div class="delivery-modal-heading"><span class="delivery-modal-title-icon"><img src="/assets/maintenance-icons/file-text.svg" alt=""></span><div><h2>${note ? "Edit Delivery Note" : "Create Delivery Note"}</h2><p class="inventory-muted">Create and issue outbound delivery notes.</p></div></div>
         <label class="delivery-project-no-lookup">Project No.
-          <input id="deliveryProjectNoInput" value="${escapeHtml(deliveryDraft.projectNo || "")}" placeholder="Enter project no." autocomplete="off">
+          <span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="deliveryProjectNoInput" value="${escapeHtml(deliveryDraft.projectNo || "")}" placeholder="Enter project no." autocomplete="off"></span>
         </label>
-        <button class="mini-button" data-close-delivery-modal>Close</button>
+        <button class="mini-button delivery-close-button" data-close-delivery-modal title="Close" aria-label="Close"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
       </div>
       <div data-delivery-modal-body>
         ${deliveryFormHtml(deliveryDraft)}
@@ -8893,7 +8928,40 @@ function openDeliveryModal(note = null) {
   modal.addEventListener("input", handleDeliveryModalInput);
   modal.addEventListener("change", handleDeliveryModalChange);
   modal.addEventListener("keydown", handleDeliveryModalKeydown);
+  modal.querySelector(".delivery-note-modal").addEventListener("scroll", () => modal.querySelector(".delivery-reservation-popover")?.remove());
   modal.querySelector("#dnNoInput")?.focus();
+}
+
+function openDeliveryNoteViewModal(noteId) {
+  const note = inventoryState.deliveryNotes.find(item => item.id === noteId);
+  if (!note) return toast("Delivery note not found");
+  document.querySelector("[data-delivery-view-modal]")?.remove();
+
+  const detail = (label, value) => `<div><dt>${label}</dt><dd>${escapeHtml(String(value || "—"))}</dd></div>`;
+  const lines = (note.lines || []).map((line, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(line.modelNo || "—")}</td><td>${escapeHtml(line.description || "—")}</td><td>${escapeHtml(String(line.qtyGoingOut ?? 0))}</td></tr>`).join("");
+  const modal = document.createElement("div");
+  modal.className = "pm-modal-backdrop pm-lpo-backdrop";
+  modal.dataset.deliveryViewModal = "true";
+  modal.innerHTML = `
+    <section class="pm-modal pm-lpo-modal delivery-view-modal" role="dialog" aria-modal="true" aria-labelledby="deliveryViewModalTitle">
+      <div class="pm-modal-head">
+        <div><h2 id="deliveryViewModalTitle">Delivery Note ${escapeHtml(note.dnNo || "")}</h2><p>${escapeHtml(formatInventoryDate(note.date) || "—")} · ${escapeHtml(note.projectName || note.customerName || "—")}</p></div>
+        <div class="pm-lpo-modal-head-actions">${statusPill(deliveryNoteStatusLabel(note.status))}<button type="button" class="pm-close delivery-view-close" data-close-delivery-view aria-label="Close delivery note details"><img src="/assets/maintenance-icons/x.svg" alt=""></button></div>
+      </div>
+      <div class="pm-lpo-modal-body">
+        <dl class="pm-lpo-details">${detail("Customer", note.customerName)}${detail("Project", note.projectName)}${note.projectNo ? detail("Project No.", note.projectNo) : ""}${detail("Contact Person", note.contactPerson)}${detail("Phone", note.phone)}${detail("Delivery Location", note.deliveryLocation)}</dl>
+        <section class="pm-lpo-section"><div class="delivery-view-section-head"><h3>Item Details</h3><span>${(note.lines || []).length} item${(note.lines || []).length === 1 ? "" : "s"}</span></div><div class="pm-table-wrap"><table class="pm-table delivery-view-items"><thead><tr><th>#</th><th>Model No.</th><th>Description</th><th>Qty</th></tr></thead><tbody>${lines || `<tr><td colspan="4" class="pm-table-empty">No items.</td></tr>`}</tbody></table></div><div class="delivery-view-total"><span>Total Quantity</span><strong>${escapeHtml(String(sumDeliveryQty(note)))}</strong></div></section>
+      </div>
+      <div class="pm-modal-actions"><button type="button" class="pm-secondary" data-close-delivery-view>Close</button></div>
+    </section>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", event => {
+    if (event.target === modal || event.target.closest("[data-close-delivery-view]")) modal.remove();
+  });
+  modal.addEventListener("keydown", event => {
+    if (event.key === "Escape") modal.remove();
+  });
+  modal.querySelector("[data-close-delivery-view]")?.focus();
 }
 
 function closeDeliveryModal() {
@@ -8906,7 +8974,62 @@ function refreshDeliveryModalForm() {
   body.innerHTML = deliveryFormHtml(deliveryDraft);
 }
 
+function showDeliveryReservationPopover(lineIndex, trigger) {
+  const modal = document.querySelector(".delivery-note-modal");
+  const stockItem = deliveryStockItem(deliveryDraft?.lines?.[lineIndex]?.modelNo);
+  if (!modal || !stockItem) return;
+  modal.querySelector(".delivery-reservation-popover")?.remove();
+  const rows = deliveryReservationRows(stockItem);
+  const popover = document.createElement("div");
+  popover.className = "delivery-reservation-popover";
+  popover.dataset.deliveryReservationLine = String(lineIndex);
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `Reservations for ${stockItem.modelNo}`);
+  popover.innerHTML = `
+    <div class="delivery-reservation-heading">
+      <span class="delivery-reservation-lock"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>
+      <div><strong>Reserved Quantity (${Number(stockItem.reservedQty || 0)})</strong><p>This quantity is reserved for the following customer(s) and project(s).</p></div>
+      <button type="button" data-close-reservation-popover aria-label="Close reservation details" title="Close"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
+    </div>
+    <div class="delivery-reservation-list"><table><thead><tr><th>#</th><th>Customer Name</th><th>Project Name</th><th>Qty</th></tr></thead><tbody>
+      ${rows.map((entry, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(entry.customerName || "Unassigned")}</td><td>${escapeHtml(entry.projectName || "Manual reservation")}</td><td>${entry.qty}</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="3">Total Reserved</td><td>${Number(stockItem.reservedQty || 0)}</td></tr></tfoot></table></div>
+  `;
+  modal.appendChild(popover);
+  const anchor = trigger.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  const height = popover.offsetHeight;
+  const below = anchor.top - height - 12 < 12;
+  popover.classList.toggle("delivery-reservation-below", below);
+  popover.style.left = `${Math.max(12, Math.min(window.innerWidth - width - 12, anchor.left + anchor.width / 2 - width / 2))}px`;
+  popover.style.top = `${below ? Math.min(window.innerHeight - height - 12, anchor.bottom + 12) : anchor.top - height - 12}px`;
+}
+
+function updateDeliveryQuantityLimits() {
+  const customerName = document.querySelector("#customerNameInput")?.value || "";
+  document.querySelectorAll(".delivery-note-modal [data-delivery-line]").forEach(input => {
+    const line = deliveryDraft?.lines?.[Number(input.dataset.deliveryLine)];
+    const allowedQty = deliveryAllowedQty(deliveryStockItem(line?.modelNo), customerName, deliveryDraft?.id);
+    input.max = String(allowedQty);
+    input.title = `${allowedQty} unit(s) available for this customer`;
+  });
+}
+
 function handleDeliveryModalClick(event) {
+  if (event.target.closest("[data-close-reservation-popover]")) {
+    event.target.closest(".delivery-reservation-popover")?.remove();
+    return;
+  }
+  const reservationTrigger = event.target.closest("[data-delivery-reservation-line]");
+  if (reservationTrigger) {
+    const openPopover = document.querySelector(".delivery-reservation-popover");
+    if (openPopover?.dataset.deliveryReservationLine === reservationTrigger.dataset.deliveryReservationLine) {
+      openPopover.remove();
+      return;
+    }
+    return showDeliveryReservationPopover(Number(reservationTrigger.dataset.deliveryReservationLine), reservationTrigger);
+  }
+  if (!event.target.closest(".delivery-reservation-popover")) document.querySelector(".delivery-reservation-popover")?.remove();
   const target = event.target.closest("button");
   if (!target) {
     if (event.target.dataset.deliveryModal) closeDeliveryModal();
@@ -8929,11 +9052,14 @@ function handleDeliveryModalInput(event) {
   if (input.dataset.suggestionList) {
     toggleSuggestionList(input);
   }
-  if (input.id === "customerNameInput") updateDeliveryProjectList(input.value);
+  if (input.id === "customerNameInput") {
+    updateDeliveryProjectList(input.value);
+    updateDeliveryQuantityLimits();
+  }
   if (input.dataset.deliveryLine) {
     const line = deliveryDraft.lines[Number(input.dataset.deliveryLine)];
     if (!line) return;
-    line.qtyGoingOut = Math.min(Number(input.value || 0), Number(line.availableQty || 0));
+    line.qtyGoingOut = Math.min(Number(input.value || 0), Number(input.max || 0));
     input.value = line.qtyGoingOut;
   }
 }
@@ -8949,6 +9075,10 @@ function handleDeliveryModalChange(event) {
 }
 
 function handleDeliveryModalKeydown(event) {
+  if (event.key === "Escape" && event.target.closest(".delivery-note-modal")?.querySelector(".delivery-reservation-popover")) {
+    event.target.closest(".delivery-note-modal").querySelector(".delivery-reservation-popover").remove();
+    return;
+  }
   if (event.key !== "Enter" || event.target.id !== "deliveryProjectNoInput") return;
   event.preventDefault();
   fillDeliveryFromProjectNo(event.target.value);
@@ -9891,6 +10021,7 @@ function handleInventoryMenuAction(action, idValue) {
     return cancelActiveSupplierDn();
   }
   if (action === "delete-supplier") return deleteSupplierDn(idValue);
+  if (action === "view-delivery") return openDeliveryNoteViewModal(idValue);
   if (action === "edit-delivery") {
     const note = inventoryState.deliveryNotes.find(item => item.id === idValue);
     return openDeliveryModal(note);
@@ -10328,6 +10459,15 @@ async function saveDelivery(status) {
   if (!note.lines.length) return alert("Add at least one model.");
   const overQtyLine = note.lines.find(line => Number(line.qtyGoingOut || 0) > Number(line.availableQty || 0));
   if (overQtyLine) return alert(`Qty Going Out cannot be more than Available Qty for ${overQtyLine.modelNo}.`);
+  if (status !== "Draft") {
+    const requestedByModel = new Map();
+    for (const line of note.lines) {
+      const key = norm(line.modelNo);
+      requestedByModel.set(key, (requestedByModel.get(key) || 0) + Number(line.qtyGoingOut || 0));
+      const allowedQty = deliveryAllowedQty(deliveryStockItem(line.modelNo), note.customerName, note.id);
+      if (requestedByModel.get(key) > allowedQty) return alert(`Only ${allowedQty} unit(s) of ${line.modelNo} are available for ${note.customerName}; remaining stock is reserved for other customers.`);
+    }
+  }
   inventoryState = await api("/api/inventory/delivery-notes", { method: "POST", body: JSON.stringify(note) });
   deliveryDraft = newDeliveryDraft();
   deliverySearchQuery = "";

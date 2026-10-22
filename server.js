@@ -4322,9 +4322,22 @@ async function handleApi(req, res) {
     if (issuing) {
       const availabilityInventory = { ...inventory, deliveryNotes: inventory.deliveryNotes.filter(dn => dn.id !== deliveryNote.id) };
       const availability = computeInventory(availabilityInventory).stockByModel;
+      const salesStore = await readSalesCrm();
+      const projectReservations = salesProjectReservationDetails(salesStore.projects || [], availabilityInventory.deliveryNotes);
+      const requestedByModel = {};
       for (const line of deliveryNote.lines) {
-        if (Number(line.qtyGoingOut || 0) > Number(availability[inventoryNorm(line.modelNo)]?.qty || 0)) {
+        const key = inventoryNorm(line.modelNo);
+        requestedByModel[key] = (requestedByModel[key] || 0) + Number(line.qtyGoingOut || 0);
+        const stockQty = Math.max(0, Number(availability[key]?.qty || 0));
+        const reservations = projectReservations[key] || [];
+        const otherProjectQty = reservations.reduce((sum, entry) => sum + (entry.customerName && inventoryNorm(entry.customerName) === inventoryNorm(deliveryNote.customerName) ? 0 : entry.qty), 0);
+        const manualQty = Math.max(0, Number((inventory.models || []).find(model => inventoryNorm(model.modelNo) === key)?.reservedQty || 0));
+        const allowedQty = Math.max(0, stockQty - otherProjectQty - manualQty);
+        if (requestedByModel[key] > stockQty) {
           return send(res, 400, { error: `Insufficient stock for ${line.modelNo}` });
+        }
+        if (requestedByModel[key] > allowedQty) {
+          return send(res, 400, { error: `Only ${allowedQty} unit(s) of ${line.modelNo} are available for ${deliveryNote.customerName || "this customer"}; remaining stock is reserved for other customers.` });
         }
       }
     }
@@ -6707,30 +6720,84 @@ function computeInventory(inventory, projectReservations = {}) {
   return { lots, stockByModel, movements };
 }
 
-function salesProjectReservations(projects = []) {
-  return (projects || []).reduce((reserved, project) => {
-    const status = inventoryNorm(project.status || "");
-    if (["COMPLETED", "LOST", "LOSTCLOSED", "CLOSED"].includes(status)) return reserved;
+function salesProjectReservationDetails(projects = [], deliveryNotes = []) {
+  const details = {};
+  const customerTotals = new Map();
+  for (const project of projects || []) {
+    const status = inventoryNorm(project.status || "").replace(/[^A-Z0-9]/g, "");
+    if (["COMPLETED", "LOST", "LOSTCLOSED", "CLOSED"].includes(status)) continue;
     for (const row of project.boq || project.items || []) {
-      if (!(row.reserve || row.reserveStock)) continue;
       const modelNo = cleanCell(row.model || row.modelNo || "");
       if (!modelNo) continue;
       const key = inventoryNorm(modelNo);
       const qty = Number(row.qty || row.quantity || 0) || 0;
       const deliveredQty = Number(row.deliveredQty || 0) || 0;
+      const customerName = cleanCell(project.customer || "");
+      const projectName = cleanCell(project.name || project.projectNo || "");
+      const customerKey = `${key}\u0000${inventoryNorm(customerName)}`;
+      const totals = customerTotals.get(customerKey) || { boqQty: 0, deliveredQty: 0, issuedQty: 0 };
+      totals.boqQty += qty;
+      totals.deliveredQty += deliveredQty;
+      customerTotals.set(customerKey, totals);
+      if (!(row.reserve || row.reserveStock)) continue;
       const reserveQty = Math.max(0, qty - deliveredQty);
       if (!reserveQty) continue;
-      reserved[key] = (reserved[key] || 0) + reserveQty;
+      const entries = details[key] ||= [];
+      const existing = entries.find(entry => inventoryNorm(entry.customerName) === inventoryNorm(customerName) && inventoryNorm(entry.projectName) === inventoryNorm(projectName));
+      if (existing) existing.qty += reserveQty;
+      else entries.push({ customerName, projectName, qty: reserveQty });
     }
-    return reserved;
-  }, {});
+  }
+  const issuedByProject = new Map();
+  for (const note of deliveryNotes || []) {
+    if (!["ISSUED", "DELIVERED"].includes(inventoryNorm(note.status))) continue;
+    for (const line of note.lines || []) {
+      const key = inventoryNorm(line.modelNo);
+      const customerKey = `${key}\u0000${inventoryNorm(note.customerName)}`;
+      const totals = customerTotals.get(customerKey);
+      if (!totals) continue;
+      const qty = Math.max(0, Number(line.qtyGoingOut || 0));
+      totals.issuedQty += qty;
+      const projectKey = `${customerKey}\u0000${inventoryNorm(note.projectName)}`;
+      issuedByProject.set(projectKey, (issuedByProject.get(projectKey) || 0) + qty);
+    }
+  }
+  for (const [customerKey, totals] of customerTotals) {
+    const split = customerKey.indexOf("\u0000");
+    const modelKey = customerKey.slice(0, split);
+    const customerName = customerKey.slice(split + 1);
+    const entries = (details[modelKey] || []).filter(entry => inventoryNorm(entry.customerName) === customerName);
+    const pendingQty = entries.reduce((sum, entry) => sum + entry.qty, 0);
+    let toRelease = Math.max(0, pendingQty - Math.max(0, totals.boqQty - Math.max(totals.deliveredQty, totals.issuedQty)));
+    entries.sort((a, b) => (issuedByProject.get(`${customerKey}\u0000${inventoryNorm(b.projectName)}`) || 0) - (issuedByProject.get(`${customerKey}\u0000${inventoryNorm(a.projectName)}`) || 0));
+    for (const entry of entries) {
+      const released = Math.min(entry.qty, toRelease);
+      entry.qty -= released;
+      toRelease -= released;
+      if (!toRelease) break;
+    }
+  }
+  Object.keys(details).forEach(key => { details[key] = details[key].filter(entry => entry.qty > 0); });
+  return details;
 }
 
 async function inventoryView(inventory) {
   ensureManualStockNumbers(inventory);
   const salesStore = await readSalesCrm();
-  const computed = computeInventory(inventory, salesProjectReservations(salesStore.projects || []));
-  const stock = Object.values(computed.stockByModel).sort((a, b) => a.modelNo.localeCompare(b.modelNo));
+  const reservationDetails = salesProjectReservationDetails(salesStore.projects || [], inventory.deliveryNotes || []);
+  const reservationTotals = Object.fromEntries(Object.entries(reservationDetails).map(([modelNo, entries]) => [
+    modelNo, entries.reduce((sum, entry) => sum + entry.qty, 0)
+  ]));
+  const computed = computeInventory(inventory, reservationTotals);
+  const stock = Object.values(computed.stockByModel).map(item => {
+    const key = inventoryNorm(item.modelNo);
+    const projectQty = reservationTotals[key] || 0;
+    const manualQty = Math.max(0, Number(item.reservedQty || 0) - projectQty);
+    return {
+      ...item,
+      reservations: [...(reservationDetails[key] || []), ...(manualQty ? [{ customerName: "", projectName: "", qty: manualQty }] : [])]
+    };
+  }).sort((a, b) => a.modelNo.localeCompare(b.modelNo));
   const lowStock = stock.filter(item => item.minimumStock && item.qty < item.minimumStock);
   const pendingReview = (inventory.supplierDns || []).filter(dn => dn.status === "Review Needed").length;
   return {
