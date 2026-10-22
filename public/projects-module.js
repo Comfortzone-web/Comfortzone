@@ -7,6 +7,7 @@
     documentSearch: "", documentType: "all", documentCategory: "all", documentUploader: "all", selectedDocumentIds: new Set(), pendingDocumentFile: null,
     folderSelectMode: false, selectedFolderNames: new Set(), renamingFolderName: "", dashboardViewAll: "", dashboardModalSearch: "", dashboardListItems: null, dashboardListError: "",
     boqSearch: "", installationSearch: "", collapsedBoqCategories: new Set(), boqImportBusy: false,
+    submittalKind: "material", submittalSearch: "", expandedSubmittals: new Set(), submittalImportBusy: false,
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
   let projectSaveQueue = Promise.resolve();
   let projectSaveVersion = 0;
@@ -89,6 +90,9 @@
         state.folderSelectMode = false;
         state.selectedFolderNames.clear();
         state.renamingFolderName = "";
+        state.submittalKind = "material";
+        state.submittalSearch = "";
+        state.expandedSubmittals.clear();
       }
       state.project = await api(`/api/project-management/projects/${encodeURIComponent(projectId)}`);
       navigate(`/projects/${encodeURIComponent(projectId)}`);
@@ -300,13 +304,14 @@
   function renderDetail() {
     const project = state.project;
     if (!project) return open();
-    root.innerHTML = `${detailHeader(project)}<nav class="pm-tabs">${["overview", "information", "boq", "installation", "pending", "payment", "followups", "lpos", "documents", "activity"].map(tab => `<button class="${state.tab === tab ? "active" : ""}" data-pm-tab="${tab}">${tab === "information" ? "Project Information" : tab === "boq" ? "BOQ" : tab === "followups" ? "Follow-ups" : tab === "lpos" ? "LPO's" : tab === "activity" ? "Activity History" : tab === "installation" ? "Installation Progress" : tab === "pending" ? "Pending Works" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}</nav><div class="pm-detail-content">${detailTab(project)}</div>`;
+    root.innerHTML = `${detailHeader(project)}<nav class="pm-tabs">${["overview", "information", "boq", "installation", "submittals", "pending", "payment", "followups", "lpos", "documents", "activity"].map(tab => `<button class="${state.tab === tab ? "active" : ""}" data-pm-tab="${tab}">${tab === "information" ? "Project Information" : tab === "boq" ? "BOQ" : tab === "followups" ? "Follow-ups" : tab === "lpos" ? "LPO's" : tab === "activity" ? "Activity History" : tab === "installation" ? "Installation Progress" : tab === "pending" ? "Pending Works" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}</nav><div class="pm-detail-content">${detailTab(project)}</div>`;
   }
 
   function detailTab(project) {
     if (state.tab === "information") return informationTab(project);
     if (state.tab === "boq") return boqTab(project);
     if (state.tab === "installation") return installationTab(project);
+    if (state.tab === "submittals") return submittalsTab(project);
     if (state.tab === "pending") return pendingWorksTab(project);
     if (state.tab === "payment") return paymentTab(project);
     if (state.tab === "followups") return followUpsTab(project);
@@ -321,10 +326,212 @@
       ? `<section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Variation Payment</h2><button class="pm-link" data-pm-tab="payment">View All →</button></div>${compactVariationPayments(project)}</section>`
       : "";
     const installationRows = installationOverviewRows(project);
-    return `<div class="pm-command-grid"><div class="pm-command-main"><section class="pm-panel pm-command-docs"><div class="pm-panel-head"><div><h2>Documentation / Submittals</h2><p>${project.submittals.filter(item => /^approved$/i.test(item.status)).length} of ${project.submittals.length} approved</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactSubmittals(project)}</section><section class="pm-panel pm-command-installation"><div class="pm-panel-head"><span class="pm-installation-heading-icon" aria-hidden="true"></span><div class="pm-installation-heading"><h2>Installation Progress</h2><p>${installationRows.filter(row => row.installed >= 100 && row.hasBoq).length} of ${installationRows.length} categories complete</p></div><button class="pm-installation-view" data-pm-tab="installation">View Full Installation <span aria-hidden="true">→</span></button></div>${compactInstallation(installationRows)}</section><section class="pm-panel pm-command-testing"><div class="pm-panel-head"><div><h2>Testing & Commissioning</h2><p>${project.testingItems.filter(item => /^(finished|completed)$/i.test(item.status)).length} of ${project.testingItems.length} finished</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactTesting(project)}</section></div><aside class="pm-command-side"><section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Payment Terms</h2><button class="pm-link" data-pm-tab="payment">View All Payment Terms →</button></div>${compactPayments(project)}</section>${variation}<section class="pm-panel pm-command-followups"><div class="pm-panel-head"><div><h2>Follow-ups <em>${project.followUps.length}</em></h2><p>Latest actions requiring attention</p></div><button class="pm-link" data-pm-tab="followups">View All Follow-ups →</button></div>${compactFollowUps(project)}</section></aside></div>`;
+    return `<div class="pm-command-grid"><div class="pm-command-main"><section class="pm-panel pm-command-docs"><div class="pm-panel-head"><div><h2>Documentation / Submittals</h2><p>${project.submittals.filter(item => /^approved(?: as noted)?$/i.test(item.status)).length} of ${project.submittals.length} approved</p></div><button class="pm-link" data-pm-tab="submittals">View All →</button></div>${compactSubmittals(project)}</section><section class="pm-panel pm-command-installation"><div class="pm-panel-head"><span class="pm-installation-heading-icon" aria-hidden="true"></span><div class="pm-installation-heading"><h2>Installation Progress</h2><p>${installationRows.filter(row => row.installed >= 100 && row.hasBoq).length} of ${installationRows.length} categories complete</p></div><button class="pm-installation-view" data-pm-tab="installation">View Full Installation <span aria-hidden="true">→</span></button></div>${compactInstallation(installationRows)}</section><section class="pm-panel pm-command-testing"><div class="pm-panel-head"><div><h2>Testing & Commissioning</h2><p>${project.testingItems.filter(item => /^(finished|completed)$/i.test(item.status)).length} of ${project.testingItems.length} finished</p></div><button class="pm-link" data-pm-tab="information">View All →</button></div>${compactTesting(project)}</section></div><aside class="pm-command-side"><section class="pm-panel pm-command-payment"><div class="pm-panel-head"><h2>Payment Terms</h2><button class="pm-link" data-pm-tab="payment">View All Payment Terms →</button></div>${compactPayments(project)}</section>${variation}<section class="pm-panel pm-command-followups"><div class="pm-panel-head"><div><h2>Follow-ups <em>${project.followUps.length}</em></h2><p>Latest actions requiring attention</p></div><button class="pm-link" data-pm-tab="followups">View All Follow-ups →</button></div>${compactFollowUps(project)}</section></aside></div>`;
   }
 
-  function compactSubmittals(project) { return `<div class="pm-compact-table"><div class="pm-compact-row pm-compact-head"><span>Item</span><span>Status</span><span>Comments</span></div>${project.submittals.slice(0, 4).map(item => `<div class="pm-compact-row"><span>${esc(item.item)}</span><span>${pill(item.status)}</span><small>${esc(item.comments || "-")}</small></div>`).join("")}</div>`; }
+  function compactSubmittals(project) {
+    const rows = project.submittals.slice(0, 4).map(item => `<div class="pm-compact-row"><span>${esc(item.item)}</span><span>${submittalStatusPill(item.status)}</span><small>${esc(item.comments || "-")}</small></div>`).join("");
+    return `<div class="pm-compact-table"><div class="pm-compact-row pm-compact-head"><span>Item</span><span>Status</span><span>Comments</span></div>${rows || `<div class="pm-table-empty">No submittals yet.</div>`}</div>`;
+  }
+
+  const submittalStatuses = ["Preparation", "Submitted", "Approved as Noted", "Revise & Resubmit", "Rejected"];
+  const submittalTone = status => ({
+    Preparation: "preparation", Submitted: "submitted", "Approved as Noted": "approved",
+    "Revise & Resubmit": "revise", Rejected: "rejected"
+  })[status] || "preparation";
+  const submittalStatusPill = status => `<span class="pm-submittal-status pm-submittal-status-${submittalTone(status)}">${esc(status)}</span>`;
+  function submittalPendingDays(revision) {
+    if (!revision.submitted) return "";
+    const endDate = revision.released || (["Submitted", "Revise & Resubmit"].includes(revision.status) ? todayISO() : "");
+    if (!endDate) return "";
+    const days = Math.floor((Date.parse(endDate) - Date.parse(revision.submitted)) / 86400000);
+    return Number.isFinite(days) ? Math.max(0, days) : "";
+  }
+
+  function submittalDateText(value) {
+    const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+  }
+
+  function parseSubmittalDate(value) {
+    const text = value.trim();
+    if (!text) return "";
+    const parts = text.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!parts && !iso) return null;
+    const [year, month, day] = parts ? [Number(parts[3]), Number(parts[2]), Number(parts[1])] : [Number(iso[1]), Number(iso[2]), Number(iso[3])];
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1000 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function submittalField(item, field, label, revision = null, type = "text") {
+    const value = revision ? revision[field] : item[field];
+    if (type === "date") {
+      const attrs = `data-pm-sub-field="${field}" data-pm-sub-id="${esc(item.id)}" ${revision ? `data-pm-revision-id="${esc(revision.id)}"` : ""}`;
+      return `<span class="pm-submittal-date"><input class="pm-submittal-input pm-submittal-date-text" type="text" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" ${attrs} data-pm-date-text value="${esc(submittalDateText(value))}" aria-label="${esc(label)}"><input class="pm-submittal-date-picker" type="date" ${attrs} value="${esc(value)}" aria-label="Choose ${esc(label)}" title="Choose date"></span>`;
+    }
+    return `<input class="pm-submittal-input" type="${type}" data-pm-sub-field="${field}" data-pm-sub-id="${esc(item.id)}" ${revision ? `data-pm-revision-id="${esc(revision.id)}"` : ""} value="${esc(value)}" aria-label="${esc(label)}" title="${esc(value)}">`;
+  }
+
+  function submittalStatusSelect(item, revision) {
+    return `<span class="pm-submittal-status-wrap pm-submittal-status-${submittalTone(revision.status)}"><select class="pm-submittal-status-select" data-pm-sub-field="status" data-pm-sub-id="${esc(item.id)}" data-pm-revision-id="${esc(revision.id)}" aria-label="${esc(item.refNo || item.item)} status">${options(submittalStatuses, revision.status)}</select></span>`;
+  }
+
+  function submittalFileCell(item, revision) {
+    const document = state.project.documents.find(file => file.id === revision.documentId);
+    const link = document ? `<a class="pm-submittal-file-link" href="${esc(documentUrl(document))}" target="_blank" rel="noopener" title="${esc(document.originalName)}">View</a>`
+      : revision.sourceFileName ? `<span class="pm-submittal-imported-file" title="${esc(revision.sourceFileName)}">${esc(revision.sourceFileName)}</span>` : "";
+    const upload = document ? "" : `<button type="button" class="pm-submittal-icon-button" data-pm-action="choose-submittal-file" title="Upload file" aria-label="Upload ${esc(item.refNo || item.item)} ${esc(revision.rev)} file"><img src="/assets/upload.svg" alt=""></button><input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" data-pm-sub-file data-pm-sub-id="${esc(item.id)}" data-pm-revision-id="${esc(revision.id)}" hidden>`;
+    return `<div class="pm-submittal-file-cell">${link}${upload}</div>`;
+  }
+
+  function submittalHistory(item) {
+    const rows = item.revisions.map((revision, index) => `<tr class="pm-submittal-history-item"><td><b>${esc(revision.rev)}</b></td><td>${submittalStatusSelect(item, revision)}</td><td>${submittalField(item, "submitted", `${revision.rev} submitted date`, revision, "date")}</td><td>${submittalField(item, "released", `${revision.rev} released date`, revision, "date")}</td><td>${submittalField(item, "remarks", `${revision.rev} remarks`, revision)}</td><td>${submittalFileCell(item, revision)}</td><td class="pm-submittal-history-action">${index ? `<button type="button" class="pm-submittal-delete" data-pm-action="delete-submittal-revision" data-pm-sub-id="${esc(item.id)}" data-pm-revision-id="${esc(revision.id)}" title="Delete ${esc(revision.rev)}" aria-label="Delete ${esc(revision.rev)} revision">×</button>` : ""}</td></tr>`).join("");
+    const table = `<table><thead><tr><th>Rev</th><th>Status</th><th>Submit Date</th><th>Release Date</th><th>Remarks</th><th>File</th><th class="pm-submittal-history-action" aria-label="Revision actions"></th></tr></thead><tbody>${rows}</tbody></table>`;
+    return `<tr class="pm-submittal-history-row"><td colspan="11"><div class="pm-submittal-history"><div class="pm-submittal-history-head"><h3>Revision History</h3><button type="button" class="pm-secondary" data-pm-action="new-submittal-revision" data-pm-sub-id="${esc(item.id)}">+ New Revision</button></div>${table}</div></td></tr>`;
+  }
+
+  function filteredSubmittals() {
+    const query = state.submittalSearch.trim().toLowerCase();
+    return (state.project?.submittals || []).filter(item => item.kind === state.submittalKind &&
+      (!query || [item.refNo, item.item, item.supplier, item.status].some(value => String(value || "").toLowerCase().includes(query))));
+  }
+
+  function renderSubmittalRows() {
+    const tbody = root.querySelector("[data-pm-submittal-rows]");
+    if (!tbody) return;
+    const items = filteredSubmittals();
+    tbody.innerHTML = items.map((item, index) => {
+      const revision = item.revisions.at(-1);
+      const expanded = state.expandedSubmittals.has(item.id);
+      const pending = submittalPendingDays(revision);
+      const detail = state.submittalKind === "material"
+        ? submittalField(item, "supplier", `Supplier or manufacturer for ${item.refNo || item.item}`)
+        : submittalField(item, "plannedDate", `Planned date for ${item.refNo || item.item}`, null, "date");
+      return `<tr class="pm-submittal-row"><td class="pm-submittal-number">${index + 1}</td><td>${submittalField(item, "refNo", `Reference number for ${item.item}`)}</td><td class="pm-submittal-description">${submittalField(item, "item", `Description for ${item.refNo || `row ${index + 1}`}`)}</td><td>${detail}</td><td class="pm-submittal-rev"><button type="button" class="pm-submittal-rev-button ${expanded ? "expanded" : ""}" data-pm-action="toggle-submittal-history" data-pm-sub-id="${esc(item.id)}" aria-label="${expanded ? "Collapse" : "Expand"} ${esc(item.refNo || item.item || `row ${index + 1}`)} revision history" aria-expanded="${expanded}" title="Revision history">${esc(revision.rev)}</button></td><td>${submittalStatusSelect(item, revision)}</td><td>${submittalField(item, "submitted", `Submitted date for ${item.refNo || item.item}`, revision, "date")}</td><td>${submittalField(item, "released", `Released date for ${item.refNo || item.item}`, revision, "date")}</td><td class="pm-submittal-days">${pending === "" ? "-" : `<span class="pm-submittal-days-tag ${revision.released ? "released" : "waiting"}">${pending} days</span>`}</td><td>${submittalFileCell(item, revision)}</td><td class="pm-submittal-action"><button type="button" class="pm-submittal-delete" data-pm-action="delete-submittal-row" data-pm-sub-id="${esc(item.id)}" title="Delete submittal" aria-label="Delete ${esc(item.refNo || item.item || "blank submittal")}">×</button></td></tr>${expanded ? submittalHistory(item) : ""}`;
+    }).join("") || `<tr><td colspan="11" class="pm-table-empty">${state.submittalSearch ? "No submittals match the search." : "No submittals yet."}</td></tr>`;
+    const count = root.querySelector("[data-pm-submittal-count]");
+    if (count) count.textContent = `${items.length} item${items.length === 1 ? "" : "s"}`;
+  }
+
+  function submittalsTab(project) {
+    const material = state.submittalKind === "material";
+    const title = material ? "Material Submittals" : "Shop Drawings";
+    const description = material ? "Track material submittals and approvals." : "Track shop drawings, approvals and revisions.";
+    const content = `<section class="pm-panel pm-submittals-panel"><div class="pm-submittals-top"><div class="pm-submittals-title"><span class="pm-submittals-title-icon"><img src="/assets/file-text.svg" alt=""></span><div><h2>${title}</h2><p>${description}</p></div></div></div><div class="pm-submittals-inner"><div class="pm-submittals-toolbar"><div class="pm-submittals-segment" role="tablist" aria-label="Submittal type"><button type="button" role="tab" aria-selected="${material}" class="${material ? "active" : ""}" data-pm-action="show-submittal-kind" data-pm-kind="material"><img src="/assets/maintenance-icons/file-check-2.svg" alt="">Material Submittals</button><button type="button" role="tab" aria-selected="${!material}" class="${!material ? "active" : ""}" data-pm-action="show-submittal-kind" data-pm-kind="drawing"><img src="/assets/maintenance-icons/image.svg" alt="">Shop Drawings</button></div><div class="pm-submittals-actions"><label class="pm-search"><img src="/assets/search.svg" alt=""><input type="search" data-pm-sub-search value="${esc(state.submittalSearch)}" placeholder="Search reference, description or status" aria-label="Search submittals by reference, description, supplier or status"></label><button type="button" class="pm-primary" data-pm-action="add-submittal">+ ${material ? "Add Submittal" : "Add Drawing"}</button><div class="pm-submittals-more"><button type="button" class="pm-submittals-more-button" data-pm-action="toggle-submittal-menu" aria-label="More submittal actions" aria-haspopup="menu" aria-expanded="false" aria-controls="pmSubmittalMenu" title="More actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div id="pmSubmittalMenu" class="pm-submittals-menu" role="menu" hidden><button type="button" role="menuitem" data-pm-action="choose-submittal-import"><img src="/assets/upload.svg" alt="">Import Log</button><button type="button" role="menuitem" data-pm-action="download-submittal-log"><img src="/assets/download.svg" alt="">Download Log</button></div></div><input type="file" accept=".xlsx,.csv" data-pm-sub-import hidden></div></div><div class="pm-submittals-table-wrap"><table class="pm-submittals-table ${material ? "pm-submittals-material" : "pm-submittals-drawing"}"><colgroup><col class="pm-sub-col-number"><col class="pm-sub-col-ref"><col class="pm-sub-col-description"><col class="pm-sub-col-detail"><col class="pm-sub-col-rev"><col class="pm-sub-col-status"><col class="pm-sub-col-date"><col class="pm-sub-col-date"><col class="pm-sub-col-days"><col class="pm-sub-col-file"><col class="pm-sub-col-action"></colgroup><thead><tr><th>#</th><th>Ref No.</th><th>Description</th><th>${material ? "Supplier / Manufacturer" : "Planned Date"}</th><th>Rev</th><th>Status</th><th>Submit Date</th><th>Release Date</th><th>Days Pending</th><th>File</th><th class="pm-submittal-action" aria-label="Row actions"></th></tr></thead><tbody data-pm-submittal-rows></tbody></table></div><div class="pm-submittals-footer" data-pm-submittal-count></div></div></section>`;
+    queueMicrotask(renderSubmittalRows);
+    return content;
+  }
+
+  function closeSubmittalMenu() {
+    const menu = root.querySelector(".pm-submittals-menu");
+    if (menu) menu.hidden = true;
+    root.querySelector('[data-pm-action="toggle-submittal-menu"]')?.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleSubmittalMenu() {
+    const menu = root.querySelector(".pm-submittals-menu");
+    const button = root.querySelector('[data-pm-action="toggle-submittal-menu"]');
+    if (!menu || !button) return;
+    const opening = menu.hidden;
+    menu.hidden = !opening;
+    button.setAttribute("aria-expanded", String(opening));
+    if (opening) menu.querySelector('[role="menuitem"]')?.focus();
+    else button.focus();
+  }
+
+  async function addSubmittalRow() {
+    const next = structuredClone(state.project);
+    const itemId = crypto.randomUUID();
+    next.submittals.push({ id: itemId, kind: state.submittalKind, refNo: "", item: "", supplier: "", plannedDate: "",
+      revisions: [{ id: crypto.randomUUID(), rev: "R0", status: "Preparation", submitted: "", released: "", remarks: "", documentId: "" }] });
+    state.submittalSearch = "";
+    const saving = saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
+    queueMicrotask(() => root.querySelector(`[data-pm-sub-id="${itemId}"][data-pm-sub-field="refNo"]`)?.focus());
+    await saving;
+  }
+
+  async function deleteSubmittalRow(itemId) {
+    const item = state.project.submittals.find(row => row.id === itemId);
+    if (!item) return;
+    const hasContent = item.refNo || item.item || item.supplier || item.plannedDate || item.revisions.length > 1 ||
+      item.revisions.some(revision => revision.documentId || revision.sourceFileName || revision.submitted || revision.released || revision.remarks);
+    if (hasContent && !confirm(`Delete ${item.refNo || item.item || "this submittal"} and its revision history? Uploaded files will remain in Documents.`)) return;
+    const next = structuredClone(state.project);
+    next.submittals = next.submittals.filter(row => row.id !== itemId);
+    state.expandedSubmittals.delete(itemId);
+    await saveProjectPayload(projectPayload(next), "Submittal deleted");
+  }
+
+  async function updateSubmittalField(input) {
+    const next = structuredClone(state.project);
+    const item = next.submittals.find(row => row.id === input.dataset.pmSubId);
+    if (!item) return;
+    const field = input.dataset.pmSubField;
+    const revision = input.dataset.pmRevisionId ? item.revisions.find(row => row.id === input.dataset.pmRevisionId) : null;
+    const target = revision || item;
+    if (!target || !["refNo", "item", "supplier", "plannedDate", "status", "submitted", "released", "remarks"].includes(field)) return;
+    const value = input.matches("[data-pm-date-text]") ? parseSubmittalDate(input.value) : input.value.trim();
+    if (value === null) {
+      input.value = submittalDateText(target[field]);
+      toast("Enter a valid date as dd/mm/yyyy");
+      return;
+    }
+    if (field === "refNo" && value && next.submittals.some(row => row.id !== item.id && row.kind === item.kind && String(row.refNo || "").toLowerCase() === value.toLowerCase())) {
+      renderDetail(); throw new Error("This reference number already exists in the selected log");
+    }
+    target[field] = value;
+    if (revision && field === "status" && value === "Submitted" && !revision.submitted) revision.submitted = todayISO();
+    await saveProjectPayload(projectPayload(next), "", { quiet: true });
+    renderDetail();
+  }
+
+  async function addSubmittalRevision(submittalId) {
+    const next = structuredClone(state.project);
+    const item = next.submittals.find(row => row.id === submittalId);
+    if (!item) return;
+    const number = Math.max(-1, ...item.revisions.map(revision => Number(revision.rev.slice(1)) || 0)) + 1;
+    item.revisions.push({ id: crypto.randomUUID(), rev: `R${number}`, status: "Preparation", submitted: "", released: "", remarks: "", documentId: "" });
+    state.expandedSubmittals.add(item.id);
+    await saveProjectPayload(projectPayload(next), "New revision added");
+  }
+
+  async function deleteSubmittalRevision(submittalId, revisionId) {
+    const item = state.project.submittals.find(row => row.id === submittalId);
+    const revision = item?.revisions.find(row => row.id === revisionId);
+    if (!revision || item.revisions[0].id === revisionId) return;
+    if (!confirm(`Delete ${revision.rev} from ${item.refNo || item.item || "this submittal"}? Uploaded files will remain in Documents.`)) return;
+    const next = structuredClone(state.project);
+    const nextItem = next.submittals.find(row => row.id === submittalId);
+    nextItem.revisions = nextItem.revisions.filter(row => row.id !== revisionId);
+    await saveProjectPayload(projectPayload(next), `${revision.rev} deleted`);
+  }
+
+  async function uploadSubmittalFile(itemId, revisionId, file) {
+    const form = new FormData();
+    form.append("file", file);
+    const url = `/api/project-management/projects/${encodeURIComponent(state.project.id)}/submittals/${encodeURIComponent(itemId)}/revisions/${encodeURIComponent(revisionId)}/file`;
+    state.project = await api(url, { method: "POST", body: form });
+    renderDetail();
+    toast("Revision file uploaded to Documents");
+  }
+
+  async function importSubmittalLog(input) {
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file || state.submittalImportBusy) return;
+    state.submittalImportBusy = true;
+    const form = new FormData();
+    form.append("file", file);
+    form.append("kind", state.submittalKind);
+    try {
+      state.project = await api(`/api/project-management/projects/${encodeURIComponent(state.project.id)}/submittals/import`, { method: "POST", body: form });
+      renderDetail();
+      toast("Submittal log imported");
+    } catch (error) { toast(error.message); }
+    finally { state.submittalImportBusy = false; }
+  }
   function compactFollowUps(project) { const items = project.followUps.filter(item => !/^(finished|completed)$/i.test(item.status)).slice(0, 6); return `<div class="pm-followup-timeline">${items.map(item => `<div class="pm-followup-item"><span class="pm-followup-dot"></span><div><div class="pm-followup-meta"><b>${date(item.date)}</b>${pill(item.status)}</div><strong>${esc(item.subject)}</strong><small>${esc(item.notes || "-")}</small><small>Assigned: ${esc(item.assigned || "Unassigned")}</small></div></div>`).join("") || `<div class="pm-table-empty">No active follow-ups.</div>`}</div>`; }
   function checkpointSvg(status) { return status === "completed" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 10 3.1 3.1L15 6.5"></path></svg>` : status === "in_progress" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 10h10"></path></svg>` : status === "issue" ? `<svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg>` : ""; }
   function checkpointIcon(value, field = "", index = "") { const status = ["completed", "in_progress", "issue", "not_started"].includes(value) ? value : "not_started"; const label = ({ completed: "Completed", in_progress: "In Progress / Partial", issue: "Issue / Not Available", not_started: "Not Started" })[status]; if (!field) return `<span class="pm-checkpoint pm-checkpoint-${status}" title="${label}">${checkpointSvg(status)}</span>`; return `<button type="button" class="pm-checkpoint pm-checkpoint-${status}" title="${label}" aria-label="${label}" data-pm-checkpoint="${field}" data-pm-index="${index}">${checkpointSvg(status)}</button>`; }
@@ -362,11 +569,10 @@
   }
 
   function informationTab(project) {
-    return `<div class="pm-section-grid"><section class="pm-panel"><div class="pm-panel-head"><div><h2>Project Information</h2><p>Keep the project identity and commercial details current.</p></div><button class="pm-secondary" data-pm-action="edit-project">✎ Edit</button></div><div class="pm-info-grid">${info("Customer", project.customer)}${info("Consultant", project.consultant)}${info("Contact Person", project.contact)}${info("Phone", project.phone)}${info("Email", project.email)}${info("Location", project.location)}${info("Project Engineers", (project.projectEngineers || []).map(user => user.name).join(", "))}${info("Target Handover", date(project.targetHandover))}${info("Contract Value", project.contractValue ? money(project.contractValue) : "-")}${info("Progress", `${project.derived.progress}% calculated`)}${info("Created By", project.createdBy)}${info("Payment Note", project.paymentSummary)}${info("Project Details", project.notes, true)}</div></section><section class="pm-panel"><div class="pm-panel-head"><div><h2>Documentation / Submittals</h2><p>All rows must be approved for this milestone to complete.</p></div><button class="pm-secondary" data-pm-action="add-row" data-pm-section="submittals">＋ Add row</button></div>${editableSubmittalTable(project)}</section>${testingTab(project)}</div>`;
+    return `<div class="pm-section-grid"><section class="pm-panel"><div class="pm-panel-head"><div><h2>Project Information</h2><p>Keep the project identity and commercial details current.</p></div><button class="pm-secondary" data-pm-action="edit-project">✎ Edit</button></div><div class="pm-info-grid">${info("Customer", project.customer)}${info("Consultant", project.consultant)}${info("Contractor", project.contractor)}${info("Owner", project.owner)}${info("Contact Person", project.contact)}${info("Phone", project.phone)}${info("Email", project.email)}${info("Location", project.location)}${info("Project Engineers", (project.projectEngineers || []).map(user => user.name).join(", "))}${info("Target Handover", date(project.targetHandover))}${info("Contract Value", project.contractValue ? money(project.contractValue) : "-")}${info("Progress", `${project.derived.progress}% calculated`)}${info("Created By", project.createdBy)}${info("Payment Note", project.paymentSummary)}${info("Project Details", project.notes, true)}</div></section>${testingTab(project)}</div>`;
   }
 
   function info(label, value, full = false) { return `<div${full ? ' class="pm-info-full"' : ""}><span>${esc(label)}</span><b>${esc(value || "-")}</b></div>`; }
-  function editableSubmittalTable(project) { return `<div class="pm-table-wrap pm-rounded-table-wrap"><table class="pm-table pm-edit-table pm-submittal-table"><thead><tr><th>Item</th><th>Status</th><th>Comments</th><th class="pm-delete-col"><span class="sr-only">Delete</span></th></tr></thead><tbody>${project.submittals.map((item, index) => `<tr><td><input class="pm-inline-edit pm-bold-edit" data-pm-item="submittals" data-pm-index="${index}" data-pm-field="item" value="${esc(item.item)}"></td><td>${statusSelect("submittals", index, "status", ["Pending", "Submitted", "Approved", "Revised"], item.status)}</td><td><textarea class="pm-inline-edit pm-comment-edit" rows="1" data-pm-item="submittals" data-pm-index="${index}" data-pm-field="comments">${esc(item.comments)}</textarea></td><td class="pm-delete-cell"><button class="pm-row-action pm-inline-row-delete" type="button" title="Delete submittal" aria-label="Delete submittal" data-pm-action="delete-row" data-pm-section="submittals" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`).join("")}</tbody></table></div>`; }
 
   function installationProgress(item) {
     if (Number.isFinite(Number(item.progress))) return Math.min(100, Math.max(0, Number(item.progress)));
@@ -744,6 +950,8 @@
     }
     state.engineerPickerOpen = false;
     root.insertAdjacentHTML("beforeend", `<div class="pm-modal-backdrop"><form class="pm-modal" data-pm-form="project"><div class="pm-modal-head"><div><h2>${project.id ? "Edit Project" : "New Project"}</h2><p>Start with the project identity. The standard HVAC checklists will be created automatically.</p></div><button type="button" class="pm-close" data-pm-action="close-modal">×</button></div><div class="pm-form-grid"><label>Project Code<input name="code" value="${esc(project.code)}" placeholder="Optional"></label><label>Project Name<input name="name" required value="${esc(project.name === "Untitled Project" ? "" : project.name)}"></label><label>Customer<input name="customer" value="${esc(project.customer)}"></label><label>Consultant<input name="consultant" value="${esc(project.consultant)}"></label><label>Contact Person<input name="contact" value="${esc(project.contact)}"></label><label>Phone<input name="phone" value="${esc(project.phone)}"></label><label>Email<input type="email" name="email" value="${esc(project.email)}"></label><label>Status<select name="status">${options(["Active", "On Hold", "Completed"], project.status || "Active")}</select></label><label class="wide">Location<input name="location" value="${esc(project.location)}"></label><div class="wide pm-engineer-field"><label for="pmEngineerSearch">Project Engineers</label><div class="pm-engineer-picker"><div class="pm-engineer-chips" data-pm-engineer-chips></div><input id="pmEngineerSearch" data-pm-engineer-search type="text" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="pmEngineerOptions" aria-expanded="false" placeholder="Search Login Access names"><div id="pmEngineerOptions" class="pm-engineer-options" role="listbox" hidden></div></div></div><label>Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="contractValue" value="${esc(project.contractValue || "")}"></label><label>Target Handover<input type="date" name="targetHandover" value="${esc(project.targetHandover)}"></label><label>Variation Contract Value (AED) Without VAT<input type="number" min="0" step="0.01" inputmode="decimal" name="variationContractValue" value="${esc(project.variationContractValue || "")}"></label><label>Payment Note<input name="paymentSummary" value="${esc(project.paymentSummary)}"></label><label class="wide">Project Notes<textarea name="notes" rows="3">${esc(project.notes)}</textarea></label></div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-pm-action="close-modal">Cancel</button><button class="pm-primary" type="submit">${project.id ? "Save Changes" : "Create Project"}</button></div></form></div>`);
+    root.lastElementChild.querySelector('[name="consultant"]').closest("label").insertAdjacentHTML("afterend",
+      `<label>Contractor<input name="contractor" value="${esc(project.contractor)}"></label><label>Owner<input name="owner" value="${esc(project.owner)}"></label>`);
     renderEngineerPicker();
   }
 
@@ -1088,6 +1296,25 @@
       return;
     }
     const action = target.dataset.pmAction;
+    if (action === "toggle-submittal-menu") { toggleSubmittalMenu(); return; }
+    if (action === "show-submittal-kind") { state.submittalKind = target.dataset.pmKind; renderDetail(); return; }
+    if (action === "toggle-submittal-history") {
+      const id = target.dataset.pmSubId;
+      if (state.expandedSubmittals.has(id)) state.expandedSubmittals.delete(id);
+      else state.expandedSubmittals.add(id);
+      renderSubmittalRows(); return;
+    }
+    if (action === "add-submittal") return addSubmittalRow().catch(error => toast(error.message));
+    if (action === "delete-submittal-row") return deleteSubmittalRow(target.dataset.pmSubId).catch(error => toast(error.message));
+    if (action === "new-submittal-revision") return addSubmittalRevision(target.dataset.pmSubId).catch(error => toast(error.message));
+    if (action === "delete-submittal-revision") return deleteSubmittalRevision(target.dataset.pmSubId, target.dataset.pmRevisionId).catch(error => toast(error.message));
+    if (action === "choose-submittal-file") { target.parentElement.querySelector("[data-pm-sub-file]")?.click(); return; }
+    if (action === "choose-submittal-import") { closeSubmittalMenu(); root.querySelector("[data-pm-sub-import]")?.click(); return; }
+    if (action === "download-submittal-log") {
+      closeSubmittalMenu();
+      window.open(`/api/project-management/projects/${encodeURIComponent(state.project.id)}/submittals/log`, "_blank", "noopener");
+      return;
+    }
     if (action === "toggle-boq-category") {
       const id = target.dataset.pmCategoryId;
       if (state.collapsedBoqCategories.has(id)) state.collapsedBoqCategories.delete(id);
@@ -1339,6 +1566,14 @@
 
   async function onChange(event) {
     const target = event.target;
+    if (target.matches("[data-pm-sub-import]")) return importSubmittalLog(target);
+    if (target.matches("[data-pm-sub-file]")) {
+      const file = target.files?.[0];
+      target.value = "";
+      if (file) return uploadSubmittalFile(target.dataset.pmSubId, target.dataset.pmRevisionId, file).catch(error => toast(error.message));
+      return;
+    }
+    if (target.matches("[data-pm-sub-field]")) return updateSubmittalField(target).catch(error => toast(error.message));
     if (target.matches("[data-pm-boq-file]")) return importProjectBoq(target);
     if (target.matches("[data-pm-grid-field], [data-pm-category-name]")) return updateProjectGrid(target).catch(error => toast(error.message));
     if (target.matches("[data-pm-invoice-input]")) return uploadInvoice(target);
@@ -1384,6 +1619,11 @@
   }
 
   function onInput(event) {
+    if (event.target.matches("[data-pm-sub-search]")) {
+      state.submittalSearch = event.target.value;
+      renderSubmittalRows();
+      return;
+    }
     if (event.target.matches("[data-pm-grid-search]")) {
       state[event.target.dataset.pmGridSearch === "boq" ? "boqSearch" : "installationSearch"] = event.target.value;
       renderProjectGridRows();
@@ -1512,6 +1752,12 @@
     renderEngineerPicker();
   });
   root.addEventListener("keydown", event => {
+    if (event.target.closest(".pm-submittals-menu") && ["ArrowDown", "ArrowUp"].includes(event.key)) {
+      event.preventDefault();
+      const items = [...root.querySelectorAll('.pm-submittals-menu [role="menuitem"]')];
+      items[(items.indexOf(event.target) + (event.key === "ArrowDown" ? 1 : items.length - 1)) % items.length]?.focus();
+      return;
+    }
     if (event.target.matches("[data-pm-folder-rename-input]")) {
       if (event.key === "Enter") { event.preventDefault(); root.querySelector('[data-pm-action="save-document-folder-name"]')?.click(); }
       if (event.key === "Escape") { state.renamingFolderName = ""; renderDocumentsContent(); }
@@ -1527,6 +1773,7 @@
     if (event.key === "ArrowDown") { event.preventDefault(); root.querySelector("#pmEngineerOptions [data-pm-action='select-engineer']")?.focus(); }
   });
   document.addEventListener("click", event => {
+    if (!event.target.closest(".pm-submittals-more")) closeSubmittalMenu();
     if (!event.target.closest(".pm-followup-menu, [data-pm-action='followup-menu']")) closeFollowUpMenu();
     if (!event.target.closest(".pm-doc-menu, [data-pm-action='document-menu']")) closeDocumentMenu();
     if (!event.target.closest(".pm-engineer-picker")) {
@@ -1536,6 +1783,11 @@
   });
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
+    if (root.querySelector('.pm-submittals-menu:not([hidden])')) {
+      closeSubmittalMenu();
+      root.querySelector('[data-pm-action="toggle-submittal-menu"]')?.focus();
+      return;
+    }
     if (state.modal === "lpo-view") { closeLpoModal(); return; }
     if (root.querySelector(".pm-followup-menu")) {
       const button = root.querySelector('[data-pm-action="followup-menu"][aria-expanded="true"]');

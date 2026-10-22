@@ -14,6 +14,7 @@ test("combines approvals, BOQ quantities, and finished testing as five equal par
 test("submittals count only when approved and testing counts only when finished", () => {
   assert.equal(calculateProjectProgress({ submittals: [{ item: "Drawing", status: "Submitted" }] }), 0);
   assert.equal(calculateProjectProgress({ submittals: [{ item: "Drawing", status: "Approved" }] }), 20);
+  assert.equal(calculateProjectProgress({ submittals: [{ item: "Drawing", status: "Approved as Noted" }] }), 20);
   assert.equal(calculateProjectProgress({ testingItems: [{ activity: "Pressure", status: "In Progress" }] }), 0);
   assert.equal(calculateProjectProgress({ testingItems: [{ activity: "Pressure", status: "Finished" }] }), 20);
 });

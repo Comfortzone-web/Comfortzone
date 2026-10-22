@@ -337,9 +337,53 @@ function projectInstallationStatus(value, legacyValue = "") {
 }
 
 function projectManagementDefaultSubmittals() {
-  return ["Material Submittal", "HVAC Drawings", "Technical Data"].map(item => ({
-    id: id(), item, status: "Pending", comments: "", updatedAt: new Date().toISOString()
+  return [];
+}
+
+const PROJECT_SUBMITTAL_STATUSES = ["Preparation", "Submitted", "Approved as Noted", "Revise & Resubmit", "Rejected"];
+
+function projectManagementSubmittalStatus(value) {
+  const status = cleanCell(value || "").toLowerCase();
+  if (/^approved(?:\s+(?:as\s+noted|with\s+comments?|with\s+notes?))?$/.test(status)) return "Approved as Noted";
+  if (status === "pending" || status === "not started" || status === "preparation") return "Preparation";
+  if (/^(?:submitted(?:\s+for\s+(?:approval|review))?|under\s+review|in\s+review|awaiting\s+(?:approval|response))$/.test(status)) return "Submitted";
+  if (/^(?:revised|revise\s+(?:and|&)\s+resubmit|resubmit|revision\s+required)$/.test(status)) return "Revise & Resubmit";
+  if (/^(?:rejected|not\s+approved|disapproved)(?:\s+with\s+comments?)?$/.test(status)) return "Rejected";
+  return PROJECT_SUBMITTAL_STATUSES.find(item => item.toLowerCase() === status) || "Preparation";
+}
+
+function projectManagementNormalizeSubmittal(source, now) {
+  const submittalId = cleanCell(source.id || id());
+  const kind = source.kind === "drawing" || source.type === "drawing" || /drawings?/i.test(source.item || source.description || "")
+    ? "drawing" : "material";
+  const revisions = (Array.isArray(source.revisions) && source.revisions.length ? source.revisions : [{
+    id: `${submittalId}-r0`, rev: source.rev || "R0", status: source.status,
+    submitted: source.submitted, released: source.released, remarks: source.comments,
+    documentId: source.documentId
+  }]).map((revision, index) => ({
+    id: cleanCell(revision.id || `${submittalId}-r${index}`),
+    rev: /^R\d+$/i.test(cleanCell(revision.rev)) ? cleanCell(revision.rev).toUpperCase() : `R${index}`,
+    status: projectManagementSubmittalStatus(revision.status),
+    submitted: cleanCell(revision.submitted || ""), released: cleanCell(revision.released || ""),
+    remarks: cleanCell(revision.remarks || ""), documentId: cleanCell(revision.documentId || ""),
+    sourceFileName: cleanCell(revision.sourceFileName || ""),
+    sourceRevision: cleanCell(revision.sourceRevision || "")
   }));
+  revisions.sort((a, b) => Number(a.rev.slice(1)) - Number(b.rev.slice(1)));
+  const current = revisions.at(-1);
+  return {
+    id: submittalId, kind, refNo: cleanCell(source.refNo || ""),
+    item: cleanCell(source.item || source.description || ""),
+    supplier: cleanCell(source.supplier || ""), plannedDate: cleanCell(source.plannedDate || ""),
+    revisions, rev: current.rev, status: current.status, submitted: current.submitted,
+    released: current.released, comments: current.remarks, documentId: current.documentId,
+    updatedAt: cleanCell(source.updatedAt || now)
+  };
+}
+
+function projectManagementLegacySubmittal(source) {
+  return !cleanCell(source.refNo || "") && !Array.isArray(source.revisions) &&
+    /^(material submittals|hvac drawings|drawings|purchase order)$/i.test(cleanCell(source.item || ""));
 }
 
 const PROJECT_DEFAULT_BOQ_CATEGORIES = [
@@ -488,6 +532,8 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
     name: cleanCell(input.name || "Untitled Project"),
     customer: cleanCell(input.customer || ""),
     consultant: cleanCell(input.consultant || ""),
+    contractor: cleanCell(input.contractor || ""),
+    owner: cleanCell(input.owner || ""),
     contact: cleanCell(input.contact || ""),
     phone: cleanCell(input.phone || ""),
     email: cleanCell(input.email || ""),
@@ -507,10 +553,15 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
     createdAt: cleanCell(input.createdAt || now),
     updatedAt: cleanCell(input.updatedAt || now),
     createdBy: cleanCell(input.createdBy || options.user?.name || ""),
-    submittals: Array.isArray(input.submittals) && input.submittals.length ? input.submittals.map(item => ({
-      id: cleanCell(item.id || id()), item: cleanCell(item.item || ""), status: cleanCell(item.status || "Pending") || "Pending",
-      comments: cleanCell(item.comments || ""), updatedAt: cleanCell(item.updatedAt || now)
-    })).filter(item => item.item) : projectManagementDefaultSubmittals(),
+    legacySubmittals: [
+      ...(Array.isArray(input.legacySubmittals) ? input.legacySubmittals : []),
+      ...(Array.isArray(input.submittals) ? input.submittals.filter(projectManagementLegacySubmittal) : [])
+    ],
+    submittals: Array.isArray(input.submittals)
+      ? input.submittals.filter(item => !projectManagementLegacySubmittal(item) &&
+        (item.item || item.refNo || (item.kind && Array.isArray(item.revisions))))
+        .map(item => projectManagementNormalizeSubmittal(item, now))
+      : projectManagementDefaultSubmittals(),
     boqCategories,
     boqDefaultsVersion: 1,
     installationItems: installationItems.map(item => {
@@ -584,7 +635,7 @@ function projectManagementNormalizeProject(input = {}, options = {}) {
 }
 
 function projectManagementDerived(project) {
-  const documentationComplete = project.submittals.length > 0 && project.submittals.every(item => /^approved$/i.test(item.status));
+  const documentationComplete = project.submittals.length > 0 && project.submittals.every(item => /^approved(?: as noted)?$/i.test(item.status));
   const activeInstallationItems = project.installationItems.filter(item => item.item || item.itemNo ||
     ["lpo_status", "delivered_status", "installation_status"].some(field => item[field] && item[field] !== "not_started"));
   const procurementComplete = activeInstallationItems.length > 0 && activeInstallationItems.every(item => item.lpo_status === "completed");
@@ -2024,6 +2075,199 @@ function projectManagementImportBoq(project, filePart) {
   return { boqCategories: categories, installationItems: rows, importedCount: rows.length - (project.installationItems.length - matched.size) };
 }
 
+function projectManagementSubmittalDate(value) {
+  const raw = cleanCell(value);
+  if (!raw) return "";
+  if (/^\d{5}(?:\.\d+)?$/.test(raw)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(raw)) * 86400000);
+    return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+  }
+  const parts = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(raw);
+  const date = parts ? new Date(Date.UTC(Number(parts[3]), Number(parts[2]) - 1, Number(parts[1]))) : new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function projectManagementImportSubmittals(project, filePart, preferredKind = "material") {
+  const extension = path.extname(filePart.filename || "").toLowerCase();
+  if (![".csv", ".xlsx"].includes(extension)) throw new Error("Choose a CSV or XLSX submittal log");
+  const tables = extension === ".csv" ? (() => {
+    const content = filePart.body.toString("utf8");
+    const sample = content.split(/\r?\n/).slice(0, 20).join("\n");
+    const delimiter = [",", ";", "\t"].sort((a, b) => sample.split(b).length - sample.split(a).length)[0];
+    return [{ name: "", rows: csvTableRows(content, delimiter) }];
+  })() : (() => {
+    const entries = xlsxZipEntries(filePart.body);
+    const workbookXml = entries.get("xl/workbook.xml")?.toString("utf8") || "";
+    const names = [...workbookXml.matchAll(/<sheet\b[^>]*\bname="([^"]+)"/g)].map(match => decodeXmlText(match[1]));
+    return [...entries.keys()].filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+      .sort((a, b) => Number(a.match(/sheet(\d+)/)[1]) - Number(b.match(/sheet(\d+)/)[1]))
+      .map((name, index) => ({ name: names[index] || "", rows: xlsxTableRows(filePart.body, name, entries) }));
+  })();
+  const key = value => cleanCell(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const headers = {
+    kind: ["type", "category", "logtype", "submittaltype", "documenttype", "registertype"],
+    refNo: ["ref", "refno", "refnumber", "referenceno", "referencenumber", "reference", "referencecode",
+      "submittalref", "submittalrefno", "submittalno", "submittalnumber", "materialsubmittalno", "msno",
+      "drawingref", "drawingno", "drawingnumber", "shopdrawingno", "documentno", "documentnumber",
+      "docno", "dwgno", "drgno", "transmittalno"],
+    item: ["description", "item", "itemdescription", "materialdescription", "drawingdescription", "documentdescription",
+      "descriptionofmaterial", "descriptionofdrawing", "materialname", "drawingname", "title", "subject", "details", "scope"],
+    supplier: ["supplier", "manufacturer", "suppliermanufacturer", "suppliername", "manufacturername", "vendor", "make", "brand"],
+    plannedDate: ["planned", "planneddate", "plan", "targetdate", "scheduleddate", "duedate", "plannedsubmissiondate"],
+    rev: ["rev", "revno", "revnumber", "revision", "revisionno", "revisionnumber", "currentrev", "latestrev"],
+    status: ["status", "currentstatus", "approvalstatus", "reviewstatus", "submissionstatus", "response", "decision", "approval"],
+    submitted: ["submitted", "submitdate", "submitteddate", "datesubmitted", "submissiondate", "datesent", "sentdate", "transmittaldate"],
+    released: ["release", "released", "releasedate", "releaseddate", "daterelease", "datereleased", "approvaldate", "approveddate", "responsedate", "returneddate", "replydate"],
+    remarks: ["remarks", "remark", "comments", "comment", "notes", "note", "reviewcomments", "consultantcomments"],
+    file: ["file", "filename", "attachment", "attachmentname", "document", "documentlink", "filelink", "filepath"]
+  };
+  const fieldForHeader = value => {
+    const name = key(value);
+    if (!name) return "";
+    for (const [field, aliases] of Object.entries(headers)) if (aliases.includes(name)) return field;
+    if (/(?:ref(?:erence)?|submittal|drawing|document|transmittal)(?:code|no|number)$/.test(name) && !/revision/.test(name)) return "refNo";
+    if (/(?:description|subject|title)$/.test(name) && !/project|revision|status/.test(name)) return "item";
+    if (/supplier|manufacturer|vendor/.test(name)) return "supplier";
+    if (/(?:planned|target|schedule)(?:submit|submission)?date$/.test(name)) return "plannedDate";
+    if (/^(?:current|latest)?rev(?:ision)?(?:no|number)?$/.test(name)) return "rev";
+    if (/(?:status|decision)$/.test(name)) return "status";
+    if (/(?:submit|submitted|submission|sent|transmittal)(?:date|on)$|^date(?:submit|submitted|submission|sent)$/.test(name)) return "submitted";
+    if (/(?:release|released|approved|approval|response|returned|reply)(?:date|on)$|^date(?:release|released|approved|returned)$/.test(name)) return "released";
+    if (/comment|remark|note/.test(name)) return "remarks";
+    if (/(?:file|attachment)(?:name|link|path)?$/.test(name)) return "file";
+    return "";
+  };
+  const revisionColumn = value => {
+    const name = key(value);
+    const match = /^(?:rev(?:ision)?|r)(\d+)(.*)$/.exec(name) || /^(.*?)(?:rev(?:ision)?|r)(\d+)$/.exec(name);
+    if (!match) return null;
+    const prefixFirst = /^\d+$/.test(match[1]);
+    const number = Number(prefixFirst ? match[1] : match[2]);
+    const suffix = prefixFirst ? match[2] : match[1];
+    const field = suffix ? fieldForHeader(suffix) || (suffix === "date" ? "submitted" : "") : "status";
+    return Number.isSafeInteger(number) && number < 1000 && ["status", "submitted", "released", "remarks", "file"].includes(field)
+      ? { rev: `R${number}`, field } : null;
+  };
+  const normalizedRevision = value => {
+    const match = /^(?:rev(?:ision)?\s*)?r?\s*[-#.]?\s*(\d+)$/i.exec(cleanCell(value));
+    return match ? `R${Number(match[1])}` : "";
+  };
+  const kindFromText = value => /shop|drawing|\bdwg\b|\bdrg\b/i.test(value) ? "drawing"
+    : /material/i.test(value) ? "material" : "";
+  const next = (project.submittals || []).map(item => projectManagementNormalizeSubmittal(item, new Date().toISOString()));
+  const importedRevisions = new Map();
+  let imported = 0;
+  for (const table of tables) {
+    if (table.rows.length > 20000) throw new Error("Submittal log has too many rows");
+    let headerIndex = -1, columns = {}, wideColumns = new Map(), bestScore = -1;
+    for (let index = 0; index < Math.min(table.rows.length, 60); index++) {
+      const found = Object.fromEntries(Object.keys(headers).map(field => [field, -1]));
+      const wide = new Map();
+      table.rows[index].forEach((cell, column) => {
+        const revision = revisionColumn(cell);
+        if (revision) {
+          if (!wide.has(revision.rev)) wide.set(revision.rev, {});
+          wide.get(revision.rev)[revision.field] ??= column;
+        } else {
+          const field = fieldForHeader(cell);
+          if (field && found[field] < 0) found[field] = column;
+        }
+      });
+      if (found.refNo < 0 && found.item < 0) continue;
+      const supporting = Object.entries(found).filter(([field, column]) => !["refNo", "item", "kind"].includes(field) && column >= 0).length;
+      const score = (found.refNo >= 0 ? 5 : 0) + (found.item >= 0 ? 5 : 0) + supporting * 2 + wide.size * 2;
+      if (score > bestScore) { headerIndex = index; columns = found; wideColumns = wide; bestScore = score; }
+    }
+    if (headerIndex < 0) continue;
+    let sectionKind = kindFromText(table.name) || preferredKind;
+    let previousItem = null;
+    for (const source of table.rows.slice(headerIndex + 1)) {
+      const value = field => columns[field] >= 0 ? cleanCell(source[columns[field]] ?? "") : "";
+      let refNo = value("refNo"), item = value("item");
+      const repeatedHeaderFields = Object.entries(columns).filter(([field, column]) =>
+        column >= 0 && headers[field].includes(key(source[column]))).length;
+      if (repeatedHeaderFields >= 2 || (repeatedHeaderFields === 1 && source.filter(cell => cleanCell(cell)).length === 1)) continue;
+      const heading = kindFromText(refNo || item);
+      if (!refNo && /^(?:material\s+submittals?|shop\s+drawings?)$/i.test(item)) { sectionKind = heading; previousItem = null; continue; }
+      if (!item && /^(?:material\s+submittals?|shop\s+drawings?)$/i.test(refNo)) { sectionKind = heading; previousItem = null; continue; }
+      const wideEntries = [...wideColumns].map(([rev, fields]) => ({ rev, values: Object.fromEntries(Object.entries(fields).map(([field, column]) => [field, cleanCell(source[column] ?? "")])) }))
+        .filter(entry => Object.values(entry.values).some(Boolean)).sort((a, b) => Number(a.rev.slice(1)) - Number(b.rev.slice(1)));
+      const hasRevisionData = value("rev") || value("status") || value("submitted") || value("released") || value("remarks") || value("file") || wideEntries.length;
+      if (!refNo && !item && !hasRevisionData) continue;
+      let embeddedRevision = "";
+      if (refNo && !value("rev")) {
+        const match = /^(.*?)[\s\-_/]+(?:rev(?:ision)?[\s\-_.]*|r)(\d+)$/i.exec(refNo);
+        if (match && match[1]) { refNo = match[1]; embeddedRevision = `R${Number(match[2])}`; }
+      }
+      const kind = kindFromText(value("kind")) || kindFromText(table.name) ||
+        (/^(?:sd|dwg|drg)[-./]/i.test(refNo) ? "drawing" : sectionKind);
+      if (!refNo && !item) {
+        if (!previousItem || previousItem.kind !== kind) continue;
+        refNo = previousItem.refNo;
+        item = previousItem.item;
+      }
+      const byItem = item ? next.filter(candidate => candidate.kind === kind && key(candidate.item) === key(item)) : [];
+      const row = refNo ? next.find(candidate => candidate.kind === kind && key(candidate.refNo) === key(refNo)) ||
+        (byItem.length === 1 && !byItem[0].refNo ? byItem[0] : null) : byItem.length === 1 ? byItem[0] : null;
+      const submittal = row || { id: id(), kind, refNo, item, supplier: "", plannedDate: "", revisions: [] };
+      if (!row) next.push(submittal);
+      if (refNo) submittal.refNo = refNo;
+      if (item) submittal.item = item;
+      if (value("supplier")) submittal.supplier = value("supplier");
+      if (value("plannedDate")) submittal.plannedDate = projectManagementSubmittalDate(value("plannedDate"));
+      previousItem = submittal;
+      const general = Object.fromEntries(["status", "submitted", "released", "remarks", "file"].map(field => [field, value(field)]));
+      const entries = wideEntries.length ? wideEntries : [{ rev: normalizedRevision(value("rev")) || embeddedRevision || "R0", values: general }];
+      if (wideEntries.length) for (const [field, entryValue] of Object.entries(general)) {
+        if (entryValue) entries.at(-1).values[field] ||= entryValue;
+      }
+      for (const entry of entries) {
+        if (!importedRevisions.has(submittal.id)) importedRevisions.set(submittal.id, new Map());
+        const mapped = importedRevisions.get(submittal.id);
+        let revision = mapped.get(entry.rev) || submittal.revisions.find(candidate =>
+          candidate.sourceRevision === entry.rev) || submittal.revisions.find(candidate => candidate.rev === entry.rev);
+        if (!revision) {
+          const requested = Number(entry.rev.slice(1));
+          const used = new Set(submittal.revisions.map(candidate => Number(candidate.rev.slice(1))));
+          let number = Number.isSafeInteger(requested) && requested <= used.size && !used.has(requested) ? requested : 0;
+          while (used.has(number)) number++;
+          revision = { id: id(), rev: `R${number}`, status: "Preparation", submitted: "", released: "", remarks: "", documentId: "" };
+          submittal.revisions.push(revision);
+        }
+        revision.sourceRevision = entry.rev;
+        mapped.set(entry.rev, revision);
+        if (entry.values.status) revision.status = projectManagementSubmittalStatus(entry.values.status);
+        if (entry.values.submitted) revision.submitted = projectManagementSubmittalDate(entry.values.submitted);
+        if (entry.values.released) revision.released = projectManagementSubmittalDate(entry.values.released);
+        if (entry.values.remarks) revision.remarks = entry.values.remarks;
+        if (entry.values.file && !revision.documentId) revision.sourceFileName = entry.values.file;
+        imported++;
+      }
+    }
+  }
+  for (const item of next) {
+    if (!importedRevisions.has(item.id)) continue;
+    item.revisions.sort((a, b) => Number(a.rev.slice(1)) - Number(b.rev.slice(1)));
+    item.revisions.forEach((revision, index) => { revision.rev = `R${index}`; });
+  }
+  if (!imported) throw new Error("No submittal rows found. Include a reference or description column.");
+  return { submittals: next, imported };
+}
+
+function projectManagementSubmittalWorkbook(project) {
+  const columns = ["Type", "Ref No.", "Description", "Supplier / Manufacturer", "Planned Date", "Rev", "Status", "Submitted", "Released", "Days Pending", "Remarks", "File"];
+  const rows = (project.submittals || []).flatMap(item => item.revisions.map(revision => {
+    const document = (project.documents || []).find(file => file.id === revision.documentId);
+    const pending = ["Submitted", "Revise & Resubmit"].includes(revision.status) && revision.submitted && !revision.released
+      ? Math.max(0, Math.floor((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(revision.submitted)) / 86400000)) : "";
+    return { Type: item.kind === "drawing" ? "Shop Drawings" : "Material Submittals", "Ref No.": item.refNo,
+      Description: item.item, "Supplier / Manufacturer": item.supplier, "Planned Date": item.plannedDate,
+      Rev: revision.rev, Status: revision.status, Submitted: revision.submitted, Released: revision.released,
+      "Days Pending": pending, Remarks: revision.remarks, File: document?.originalName || revision.sourceFileName || "" };
+  }));
+  return generateTableWorkbook({ title: "Submittals Log", columns, rows });
+}
+
 function parseCostingPriceListUpload(filePart) {
   const isCsv = /csv|text\//i.test(filePart.mimeType || "") || /\.csv$/i.test(filePart.filename || "");
   const table = isCsv ? csvTableRows(filePart.body.toString("utf8")) : xlsxTableRows(filePart.body);
@@ -2571,6 +2815,65 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     return send(res, 200, projectManagementView(next));
   }
 
+  if (parts[4] === "submittals" && parts[5] === "import" && req.method === "POST" && parts.length === 6) {
+    if (Number(req.headers["content-length"] || 0) > 10 * 1024 * 1024) return send(res, 413, { error: "Submittal log must be 10 MB or smaller" });
+    const multipart = parseMultipart(await collect(req), req.headers["content-type"] || "");
+    const filePart = multipart.find(item => item.filename);
+    if (!filePart) return send(res, 400, { error: "Choose a CSV or XLSX submittal log" });
+    if (filePart.body.length > 10 * 1024 * 1024) return send(res, 413, { error: "Submittal log must be 10 MB or smaller" });
+    let imported;
+    const preferredKind = cleanCell(multipart.find(item => item.name === "kind")?.body.toString("utf8") || "") === "drawing" ? "drawing" : "material";
+    try { imported = projectManagementImportSubmittals(project, filePart, preferredKind); }
+    catch (error) { return send(res, 400, { error: error.message }); }
+    const next = projectManagementNormalizeProject({ ...project, submittals: imported.submittals, updatedAt: new Date().toISOString() });
+    next.activityHistory = project.activityHistory || [];
+    projectManagementActivity(next, user, "Submittal log imported", `${imported.imported} revision rows from ${filePart.filename}`);
+    store.projects[projectIndex] = next;
+    await writeProjectManagement(store);
+    return send(res, 200, projectManagementView(next));
+  }
+
+  if (parts[4] === "submittals" && parts[5] === "log" && req.method === "GET" && parts.length === 6) {
+    const bytes = projectManagementSubmittalWorkbook(project);
+    res.writeHead(200, {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${safeName(project.code || project.name || "project")}-submittals.xlsx"`,
+      "Content-Length": bytes.length, "Cache-Control": "no-store"
+    });
+    return res.end(bytes);
+  }
+
+  if (parts[4] === "submittals" && parts[6] === "revisions" && parts[8] === "file" &&
+      req.method === "POST" && parts.length === 9) {
+    const submittal = project.submittals.find(item => item.id === decodeURIComponent(parts[5]));
+    const revision = submittal?.revisions.find(item => item.id === decodeURIComponent(parts[7]));
+    if (!revision) return notFound(res);
+    if (Number(req.headers["content-length"] || 0) > 20 * 1024 * 1024) return send(res, 413, { error: "File must be 20 MB or smaller" });
+    const multipart = parseMultipart(await collect(req), req.headers["content-type"] || "");
+    const filePart = multipart.find(item => item.filename);
+    if (!filePart) return send(res, 400, { error: "Choose a document" });
+    if (filePart.body.length > 20 * 1024 * 1024) return send(res, 413, { error: "File must be 20 MB or smaller" });
+    if (!/\.(pdf|doc|docx|xls|xlsx|png|jpe?g)$/i.test(filePart.filename)) return send(res, 400, { error: "Choose a PDF, document, spreadsheet, or image" });
+    const category = submittal.kind === "drawing" ? "Shop Drawings" : "Submittals";
+    const documentId = id(), storedName = `${documentId}-${safeName(filePart.filename)}`;
+    await saveUpload(`project-management/${project.id}`, storedName, filePart.body, filePart.mimeType);
+    const oldDocument = project.documents.find(item => item.id === revision.documentId);
+    const next = projectManagementNormalizeProject(project);
+    const nextRevision = next.submittals.find(item => item.id === submittal.id).revisions.find(item => item.id === revision.id);
+    nextRevision.documentId = documentId;
+    nextRevision.sourceFileName = "";
+    next.documents = next.documents.filter(item => item.id !== oldDocument?.id);
+    next.documents.unshift({ id: documentId, projectId: project.id, originalName: filePart.filename, storedName,
+      category, mimeType: filePart.mimeType, size: filePart.body.length, uploadedBy: user.name, uploadedAt: new Date().toISOString() });
+    next.updatedAt = new Date().toISOString();
+    next.activityHistory = project.activityHistory || [];
+    projectManagementActivity(next, user, "Submittal file uploaded", `${submittal.refNo || submittal.item} ${revision.rev}: ${filePart.filename}`);
+    store.projects[projectIndex] = next;
+    await writeProjectManagement(store);
+    if (oldDocument) await deleteUpload(`project-management/${project.id}`, oldDocument.storedName).catch(() => {});
+    return send(res, 201, projectManagementView(next));
+  }
+
   if (["payments", "variation-payments"].includes(parts[4]) && parts[6] === "invoice") {
     const section = parts[4] === "payments" ? "payments" : "variationPayments";
     const row = project[section].find(item => item.id === decodeURIComponent(parts[5] || ""));
@@ -2813,6 +3116,11 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     if (!names.length || names.some(name => name === "Uncategorized" || !categories.includes(name))) {
       return send(res, 400, { error: "Select valid folders to delete" });
     }
+    const linkedCategories = new Set(project.submittals.flatMap(item =>
+      item.revisions.some(revision => revision.documentId) ? [item.kind === "drawing" ? "Shop Drawings" : "Submittals"] : []));
+    if (names.some(name => linkedCategories.has(name))) {
+      return send(res, 400, { error: "A submittal folder with linked revision files cannot be deleted" });
+    }
     project.documents.forEach(document => {
       if (names.includes(document.category)) document.category = "Uncategorized";
     });
@@ -2910,6 +3218,10 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
       const category = cleanCell(body.category);
       const categories = projectManagementDocumentCategories(project);
       if (!categories.includes(category)) return send(res, 400, { error: "Invalid document category" });
+      const linked = project.submittals.find(item => item.revisions.some(revision => revision.documentId === document.id));
+      if (linked && category !== (linked.kind === "drawing" ? "Shop Drawings" : "Submittals")) {
+        return send(res, 400, { error: "Revision files must remain in their submittal folder" });
+      }
       document.category = category;
     }
     project.updatedAt = new Date().toISOString();
@@ -2923,7 +3235,10 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
     const document = (project.documents || []).find(item => item.id === documentId);
     if (!document) return notFound(res);
     await deleteUpload(`project-management/${project.id}`, document.storedName);
-    const next = projectManagementNormalizeProject({ ...project, documents: (project.documents || []).filter(item => item.id !== documentId) });
+    const submittals = project.submittals.map(item => ({ ...item, revisions: item.revisions.map(revision =>
+      revision.documentId === documentId ? { ...revision, documentId: "", sourceFileName: "" } : revision) }));
+    const next = projectManagementNormalizeProject({ ...project, submittals,
+      documents: (project.documents || []).filter(item => item.id !== documentId) });
     next.activityHistory = project.activityHistory || [];
     projectManagementActivity(next, user, "Document deleted", `${document.originalName} was removed`);
     next.updatedAt = new Date().toISOString();

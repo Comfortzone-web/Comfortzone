@@ -21,7 +21,7 @@ function calculateProjectProgress(project) {
   const installationItems = (project.installationItems || []).filter(item => item.item || item.itemNo);
   const testingItems = (project.testingItems || []).filter(item => item.activity || item.item);
   const parts = [
-    completedFraction(submittals, item => /^approved$/i.test(String(item.status || "").trim())),
+    completedFraction(submittals, item => /^approved(?: as noted)?$/i.test(String(item.status || "").trim())),
     quantityFraction(installationItems, "lpoQty"),
     quantityFraction(installationItems, "deliveredQty"),
     quantityFraction(installationItems, "installedQty"),

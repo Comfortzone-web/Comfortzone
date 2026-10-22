@@ -35,7 +35,9 @@ test("new projects start with one blank advance payment and not-started testing"
       method, headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify(body)
     });
 
-    const created = await request("/api/project-management/projects", "POST", { name: "Project defaults test", contractValue: 1000000 });
+    const created = await request("/api/project-management/projects", "POST", {
+      name: "Project defaults test", contractValue: 1000000, contractor: "Comfort Zone", owner: "Property Group"
+    });
     assert.equal(created.status, 201);
     let project = await created.json();
     assert.equal(project.payments.length, 1);
@@ -45,14 +47,20 @@ test("new projects start with one blank advance payment and not-started testing"
     assert.deepEqual(project.variationPayments, []);
     assert.deepEqual(project.testingItems.map(item => item.status), ["Not Started", "Not Started", "Not Started", "Not Started"]);
     assert.equal(project.derived.progress, 0);
+    assert.equal(project.contractor, "Comfort Zone");
+    assert.equal(project.owner, "Property Group");
 
     const endpoint = `/api/project-management/projects/${project.id}`;
     project = await (await request(endpoint, "PUT", project)).json();
     assert.equal(project.payments[0].amount, "");
     project.payments[0].amount = 123.45;
+    project.contractor = "Updated Contractor";
+    project.owner = "Updated Owner";
     project.testingItems[1].status = "In Progress";
     project = await (await request(endpoint, "PUT", project)).json();
     assert.equal(project.payments[0].amount, 123.45);
+    assert.equal(project.contractor, "Updated Contractor");
+    assert.equal(project.owner, "Updated Owner");
     assert.equal(project.testingItems[1].status, "In Progress");
     assert.equal(project.testingItems[0].status, "Not Started");
 
