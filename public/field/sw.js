@@ -1,5 +1,5 @@
-const CACHE = "cz-field-shell-v11";
-const SHELL = ["/field/", "/field/field.css?v=20261023-accept", "/field/field.js?v=20261023-accept", "/field/icon-192.png?v=20261023-logo", "/field/icon-512.png?v=20261023-logo"];
+const CACHE = "cz-field-shell-v12";
+const SHELL = ["/field/", "/field/field.css?v=20261023-accept", "/field/field.js?v=20261023-assignment", "/field/icon-192.png?v=20261023-logo", "/field/icon-512.png?v=20261023-logo"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));

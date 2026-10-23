@@ -260,11 +260,8 @@ function createMaintenanceApi(deps) {
     const workType = ["Preventive Maintenance", "Complaint / Repair", "Inspection", "Emergency Service", "Other"].includes(body.workType)
       ? body.workType : "Preventive Maintenance";
     const technicianIds = unique(body.technicianIds);
-    if (active && (technicianIds.length < (workType === "Preventive Maintenance" ? 2 : 1) || technicianIds.length > 5))
-      fail(workType === "Preventive Maintenance" ? "Assign 2 to 5 technicians" : "Assign 1 to 5 technicians");
+    if (active && (technicianIds.length < 1 || technicianIds.length > 5)) fail("Assign 1 to 5 technicians");
     if (technicianIds.some(id => !find(store.technicians, id) || find(store.technicians, id).active === false)) fail("Select active technicians");
-    const leadTechnicianId = trim(body.leadTechnicianId, 80);
-    if (active && !technicianIds.includes(leadTechnicianId)) fail("Choose a lead from the assigned technicians");
     const visit = body.visitId ? find(store.visits, body.visitId) : null;
     if (body.visitId && (!visit || visit.contractId !== contract?.id)) fail("Selected PM visit does not belong to this AMC");
     if (visit && visit.workOrderId && visit.workOrderId !== active?.workOrderId) fail("This PM visit already has a work order", 409);
@@ -281,7 +278,7 @@ function createMaintenanceApi(deps) {
       customerName, site,
       contact: trim(body.contact || contract?.contact, 100), phone: trim(body.phone || contract?.phone, 50),
       workType, serviceDate, startTime, endTime, priority: ["Normal", "Urgent"].includes(body.priority) ? body.priority : "Normal",
-      technicianIds, leadTechnicianId, instructions: trim(body.instructions, 4000) };
+      technicianIds, instructions: trim(body.instructions, 4000) };
   }
 
   function workOrderFromSchedule(store, schedule, existing) {
@@ -291,7 +288,7 @@ function createMaintenanceApi(deps) {
       customerId: schedule.customerId, customerName: schedule.customerName, site: schedule.site, contact: schedule.contact,
       phone: schedule.phone, workType: schedule.workType, serviceDate: schedule.serviceDate, startTime: schedule.startTime,
       endTime: schedule.endTime, priority: schedule.priority, technicianIds: schedule.technicianIds,
-      leadTechnicianId: schedule.leadTechnicianId, instructions: schedule.instructions, status: existing?.status || "Scheduled", updatedAt: now });
+      instructions: schedule.instructions, status: existing?.status || "Scheduled", updatedAt: now });
     if (!existing) store.workOrders.unshift(base);
     return base;
   }
@@ -647,8 +644,11 @@ function createMaintenanceApi(deps) {
           }
           item.history = item.history || [];
           item.history.push({ at: isoNow(), actor: user.name, action: body.decision, reason: item.reviewReason });
-          if (job?.leadTechnicianId) noticeIds.push(createNotice(store, job.leadTechnicianId, job, body.decision === "Approved" ? "approved" : "revision",
-            `${job.number} report ${body.decision.toLowerCase()}${item.reviewReason ? `: ${item.reviewReason}` : ""}`));
+          if (job) {
+            const recipients = job.technicianIds.includes(item.submittedBy) ? [item.submittedBy] : job.technicianIds;
+            recipients.forEach(id => noticeIds.push(createNotice(store, id, job, body.decision === "Approved" ? "approved" : "revision",
+              `${job.number} report ${body.decision.toLowerCase()}${item.reviewReason ? `: ${item.reviewReason}` : ""}`)));
+          }
           addActivity(store, "report", item.id, user.name, `${item.number} ${body.decision.toLowerCase()}`);
           return item;
         });
@@ -756,7 +756,6 @@ function createMaintenanceApi(deps) {
       ["Time", job?.startTime && job?.endTime ? `${job.startTime} - ${job.endTime}` : ""],
       ["Service type", job?.workType || report.type],
       ["Technicians", job ? job.technicianIds.map(id => find(store.technicians, id)?.name || "").filter(Boolean).join(", ") : report.extracted?.technicianName],
-      ["Lead technician", job ? find(store.technicians, job.leadTechnicianId)?.name || "" : ""],
       ["Submitted", dateOnly(report.submittedAt)]
     ];
     let y = 154;
@@ -818,7 +817,7 @@ function createMaintenanceApi(deps) {
       technicians: job.technicianIds.map(id => find(store.technicians, id)).filter(Boolean).map(item => ({ id: item.id, name: item.name, code: item.code })),
       attendance: store.attendance.filter(item => item.workOrderId === job.id),
       report: store.reports.find(item => item.workOrderId === job.id) || null,
-      draft: job.leadTechnicianId === technicianId ? store.drafts.find(item => item.workOrderId === job.id)?.data || null : null,
+      draft: store.drafts.find(item => item.workOrderId === job.id)?.data || null,
       files: store.files.filter(item => item.workOrderId === job.id).map(publicFile),
       activity: store.activity.filter(item => item.targetId === job.id).slice(0, 20) };
   }
@@ -919,7 +918,7 @@ function createMaintenanceApi(deps) {
         return send(res, 200, auth.state.workOrders.filter(item => item.technicianIds.includes(technicianId))
           .sort((a, b) => a.serviceDate.localeCompare(b.serviceDate)).map(item => ({ id: item.id, number: item.number,
             customerName: item.customerName, site: item.site, serviceDate: item.serviceDate, startTime: item.startTime,
-            endTime: item.endTime, workType: item.workType, status: item.status, lead: item.leadTechnicianId === technicianId })));
+            endTime: item.endTime, workType: item.workType, status: item.status })));
       }
       if (parts[0] === "work-orders" && parts[1] && parts.length === 2 && req.method === "GET") {
         const job = assignedJob(auth.state, technicianId, parts[1]);
@@ -954,7 +953,6 @@ function createMaintenanceApi(deps) {
         const body = await readJson(req);
         await storage.mutate(store => {
           const job = assignedJob(store, technicianId, parts[1]);
-          if (job.leadTechnicianId !== technicianId) fail("Only the lead technician can prepare the report", 403);
           if (job.status === "Completed") fail("Completed jobs cannot be edited", 409);
           const data = { type: body.type === "Handwritten Upload" ? "Handwritten Upload" : "Digital Checklist",
             checklist: body.checklist || {}, details: body.details || {}, fileIds: unique(body.fileIds),
@@ -969,7 +967,7 @@ function createMaintenanceApi(deps) {
       if (parts[0] === "work-orders" && parts[2] === "files" && req.method === "POST") {
         const job = assignedJob(auth.state, technicianId, parts[1]);
         const kind = ["photo", "original", "signature"].includes(url.searchParams.get("kind")) ? url.searchParams.get("kind") : "photo";
-        if ((job.leadTechnicianId !== technicianId && kind !== "original") || job.status === "Completed") fail("Upload is unavailable for this job", 403);
+        if (job.status === "Completed") fail("Upload is unavailable for this job", 403);
         const file = await acceptFile(req, { workOrderId: job.id, technicianId, kind });
         await storage.mutate(store => { store.files.push(file); addActivity(store, "workOrder", job.id, auth.technician.name, `${kind} uploaded`); });
         return send(res, 201, publicFile(file));
@@ -977,7 +975,7 @@ function createMaintenanceApi(deps) {
       if (parts[0] === "work-orders" && parts[2] === "files" && parts[3] && req.method === "DELETE") {
         const storedName = await storage.mutate(store => {
           const job = assignedJob(store, technicianId, parts[1]);
-          if (job.leadTechnicianId !== technicianId || job.status === "Completed") fail("Photo removal is unavailable for this job", 403);
+          if (job.status === "Completed") fail("Photo removal is unavailable for this job", 403);
           const file = find(store.files, parts[3]);
           const draft = store.drafts.find(item => item.workOrderId === job.id);
           if (!file || file.workOrderId !== job.id || file.kind !== "photo" || !draft?.data.fileIds?.includes(file.id)) fail("Draft photo not found", 404);
@@ -1004,7 +1002,6 @@ function createMaintenanceApi(deps) {
         const report = await storage.mutate(store => {
           const job = assignedJob(store, technicianId, parts[1]);
           const type = body.type === "Handwritten Upload" ? "Handwritten Upload" : "Digital Checklist";
-          if (job.leadTechnicianId !== technicianId && type !== "Handwritten Upload") fail("Only the lead technician can submit the report", 403);
           if (job.status === "Completed") fail("This job is completed", 409);
           const prior = store.reports.find(item => item.workOrderId === job.id);
           if (prior && !["Revision", "Rejected"].includes(prior.status)) fail("A report is already awaiting review", 409);

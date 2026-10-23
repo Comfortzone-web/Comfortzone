@@ -665,7 +665,7 @@
       const checkedItems = entries.filter(entry => entry?.value && entry.value !== "Not Checked").length;
       body = `<div class="wo-overview"><div class="wo-summary-lines"><div>${icon("building-2")}<strong>${esc(item.customerName)}</strong></div><div>${icon("map-pin")}<span>${esc(item.site || "--")}</span></div><div>${icon("file-text")}<span>${esc(linked?.number || "Non-AMC")}</span></div></div>
         <div class="wo-info-highlight">${icon("calendar-days")}<span><small>Service Date & Time</small><strong>${esc(day(item.serviceDate))} · ${esc(timeLabel(item.startTime))} - ${esc(timeLabel(item.endTime))}</strong></span></div>
-        <div class="wo-assignment"><strong>Technicians (${names.length})</strong>${names.length ? names.map(name => `<div>${dashAvatar(name)}<span>${esc(name)}${tech(item.leadTechnicianId)?.name === name ? `<small>Lead</small>` : ""}</span></div>`).join("") : `<p>Not assigned</p>`}</div>
+        <div class="wo-assignment"><strong>Technicians (${names.length})</strong>${names.length ? names.map(name => `<div>${dashAvatar(name)}<span>${esc(name)}</span></div>`).join("") : `<p>Not assigned</p>`}</div>
         ${progressHtml}<div class="wo-checklist-progress"><div><strong>Checklist Progress</strong><small>${entries.length ? `${checkedItems} of ${entries.length} items` : "No checklist submitted"}</small></div><div class="wo-meter"><span style="width:${entries.length ? Math.round(checkedItems / entries.length * 100) : 0}%"></span></div></div>
         <div class="wo-latest"><strong>Latest Activity</strong><p>${esc(activity[0]?.message || serviceReport?.details?.remarks || "No activity recorded yet.")}</p><small>${activity[0] ? `${esc(activity[0].actor)} · ${esc(day(activity[0].createdAt))}` : ""}</small></div></div>`;
     } else if (state.workOrderTab === "Checklist") {
@@ -716,11 +716,11 @@
     const sectionHead = (symbol, title, action = "", actionLabel = "Edit", disabled = false) => `<div class="wd-section-head"><div>${icon(symbol)}<h2>${esc(title)}</h2></div>${action ? `<button data-action="${action}" data-id="${esc(item.id)}" ${disabled ? "disabled title=\"Completed work orders cannot be edited\"" : ""}>${esc(actionLabel)}</button>` : ""}</div>`;
     const viewFiles = (compact = false) => files.length ? `<div class="wd-files ${compact ? "compact" : ""}">${(compact ? files.slice(0, 3) : files).map(fileCard).join("")}${compact ? `<button class="wd-upload-tile" disabled title="Only assigned technicians can upload work-order files in the Field app">${icon("upload")}<span>Upload Files</span></button>` : ""}</div>` : `<div class="wd-no-files">No files attached to this work order.${compact ? `<button disabled title="Only assigned technicians can upload work-order files in the Field app">Upload Files</button>` : ""}</div>`;
     const infoCard = `<section class="wd-card wd-site-card">${sectionHead("map-pin", "Customer & Site Information", "edit-job", "Edit", item.status === "Completed")}<div class="wd-site-content"><div class="wd-field-grid"><div>${field("Customer", item.customerName, "users-round")}${field("Site / Location", item.site, "map-pin")}${field("Contact Person", item.contact, "user-round")}${field("Phone", item.phone, "phone")}</div><div>${field("AMC Contract", amcRecord?.number || "Non-AMC", "file-text")}${field("Work Type", item.workType, "wrench")}${field("Priority", item.priority === "Urgent" ? "High" : "Medium", "triangle-alert")}${field("AC Units", amcRecord?.unitCount ? `${amcRecord.unitCount} Units` : "--", "clipboard-list")}</div></div><div class="wd-map"><span class="wd-map-icon">${icon("map-pin")}</span><strong>${esc(item.site || "Site not set")}</strong>${mapsUrl ? `<a href="${mapsUrl}" target="_blank" rel="noopener">Open in Maps ${icon("chevron-right")}</a>` : `<span>Map unavailable</span>`}</div></div></section>`;
-    const reportOptions = `<section class="wd-card">${sectionHead("file-text", "Service Report Options")}<div class="wd-report-options"><div><span class="wd-report-icon green">${icon("check")}</span><span><strong>Digital HVAC Checklist</strong><small>Technicians complete maintenance items, work details, photos and customer signature.</small><button data-action="wd-tab" data-tab="Checklist">Open Checklist ${icon("chevron-right")}</button></span></div><div><span class="wd-report-icon purple">${icon("upload")}</span><span><strong>Upload Handwritten Report</strong><small>The assigned lead technician uploads the original report in the Field app for office review.</small><button data-action="wd-upload-info">Upload Report ${icon("chevron-right")}</button></span></div></div></section>`;
+    const reportOptions = `<section class="wd-card">${sectionHead("file-text", "Service Report Options")}<div class="wd-report-options"><div><span class="wd-report-icon green">${icon("check")}</span><span><strong>Digital HVAC Checklist</strong><small>Technicians complete maintenance items, work details, photos and customer signature.</small><button data-action="wd-tab" data-tab="Checklist">Open Checklist ${icon("chevron-right")}</button></span></div><div><span class="wd-report-icon purple">${icon("upload")}</span><span><strong>Upload Handwritten Report</strong><small>An assigned technician uploads the original report in the Field app for office review.</small><button data-action="wd-upload-info">Upload Report ${icon("chevron-right")}</button></span></div></div></section>`;
     const notesAndFiles = `<div class="wd-lower-grid"><section class="wd-card">${sectionHead("pencil", "Notes", "edit-job", "Edit", item.status === "Completed")}<p class="wd-notes">${esc(item.instructions || "No work instructions or additional remarks recorded.")}</p></section><section class="wd-card">${sectionHead("paperclip", `Attachments (${files.length})`, "wd-documents", "View All")}<div class="wd-attachments-preview">${viewFiles(true)}</div></section></div>`;
     const checklistGroups = Object.entries(reportRecord?.checklist || {});
-    const checklistView = `<section class="wd-card wd-tab-content">${sectionHead("clipboard-list", "Digital HVAC Checklist")}${checklistGroups.length ? `<div class="wd-checklist-meta"><strong>${esc(reportRecord.number)}</strong>${badge(reportRecord.status)}<small>Submitted ${esc(dateTime(reportRecord.submittedAt))}</small></div>${checklistGroups.map(([group, entries]) => `<div class="wd-checklist-group"><h3>${esc(group === "indoor" ? "Indoor Unit" : group === "outdoor" ? "Outdoor Unit" : group)}</h3>${Object.entries(entries).map(([label, result]) => `<div><span>${esc(label)}</span><strong class="${result?.value === "Issue" ? "issue" : ""}">${esc(result?.value || "--")}</strong>${result?.note ? `<small>${esc(result.note)}</small>` : ""}</div>`).join("")}</div>`).join("")}` : `<p class="wd-empty-copy">${reportRecord?.type === "Handwritten Upload" ? "The checklist is included in the uploaded handwritten report." : "No digital checklist has been submitted. Only the assigned lead technician can submit one from the Field app."}</p>`}</section>`;
-    const serviceView = `<section class="wd-card wd-tab-content">${sectionHead("file-text", "Service Report")}${reportRecord ? `<div class="wd-report-summary"><div><strong>${esc(reportRecord.number)}</strong>${badge(reportRecord.status)}</div><p>${esc(reportRecord.type)} · Submitted ${esc(dateTime(reportRecord.submittedAt))} by ${esc(tech(reportRecord.submittedBy)?.name || "Technician")}</p><dl><div><dt>Work Carried Out</dt><dd>${esc(reportRecord.details?.workCarriedOut || "--")}</dd></div><div><dt>Materials Used</dt><dd>${esc(reportRecord.details?.materialsUsed || "--")}</dd></div><div><dt>Remarks</dt><dd>${esc(reportRecord.details?.remarks || "--")}</dd></div>${reportRecord.reviewReason ? `<div><dt>Review Note</dt><dd>${esc(reportRecord.reviewReason)}</dd></div>` : ""}</dl><div class="wd-report-actions"><button data-action="open-report" data-id="${esc(reportRecord.id)}">Open Report & Review</button><a href="${reportPdfUrl}" target="_blank" rel="noopener">${icon("download")} Download PDF</a></div></div>` : `<p class="wd-empty-copy">No service report has been submitted for this work order. The assigned lead technician can submit it from the Field app.</p>`}</section>`;
+    const checklistView = `<section class="wd-card wd-tab-content">${sectionHead("clipboard-list", "Digital HVAC Checklist")}${checklistGroups.length ? `<div class="wd-checklist-meta"><strong>${esc(reportRecord.number)}</strong>${badge(reportRecord.status)}<small>Submitted ${esc(dateTime(reportRecord.submittedAt))}</small></div>${checklistGroups.map(([group, entries]) => `<div class="wd-checklist-group"><h3>${esc(group === "indoor" ? "Indoor Unit" : group === "outdoor" ? "Outdoor Unit" : group)}</h3>${Object.entries(entries).map(([label, result]) => `<div><span>${esc(label)}</span><strong class="${result?.value === "Issue" ? "issue" : ""}">${esc(result?.value || "--")}</strong>${result?.note ? `<small>${esc(result.note)}</small>` : ""}</div>`).join("")}</div>`).join("")}` : `<p class="wd-empty-copy">${reportRecord?.type === "Handwritten Upload" ? "The checklist is included in the uploaded handwritten report." : "No digital checklist has been submitted. An assigned technician can submit one from the Field app."}</p>`}</section>`;
+    const serviceView = `<section class="wd-card wd-tab-content">${sectionHead("file-text", "Service Report")}${reportRecord ? `<div class="wd-report-summary"><div><strong>${esc(reportRecord.number)}</strong>${badge(reportRecord.status)}</div><p>${esc(reportRecord.type)} · Submitted ${esc(dateTime(reportRecord.submittedAt))} by ${esc(tech(reportRecord.submittedBy)?.name || "Technician")}</p><dl><div><dt>Work Carried Out</dt><dd>${esc(reportRecord.details?.workCarriedOut || "--")}</dd></div><div><dt>Materials Used</dt><dd>${esc(reportRecord.details?.materialsUsed || "--")}</dd></div><div><dt>Remarks</dt><dd>${esc(reportRecord.details?.remarks || "--")}</dd></div>${reportRecord.reviewReason ? `<div><dt>Review Note</dt><dd>${esc(reportRecord.reviewReason)}</dd></div>` : ""}</dl><div class="wd-report-actions"><button data-action="open-report" data-id="${esc(reportRecord.id)}">Open Report & Review</button><a href="${reportPdfUrl}" target="_blank" rel="noopener">${icon("download")} Download PDF</a></div></div>` : `<p class="wd-empty-copy">No service report has been submitted for this work order. An assigned technician can submit it from the Field app.</p>`}</section>`;
     const documentsView = `<section class="wd-card wd-tab-content">${sectionHead("paperclip", `Photos & Documents (${files.length})`)}${viewFiles()}<p class="wd-permission-note">Work-order uploads are available to assigned technicians in the Field app. Office users can view and download submitted files here.</p></section>`;
     const overview = `${infoCard}${reportOptions}${notesAndFiles}`;
     const tabContent = state.workOrderDetailTab === "Checklist" ? checklistView : state.workOrderDetailTab === "Service Report" ? serviceView : state.workOrderDetailTab === "Photos & Documents" ? documentsView : overview;
@@ -730,7 +730,7 @@
       const currentAtOtherSite = state.data.attendance.some(row => row.technicianId === id && row.workOrderId !== item.id && !row.checkOutAt);
       const presence = !person.active || person.offDuty ? "Off Duty" : activeCheckIn ? "On Site" : currentAtOtherSite ? "At Other Site" : "Scheduled";
       const latestAssignment = state.data.notifications.find(row => row.workOrderId === item.id && row.technicianId === id && ["assigned", "rescheduled"].includes(row.type));
-      return `<div class="wd-technician">${dashAvatar(person.name)}<span><strong>${esc(person.name)}${id === item.leadTechnicianId ? `<i>Lead</i>` : ""}${latestAssignment?.status === "Accepted" ? `<i class="accepted">Accepted</i>` : ""}</strong><small>${icon("phone")}${esc(person.phone || "No phone")}</small></span><em class="${presence === "On Site" ? "on-site" : ""}">${esc(presence)}</em></div>`;
+      return `<div class="wd-technician">${dashAvatar(person.name)}<span><strong>${esc(person.name)}${latestAssignment?.status === "Accepted" ? `<i class="accepted">Accepted</i>` : ""}</strong><small>${icon("phone")}${esc(person.phone || "No phone")}</small></span><em class="${presence === "On Site" ? "on-site" : ""}">${esc(presence)}</em></div>`;
     }).join("");
     const createdActor = scheduleRecord?.createdBy || activities.at(-1)?.actor || item.createdBy || "--";
     const failedNotices = state.data.notifications.filter(row => row.workOrderId === item.id && ["Failed", "Not Subscribed"].includes(row.status));
@@ -939,8 +939,7 @@
         ${infoItem("AMC Contract", agreement ? `<button class="sr-link" data-action="open-contract-search" data-id="${esc(agreement.id)}">${esc(agreement.number)}</button>` : "Non-AMC", "file-text")}
         ${agreement ? infoItem("AMC Site Location", esc(agreement.site || "--"), "map-pin") : ""}
         ${infoItem("Service Type", esc(linked?.workType || item.type || "--"), "wrench")}
-        ${infoItem("Assigned Technicians", names.length ? `<span class="sr-assigned-avatars">${namedTechnicians.slice(0, 4).map(dashAvatar).join("")}</span><span class="sr-assigned-names">${esc(names.join(", "))}</span>` : "--", "users-round")}
-        ${infoItem("Lead Technician", esc(tech(linked?.leadTechnicianId)?.name || "--"), "user-round")}</div></div>
+        ${infoItem("Assigned Technicians", names.length ? `<span class="sr-assigned-avatars">${namedTechnicians.slice(0, 4).map(dashAvatar).join("")}</span><span class="sr-assigned-names">${esc(names.join(", "))}</span>` : "--", "users-round")}</div></div>
         <section class="sr-gallery"><div class="sr-section-heading"><h3>Service Report Images (${images.length})</h3><button data-action="report-tab" data-tab="Images">View All</button></div><div class="sr-gallery-strip">${images.length ? images.slice(0, 4).map(file => attachment(file, true)).join("") : `<span class="sr-empty-inline">No report images attached.</span>`}${images.length > 4 ? `<button class="sr-gallery-more" data-action="report-tab" data-tab="Images">+${images.length - 4}</button>` : ""}</div>${original ? `<a class="sr-original-link" href="/api/maintenance/files/${encodeURIComponent(original.id)}" target="_blank" rel="noopener">${icon("file-text")}View Original Handwritten Report</a>` : ""}</section>
         <section class="sr-description">${icon("file-text")}<div><h3>Description of Work</h3><p>${esc(description)}</p>${item.details?.materialsUsed ? `<p><strong>Materials used:</strong> ${esc(item.details.materialsUsed)}</p>` : ""}${item.details?.remarks ? `<p><strong>Remarks:</strong> ${esc(item.details.remarks)}</p>` : ""}</div></section>`;
     } else if (state.reportTab === "Checklist") {
@@ -1122,10 +1121,9 @@
       ${formField("Service Date", "serviceDate", d.serviceDate || state.selectedDate, "date", true, 'data-schedule-change="time"')}
       ${formField("Start Time", "startTime", d.startTime || "09:00", "time", true, 'data-schedule-change="time"')}
       ${formField("End Time", "endTime", d.endTime || "12:00", "time", true, 'data-schedule-change="time"')}</div></div>
-      <div class="maint-form-section"><h3>Assign Individual Technicians</h3><p class="maint-form-hint">Choose 2-5 technicians for preventive maintenance, then designate the lead.</p>
+      <div class="maint-form-section"><h3>Assign Individual Technicians</h3>
       <label class="maint-search technician-search">${icon("search")}<input data-tech-search placeholder="Search technicians..." aria-label="Search technicians"></label>
-      <div class="maint-tech-picker">${selectable.length ? selectable.map(item => `<label data-tech-option="${esc(item.name.toLowerCase())}"><input type="checkbox" name="technicianIds" value="${item.id}" ${checked(d.technicianIds?.includes(item.id))}><span>${esc(item.name)}<small>${esc(availability(item.id, d))}</small></span></label>`).join("") : `<p class="maint-muted">Add technicians before publishing assignments.</p>`}</div>
-      <label class="maint-field"><span>Lead Technician *</span><select name="leadTechnicianId"><option value="">Select lead</option>${selectable.filter(item => d.technicianIds?.includes(item.id)).map(item => `<option value="${item.id}" ${selected(d.leadTechnicianId, item.id)}>${esc(item.name)}</option>`).join("")}</select></label></div>
+      <div class="maint-tech-picker">${selectable.length ? selectable.map(item => `<label data-tech-option="${esc(item.name.toLowerCase())}"><input type="checkbox" name="technicianIds" value="${item.id}" ${checked(d.technicianIds?.includes(item.id))}><span>${esc(item.name)}<small>${esc(availability(item.id, d))}</small></span></label>`).join("") : `<p class="maint-muted">Add technicians before publishing assignments.</p>`}</div></div>
       <label class="maint-field"><span>Work Instructions</span><textarea name="instructions" rows="4" placeholder="Check filters, coils, drainage, electrical connections and cooling performance.">${esc(d.instructions || "")}</textarea></label></form>`;
     return drawerShell(d.workOrderId ? `Edit ${job(d.workOrderId)?.number || "Schedule"}` : "New Maintenance Schedule", body,
       `<button class="maint-outline" data-action="close-drawer">Cancel</button><button class="maint-outline" data-action="save-schedule-draft">${icon("save")} Save Draft</button><button class="maint-primary" data-action="save-schedule-notify">${icon("send")} Save & Notify</button>`);
@@ -1207,7 +1205,7 @@
       state.scheduleDraft = existing ? { ...existing, technicianIds: [...existing.technicianIds] }
         : { clientKey: crypto.randomUUID(), customerName: "", contractId: options.contractId || "", visitId: options.visitId || "",
           serviceDate: options.serviceDate || state.selectedDate, startTime: "09:00", endTime: "12:00",
-          workType: options.workType || "Preventive Maintenance", priority: "Normal", technicianIds: [...(options.technicianIds || [])], leadTechnicianId: options.leadTechnicianId || "", instructions: "" };
+          workType: options.workType || "Preventive Maintenance", priority: "Normal", technicianIds: [...(options.technicianIds || [])], instructions: "" };
       if (options.contractId) {
         const item = contract(options.contractId);
         Object.assign(state.scheduleDraft, { customerName: item?.customerName || "", site: item?.site || "", contact: item?.contact || "", phone: item?.phone || "" });
@@ -1270,11 +1268,13 @@
   function scheduleFormData() {
     const form = root.querySelector("#maintScheduleForm");
     const data = new FormData(form);
-    return { ...state.scheduleDraft, customerName: formValue(form, "customerName"), contractId: formValue(form, "contractId"), visitId: formValue(form, "visitId"),
+    const draft = { ...state.scheduleDraft };
+    delete draft.leadTechnicianId;
+    return { ...draft, customerName: formValue(form, "customerName"), contractId: formValue(form, "contractId"), visitId: formValue(form, "visitId"),
       site: formValue(form, "site"), contact: formValue(form, "contact"), phone: formValue(form, "phone"),
       workType: formValue(form, "workType"), priority: formValue(form, "priority"), serviceDate: formValue(form, "serviceDate"),
       startTime: formValue(form, "startTime"), endTime: formValue(form, "endTime"),
-      technicianIds: data.getAll("technicianIds").map(String), leadTechnicianId: formValue(form, "leadTechnicianId"),
+      technicianIds: data.getAll("technicianIds").map(String),
       instructions: formValue(form, "instructions") };
   }
 
@@ -1301,10 +1301,9 @@
     const form = root.querySelector("#maintScheduleForm");
     if (!validForm(form)) return;
     const body = { ...scheduleFormData(), mode };
-    if (mode === "notify" && body.workType === "Preventive Maintenance" && (body.technicianIds.length < 2 || body.technicianIds.length > 5)) {
-      formError("Assign 2 to 5 technicians for preventive maintenance"); return;
+    if (mode === "notify" && (body.technicianIds.length < 1 || body.technicianIds.length > 5)) {
+      formError("Assign 1 to 5 technicians"); return;
     }
-    if (mode === "notify" && !body.leadTechnicianId) { formError("Choose a lead technician", form.querySelector('[name="leadTechnicianId"]')); return; }
     try {
       const result = await request("/api/maintenance/schedules", { method: "POST", body: JSON.stringify(body) });
       state.scheduleDraft = { ...result.schedule };
@@ -1495,7 +1494,7 @@
     if (action === "wd-more") { state.workOrderDetailMenu = !state.workOrderDetailMenu; return render(); }
     if (action === "wd-tab") { state.workOrderDetailTab = button.dataset.tab; return render(); }
     if (action === "wd-documents") { state.workOrderDetailTab = "Photos & Documents"; return render(); }
-    if (action === "wd-upload-info") { state.workOrderDetailTab = "Service Report"; render(); return notice("Only the assigned lead technician can upload a handwritten report in the Field app."); }
+    if (action === "wd-upload-info") { state.workOrderDetailTab = "Service Report"; render(); return notice("Assigned technicians can upload a handwritten report in the Field app."); }
     if (action === "wd-retry-notifications") {
       const failures = state.data.notifications.filter(row => row.workOrderId === id && ["Failed", "Not Subscribed"].includes(row.status));
       if (!failures.length) return notice("There are no failed notifications to retry.");
@@ -1508,7 +1507,7 @@
         const result = await request("/api/maintenance/schedules", { method: "POST", body: JSON.stringify({ mode: "draft", clientKey: crypto.randomUUID(),
           customerName: source.customerName, contractId: source.contractId || "", visitId: "", site: source.site, contact: source.contact || "", phone: source.phone || "",
           workType: source.workType, priority: source.priority, serviceDate: source.serviceDate, startTime: source.startTime,
-          endTime: source.endTime, technicianIds: [...(source.technicianIds || [])], leadTechnicianId: source.leadTechnicianId || "", instructions: source.instructions || "" }) });
+          endTime: source.endTime, technicianIds: [...(source.technicianIds || [])], instructions: source.instructions || "" }) });
         await refresh(); openDrawer("schedule", result.schedule.id); notice(`Draft copied from ${source.number}. Review before publishing.`);
       } catch (error) { handleError(error); } return;
     }
@@ -1538,7 +1537,7 @@
     if (action === "td-more") { state.technicianMoreMenu = !state.technicianMoreMenu; return render(); }
     if (action === "sr-more") { state.reportMoreMenu = !state.reportMoreMenu; return render(); }
     if (action === "sr-view-pdf") return;
-    if (action === "td-assign") return openDrawer("schedule", "", { workType: "Preventive Maintenance", technicianIds: [id], leadTechnicianId: id });
+    if (action === "td-assign") return openDrawer("schedule", "", { workType: "Preventive Maintenance", technicianIds: [id] });
     if (action === "td-map") { window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(button.dataset.site)}`, "_blank", "noopener,noreferrer"); return; }
     if (action === "td-toggle") {
       const item = tech(id); if (!item) return notice("Technician not found");
@@ -1755,7 +1754,6 @@
     if (input.closest("#maintScheduleForm")) {
       const draft = scheduleFormData();
       if (input.dataset.scheduleChange === "contract") { const item = contract(draft.contractId); Object.assign(draft, { visitId: "", customerName: item?.customerName || draft.customerName, site: item?.site || draft.site, contact: item?.contact || draft.contact, phone: item?.phone || draft.phone }); }
-      if (input.name === "technicianIds" && !draft.technicianIds.includes(draft.leadTechnicianId)) draft.leadTechnicianId = "";
       state.scheduleDraft = draft;
       return render();
     }

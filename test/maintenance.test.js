@@ -97,7 +97,7 @@ test("maintenance lifecycle and field access", async () => {
 
     const scheduleBody = { clientKey: "stable-client-key", contractId: amc.result.id, customerName: customer.name,
       visitId: planned.id, site: customer.site, serviceDate: "2026-10-15", startTime: "09:00", endTime: "12:00",
-      workType: "Preventive Maintenance", technicianIds: ids, leadTechnicianId: ids[0], mode: "notify" };
+      workType: "Preventive Maintenance", technicianIds: ids, mode: "notify" };
     const scheduled = await office("POST", "/api/maintenance/schedules", scheduleBody);
     assert.equal(scheduled.status, 201);
     const workOrder = scheduled.result.workOrder;
@@ -204,6 +204,18 @@ test("maintenance lifecycle and field access", async () => {
     summary = (await office("GET", "/api/maintenance/summary")).result;
     assert.equal(summary.workOrders[0].status, "Completed");
     assert.equal(summary.visits.find(item => item.id === planned.id).status, "Completed");
+    const singlePm = await office("POST", "/api/maintenance/schedules", { clientKey: "single-technician-pm",
+      customerName: "Solo PM Customer", site: "Al Quoz", serviceDate: "2026-10-30", startTime: "09:00", endTime: "11:00",
+      workType: "Preventive Maintenance", technicianIds: [third.result.id], mode: "notify" });
+    assert.equal(singlePm.status, 201, JSON.stringify(singlePm.result));
+    assert.equal(Object.hasOwn(singlePm.result.workOrder, "leadTechnicianId"), false);
+    const soloId = singlePm.result.workOrder.id;
+    const soloSignature = await field("POST", `/api/field/work-orders/${soloId}/files?kind=signature`, null, outsiderCookie, png);
+    assert.equal(soloSignature.status, 201);
+    const soloBody = { type: "Digital Checklist", checklist: {}, signatureFileId: soloSignature.result.id,
+      fileIds: [soloSignature.result.id], details: { customerName: "Customer", workCarriedOut: "Serviced unit" } };
+    assert.equal((await field("PUT", `/api/field/work-orders/${soloId}/draft`, soloBody, outsiderCookie)).status, 200);
+    assert.equal((await field("POST", `/api/field/work-orders/${soloId}/report`, soloBody, outsiderCookie)).status, 201);
     const pdf = await office("GET", `/api/maintenance/reports/${submitted.result.id}/pdf`);
     assert.equal(pdf.status, 200);
     assert.equal(pdf.result.toString("ascii", 0, 5), "%PDF-");
@@ -297,6 +309,13 @@ test("maintenance lifecycle and field access", async () => {
     const secondAccess = await office("POST", `/api/maintenance/technicians/${ids[1]}/access`, {});
     const secondToken = new URL(secondAccess.result.link).searchParams.get("access");
     const secondCookie = (await field("POST", "/api/field/access", { token: secondToken })).headers["Set-Cookie"].split(";")[0];
+    const sharedJobId = fieldDirectJob.result.workOrder.id;
+    assert.equal((await field("PUT", `/api/field/work-orders/${sharedJobId}/draft`, { type: "Digital Checklist", checklist: {}, details: {} }, secondCookie)).status, 200);
+    const sharedPhoto = await field("POST", `/api/field/work-orders/${sharedJobId}/files?kind=photo`, null, secondCookie, png);
+    assert.equal(sharedPhoto.status, 201);
+    assert.equal((await field("PUT", `/api/field/work-orders/${sharedJobId}/draft`, {
+      type: "Digital Checklist", checklist: {}, details: {}, fileIds: [sharedPhoto.result.id] }, secondCookie)).status, 200);
+    assert.equal((await field("DELETE", `/api/field/work-orders/${sharedJobId}/files/${sharedPhoto.result.id}`, null, secondCookie)).status, 200);
     delete process.env.OPENAI_API_KEY;
     const fieldUpload = await field("POST", "/api/field/reports/upload", null, secondCookie, png);
     if (priorApiKey !== undefined) process.env.OPENAI_API_KEY = priorApiKey;

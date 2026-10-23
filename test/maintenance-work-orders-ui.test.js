@@ -103,4 +103,5 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
   await click("close-drawer");
   await click("new-work-order");
   assert.match(root.innerHTML, /New Maintenance Schedule/);
+  assert.doesNotMatch(root.innerHTML, /Lead Technician|Choose 2-5 technicians/);
 });

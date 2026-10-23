@@ -130,13 +130,12 @@
     if (!item) return home();
     const myAttendance = item.attendance.filter(row => row.technicianId === state.technician.id);
     const open = myAttendance.find(row => !row.checkOutAt);
-    const lead = item.leadTechnicianId === state.technician.id;
     const allowReport = !["Completed"].includes(item.status) && (!item.report || ["Revision", "Rejected"].includes(item.report.status));
     return `${header("Work Order", true)}<main class="field-main"><div id="fieldNotice" class="field-notice ${state.error ? "error" : "success"}" ${state.error || state.message ? "" : "hidden"}>${esc(state.error || state.message)}</div>
       <div class="field-job-heading"><span>${esc(item.number)}</span>${badge(item.status)}<h1>${esc(item.customerName)}</h1><p>${esc(item.site)}</p></div>
       <section class="field-info"><h2>Job Details</h2><dl><div><dt>Service Date</dt><dd>${date(item.serviceDate)}</dd></div><div><dt>Time</dt><dd>${time(item.startTime)} - ${time(item.endTime)}</dd></div>
         <div><dt>Work Type</dt><dd>${esc(item.workType)}</dd></div><div><dt>AMC Contract</dt><dd>${esc(item.contractNumber || "Non-AMC")}</dd></div>
-        <div><dt>Contact</dt><dd>${esc(item.contact || "--")}</dd></div><div><dt>Lead</dt><dd>${esc(item.technicians.find(row => row.id === item.leadTechnicianId)?.name || "--")}</dd></div>
+        <div><dt>Contact</dt><dd>${esc(item.contact || "--")}</dd></div>
         <div class="wide"><dt>Assigned Technicians</dt><dd>${esc(item.technicians.map(row => row.name).join(", "))}</dd></div></dl>
         <p class="field-instructions"><strong>Work Instructions</strong>${esc(item.instructions || "No instructions added.")}</p>
         <div class="field-links"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.site)}" target="_blank" rel="noopener">View Location</a>
@@ -144,7 +143,7 @@
       <section class="field-info"><h2>My Attendance</h2><p>${open ? `Checked in ${date(open.checkInAt)} at ${open.checkInAt.slice(11, 16)}` : myAttendance.length ? `Last check-out ${date(myAttendance.at(-1).checkOutAt)}` : "Not checked in"}</p>
         <button class="field-primary" data-action="${open ? "check-out" : "check-in"}" ${item.status === "Completed" ? "disabled" : ""}>${open ? "Check Out" : "Check In"}</button></section>
       <section class="field-info"><h2>Service Report</h2>${item.report ? `<p>${esc(item.report.number)} · ${badge(item.report.status)}</p>${item.report.reviewReason ? `<p class="field-review-note">Office note: ${esc(item.report.reviewReason)}</p>` : ""}` : `<p>No report submitted yet.</p>`}
-        ${lead && allowReport ? `<div class="field-report-actions"><button data-action="digital">Digital HVAC Checklist</button><button data-action="handwritten">Upload Handwritten Report</button></div>` : lead ? "" : `<p class="field-tip">The lead technician submits the consolidated service report.</p>`}</section>
+        ${allowReport ? `<div class="field-report-actions"><button data-action="digital">Digital HVAC Checklist</button><button data-action="handwritten">Upload Handwritten Report</button></div>` : ""}</section>
       <section class="field-info"><h2>Attendance History</h2>${myAttendance.length ? myAttendance.map(row => `<p>${date(row.checkInAt)} · In ${row.checkInAt.slice(11, 16)} · Out ${row.checkOutAt ? row.checkOutAt.slice(11, 16) : "On site"}</p>`).join("") : `<p>No attendance recorded.</p>`}</section></main>`;
   }
 
