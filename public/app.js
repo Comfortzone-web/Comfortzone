@@ -2703,8 +2703,6 @@ function salesProjectTableHtml(rows) {
           <td>${salesBadge(salesProjectStatus(project))}</td>
           <td>
             <div class="sales-project-actions">
-              <button data-sales-project-select="${escapeHtml(project.id)}">View</button>
-              <button data-sales-action="edit-project" data-sales-id="${escapeHtml(project.id)}">Edit</button>
               ${rowMenu([
                 { label: "View", action: "view-project", id: project.id },
                 { label: "Edit", action: "edit-project", id: project.id },
@@ -2815,7 +2813,7 @@ function salesProjectBoqTableHtml(project, boqRows) {
       <tbody>${boqRows.map(row => {
         const model = row.model || row.modelNo || "";
         const qty = Number(row.qty || row.quantity || 0) || 0;
-        const delivered = Number(row.deliveredQty || salesProjectDeliveredQty(project, model)) || 0;
+        const delivered = salesProjectBoqDeliveredQty(project, row);
         const pending = qty - delivered;
         return `<tr><td>${escapeHtml(model || "-")}</td><td>${qty || ""}</td><td class="sales-project-delivered-qty">${delivered || ""}</td><td class="sales-project-pending-qty">${pending}</td></tr>`;
       }).join("") || `<tr><td colspan="4">No BOQ items yet.</td></tr>`}</tbody>
@@ -2843,7 +2841,8 @@ function salesProjectDeliveryNotes(project = {}) {
   if (!projectName || !inventoryState) return [];
   return (inventoryState.deliveryNotes || []).filter(note => {
     const status = norm(note.status || "");
-    return norm(note.projectName || note.project || "") === projectName && !["draft", "cancelled"].includes(status);
+    const sameCustomer = !project.customer || !note.customerName || norm(note.customerName) === norm(project.customer);
+    return norm(note.projectName || note.project || "") === projectName && sameCustomer && ["ISSUED", "DELIVERED"].includes(status);
   });
 }
 
@@ -2853,6 +2852,11 @@ function salesProjectDeliveredQty(project, model) {
   return salesProjectDeliveryNotes(project).reduce((total, note) => total + (note.lines || note.items || []).reduce((sum, line) => {
     return norm(line.modelNo || line.model || "") === target ? sum + (Number(line.qtyGoingOut || line.qty || line.quantity || 0) || 0) : sum;
   }, 0), 0);
+}
+
+function salesProjectBoqDeliveredQty(project, row = {}) {
+  const model = salesProjectModelNo(row.model || row.modelNo || row.description || "");
+  return Math.max(Number(row.deliveredQty || 0) || 0, salesProjectDeliveredQty(project, model));
 }
 
 function salesProjectStockQty(model) {
@@ -2943,22 +2947,23 @@ function salesProjectDrawerField(label, key, value = "", options = null, type = 
   return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="${escapeHtml(key)}" ${type === "dateText" ? 'type="date"' : ""} value="${type === "dateText" ? nativeDateValue(value) : escapeHtml(value || "")}"></label>`;
 }
 
-function salesProjectDrawerBoqRowHtml(row = {}, index = 0) {
+function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}) {
   const model = salesProjectModelNo(row.model || row.modelNo || row.description || "");
   const qty = Number(row.qty || row.quantity || 0) || 0;
-  const delivered = Number(row.deliveredQty || 0) || 0;
+  const recordedDelivered = Number(row.deliveredQty || 0) || 0;
+  const delivered = salesProjectBoqDeliveredQty(project, row);
   const pending = qty - delivered;
   const stock = model ? salesProjectStockQty(model) : "";
   const canReserve = pending > 0;
   const reserve = canReserve && !!(row.reserve || row.reserveStock);
   return `
-    <tr data-project-boq-row>
+    <tr data-project-boq-row data-project-boq-origin-model="${escapeHtml(model)}">
       <td>
         <input data-suggestion-list="salesProjectModelList" data-project-boq-field="model" value="${escapeHtml(model)}">
         <input type="hidden" data-project-boq-field="description" value="${escapeHtml(row.description || "")}">
       </td>
       <td><input inputmode="decimal" data-project-boq-field="qty" value="${qty || ""}"></td>
-      <td><input inputmode="decimal" data-project-boq-field="deliveredQty" value="${delivered || ""}"></td>
+      <td><input data-project-boq-field="deliveredQty" data-recorded-delivered-qty="${recordedDelivered}" value="${delivered || ""}" readonly title="Calculated from delivered notes and verified direct deliveries"></td>
       <td data-project-boq-pending>${pending}</td>
       <td data-project-boq-stock>${model ? escapeHtml(String(stock)) : ""}</td>
       <td class="sales-project-reserve-cell">
@@ -3098,7 +3103,7 @@ function openSalesProjectDrawer(itemId = "") {
                 <col class="sales-project-boq-reserve">
               </colgroup>
               <thead><tr><th>Model</th><th>Qty</th><th>Delivered Qty</th><th>Pending Qty</th><th>Stock</th><th>Reserve</th></tr></thead>
-              <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map(salesProjectDrawerBoqRowHtml).join("")}</tbody>
+              <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map((row, index) => salesProjectDrawerBoqRowHtml(row, index, project)).join("")}</tbody>
             </table>
           </div>
           <button class="sales-secondary sales-project-add-boq" data-add-project-boq>Add BOQ Row</button>
@@ -3117,18 +3122,18 @@ function openSalesProjectDrawer(itemId = "") {
   modal._directDeliveryPendingUpload = null;
   modal.querySelectorAll("[data-close-project-drawer]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("[data-add-project-boq]").addEventListener("click", () => {
-    modal.querySelector(".sales-project-boq-edit tbody").insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({}, modal.querySelectorAll("[data-project-boq-row]").length));
+    modal.querySelector(".sales-project-boq-edit tbody").insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({}, modal.querySelectorAll("[data-project-boq-row]").length, project));
   });
   modal.addEventListener("input", event => {
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
-    if (row) salesProjectUpdateBoqRow(row);
+    if (row) salesProjectUpdateBoqRow(row, false, project);
   });
   modal.addEventListener("change", event => {
     if (event.target.dataset.projectDirectFile !== undefined) return uploadSalesProjectDirectDelivery(modal, project, event.target.files?.[0]);
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
-    if (row) salesProjectUpdateBoqRow(row, true);
+    if (row) salesProjectUpdateBoqRow(row, true, project);
     if (event.target.closest("[data-project-direct-detected-row]")) salesProjectRefreshDirectDetectedStatuses(modal);
   });
   modal.addEventListener("click", event => {
@@ -3164,14 +3169,21 @@ function openSalesProjectDrawer(itemId = "") {
     await saveSalesProject(payload);
     modal.remove();
   });
+  loadInventory({ force: true })
+    .then(() => {
+      if (modal.isConnected) modal.querySelectorAll("[data-project-boq-row]").forEach(row => salesProjectUpdateBoqRow(row, false, project));
+    })
+    .catch(error => console.warn("Could not refresh project delivery quantities", error));
 }
 
-function salesProjectUpdateBoqRow(row, normalizeModel = false) {
+function salesProjectUpdateBoqRow(row, normalizeModel = false, project = {}) {
   const modelInput = row.querySelector('[data-project-boq-field="model"]');
   const model = normalizeModel ? salesProjectModelNo(modelInput?.value || "") : modelInput?.value.trim() || "";
   if (normalizeModel && modelInput) modelInput.value = model;
   const qty = Number(row.querySelector('[data-project-boq-field="qty"]')?.value || 0) || 0;
-  const delivered = Number(row.querySelector('[data-project-boq-field="deliveredQty"]')?.value || 0) || 0;
+  const deliveredInput = row.querySelector('[data-project-boq-field="deliveredQty"]');
+  const recordedDelivered = Number(deliveredInput?.dataset.recordedDeliveredQty || 0) || 0;
+  const delivered = Math.max(recordedDelivered, salesProjectDeliveredQty(project, model));
   const descriptionInput = row.querySelector('[data-project-boq-field="description"]');
   const modelInfo = salesProjectModelInfo(model);
   const pending = qty - delivered;
@@ -3181,6 +3193,7 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false) {
   const stockCell = row.querySelector("[data-project-boq-stock]");
   const reserveInput = row.querySelector('[data-project-boq-field="reserve"]');
   const reserveToggle = reserveInput?.closest(".sales-project-row-toggle");
+  if (deliveredInput) deliveredInput.value = delivered || "";
   if (descriptionInput && modelInfo?.description) descriptionInput.value = modelInfo.description;
   if (pendingCell) pendingCell.textContent = String(pending);
   if (stockCell) stockCell.textContent = model ? String(stock) : "";
@@ -3291,11 +3304,11 @@ async function verifySalesProjectDirectDelivery(modal, project) {
     });
     if (existingRow) {
       const deliveredInput = existingRow.querySelector('[data-project-boq-field="deliveredQty"]');
-      deliveredInput.value = String((Number(deliveredInput.value || 0) || 0) + quantity);
-      salesProjectUpdateBoqRow(existingRow, true);
+      deliveredInput.dataset.recordedDeliveredQty = String((Number(deliveredInput.dataset.recordedDeliveredQty || 0) || 0) + quantity);
+      salesProjectUpdateBoqRow(existingRow, true, project);
     } else if (boqBody) {
-      boqBody.insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({ model: item.modelNo, qty: quantity, deliveredQty: quantity }, modal.querySelectorAll("[data-project-boq-row]").length));
-      salesProjectUpdateBoqRow(boqBody.lastElementChild, true);
+      boqBody.insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({ model: item.modelNo, qty: quantity, deliveredQty: quantity }, modal.querySelectorAll("[data-project-boq-row]").length, project));
+      salesProjectUpdateBoqRow(boqBody.lastElementChild, true, project);
     }
   }
   const upload = modal._directDeliveryPendingUpload || {
@@ -3331,7 +3344,11 @@ async function downloadSalesProjectDirectUpload(projectId, uploadId) {
 
 async function deleteSalesProjectDirectUpload(modal, project, uploadId) {
   if (!uploadId) return;
-  if (project.id) {
+  const upload = (modal._directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+  if (!upload) return;
+  const savedProject = (salesData().projects || []).find(item => item.id === project.id);
+  const savedUpload = (savedProject?.directDeliveryUploads || []).some(item => item.uploadId === uploadId || item.id === uploadId);
+  if (savedUpload) {
     try {
       salesCrmState = await api(`/api/sales-crm/projects/${encodeURIComponent(project.id)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
     } catch (error) {
@@ -3339,8 +3356,25 @@ async function deleteSalesProjectDirectUpload(modal, project, uploadId) {
       return;
     }
   }
+  const quantitiesByModel = new Map();
+  for (const line of upload.lines || []) {
+    const model = norm(line.modelNo || line.model);
+    if (!model) continue;
+    quantitiesByModel.set(model, (quantitiesByModel.get(model) || 0) + Math.max(0, Number(line.quantity || 0)));
+  }
+  for (const [model, quantity] of quantitiesByModel) {
+    const row = Array.from(modal.querySelectorAll("[data-project-boq-row]")).find(item => {
+      const currentModel = item.querySelector('[data-project-boq-field="model"]')?.value;
+      return norm(currentModel) === model || norm(item.dataset.projectBoqOriginModel) === model;
+    });
+    if (!row) continue;
+    const deliveredInput = row.querySelector('[data-project-boq-field="deliveredQty"]');
+    deliveredInput.dataset.recordedDeliveredQty = String(Math.max(0, Number(deliveredInput.dataset.recordedDeliveredQty || 0) - quantity));
+    salesProjectUpdateBoqRow(row, false, project);
+  }
   modal._directDeliveryUploads = (modal._directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
   salesProjectRenderDirectUploads(modal, project);
+  if (savedUpload && activeView === "salesDesk") renderSalesDesk();
   toast("Uploaded delivery note deleted");
 }
 
@@ -3395,8 +3429,9 @@ function collectSalesProjectBoqRows(container) {
       return field.type === "checkbox" ? field.checked : field.value.trim();
     };
     const qty = Number(get("qty")) || 0;
-    const deliveredQty = Number(get("deliveredQty")) || 0;
-    const pendingQty = qty - deliveredQty;
+    const deliveredField = row.querySelector('[data-project-boq-field="deliveredQty"]');
+    const deliveredQty = Number(deliveredField?.dataset.recordedDeliveredQty || 0) || 0;
+    const pendingQty = qty - (Number(deliveredField?.value || 0) || 0);
     const model = salesProjectModelNo(get("model"));
     return {
       model,
@@ -8930,6 +8965,11 @@ function openDeliveryModal(note = null) {
   modal.addEventListener("keydown", handleDeliveryModalKeydown);
   modal.querySelector(".delivery-note-modal").addEventListener("scroll", () => modal.querySelector(".delivery-reservation-popover")?.remove());
   modal.querySelector("#dnNoInput")?.focus();
+  loadSalesCrm()
+    .then(() => {
+      if (modal.isConnected) updateDeliveryProjectList(modal.querySelector("#customerNameInput")?.value || "");
+    })
+    .catch(error => console.warn("Could not load Sales Desk projects", error));
 }
 
 function openDeliveryNoteViewModal(noteId) {
@@ -10293,9 +10333,9 @@ function fillCustomerDetails() {
 
 function deliveryProjectsForCustomer(customerName = "") {
   const customerKey = norm(customerName);
+  if (!customerKey) return [];
   return uniqueValues((salesData().projects || [])
-    .filter(project => !customerKey || norm(project.customer) === customerKey)
-    .filter(project => norm(project.status) !== "COMPLETED")
+    .filter(project => norm(project.customer) === customerKey)
     .map(project => project.name)
     .filter(Boolean));
 }

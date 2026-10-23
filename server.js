@@ -3704,6 +3704,21 @@ async function handleApi(req, res) {
     const project = (store.projects || []).find(item => item.id === projectId);
     if (!project) return notFound(res);
     const upload = (project.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+    if (upload) {
+      const quantitiesByModel = new Map();
+      for (const line of upload.lines || []) {
+        const model = inventoryNorm(line.modelNo || line.model);
+        if (!model) continue;
+        quantitiesByModel.set(model, (quantitiesByModel.get(model) || 0) + Math.max(0, Number(line.quantity || 0)));
+      }
+      for (const [model, quantity] of quantitiesByModel) {
+        const row = (project.boq || []).find(item => inventoryNorm(item.model || item.modelNo) === model);
+        if (!row) continue;
+        row.deliveredQty = Math.max(0, Number(row.deliveredQty || 0) - quantity);
+        row.pendingQty = Number(row.qty || 0) - row.deliveredQty;
+      }
+      project.status = salesProjectAutoStatusServer(project);
+    }
     project.directDeliveryUploads = (project.directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
     if (upload?.storedName) await deleteUpload(`sales-project-deliveries/${projectId}`, upload.storedName);
     await writeSalesCrm(store);
