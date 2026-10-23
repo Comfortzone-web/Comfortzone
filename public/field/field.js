@@ -70,7 +70,7 @@
   }
 
   function header(title, back = false) {
-    return `<header class="field-header"><div>${back ? `<button class="field-back" data-action="home" aria-label="Back to jobs">&#8592;</button>` : `<img src="/field/icon-192.png" alt="">`}
+    return `<header class="field-header"><div>${back ? `<button class="field-back" data-action="home" aria-label="Back to jobs">&#8592;</button>` : `<img src="/field/icon-512.png?v=20261023-logo" alt="">`}
       <span><strong>${esc(title)}</strong><small>${esc(state.technician?.name || "Comfort Zone AC")}</small></span></div>
       <button class="field-header-menu" data-action="logout" title="Sign out" aria-label="Sign out">Sign out</button></header>`;
   }
@@ -97,7 +97,7 @@
       <section class="field-section"><h2>Today <span>${todayJobs.length}</span></h2>${todayJobs.length ? todayJobs.map(jobCard).join("") : `<div class="field-empty">No assigned jobs today.</div>`}</section>
       <section class="field-section"><h2>Upcoming <span>${upcoming.length}</span></h2>${upcoming.length ? upcoming.map(jobCard).join("") : `<div class="field-empty">No upcoming jobs assigned.</div>`}</section>
       ${past.length ? `<section class="field-section"><h2>Recent Jobs</h2>${past.map(jobCard).join("")}</section>` : ""}
-      <section class="field-section"><h2>Notifications <span>${state.notifications.length}</span></h2>${state.notifications.length ? state.notifications.slice(0, 20).map(item => `<div class="field-notification"><div><strong>${esc(item.title)}</strong><p>${esc(item.message)}</p><small>${date(item.createdAt)} · ${esc(item.status)}</small></div>${!item.acknowledgedAt ? `<button data-action="ack" data-id="${item.id}">Acknowledge</button>` : ""}</div>`).join("") : `<div class="field-empty">No notifications yet.</div>`}</section></main>`;
+      <section class="field-section"><h2>Notifications <span>${state.notifications.length}</span></h2>${state.notifications.length ? state.notifications.slice(0, 20).map(item => `<div class="field-notification"><div><strong>${esc(item.title)}</strong><p>${esc(item.message)}</p><small>${date(item.createdAt)} · ${esc(item.status)}</small></div>${item.status !== "Accepted" ? `<button data-action="accept-notification" data-id="${item.id}">Accept</button>` : ""}</div>`).join("") : `<div class="field-empty">No notifications yet.</div>`}</section></main>`;
   }
 
   function uploadSRForm() {
@@ -375,7 +375,7 @@
       if (action === "submit-report") return await submit();
       if (action === "clear-signature") { state.signatureData = ""; state.signatureDirty = false; state.draft.signatureFileId = ""; return setupSignatureClear(); }
       if (action === "enable-push") return enablePush();
-      if (action === "ack") { await api(`/api/field/notifications/${encodeURIComponent(button.dataset.id)}/ack`, { method: "POST", body: "{}" }); await load(); return; }
+      if (action === "accept-notification") { await api(`/api/field/notifications/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: "{}" }); await load(); return; }
     } catch (error) { alertMessage(error.message, true); }
   });
 

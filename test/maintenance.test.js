@@ -138,11 +138,22 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal((await field("POST", "/api/field/access", { token })).status, 401);
     assert.equal((await field("GET", "/api/field/work-orders", null, cookie)).result.length, 1);
     assert.equal((await field("GET", `/api/field/work-orders/${workOrder.id}`)).status, 401);
+    const assignmentNotice = summary.notifications.find(item => item.technicianId === ids[0] && item.type === "rescheduled");
+    assert.equal((await field("GET", `/api/field/work-orders/${workOrder.id}`, null, cookie)).status, 200);
+    assert.equal((await office("GET", "/api/maintenance/summary")).result.notifications.find(item => item.id === assignmentNotice.id).status, assignmentNotice.status);
+    assert.equal((await field("POST", `/api/field/notifications/${assignmentNotice.id}/accept`, {}, cookie)).status, 200);
+    summary = (await office("GET", "/api/maintenance/summary")).result;
+    assert.equal(summary.notifications.find(item => item.id === assignmentNotice.id).status, "Accepted");
+    assert.ok(summary.activity.some(item => item.targetId === workOrder.id && item.message.includes("accepted")));
+    const acceptedActivityCount = summary.activity.filter(item => item.targetId === workOrder.id && item.message.includes("accepted")).length;
+    assert.equal((await field("POST", `/api/field/notifications/${assignmentNotice.id}/accept`, {}, cookie)).status, 200);
+    assert.equal((await office("GET", "/api/maintenance/summary")).result.activity.filter(item => item.targetId === workOrder.id && item.message.includes("accepted")).length, acceptedActivityCount);
 
     const outsiderAccess = await office("POST", `/api/maintenance/technicians/${third.result.id}/access`, {});
     const outsiderToken = new URL(outsiderAccess.result.link).searchParams.get("access");
     const outsiderCookie = (await field("POST", "/api/field/access", { token: outsiderToken })).headers["Set-Cookie"].split(";")[0];
     assert.equal((await field("GET", `/api/field/work-orders/${workOrder.id}`, null, outsiderCookie)).status, 404);
+    assert.equal((await field("POST", `/api/field/notifications/${assignmentNotice.id}/accept`, {}, outsiderCookie)).status, 404);
 
     assert.equal((await field("POST", `/api/field/work-orders/${workOrder.id}/attendance`, { action: "checkIn" }, cookie)).status, 200);
     summary = (await office("GET", "/api/maintenance/summary")).result;

@@ -923,10 +923,6 @@ function createMaintenanceApi(deps) {
       }
       if (parts[0] === "work-orders" && parts[1] && parts.length === 2 && req.method === "GET") {
         const job = assignedJob(auth.state, technicianId, parts[1]);
-        await storage.mutate(store => {
-          store.notifications.filter(item => item.technicianId === technicianId && item.workOrderId === job.id && !item.acknowledgedAt)
-            .forEach(item => { item.acknowledgedAt = isoNow(); item.status = "Acknowledged"; });
-        });
         return send(res, 200, fieldJobView(auth.state, job, technicianId));
       }
       if (parts[0] === "work-orders" && parts[2] === "attendance" && req.method === "POST") {
@@ -1066,12 +1062,17 @@ function createMaintenanceApi(deps) {
         });
         return send(res, 200, { ok: true });
       }
-      if (parts[0] === "notifications" && parts[2] === "ack" && req.method === "POST") {
+      if (parts[0] === "notifications" && parts[2] === "accept" && req.method === "POST") {
         await storage.mutate(store => {
           const notice = find(store.notifications, parts[1]);
           if (!notice || notice.technicianId !== technicianId) fail("Notification not found", 404);
+          if (notice.status === "Accepted") return;
           notice.acknowledgedAt = isoNow();
-          notice.status = "Acknowledged";
+          notice.status = "Accepted";
+          if (["assigned", "rescheduled"].includes(notice.type)) {
+            const job = find(store.workOrders, notice.workOrderId);
+            if (job?.technicianIds.includes(technicianId)) addActivity(store, "workOrder", job.id, auth.technician.name, `${auth.technician.name} accepted ${job.number}`);
+          }
         });
         return send(res, 200, { ok: true });
       }

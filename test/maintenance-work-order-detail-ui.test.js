@@ -25,7 +25,8 @@ test("single work-order detail keeps live tabs, permissions, workflow timing and
     files: [{ id: "f1", workOrderId: "w1", mimeType: "image/jpeg", originalName: "unit.jpg", kind: "photo", size: 1024 },
       { id: "f2", workOrderId: "w2", mimeType: "image/jpeg", originalName: "other.jpg", kind: "photo", size: 1024 }],
     activity: [{ kind: "workOrder", targetId: "w1", actor: "Admin", message: "WO-1024 scheduled", createdAt: "2026-10-10T11:30:00Z" }],
-    notifications: [{ id: "n1", workOrderId: "w1", status: "Failed", technicianId: "t1" }]
+    notifications: [{ id: "n2", workOrderId: "w1", status: "Accepted", type: "assigned", technicianId: "t2" },
+      { id: "n1", workOrderId: "w1", status: "Failed", type: "assigned", technicianId: "t1" }]
   };
   const listeners = {}, documentListeners = {}, routes = [], requests = [], scroller = { scrollTop: 0 };
   const root = { innerHTML: "", closest: () => scroller, querySelector: () => null, contains: () => false,
@@ -66,6 +67,7 @@ test("single work-order detail keeps live tabs, permissions, workflow timing and
   assert.match(root.innerHTML, /wd-stage pending completed/);
   assert.match(root.innerHTML, /Mavis Khan/);
   assert.match(root.innerHTML, /Ahmed Raza/);
+  assert.match(root.innerHTML, /class="accepted">Accepted<\/i>/);
   assert.match(root.innerHTML, /Open in Maps/);
   assert.match(root.innerHTML, /JVC%2C%20Dubai/);
   assert.match(root.innerHTML, /Check drainage and filters/);

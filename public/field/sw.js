@@ -1,5 +1,5 @@
-const CACHE = "cz-field-shell-v10";
-const SHELL = ["/field/", "/field/field.css", "/field/field.js", "/field/icon-192.png", "/field/icon-512.png"];
+const CACHE = "cz-field-shell-v11";
+const SHELL = ["/field/", "/field/field.css?v=20261023-accept", "/field/field.js?v=20261023-accept", "/field/icon-192.png?v=20261023-logo", "/field/icon-512.png?v=20261023-logo"];
 
 self.addEventListener("install", event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -20,7 +20,7 @@ self.addEventListener("push", event => {
   let message = {};
   try { message = event.data?.json() || {}; } catch {}
   event.waitUntil(self.registration.showNotification(message.title || "Comfort Zone Field Service", {
-    body: message.body || "You have a maintenance update.", icon: "/field/icon-192.png", badge: "/field/icon-192.png",
+    body: message.body || "You have a maintenance update.", icon: "/field/icon-192.png?v=20261023-logo", badge: "/field/icon-192.png?v=20261023-logo",
     data: { url: message.url && message.url.startsWith("/field/") ? message.url : "/field/" }
   }));
 });
