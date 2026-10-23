@@ -593,6 +593,9 @@
 .maint-work-orders .wo-card-technicians { min-width: 0; padding-top: 8px; margin-top: 7px; border-top: 1px solid #eef3f8; }
 .maint-work-orders .wo-techs { min-width: 0; display: flex; align-items: center; gap: 6px; color: #2c4876; font-size: 9px; }
 .maint-work-orders .wo-techs > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.maint-work-orders .wo-techs .wo-tech-names { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; white-space: normal; }
+.maint-work-orders .wo-tech-name { display: inline-flex; align-items: center; gap: 4px; }
+.maint-work-orders .wo-tech-accepted { padding: 2px 5px; border-radius: 8px; background: #e3f8ed; color: #068453; font-size: 8px; font-style: normal; font-weight: 700; }
 .maint-work-orders .wo-avatar-stack { display: inline-flex; flex: 0 0 auto; align-items: center; }.maint-work-orders .wo-avatar-stack .dash-avatar { width: 21px; height: 21px; flex-basis: 21px; border: 2px solid #fff; font-size: 7px; }.maint-work-orders .wo-avatar-stack .dash-avatar + .dash-avatar { margin-left: -5px; }
 .maint-work-orders .wo-more-tech { display: grid; place-items: center; min-width: 21px; height: 21px; margin-left: -4px; border: 2px solid #fff; border-radius: 50%; background: #e6eef9; color: #315481; font-size: 8px; font-weight: 700; }
 .maint-work-orders .wo-card-menu, .maint-work-orders .wo-detail-menu { position: absolute; z-index: 8; right: 6px; top: 32px; min-width: 145px; display: grid; padding: 4px; border: 1px solid #dce7f5; border-radius: 5px; background: #fff; box-shadow: 0 8px 22px rgba(10, 32, 75, .16); }

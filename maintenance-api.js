@@ -523,7 +523,8 @@ function createMaintenanceApi(deps) {
         const notice = find((await storage.read()).notifications, parts[1]);
         if (!notice) fail("Notification not found", 404);
         await attemptPush(notice.id);
-        return send(res, 200, { ok: true });
+        const updated = find((await storage.read()).notifications, notice.id);
+        return send(res, 200, { ok: true, status: updated.status, detail: updated.detail || "" });
       }
 
       if (parts[0] === "reports" && parts[1] === "upload" && parts.length === 2 && req.method === "POST") {
@@ -880,7 +881,8 @@ function createMaintenanceApi(deps) {
         const state = auth.state;
         return send(res, 200, { technician: { id: technicianId, name: auth.technician.name, code: auth.technician.code },
           notifications: state.notifications.filter(item => item.technicianId === technicianId).slice(0, 80),
-          pushPublicKey: process.env.VAPID_PUBLIC_KEY || "", checklist: CHECKLIST });
+          pushPublicKey: process.env.VAPID_PUBLIC_KEY || "", pushConfigured: !!(webPush && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY),
+          pushSubscribed: state.subscriptions.some(item => item.technicianId === technicianId), checklist: CHECKLIST });
       }
       if (parts[0] === "reports" && parts[1] === "upload" && parts.length === 2 && req.method === "POST") {
         const file = await acceptFile(req, { kind: "original", technicianId });

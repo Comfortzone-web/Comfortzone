@@ -1,6 +1,6 @@
 (() => {
   const root = document.querySelector("#fieldRoot");
-  const state = { technician: null, jobs: [], notifications: [], checklistLabels: {}, pushPublicKey: "", job: null,
+  const state = { technician: null, jobs: [], notifications: [], checklistLabels: {}, pushPublicKey: "", pushConfigured: false, pushSubscribed: false, job: null,
     screen: "home", type: "Digital Checklist", step: 0, draft: null, message: "", error: "", signatureData: "", signatureDirty: false, submitting: false,
     uploadSR: null };
   let autoSaveTimer;
@@ -39,7 +39,7 @@
     const me = await api("/api/field/me");
     const jobs = await api("/api/field/work-orders");
     Object.assign(state, { technician: me.technician, notifications: me.notifications, checklistLabels: me.checklist,
-      pushPublicKey: me.pushPublicKey, jobs, error: "" });
+      pushPublicKey: me.pushPublicKey, pushConfigured: me.pushConfigured, pushSubscribed: me.pushSubscribed, jobs, error: "" });
     const requested = new URL(location.href).searchParams.get("workOrder");
     if (requested) await openJob(requested);
     else { state.screen = "home"; render(); }
@@ -88,7 +88,7 @@
     const todayJobs = state.jobs.filter(item => item.serviceDate === current && item.status !== "Completed");
     const upcoming = state.jobs.filter(item => item.serviceDate > current && item.status !== "Completed");
     const past = state.jobs.filter(item => item.serviceDate < current || item.status === "Completed").slice(-10).reverse();
-    const pushStatus = !window.isSecureContext ? "Available over HTTPS" : !("Notification" in window) ? "Unavailable" : Notification.permission === "granted" ? "Enabled" : Notification.permission === "denied" ? "Blocked" : "Not enabled";
+    const pushStatus = !window.isSecureContext ? "Available over HTTPS" : !("Notification" in window) ? "Unavailable" : !state.pushConfigured ? "Server setup needed" : Notification.permission === "denied" ? "Blocked" : Notification.permission !== "granted" ? "Not enabled" : state.pushSubscribed ? "Enabled" : "Not connected";
     return `${header("My Maintenance Jobs")}
       <main class="field-main"><div id="fieldNotice" class="field-notice ${state.error ? "error" : "success"}" ${state.error || state.message ? "" : "hidden"}>${esc(state.error || state.message)}</div>
       <section class="field-welcome"><div><span>Today · ${date(current)}</span><h1>My Maintenance Jobs</h1><p>${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today</p></div><button class="field-primary field-upload-shortcut" data-action="upload-sr">Upload SR</button></section>
@@ -330,14 +330,15 @@
   }
 
   async function enablePush() {
-    if (!window.isSecureContext || !("Notification" in window) || !("PushManager" in window) || !state.pushPublicKey) {
-      throw new Error("Web Push requires HTTPS, a compatible browser and configured VAPID keys.");
-    }
+    if (!window.isSecureContext || !("Notification" in window) || !("PushManager" in window)) throw new Error("Web Push requires HTTPS and a compatible browser.");
+    if (!state.pushConfigured || !state.pushPublicKey) throw new Error("Phone alerts are not configured on the server. Set the VAPID public and private keys.");
     const permission = await Notification.requestPermission();
     if (permission !== "granted") throw new Error("Notifications were not allowed. Job updates remain in the inbox.");
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidBytes(state.pushPublicKey) });
     await api("/api/field/push-subscription", { method: "POST", body: JSON.stringify({ subscription }) });
+    state.pushSubscribed = true;
+    render();
     alertMessage("Notifications enabled");
   }
 

@@ -131,6 +131,8 @@ test("maintenance lifecycle and field access", async () => {
     const renewingCookie = `cz_field=${encodeURIComponent(`${sessionPayload}.${sessionSignature}`)}`;
     const renewed = await field("GET", "/api/field/me", null, renewingCookie);
     assert.equal(renewed.status, 200);
+    assert.equal(typeof renewed.result.pushConfigured, "boolean");
+    assert.equal(renewed.result.pushSubscribed, false);
     assert.match(renewed.headers["Set-Cookie"], /Max-Age=7776000/);
     const renewedToken = decodeURIComponent(renewed.headers["Set-Cookie"].split(";")[0].split("=")[1]);
     const renewedPayload = JSON.parse(Buffer.from(renewedToken.split(".")[0], "base64url").toString("utf8"));
@@ -242,7 +244,10 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal((await office("POST", `/api/maintenance/reports/${paperReport.result.id}/review`,
       { decision: "Approved" })).status, 200);
     const retryNotice = (await office("GET", "/api/maintenance/summary")).result.notifications.find(item => item.technicianId === third.result.id);
-    assert.equal((await office("POST", `/api/maintenance/notifications/${retryNotice.id}/retry`, {})).status, 200);
+    const retry = await office("POST", `/api/maintenance/notifications/${retryNotice.id}/retry`, {});
+    assert.equal(retry.status, 200);
+    assert.equal(retry.result.status, "Not Subscribed");
+    assert.equal(retry.result.detail, "No device subscription");
 
     const officeJob = await office("POST", "/api/maintenance/schedules", { clientKey: "office-report-job",
       customerName: "Office Report Customer", site: "Business Bay", serviceDate: "2026-10-20", startTime: "09:00", endTime: "11:00",

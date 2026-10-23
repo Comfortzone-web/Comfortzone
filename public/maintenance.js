@@ -129,6 +129,9 @@
     window.setTimeout(() => { if (state.message === message) { state.message = ""; root.querySelector(".maint-toast")?.remove(); } }, 5000);
   }
   function handleError(error) { notice(error.message || "Unable to complete the action"); }
+  function pushDeliveryMessage(result) {
+    return result.status === "Sent" ? "Push accepted by browser push service" : `Phone push not sent: ${result.detail || result.status || "Unknown delivery status"}`;
+  }
   function statusClass(value) {
     const text = String(value || "").toLowerCase();
     return text.includes("complete") || text.includes("approved") || text === "accepted" || text === "active" || text === "available" ? "green"
@@ -634,8 +637,13 @@
     </section>`;
   }
   function workOrderAvatars(item) {
-    const names = (item.technicianIds || []).map(id => tech(id)?.name).filter(Boolean);
-    return `<span class="wo-techs"><span class="wo-avatar-stack">${names.slice(0, 2).map(name => dashAvatar(name)).join("")}${names.length > 2 ? `<span class="wo-more-tech">+${names.length - 2}</span>` : ""}</span><span title="${esc(names.join(", "))}">${esc(names.length ? names.join(", ") : "Unassigned")}</span></span>`;
+    const people = (item.technicianIds || []).map(id => ({ id, name: tech(id)?.name })).filter(person => person.name);
+    const names = people.map(person => person.name);
+    const labels = people.map(person => {
+      const latestAssignment = state.data.notifications.find(row => row.workOrderId === item.id && row.technicianId === person.id && ["assigned", "rescheduled"].includes(row.type));
+      return `<span class="wo-tech-name">${esc(person.name)}${latestAssignment?.status === "Accepted" ? `<i class="wo-tech-accepted">Accepted</i>` : ""}</span>`;
+    }).join("");
+    return `<span class="wo-techs"><span class="wo-avatar-stack">${names.slice(0, 2).map(name => dashAvatar(name)).join("")}${names.length > 2 ? `<span class="wo-more-tech">+${names.length - 2}</span>` : ""}</span><span class="wo-tech-names" title="${esc(names.join(", "))}">${labels || "Unassigned"}</span></span>`;
   }
   function workOrderCard(item) {
     const linked = contract(item.contractId);
@@ -1498,7 +1506,13 @@
     if (action === "wd-retry-notifications") {
       const failures = state.data.notifications.filter(row => row.workOrderId === id && ["Failed", "Not Subscribed"].includes(row.status));
       if (!failures.length) return notice("There are no failed notifications to retry.");
-      try { for (const row of failures) await request(`/api/maintenance/notifications/${encodeURIComponent(row.id)}/retry`, { method: "POST", body: "{}" }); await refresh(); notice(`Retried ${failures.length} notification ${failures.length === 1 ? "delivery" : "deliveries"}`); }
+      try {
+        const results = [];
+        for (const row of failures) results.push(await request(`/api/maintenance/notifications/${encodeURIComponent(row.id)}/retry`, { method: "POST", body: "{}" }));
+        await refresh();
+        const failed = results.find(result => result.status !== "Sent");
+        notice(failed ? pushDeliveryMessage(failed) : `${results.length} push ${results.length === 1 ? "message" : "messages"} accepted by push service`);
+      }
       catch (error) { handleError(error); } return;
     }
     if (action === "wd-duplicate") {
@@ -1627,7 +1641,10 @@
       catch { notice("Copy the link from the field above"); } return;
     }
     if (action === "retry-notification") {
-      try { await request(`/api/maintenance/notifications/${encodeURIComponent(id)}/retry`, { method: "POST", body: "{}" }); await refresh(); notice("Notification retry recorded"); }
+      try {
+        const result = await request(`/api/maintenance/notifications/${encodeURIComponent(id)}/retry`, { method: "POST", body: "{}" });
+        await refresh(); notice(pushDeliveryMessage(result));
+      }
       catch (error) { handleError(error); } return;
     }
   });

@@ -104,6 +104,10 @@ test("single work-order detail keeps live tabs, permissions, workflow timing and
   assert.match(root.innerHTML, /Draft copied from WO-1024/);
   assert.match(root.innerHTML, /New Maintenance Schedule/);
   await click("close-drawer");
+  await context.window.maintenanceModule.open("work-orders");
+  assert.match(root.innerHTML, /<span class="wo-tech-name">Ahmed Raza<i class="wo-tech-accepted">Accepted<\/i><\/span>/);
+  assert.match(root.innerHTML, /<span class="wo-tech-name">Mavis Khan<\/span>/);
+  await context.window.maintenanceModule.open("work-orders", "w1");
 
   summary.workOrders[0].status = "Completed";
   await context.window.maintenanceModule.refresh();
