@@ -1,4 +1,4 @@
-const CACHE = "cz-field-shell-v9";
+const CACHE = "cz-field-shell-v10";
 const SHELL = ["/field/", "/field/field.css", "/field/field.js", "/field/icon-192.png", "/field/icon-512.png"];
 
 self.addEventListener("install", event => {
