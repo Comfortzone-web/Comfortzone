@@ -28,6 +28,10 @@
 .maint-primary { color: #fff; border: 1px solid #0868f9; background: #0868f9; }
 .maint-primary:hover { background: #0059df; }
 .maint-primary .maint-icon { filter: brightness(0) invert(1); }
+.maint-filter-toggle { min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 8px 12px; border: 1px solid #b6d2ff; border-radius: 6px; background: #fff; color: #0868f9; font-weight: 650; white-space: nowrap; }
+.maint-filter-toggle:hover, .maint-filter-toggle.active { border-color: #0868f9; background: #edf5ff; }
+.maint-filter-toggle .maint-icon { width: 16px; height: 16px; }
+.maint-work-orders .wo-filters[hidden], .sr-filters[hidden] { display: none; }
 .maint-outline { color: #0868f9; border: 1px solid #b6d2ff; background: #fff; }
 .maint-outline:hover { background: #eff6ff; }
 .maint-outline.danger { color: #c82542; border-color: #ffd0d8; }
@@ -162,7 +166,9 @@
 .maint-report-customer { position: relative; }
 .maint-report-customer-options { position: absolute; z-index: 12; top: 100%; left: 0; right: 0; max-height: 180px; margin-top: 3px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid #cbd9e9; border-radius: 5px; background: #fff; box-shadow: 0 8px 18px rgba(8, 25, 54, .12); }
 .maint-report-customer-options[hidden] { display: none; }
-.maint-report-customer-options button { display: block; width: 100%; padding: 8px 10px; border: 0; background: #fff; color: var(--m-ink); font: inherit; font-weight: 400; text-align: left; cursor: pointer; }
+.maint-report-customer-options button { display: grid; gap: 2px; width: 100%; min-height: 44px; padding: 7px 10px; border: 0; background: #fff; color: var(--m-ink); font: inherit; font-weight: 400; text-align: left; cursor: pointer; }
+.maint-report-customer-options button strong { font-size: 12px; font-weight: 650; }
+.maint-report-customer-options button small { color: #637b9f; font-size: 10px; }
 .maint-report-customer-options button:hover, .maint-report-customer-options button.active, .maint-report-customer-options button:focus-visible { background: #eaf3ff; }
 
 /* AMC Register is intentionally scoped; the other Maintenance views retain their layouts. */
@@ -849,6 +855,12 @@
 @media (max-width: 1180px) { .sr-layout { grid-template-columns: 1fr; }.sr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }.sr-detail { max-width: none; }.sr-report-row { grid-template-columns: 28px minmax(0, 1.1fr) minmax(0, .9fr) minmax(0, 1.2fr) minmax(0, .8fr) auto 12px; } }
 @media (max-width: 800px) { .sr-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }.sr-filter-actions { grid-column: 1 / -1; justify-content: end; }.sr-report-row { grid-template-columns: 27px minmax(0, 1.15fr) minmax(0, .95fr) auto 12px; }.sr-row-site, .sr-row-people { display: none; }.sr-directory-toolbar { align-items: start; flex-wrap: wrap; }.sr-sort { margin-left: auto; } }
 @media (max-width: 520px) { .maint-reports-page .maint-body { padding: 11px; }.sr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }.sr-kpi { min-height: 75px; }.sr-mini-bars { display: none; }.sr-kpi-text small { font-size: 10px; }.sr-filters { gap: 6px; }.sr-report-row { grid-template-columns: 22px minmax(0, 1fr) auto 10px; gap: 4px; }.sr-row-work { display: none; }.sr-status-tabs { gap: 3px; }.sr-pagination { flex-wrap: wrap; }.sr-pagination > div { flex-wrap: wrap; }.sr-info-card { grid-template-columns: 1fr; }.sr-info-column:first-child { padding: 0 0 9px; border-right: 0; border-bottom: 1px solid #e7eef8; }.sr-info-column:last-child { padding: 0; }.sr-image-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .maint-work-orders .maint-header-actions, .maint-reports-page .maint-header-actions { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; width: 100%; gap: 8px; }
+  .maint-work-orders .maint-header-actions .maint-search, .maint-reports-page .maint-header-actions .maint-search { grid-column: 1 / -1; grid-row: 1; order: 0; width: 100%; min-width: 0; }
+  .maint-work-orders .maint-header-actions .maint-filter-toggle, .maint-reports-page .maint-header-actions .maint-filter-toggle { grid-column: 1; grid-row: 2; order: 1; }
+  .maint-work-orders .maint-header-actions .maint-primary, .maint-reports-page .maint-header-actions .maint-primary { grid-column: 3; grid-row: 2; order: 2; }
+}
 
 /* Destructive Maintenance actions share one visual language across the module. */
 .maint-page .maint-delete-option { display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 3px; padding: 8px; border: 0; border-top: 1px solid #edf0f4; border-radius: 3px; background: #fff; color: #c12c39; text-align: left; font-size: 11px; font-weight: 650; }

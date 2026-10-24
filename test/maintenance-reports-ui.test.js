@@ -27,20 +27,28 @@ test("service report directory, filters, details and review controls remain live
     checklist: index === 0 ? { indoor: { Filters: { value: "OK", note: "Clean" } }, outdoor: { Coil: { value: "Issue", note: "Dust" } } } : {},
     extracted: index === 1 ? { workCarriedOut: "Checked compressor", technicianName: "Ahmed Raza, Guest Technician", workOrderNumber: "Legacy duplicate" } : {},
     history: [{ action: "Submitted", actor: index === 0 ? "Mavis Khan" : "Ahmed Raza", at: `${today}T12:00:00Z` }] }));
-  const summary = { contracts: [{ id: "a1", number: "AMC-2026-014" }], visits: [], workOrders, schedules: [], reports,
+  const summary = { viewerRole: "admin", contracts: [{ id: "a1", number: "AMC-2026-014", customerName: "Villa 14", site: "JVC, Dubai" },
+    { id: "a2", number: "AMC-2026-015", customerName: "Villa 14", site: "Business Bay" }], visits: [], workOrders, schedules: [], reports,
     technicians: [{ id: "t1", name: "Mavis Khan", active: true }, { id: "t2", name: "Ahmed Raza", active: true }], attendance: [], notifications: [], activity: [],
     files: [{ id: "f1", mimeType: "image/jpeg", originalName: "unit.jpg", kind: "photo" },
       { id: "f2", mimeType: "image/jpeg", originalName: "coil.jpg", kind: "photo" },
       { id: "f3", mimeType: "image/png", originalName: "signature.png", kind: "signature" },
       { id: "f4", mimeType: "image/jpeg", originalName: "paper.jpg", kind: "original" }] };
   const listeners = {}, documentListeners = {}, routes = [], scroller = { scrollTop: 0 };
+  const uploadedReport = { id: "uploaded-report", number: "1818", workOrderId: "", contractId: "", type: "Handwritten Upload",
+    status: "Pending Review", submittedAt: `${today}T13:00:00Z`, fileIds: ["uploaded-file"], originalFileId: "uploaded-file",
+    extracted: { reportNumber: "1818", serviceDate: "2026-10-22", customerName: "Ahmad Villa", siteName: "Nad al Shiba" },
+    details: {}, history: [] };
   const root = { innerHTML: "", closest: () => scroller, querySelector: () => null, contains: () => false,
     addEventListener: (name, callback) => { listeners[name] = callback; } };
   const context = {
     document: { querySelector: () => root, body: { classList: { remove() {}, toggle() {} } }, scrollingElement: scroller,
       activeElement: null, addEventListener: (name, callback) => { documentListeners[name] = callback; } },
     window: { scrollY: 0, scrollTo() {}, setTimeout() {}, showMaintenance: (...args) => routes.push(args) },
-    fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => summary }),
+    fetch: async url => ({ ok: true, headers: { get: () => "application/json" }, json: async () =>
+      String(url).includes("/reports/upload?submit=1")
+        ? { report: uploadedReport, file: { id: "uploaded-file", originalName: "paper.jpg", mimeType: "image/jpeg", kind: "original" } }
+        : summary }),
     Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
@@ -64,12 +72,20 @@ test("service report directory, filters, details and review controls remain live
   assert.match(root.innerHTML, /Upload SR/);
   assert.doesNotMatch(root.innerHTML, /class="maint-date"/);
   assert.doesNotMatch(root.innerHTML, /Team Name/);
+  assert.match(root.innerHTML, /data-action="sr-toggle-filters" aria-expanded="false"/);
+  assert.match(root.innerHTML, /id="srFilterPanel"[^>]*hidden/);
+  await click("sr-toggle-filters");
+  assert.match(root.innerHTML, /data-action="sr-toggle-filters" aria-expanded="true"/);
+  assert.match(root.innerHTML, /id="srFilterPanel"/);
+  await click("sr-toggle-filters");
+  assert.match(root.innerHTML, /id="srFilterPanel"[^>]*hidden/);
+  await click("sr-toggle-filters");
 
   await click("upload-report");
   assert.match(root.innerHTML, /Upload Service Report/);
   assert.match(root.innerHTML, /data-report-upload/);
   assert.doesNotMatch(root.innerHTML, /Link to Work Order/);
-  assert.match(root.innerHTML, /Submit for Review/);
+  assert.doesNotMatch(root.innerHTML, /Submit for Review|Review Extracted Details/);
   await click("close-drawer");
 
   scroller.scrollTop = 230;
@@ -91,6 +107,20 @@ test("service report directory, filters, details and review controls remain live
   assert.doesNotMatch(root.innerHTML, /Recommended Further Work/);
   assert.match(root.innerHTML, /Save Changes/);
   await click("close-drawer");
+  await click("sr-more");
+  assert.match(root.innerHTML, /View PDF<\/a><button data-action="edit-report" data-id="r2"[^>]*>.*?Re-Edit<\/button>/);
+  await click("edit-report", { id: "r2" });
+  assert.match(root.innerHTML, /Re-Edit SR-2026-047/);
+  assert.match(root.innerHTML, /Approval and the uploaded original will be retained/);
+  await click("close-drawer");
+  summary.viewerRole = "mts";
+  await context.window.maintenanceModule.refresh();
+  await click("sr-more");
+  assert.doesNotMatch(root.innerHTML, /Re-Edit/);
+  await click("edit-report", { id: "r2" });
+  assert.doesNotMatch(root.innerHTML, /maintReportEditForm/);
+  summary.viewerRole = "admin";
+  await context.window.maintenanceModule.refresh();
   await click("report-tab", { tab: "Checklist" });
   assert.match(root.innerHTML, /original paper report/);
   assert.match(root.innerHTML, /View original handwritten report/);
@@ -170,4 +200,38 @@ test("service report directory, filters, details and review controls remain live
   assert.match(root.innerHTML, /class="sr-detail"/);
   await click("open-job", { id: "w1" });
   assert.deepEqual(routes.at(-1), ["work-orders", "w1"]);
+
+  await context.window.maintenanceModule.open("reports");
+  await click("upload-report");
+  const file = new Blob(["report"], { type: "image/jpeg" });
+  file.name = "paper.jpg";
+  await listeners.change({ target: { files: [file], matches: pattern => pattern === "[data-report-upload]" } });
+  assert.match(root.innerHTML, /Edit 1818/);
+  assert.match(root.innerHTML, /AMC Register/);
+  assert.match(root.innerHTML, /name="extracted_serviceDate"[^>]*value="22\/10\/2026"/);
+  assert.match(root.innerHTML, /Save Changes/);
+  assert.doesNotMatch(root.innerHTML, /Submit for Review|Review Extracted Details/);
+
+  const customerField = { value: "Villa 14", name: "extracted_customerName", setAttribute() {}, removeAttribute() {} };
+  const siteField = { value: "Nad al Shiba" }, amcField = { value: "", innerHTML: "" };
+  const form = { elements: { namedItem: name => ({ extracted_customerName: customerField,
+    extracted_siteName: siteField, contractId: amcField })[name] } };
+  const optionList = { innerHTML: "", hidden: true };
+  const wrapper = { querySelector: () => customerField };
+  customerField.parentElement = { querySelector: () => optionList };
+  customerField.closest = selector => selector === "form" ? form : null;
+  customerField.matches = selector => selector.includes('extracted_customerName');
+  root.querySelector = selector => selector === "#maintReportEditForm [data-report-customer-input]" ? customerField : null;
+  listeners.input({ target: customerField });
+  assert.match(optionList.innerHTML, /data-id="a1"/);
+  assert.match(optionList.innerHTML, /data-id="a2"/);
+  assert.match(optionList.innerHTML, /Business Bay/);
+  assert.equal(siteField.value, "Nad al Shiba");
+  const choice = { dataset: { action: "report-customer-choice", id: "a2" },
+    closest: selector => selector === ".maint-report-customer" ? wrapper : choice };
+  await listeners.click({ target: choice });
+  assert.equal(customerField.value, "Villa 14");
+  assert.equal(siteField.value, "Business Bay");
+  assert.equal(amcField.value, "a2");
+  assert.equal(optionList.hidden, true);
 });

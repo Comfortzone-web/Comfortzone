@@ -279,6 +279,23 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(editedOfficeReport.status, 200);
     assert.equal(editedOfficeReport.result.details.workCarriedOut, "Replaced and tested capacitor");
     assert.equal((await office("POST", `/api/maintenance/reports/${officeReport.result.id}/review`, { decision: "Approved" })).status, 200);
+    const reEditPath = `/api/maintenance/reports/${officeReport.result.id}`;
+    const reEditBody = { workOrderId: officeJob.result.workOrder.id,
+      extracted: { reportNumber: officeReport.result.number, customerName: "Office Report Customer", siteName: "Business Bay" },
+      details: { customerName: "Office Report Customer", workCarriedOut: "Capacitor replaced and tested again" } };
+    const mtsReEdit = await officeAs({ role: "MTS", name: "MTS User" }, "PUT", reEditPath, reEditBody);
+    assert.equal(mtsReEdit.status, 403);
+    const wrongJobReEdit = await office("PUT", reEditPath, { ...reEditBody, workOrderId: "" });
+    assert.equal(wrongJobReEdit.status, 409);
+    const adminReEdit = await office("PUT", reEditPath, reEditBody);
+    assert.equal(adminReEdit.status, 200);
+    assert.equal(adminReEdit.result.status, "Approved");
+    assert.equal(adminReEdit.result.details.workCarriedOut, "Capacitor replaced and tested again");
+    assert.equal(adminReEdit.result.history.at(-1).action, "Approved report re-edited");
+    const afterReEdit = (await office("GET", "/api/maintenance/summary")).result;
+    assert.equal(afterReEdit.viewerRole, "admin");
+    assert.equal(afterReEdit.workOrders.find(item => item.id === officeJob.result.workOrder.id).status, "Completed");
+    assert.equal((await officeAs({ role: "MTS", name: "MTS User" }, "GET", "/api/maintenance/summary")).result.viewerRole, "mts");
 
     delete process.env.OPENAI_API_KEY;
     const standaloneUpload = await office("POST", "/api/maintenance/reports/upload", null, png);
@@ -295,6 +312,15 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(standalone.result.extracted.reportNumber, standalone.result.number);
     assert.equal((await office("GET", `/api/maintenance/reports/${standalone.result.id}/pdf`)).status, 200);
     assert.equal((await office("POST", `/api/maintenance/reports/${standalone.result.id}/review`, { decision: "Approved" })).status, 200);
+
+    delete process.env.OPENAI_API_KEY;
+    const automaticUpload = await office("POST", "/api/maintenance/reports/upload?submit=1", null, png);
+    if (priorApiKey !== undefined) process.env.OPENAI_API_KEY = priorApiKey;
+    assert.equal(automaticUpload.status, 201, JSON.stringify(automaticUpload.result));
+    assert.equal(automaticUpload.result.report.status, "Pending Review");
+    assert.equal(automaticUpload.result.report.originalFileId, automaticUpload.result.file.id);
+    assert.equal(automaticUpload.result.report.extracted.reportNumber, automaticUpload.result.report.number);
+    assert.ok((await office("GET", "/api/maintenance/summary")).result.reports.some(item => item.id === automaticUpload.result.report.id));
 
     const laterJob = await office("POST", "/api/maintenance/schedules", { clientKey: "link-report-later",
       customerName: "Another Walk-in Customer", site: "Sharjah", serviceDate: "2026-10-23", startTime: "09:00", endTime: "11:00",
@@ -371,6 +397,35 @@ test("maintenance lifecycle and field access", async () => {
       workType: "Complaint / Repair", technicianIds: [ids[0]], mode: "notify" });
     assert.equal(nextCustomJob.status, 201);
     assert.equal(nextCustomJob.result.workOrder.number, `CZWO-${new Date().getFullYear()}-002`);
+
+    const linkedStandalone = await office("PUT", `/api/maintenance/reports/${fieldStandalone.result.id}`, {
+      contractId: amc.result.id, extracted: fieldStandalone.result.extracted, details: fieldStandalone.result.details });
+    assert.equal(linkedStandalone.status, 200, JSON.stringify(linkedStandalone.result));
+    const currentAmc = (await office("GET", "/api/maintenance/summary")).result.contracts.find(item => item.id === amc.result.id);
+    const renamedAmc = await office("PUT", `/api/maintenance/contracts/${amc.result.id}`, {
+      ...currentAmc, customerName: "Villa 14 Updated", site: "JVC, Updated" });
+    assert.equal(renamedAmc.status, 200, JSON.stringify(renamedAmc.result));
+    summary = (await office("GET", "/api/maintenance/summary")).result;
+    const renamedJob = summary.workOrders.find(item => item.id === workOrder.id);
+    const renamedSchedule = summary.schedules.find(item => item.id === scheduled.result.schedule.id);
+    const renamedHandwritten = summary.reports.find(item => item.id === fieldStandalone.result.id);
+    const digitalReport = summary.reports.find(item => item.id === submitted.result.id);
+    for (const item of [renamedJob, renamedSchedule]) {
+      assert.equal(item.customerId, renamedAmc.result.customerId);
+      assert.equal(item.customerName, "Villa 14 Updated");
+      assert.equal(item.site, "JVC, Updated");
+    }
+    assert.equal(renamedHandwritten.extracted.customerName, "Villa 14 Updated");
+    assert.equal(renamedHandwritten.extracted.siteName, "JVC, Updated");
+    assert.equal(renamedHandwritten.details.customerName, "Villa 14 Updated");
+    assert.equal(digitalReport.details.customerName, "Mr Raza");
+    assert.equal(digitalReport.status, "Approved");
+    assert.equal(digitalReport.versions.length, 1);
+    assert.equal(summary.attendance.find(item => item.workOrderId === workOrder.id).site, "JVC, Updated");
+    assert.equal(summary.contracts.find(item => item.id === secondAmc.result.id).site, "Second sample site");
+    assert.equal(summary.schedules.find(item => item.id === freeDraft.result.schedule.id).customerName, "Standalone Sample");
+    assert.equal(summary.reports.find(item => item.id === standalone.result.id).details.customerName, "Walk-in Customer");
+    assert.equal((await field("GET", `/api/field/work-orders/${workOrder.id}`, null, cookie)).result.customerName, "Villa 14 Updated");
 
     const revoked = await office("POST", `/api/maintenance/technicians/${ids[0]}/revoke`, {});
     assert.equal(revoked.status, 200);

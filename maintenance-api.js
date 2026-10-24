@@ -331,7 +331,8 @@ function createMaintenanceApi(deps) {
       if (req.method === "GET" && parts[0] === "summary") {
         const state = await storage.read();
         if (state.pendingUploadDeletes.length) await flushUploadDeletes(state.pendingUploadDeletes);
-        return send(res, 200, publicState(state.pendingUploadDeletes.length ? await storage.read() : state));
+        return send(res, 200, { ...publicState(state.pendingUploadDeletes.length ? await storage.read() : state),
+          viewerRole: String(user.role).toLowerCase() });
       }
 
       if (req.method === "DELETE" && parts.length === 2 && ["contracts", "schedules", "work-orders", "technicians", "reports"].includes(parts[0])) {
@@ -449,7 +450,27 @@ function createMaintenanceApi(deps) {
               store.visits.push({ id: random(), contractId: contract.id, sequence: index + 1, plannedDate, status: "Planned", workOrderId: "" });
             });
           }
-          Object.assign(contract, input, { updatedAt: isoNow() });
+          const identityChanged = input.customerName !== contract.customerName || input.site !== contract.site;
+          const now = isoNow();
+          Object.assign(contract, input, { updatedAt: now });
+          if (identityChanged) {
+            const identity = { customerId: contract.customerId, customerName: contract.customerName, site: contract.site, updatedAt: now };
+            for (const schedule of store.schedules.filter(item => item.contractId === contract.id)) Object.assign(schedule, identity);
+            for (const job of store.workOrders.filter(item => item.contractId === contract.id)) Object.assign(job, identity);
+            const linkedJobIds = new Set(store.workOrders.filter(item => item.contractId === contract.id).map(item => item.id));
+            for (const entry of store.attendance.filter(item => linkedJobIds.has(item.workOrderId))) entry.site = contract.site;
+            for (const report of store.reports) {
+              const linkedJob = find(store.workOrders, report.workOrderId);
+              if (report.contractId !== contract.id && (report.contractId || linkedJob?.contractId !== contract.id)) continue;
+              if (report.type === "Handwritten Upload") {
+                report.extracted = { ...report.extracted, customerName: contract.customerName, siteName: contract.site };
+                report.details = { ...report.details, customerName: contract.customerName };
+              }
+              report.updatedAt = now;
+              report.history ||= [];
+              report.history.push({ at: now, actor: user.name, action: "AMC customer or site updated" });
+            }
+          }
           addActivity(store, "contract", contract.id, user.name, `${contract.number} updated`);
           return contract;
         });
@@ -583,8 +604,28 @@ function createMaintenanceApi(deps) {
       if (parts[0] === "reports" && parts[1] === "upload" && parts.length === 2 && req.method === "POST") {
         const file = await acceptFile(req, { kind: "original" });
         const extraction = await extractHandwritten(file);
-        await storage.mutate(store => { store.files.unshift(file); });
-        return send(res, 201, { file: publicFile(file), ...extraction });
+        if (url.searchParams.get("submit") !== "1") {
+          await storage.mutate(store => { store.files.unshift(file); });
+          return send(res, 201, { file: publicFile(file), ...extraction });
+        }
+        const report = await storage.mutate(store => {
+          const now = isoNow();
+          const extracted = Object.fromEntries(REPORT_FIELDS.map(key => [key, trim(extraction.fields?.[key], 1000)]));
+          let number = trim(extracted.reportNumber, 100);
+          if (!number || reportNumberTaken(store, number)) number = nextReportNumber(store);
+          extracted.reportNumber = number;
+          const details = { customerName: trim(extracted.customerName, 100), workCarriedOut: trim(extracted.workCarriedOut, 4000),
+            materialsUsed: trim(extracted.materialsUsed, 2000), remarks: trim(extracted.remarks, 4000) };
+          const item = { id: random(), number, workOrderId: "", contractId: "", visitId: "", createdAt: now,
+            history: [{ at: now, actor: user.name, action: "Submitted" }], versions: [], type: "Handwritten Upload",
+            details, checklist: {}, extracted, fileIds: [file.id], originalFileId: file.id, signatureFileId: "",
+            status: "Pending Review", submittedAt: now, submittedBy: user.name, reviewReason: "" };
+          store.files.unshift(file);
+          store.reports.unshift(item);
+          addActivity(store, "report", item.id, user.name, `${number} uploaded for office review`);
+          return item;
+        });
+        return send(res, 201, { file: publicFile(file), report, ...extraction });
       }
 
       if (parts[0] === "reports" && parts.length === 1 && req.method === "POST") {
@@ -633,8 +674,11 @@ function createMaintenanceApi(deps) {
         const item = await storage.mutate(store => {
           const report = find(store.reports, parts[1]);
           if (!report) fail("Service report not found", 404);
-          if (report.status === "Approved") fail("Approved reports cannot be edited", 409);
+          const approved = report.status === "Approved";
+          if (approved && (String(user.role).toLowerCase() !== "admin" || report.type !== "Handwritten Upload"))
+            fail("Only Admin can re-edit an approved uploaded service report", 403);
           const workOrderId = Object.hasOwn(body, "workOrderId") ? trim(body.workOrderId, 80) : report.workOrderId;
+          if (approved && workOrderId !== report.workOrderId) fail("An approved report cannot change work orders", 409);
           const job = workOrderId ? find(store.workOrders, workOrderId) : null;
           if (workOrderId && !job) fail("Work order not found", 404);
           const contractId = Object.hasOwn(body, "contractId") ? trim(body.contractId, 80) : (job?.contractId || report.contractId || "");
@@ -666,8 +710,8 @@ function createMaintenanceApi(deps) {
           Object.assign(report, { number, workOrderId: job?.id || "", contractId, visitId: job?.visitId || "",
             extracted, details, updatedAt: isoNow() });
           report.history ||= [];
-          report.history.push({ at: isoNow(), actor: user.name, action: "Details updated" });
-          addActivity(store, "report", report.id, user.name, `${report.number} details updated`);
+          report.history.push({ at: isoNow(), actor: user.name, action: approved ? "Approved report re-edited" : "Details updated" });
+          addActivity(store, "report", report.id, user.name, approved ? `${report.number} re-edited after approval` : `${report.number} details updated`);
           return report;
         });
         return send(res, 200, item);
@@ -789,6 +833,7 @@ function createMaintenanceApi(deps) {
     const report = find(store.reports, reportId);
     if (!report) fail("Report not found", 404);
     const job = find(store.workOrders, report.workOrderId);
+    const agreement = find(store.contracts, report.contractId || job?.contractId);
     const settings = await readSettings();
     const doc = new PDFDocument({ margin: 44, size: "A4" });
     const chunks = [];
@@ -804,8 +849,8 @@ function createMaintenanceApi(deps) {
     doc.font("Helvetica").fontSize(9).fillColor("#475569");
     const rows = [
       ["Work order", job?.number || "Not linked"], ["Status", report.status],
-      ["Customer", job?.customerName || report.details?.customerName || report.extracted?.customerName],
-      ["Site", job?.site || report.extracted?.siteName],
+      ["Customer", agreement?.customerName || job?.customerName || report.details?.customerName || report.extracted?.customerName],
+      ["Site", agreement?.site || job?.site || report.extracted?.siteName],
       ["Service date", job?.serviceDate || report.extracted?.serviceDate],
       ["Time", job?.startTime && job?.endTime ? `${job.startTime} - ${job.endTime}` : ""],
       ["Service type", job?.workType || report.type],

@@ -52,6 +52,14 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
   assert.match(root.innerHTML, /class="wo-detail"/);
   assert.doesNotMatch(root.innerHTML, /<table class="maint-table"/);
   for (const stage of ["Scheduled", "On Site", "Report Submitted", "Completed"]) assert.match(root.innerHTML, new RegExp(`<h2>${stage}</h2>`));
+  assert.match(root.innerHTML, /data-action="wo-toggle-filters" aria-expanded="false"/);
+  assert.match(root.innerHTML, /id="woFilterPanel"[^>]*hidden/);
+  await click("wo-toggle-filters");
+  assert.match(root.innerHTML, /data-action="wo-toggle-filters" aria-expanded="true"/);
+  assert.match(root.innerHTML, /id="woFilterPanel"/);
+  await click("wo-toggle-filters");
+  assert.match(root.innerHTML, /id="woFilterPanel"[^>]*hidden/);
+  await click("wo-toggle-filters");
 
   await click("wo-close");
   assert.doesNotMatch(root.innerHTML, /class="wo-detail"/);
@@ -74,6 +82,11 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
   await click("wo-apply-filters");
   assert.equal(cardCount(), 1);
   assert.match(root.innerHTML, /WO-4/);
+  await click("wo-toggle-filters");
+  assert.equal(cardCount(), 1);
+  assert.match(root.innerHTML, /id="woFilterPanel"[^>]*hidden/);
+  await click("wo-toggle-filters");
+  assert.match(root.innerHTML, /<option value="Completed" selected>/);
   await click("wo-clear-filters");
   assert.equal(cardCount(), 4);
   change("customer", "Office Two");

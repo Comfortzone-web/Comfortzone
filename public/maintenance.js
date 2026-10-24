@@ -6,7 +6,7 @@
     srUpload: null,
     reportFilterDraft: { range: "all", from: "", to: "", customer: "", site: "", technician: "", status: "all" },
     reportFilters: { range: "all", from: "", to: "", customer: "", site: "", technician: "", status: "all" },
-    reportSort: "newest", reportPageSize: 10, reportPreviewFileId: "",
+    reportSort: "newest", reportPageSize: 10, reportPreviewFileId: "", reportFiltersOpen: false,
     technicianTab: "Overview", technicianDirectorySearch: "", technicianAvailability: "all", technicianSort: "name", technicianMoreMenu: false,
     month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     selectedDate: "", scheduleView: "month", pmFiltersOpen: false, pmUpcomingOffset: 0, pmMenuId: "", dashboardMonth: null, dashboardScheduleRange: "week", dashboardCalendarView: "month",
@@ -20,7 +20,8 @@
     selectedWorkOrderId: "", workOrderTab: "Overview", workOrderMenuId: "", workOrderMenuLocation: "",
     workOrderDetailTab: "Overview", workOrderDetailMenu: false,
     workOrderDraft: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" },
-    workOrderFilters: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" }
+    workOrderFilters: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" },
+    workOrderFiltersOpen: false
   };
   let lastRenderKey = "", lastRenderedDrawer = "", drawerReturnFocus = null;
   let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null, savePending = false;
@@ -28,6 +29,17 @@
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const day = value => value ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
   const reportDay = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? day(value) : (value || "--");
+  const reportDateInput = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
+    ? `${value.slice(8, 10)}/${value.slice(5, 7)}/${value.slice(0, 4)}` : (value || "");
+  const reportDateIso = value => {
+    const raw = String(value || "").trim();
+    if (!raw) return "";
+    const match = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const iso = match ? `${match[3]}-${match[2]}-${match[1]}` : raw;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso) || Number.isNaN(Date.parse(`${iso}T00:00:00Z`))
+      || new Date(`${iso}T00:00:00Z`).toISOString().slice(0, 10) !== iso) return null;
+    return iso;
+  };
   const shortDay = value => value ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
   const today = () => {
     const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -43,6 +55,8 @@
   const tech = id => state.data?.technicians.find(item => item.id === id);
   const visit = id => state.data?.visits.find(item => item.id === id);
   const report = id => state.data?.reports.find(item => item.id === id);
+  const canReEditApprovedReport = item => item?.status === "Approved" && item.type === "Handwritten Upload"
+    && state.data?.viewerRole === "admin";
   const selected = (name, value) => name === value ? "selected" : "";
   const checked = value => value ? "checked" : "";
 
@@ -178,10 +192,11 @@
   const stack = (first, second) => `<span class="maint-stack"><strong>${esc(first || "--")}</strong><small>${esc(second || "")}</small></span>`;
   const iconButton = (name, title, action, id = "", disabled = false) => `<button class="maint-icon-button" title="${esc(title)}" aria-label="${esc(title)}" data-action="${action}" ${id ? `data-id="${esc(id)}"` : ""} ${disabled ? "disabled" : ""}>${icon(name)}</button>`;
 
-  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true) {
+  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true, filterAction = "", filtersOpen = false) {
     return `<header class="maint-header"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>
       <div class="maint-header-actions">${searchPlaceholder ? `<label class="maint-search">${icon("search")}<input data-search="${esc(state.page)}" value="${esc(state.search[state.page] || "")}" placeholder="${esc(searchPlaceholder)}" aria-label="Search ${esc(title)}"></label>` : ""}
       ${showDate ? `<span class="maint-date">${icon("calendar-days")}${day(today())}</span>` : ""}
+      ${filterAction ? `<button class="maint-filter-toggle${filtersOpen ? " active" : ""}" data-action="${filterAction}" aria-expanded="${filtersOpen}" aria-controls="${filterAction === "wo-toggle-filters" ? "woFilterPanel" : "srFilterPanel"}">${icon("filter")}Filter</button>` : ""}
       ${primaryLabel ? `<button class="maint-primary" data-action="${primaryAction}">${icon("plus")}${esc(primaryLabel)}</button>` : ""}</div></header>`;
   }
 
@@ -658,7 +673,7 @@
     const option = (value, label, active) => `<option value="${esc(value)}" ${selected(active, value)}>${esc(label)}</option>`;
     const distinct = key => [...new Set(state.data.workOrders.map(item => item[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     const control = (label, key, options) => `<label class="wo-filter"><span>${label}</span><select data-wo-filter="${key}">${options}</select></label>`;
-    return `<section class="wo-filters" aria-label="Work order filters">
+    return `<section class="wo-filters" id="woFilterPanel" aria-label="Work order filters" ${state.workOrderFiltersOpen ? "" : "hidden"}>
       ${control("Date Range", "range", [option("all", "All Dates", draft.range), option("this-month", "This Month", draft.range), option("last-month", "Last Month", draft.range), option("next-30", "Next 30 Days", draft.range), option("custom", "Custom Range", draft.range)].join(""))}
       ${control("Status", "status", option("all", "All Statuses", draft.status) + workOrderStages.map(stage => option(stage.name, stage.name, draft.status)).join(""))}
       ${control("AMC Contract", "contract", option("", "All Contracts", draft.contract) + state.data.contracts.map(item => option(item.id, item.number, draft.contract)).join(""))}
@@ -732,7 +747,7 @@
       const rows = visible.filter(item => item.status === stage.name);
       return `<section class="wo-column ${stage.tone}"><header><span class="wo-column-icon">${icon(stage.icon)}</span><span><h2>${esc(stage.name)}</h2><small>${esc(stage.description)}</small></span><b>${rows.length}</b></header><div class="wo-card-list">${rows.length ? rows.map(workOrderCard).join("") : `<p class="wo-column-empty">No ${esc(stage.name.toLowerCase())} work orders match.</p>`}</div></section>`;
     }).join("");
-    return `<div class="maint-work-orders">${header("Work Orders", "Manage and track maintenance work orders across your HVAC operations.", "New Work Order", "new-work-order", "Search work orders, customer, site, AMC...")}
+    return `<div class="maint-work-orders">${header("Work Orders", "Manage and track maintenance work orders across your HVAC operations.", "New Work Order", "new-work-order", "Search work orders, customer, site, AMC...", true, "wo-toggle-filters", state.workOrderFiltersOpen)}
       <div class="maint-body wo-body"><div class="wo-kpi-row">${workOrderKpi("Total Work Orders", all.length, "file-text", "total", "")}${workOrderKpi("Scheduled", all.filter(item => item.status === "Scheduled").length, "calendar-days", "scheduled", "Scheduled")}${workOrderKpi("On Site", all.filter(item => item.status === "On Site").length, "play", "onsite", "On Site")}${workOrderKpi("Report Submitted", all.filter(item => item.status === "Report Submitted").length, "file-text", "submitted", "Report Submitted")}${workOrderKpi("Completed", all.filter(item => item.status === "Completed").length, "circle-check", "completed", "Completed")}</div>
       ${workOrderFilterBar()}<div class="wo-layout ${selectedJob ? "has-detail" : ""}"><div class="wo-board">${board}</div>${selectedJob ? `<div class="wo-detail-backdrop" data-action="wo-close"></div>${workOrderPanel(selectedJob)}` : ""}</div></div></div>`;
   }
@@ -883,10 +898,11 @@
   function reports() {
     const all = state.data.reports.map(item => {
       const linked = job(item.workOrderId);
+      const agreement = contract(item.contractId || linked?.contractId);
       const reportedNames = reportTechnicianNames(item.extracted?.technicianName);
       const reportedTechnicianIds = state.data.technicians.filter(person => reportedNames.some(name => name.toLowerCase() === person.name.toLowerCase().trim())).map(person => person.id);
-      return { ...item, customerId: linked?.customerId || "", customerName: linked?.customerName || item.details?.customerName || item.extracted?.customerName || "",
-        site: linked?.site || item.extracted?.siteName || "", serviceDate: linked?.serviceDate || item.extracted?.serviceDate || "",
+      return { ...item, customerId: agreement?.customerId || linked?.customerId || "", customerName: agreement?.customerName || linked?.customerName || item.details?.customerName || item.extracted?.customerName || "",
+        site: agreement?.site || linked?.site || item.extracted?.siteName || "", serviceDate: linked?.serviceDate || item.extracted?.serviceDate || "",
         serviceTime: linked?.startTime || "", technicianIds: reportedNames.length ? reportedTechnicianIds : (linked?.technicianIds || []),
         workOrderNumber: linked?.number || "" };
     });
@@ -938,9 +954,9 @@
     const pageStart = Math.max(1, Math.min(currentPage - 2, pageCount - 4));
     const pageButtons = Array.from({ length: Math.min(5, pageCount - pageStart + 1) }, (_, index) => pageStart + index)
       .map(number => `<button class="${number === currentPage ? "active" : ""}" data-action="sr-page" data-page="${number}" aria-label="Page ${number}" ${number === currentPage ? 'aria-current="page"' : ""}>${number}</button>`).join("");
-    return `${header("Service Reports", "View and manage all submitted maintenance service reports.", "Upload SR", "upload-report", "Search by WO No., customer, site or technician...", false)}
+    return `${header("Service Reports", "View and manage all submitted maintenance service reports.", "Upload SR", "upload-report", "Search by WO No., customer, site or technician...", false, "sr-toggle-filters", state.reportFiltersOpen)}
       <div class="maint-body sr-page"><div class="sr-kpis">${metric("Total Reports", all.length, "file-text", "blue")}${metric("Approved", count("Approved"), "circle-check", "green", "Approved")}${metric("Pending Review", count("Pending Review"), "clock-3", "amber", "Pending Review")}${metric("Revision", count("Revision"), "refresh-cw", "red", "Revision")}${metric("Rejected", count("Rejected"), "file-text", "violet", "Rejected")}</div>
-      <div class="sr-filters"><label>Date Range<select data-report-filter="range"><option value="all" ${selected(draft.range, "all")}>All Dates</option><option value="month" ${selected(draft.range, "month")}>This Month</option><option value="previous" ${selected(draft.range, "previous")}>Last Month</option><option value="30days" ${selected(draft.range, "30days")}>Last 30 Days</option><option value="custom" ${selected(draft.range, "custom")}>Custom Range</option></select></label>
+      <div class="sr-filters" id="srFilterPanel" ${state.reportFiltersOpen ? "" : "hidden"}><label>Date Range<select data-report-filter="range"><option value="all" ${selected(draft.range, "all")}>All Dates</option><option value="month" ${selected(draft.range, "month")}>This Month</option><option value="previous" ${selected(draft.range, "previous")}>Last Month</option><option value="30days" ${selected(draft.range, "30days")}>Last 30 Days</option><option value="custom" ${selected(draft.range, "custom")}>Custom Range</option></select></label>
       <label>Customer<select data-report-filter="customer"><option value="">All Customers</option>${customers.map(value => `<option value="${esc(value)}" ${selected(draft.customer, value)}>${esc(value)}</option>`).join("")}</select></label>
       <label>Site / Location<select data-report-filter="site"><option value="">All Locations</option>${sites.map(value => `<option value="${esc(value)}" ${selected(draft.site, value)}>${esc(value)}</option>`).join("")}</select></label>
       <label>Technician<select data-report-filter="technician"><option value="">All Technicians</option>${state.data.technicians.map(item => `<option value="${esc(item.id)}" ${selected(draft.technician, item.id)}>${esc(item.name)}</option>`).join("")}</select></label>
@@ -972,8 +988,8 @@
     if (state.reportTab === "Report Details") {
       content = `<div class="sr-info-card"><div class="sr-info-column">
         ${infoItem("Work Order", linked?.number ? `<button class="sr-link" data-action="open-job" data-id="${esc(linked.id)}">${esc(linked.number)}</button>` : "Not linked", "clipboard-list")}
-        ${infoItem("Customer", esc(linked?.customerName || item.details?.customerName || item.extracted?.customerName || "--"), "user-round")}
-        ${infoItem("Site / Location", esc(linked?.site || item.extracted?.siteName || "--"), "map-pin")}
+        ${infoItem("Customer", esc(agreement?.customerName || linked?.customerName || item.details?.customerName || item.extracted?.customerName || "--"), "user-round")}
+        ${infoItem("Site / Location", esc(agreement?.site || linked?.site || item.extracted?.siteName || "--"), "map-pin")}
         ${infoItem("Service Date & Time", esc(serviceWhen), "calendar-days")}
         ${infoItem("Report Submitted By", esc(submittedBy), "user-round")}
         ${infoItem("Submitted On", esc(stamp(item.submittedAt)), "calendar")}</div><div class="sr-info-column">
@@ -1006,7 +1022,7 @@
     }
     const previewIndex = images.findIndex(file => file.id === state.reportPreviewFileId);
     const preview = previewIndex >= 0 ? `<div class="sr-preview" role="dialog" aria-modal="true" aria-label="Report image preview"><div class="sr-preview-top"><strong>${esc(images[previewIndex].originalName)}</strong><button data-action="sr-preview-close" aria-label="Close image preview">${icon("x")}</button></div><div class="sr-preview-stage"><button data-action="sr-preview-prev" aria-label="Previous image" ${images.length < 2 ? "disabled" : ""}>${icon("chevron-left")}</button><img src="/api/maintenance/files/${encodeURIComponent(images[previewIndex].id)}" alt="${esc(images[previewIndex].originalName)}"><button data-action="sr-preview-next" aria-label="Next image" ${images.length < 2 ? "disabled" : ""}>${icon("chevron-right")}</button></div><small>${previewIndex + 1} of ${images.length}</small></div>` : "";
-    return `<section class="sr-detail"><header class="sr-detail-head"><div><h2>${esc(item.number)} <span class="sr-badge ${({ Submitted: "blue", Approved: "green", "Pending Review": "amber", Revision: "red", Rejected: "violet" })[item.status] || "blue"}"><i></i>${esc(item.status)}</span></h2><p>${esc(stamp(item.submittedAt))} <span>-</span> Submitted by ${esc(submittedBy)}</p></div><div class="sr-detail-actions"><div class="sr-detail-tools">${iconButton("x", "Close report", "close-report")}<div class="sr-more-wrap">${iconButton("ellipsis", "More report actions", "sr-more")}${state.reportMoreMenu ? `<div class="sr-more-menu"><a data-action="sr-view-pdf" href="/api/maintenance/reports/${encodeURIComponent(item.id)}/pdf" target="_blank" rel="noopener">${icon("file-text")}View PDF</a>${item.type === "Handwritten Upload" && item.status !== "Approved" ? `<button data-action="edit-report" data-id="${esc(item.id)}">${icon("pencil")}Edit SR</button>` : ""}<button class="maint-delete-option" data-action="delete-request" data-kind="reports" data-id="${esc(item.id)}">${icon("trash-2")} Delete Service Report</button></div>` : ""}</div></div></div></header>
+    return `<section class="sr-detail"><header class="sr-detail-head"><div><h2>${esc(item.number)} <span class="sr-badge ${({ Submitted: "blue", Approved: "green", "Pending Review": "amber", Revision: "red", Rejected: "violet" })[item.status] || "blue"}"><i></i>${esc(item.status)}</span></h2><p>${esc(stamp(item.submittedAt))} <span>-</span> Submitted by ${esc(submittedBy)}</p></div><div class="sr-detail-actions"><div class="sr-detail-tools">${iconButton("x", "Close report", "close-report")}<div class="sr-more-wrap">${iconButton("ellipsis", "More report actions", "sr-more")}${state.reportMoreMenu ? `<div class="sr-more-menu"><a data-action="sr-view-pdf" href="/api/maintenance/reports/${encodeURIComponent(item.id)}/pdf" target="_blank" rel="noopener">${icon("file-text")}View PDF</a>${canReEditApprovedReport(item) ? `<button data-action="edit-report" data-id="${esc(item.id)}">${icon("pencil")}Re-Edit</button>` : item.type === "Handwritten Upload" && item.status !== "Approved" ? `<button data-action="edit-report" data-id="${esc(item.id)}">${icon("pencil")}Edit SR</button>` : ""}<button class="maint-delete-option" data-action="delete-request" data-kind="reports" data-id="${esc(item.id)}">${icon("trash-2")} Delete Service Report</button></div>` : ""}</div></div></div></header>
       <nav class="sr-detail-tabs" aria-label="Service report sections">${tabs.map(tab => `<button data-action="report-tab" data-tab="${tab}" class="${tab === state.reportTab ? "active" : ""}" aria-current="${tab === state.reportTab ? "page" : "false"}">${tab === "Images" ? `Images (${images.length})` : tab}</button>`).join("")}</nav>
       <div class="sr-detail-body">${content}</div>${item.status !== "Approved" ? `<div class="sr-review-actions"><button class="maint-primary" data-action="review-approve" data-id="${esc(item.id)}">${icon("check")}Approve</button><button class="maint-outline" data-action="review-revision" data-id="${esc(item.id)}">Request Revision</button><button class="maint-outline danger" data-action="review-reject" data-id="${esc(item.id)}">Reject</button></div>` : ""}${preview}</section>`;
   }
@@ -1050,19 +1066,11 @@
   }
 
   function reportUploadDrawer() {
-    const upload = state.srUpload || { fields: {}, fileId: "", message: "Choose a clear service report image or PDF. Extracted fields can be corrected before review." };
-    const fields = [["reportNumber", "Service Report Number"], ["serviceDate", "Service Date"], ["customerName", "Customer Name"], ["siteName", "Site / Location"],
-      ["technicianName", "Technicians"], ["unitNumber", "Unit Number"], ["modelNumber", "Model Number"],
-      ["serialNumber", "Serial Number"], ["refrigerant", "Refrigerant"], ["quantity", "Quantity"], ["jobCompletion", "Job Completion"]];
-    const descriptions = [["workCarriedOut", "Work Carried Out"], ["materialsUsed", "Materials Used"], ["remarks", "Remarks"]];
-    return drawerShell("Upload Service Report", `<form id="maintReportUploadForm" class="maint-form">
-      <label class="maint-field"><span>Service Report Image or PDF *</span><input type="file" data-report-upload accept="image/*,.pdf,application/pdf" ${upload.fileId ? "" : "required"}></label>
+    const upload = state.srUpload || { message: "Choose a service report image or PDF. It will open in Edit after upload." };
+    return drawerShell("Upload Service Report", `<div class="maint-form">
+      <label class="maint-field"><span>Service Report Image or PDF *</span><input type="file" data-report-upload accept="image/*,.pdf,application/pdf" ${upload.loading ? "disabled" : ""}></label>
       <p class="maint-form-hint ${upload.error ? "maint-upload-error" : ""}" role="status">${esc(upload.message || "")}</p>
-      ${upload.fileId ? `<p class="maint-upload-file">${icon("file-check-2")}${esc(upload.fileName || "Service report uploaded")}</p>
-        <section class="maint-form-section"><div><h3>Review Extracted Details</h3></div><p class="maint-form-hint">Confirm or correct the extracted values before sending this report for review.</p>
-        <div class="maint-form-grid">${fields.map(([key, label]) => key === "technicianName" ? reportTechnicianField(key, upload.fields?.[key] || "") : formField(label, key, upload.fields?.[key] || "")).join("")}</div>
-        ${descriptions.map(([key, label]) => `<label class="maint-field"><span>${label}</span><textarea name="${key}" rows="3">${esc(upload.fields?.[key] || "")}</textarea></label>`).join("")}</section>` : ""}
-      </form>`, `<button class="maint-outline" data-action="close-drawer">Cancel</button><button class="maint-primary" data-action="submit-report-upload" ${upload.fileId ? "" : "disabled"}>${icon("send")}Submit for Review</button>`);
+      </div>`, `<button class="maint-outline" data-action="close-drawer" ${upload.loading ? "disabled" : ""}>Cancel</button>`);
   }
 
   function reportAmcOptions(customerName, siteName, selectedId) {
@@ -1083,11 +1091,12 @@
   function showReportCustomerOptions(input) {
     const list = input.parentElement.querySelector("[data-report-customer-options]");
     const query = input.value.trim().toLowerCase();
-    const names = [...new Set(state.data.contracts.map(item => item.customerName).filter(Boolean))]
-      .filter(name => query && name.toLowerCase().includes(query)).sort((a, b) => a.localeCompare(b));
-    list.innerHTML = names.map((name, index) => `<button type="button" role="option" id="maintReportCustomerOption-${index}" data-action="report-customer-choice" data-name="${esc(name)}">${esc(name)}</button>`).join("");
-    list.hidden = !names.length;
-    input.setAttribute("aria-expanded", String(!!names.length));
+    const matches = state.data.contracts.filter(item => item.customerName && query
+      && `${item.customerName} ${item.site || ""}`.toLowerCase().includes(query))
+      .sort((a, b) => a.customerName.localeCompare(b.customerName) || String(a.site || "").localeCompare(String(b.site || "")));
+    list.innerHTML = matches.map((item, index) => `<button type="button" role="option" id="maintReportCustomerOption-${index}" data-action="report-customer-choice" data-id="${esc(item.id)}"><strong>${esc(item.customerName)}</strong><small>${esc(item.site || "No site listed")} · ${esc(item.number || "AMC")}</small></button>`).join("");
+    list.hidden = !matches.length;
+    input.setAttribute("aria-expanded", String(!!matches.length));
     input.removeAttribute("aria-activedescendant");
   }
 
@@ -1107,11 +1116,12 @@
       ["serialNumber", "Serial Number"], ["refrigerant", "Refrigerant"], ["quantity", "Quantity"], ["jobCompletion", "Job Completion"]];
     const details = [["workCarriedOut", "Work Carried Out"], ["materialsUsed", "Materials Used"], ["remarks", "Remarks"]];
     const selectedContractId = item.contractId || job(item.workOrderId)?.contractId || "";
-    const customerName = item.extracted?.customerName || item.details?.customerName || job(item.workOrderId)?.customerName || "";
-    return drawerShell(`Edit ${item.number}`, `<form id="maintReportEditForm" class="maint-form"><p class="maint-form-hint">Update the extracted service report details before approval. The uploaded original is retained.</p>
-      <label class="maint-field"><span>Link to Work Order (optional)</span><select name="workOrderId"><option value="">No linked work order</option>${availableJobs.map(job => `<option value="${esc(job.id)}" ${selected(item.workOrderId, job.id)}>${esc(job.number)} · ${esc(job.customerName)} · ${esc(job.site)}</option>`).join("")}</select></label>
-      <section class="maint-form-section"><div><h3>Report Information</h3></div><div class="maint-form-grid">${fields.map(([key, label]) => key === "technicianName" ? reportTechnicianField(`extracted_${key}`, item.extracted?.[key] || "") : key === "customerName" ? `<div class="maint-field maint-report-customer"><span>Customer Name</span><input name="extracted_customerName" value="${esc(customerName)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="maintReportCustomerOptions" data-report-customer-input><div class="maint-report-customer-options" id="maintReportCustomerOptions" role="listbox" data-report-customer-options hidden></div></div>` : formField(label, `extracted_${key}`, key === "reportNumber" ? (item.extracted?.reportNumber || item.number) : (item.extracted?.[key] || ""), "text", key === "reportNumber")).join("")}
-        <label class="maint-field"><span>AMC Register</span><select name="contractId">${reportAmcOptions(customerName, item.extracted?.siteName, selectedContractId)}</select></label></div></section>
+    const agreement = contract(selectedContractId);
+    const customerName = agreement?.customerName || item.extracted?.customerName || item.details?.customerName || job(item.workOrderId)?.customerName || "";
+    return drawerShell(`${item.status === "Approved" ? "Re-Edit" : "Edit"} ${item.number}`, `<form id="maintReportEditForm" class="maint-form"><p class="maint-form-hint">${item.status === "Approved" ? "Update approved report details. Approval and the uploaded original will be retained." : "Update the extracted service report details before approval. The uploaded original is retained."}</p>
+      <label class="maint-field"><span>Link to Work Order (optional)</span><select name="workOrderId" ${item.status === "Approved" ? "disabled" : ""}><option value="">No linked work order</option>${availableJobs.map(job => `<option value="${esc(job.id)}" ${selected(item.workOrderId, job.id)}>${esc(job.number)} · ${esc(job.customerName)} · ${esc(job.site)}</option>`).join("")}</select></label>
+      <section class="maint-form-section"><div><h3>Report Information</h3></div><div class="maint-form-grid">${fields.map(([key, label]) => key === "technicianName" ? reportTechnicianField(`extracted_${key}`, item.extracted?.[key] || "") : key === "customerName" ? `<div class="maint-field maint-report-customer"><span>Customer Name</span><input name="extracted_customerName" value="${esc(customerName)}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="maintReportCustomerOptions" data-report-customer-input><div class="maint-report-customer-options" id="maintReportCustomerOptions" role="listbox" data-report-customer-options hidden></div></div>` : formField(label, `extracted_${key}`, key === "reportNumber" ? (item.extracted?.reportNumber || item.number) : key === "serviceDate" ? reportDateInput(item.extracted?.serviceDate) : key === "siteName" ? (agreement?.site || item.extracted?.siteName || "") : (item.extracted?.[key] || ""), "text", key === "reportNumber", key === "serviceDate" ? 'placeholder="DD/MM/YYYY" inputmode="numeric"' : "")).join("")}
+        <label class="maint-field"><span>AMC Register</span><select name="contractId">${reportAmcOptions(customerName, agreement?.site || item.extracted?.siteName, selectedContractId)}</select></label></div></section>
       <section class="maint-form-section"><div><h3>Work Summary</h3></div>
         ${details.map(([key, label]) => `<label class="maint-field"><span>${label}</span><textarea name="detail_${key}" rows="3">${esc(item.details?.[key] || "")}</textarea></label>`).join("")}</section></form>`,
       `<button class="maint-outline" data-action="close-drawer">Cancel</button><button class="maint-primary" data-action="save-report-edit">${icon("save")}Save Changes</button>`);
@@ -1331,9 +1341,26 @@
     })).filter(unit => unit.reference || unit.type || unit.location);
     const body = { ...fields, units, unitCount: Number(fields.unitCount), visitsPerYear: Number(fields.visitsPerYear), contractValue: Number(fields.contractValue || 0) };
     await whileSaving("save-amc", async () => { try {
+      const previous = contract(state.drawerId);
       const item = await request(state.drawerId ? `/api/maintenance/contracts/${encodeURIComponent(state.drawerId)}` : "/api/maintenance/contracts",
         { method: state.drawerId ? "PUT" : "POST", body: JSON.stringify(body) });
       upsert("contracts", item);
+      if (previous && (previous.customerName !== item.customerName || previous.site !== item.site)) {
+        const identity = { customerId: item.customerId, customerName: item.customerName, site: item.site, updatedAt: item.updatedAt };
+        state.data.schedules.filter(row => row.contractId === item.id).forEach(row => Object.assign(row, identity));
+        state.data.workOrders.filter(row => row.contractId === item.id).forEach(row => Object.assign(row, identity));
+        const linkedJobIds = new Set(state.data.workOrders.filter(row => row.contractId === item.id).map(row => row.id));
+        state.data.attendance.filter(row => linkedJobIds.has(row.workOrderId)).forEach(row => { row.site = item.site; });
+        state.data.reports.forEach(row => {
+          const linked = job(row.workOrderId);
+          if (row.contractId !== item.id && (row.contractId || linked?.contractId !== item.id)) return;
+          if (row.type === "Handwritten Upload") {
+            row.extracted = { ...row.extracted, customerName: item.customerName, siteName: item.site };
+            row.details = { ...row.details, customerName: item.customerName };
+          }
+          row.updatedAt = item.updatedAt;
+        });
+      }
       state.selectedContractId = item.id;
       showSavedRecord();
       notice(`${item.number} saved`);
@@ -1389,27 +1416,6 @@
     } catch (error) { formError(error.message || "Unable to review report"); }
   }
 
-  async function saveReportUpload() {
-    const form = root.querySelector("#maintReportUploadForm");
-    commitReportTechnicianInput(form);
-    if (!validForm(form)) return;
-    const values = new FormData(form);
-    const fields = Object.fromEntries(["reportNumber", "serviceDate", "customerName", "siteName", "technicianName", "unitNumber",
-      "modelNumber", "serialNumber", "refrigerant", "workCarriedOut", "materialsUsed", "quantity", "remarks", "jobCompletion"]
-      .map(key => [key, String(values.get(key) || "").trim()]));
-    const payload = { fileId: state.srUpload?.fileId, extracted: fields,
-      details: { customerName: fields.customerName, workCarriedOut: fields.workCarriedOut, materialsUsed: fields.materialsUsed, remarks: fields.remarks } };
-    if (!payload.fileId) return formError("Upload the service report image or PDF first.");
-    await whileSaving("submit-report-upload", async () => { try {
-      const item = await request("/api/maintenance/reports", { method: "POST", body: JSON.stringify(payload) });
-      upsert("reports", item);
-      state.srUpload = null; state.selectedReportId = item.id; state.reportTab = "Report Details";
-      state.status.reports = "all"; state.reportFilterDraft = { range: "all", from: "", to: "", customer: "", site: "", technician: "", status: "all" };
-      state.reportFilters = { ...state.reportFilterDraft }; state.search.reports = ""; state.pageNumber.reports = 1;
-      showSavedRecord(); notice(`${item.number} submitted for review`);
-    } catch (error) { formError(error.message || "Unable to submit service report"); } });
-  }
-
   async function saveReportEdit() {
     const form = root.querySelector("#maintReportEditForm");
     if (!form) return;
@@ -1420,14 +1426,18 @@
       "serialNumber", "refrigerant", "workCarriedOut", "materialsUsed", "quantity", "remarks", "jobCompletion"];
     const priorFields = report(state.drawerId)?.extracted || {};
     const extracted = Object.fromEntries(keys.map(key => [key, String(values.get(`extracted_${key}`) ?? priorFields[key] ?? "").trim()]));
+    extracted.serviceDate = reportDateIso(extracted.serviceDate);
+    if (extracted.serviceDate === null) return formError("Enter Service Date as DD/MM/YYYY.", form.elements.namedItem("extracted_serviceDate"));
     const details = Object.fromEntries(["workCarriedOut", "materialsUsed", "remarks"]
       .map(key => [key, String(values.get(`detail_${key}`) || "").trim()]));
     details.customerName = extracted.customerName;
-    try {
-      await request(`/api/maintenance/reports/${encodeURIComponent(state.drawerId)}`, { method: "PUT",
-        body: JSON.stringify({ workOrderId: String(values.get("workOrderId") || ""), contractId: String(values.get("contractId") || ""), extracted, details }) });
-      state.drawer = ""; await refresh(); notice("Service report details updated");
-    } catch (error) { formError(error.message || "Unable to update service report"); }
+    await whileSaving("save-report-edit", async () => { try {
+      const item = await request(`/api/maintenance/reports/${encodeURIComponent(state.drawerId)}`, { method: "PUT",
+        body: JSON.stringify({ workOrderId: report(state.drawerId)?.status === "Approved" ? report(state.drawerId).workOrderId : String(values.get("workOrderId") || ""),
+          contractId: String(values.get("contractId") || ""), extracted, details }) });
+      upsert("reports", item);
+      showSavedRecord(); notice("Service report details updated");
+    } catch (error) { formError(error.message || "Unable to update service report"); } });
   }
 
   function csvDownload(rows, columns, name) {
@@ -1445,10 +1455,15 @@
     if (!button) { if (state.amcMenuId || state.pmMenuId || state.workOrderMenuId || state.workOrderDetailMenu || state.technicianMoreMenu || state.reportMoreMenu) { state.amcMenuId = ""; state.pmMenuId = ""; state.workOrderMenuId = ""; state.workOrderDetailMenu = false; state.technicianMoreMenu = false; state.reportMoreMenu = false; render(); } return; }
     const action = button.dataset.action, id = button.dataset.id || "";
     if (action === "report-customer-choice") {
+      const chosen = contract(button.dataset.id);
+      if (!chosen) return;
       const input = button.closest(".maint-report-customer").querySelector("[data-report-customer-input]");
-      input.value = button.dataset.name;
+      const form = input.closest("form");
+      input.value = chosen.customerName;
+      form.elements.namedItem("extracted_siteName").value = chosen.site || "";
       hideReportCustomerOptions(input);
-      updateReportAmcSelect(input.closest("form"));
+      updateReportAmcSelect(form);
+      form.elements.namedItem("contractId").value = chosen.id;
       return;
     }
     if (action === "report-tech-add") { commitReportTechnicianInput(button.closest("form")); button.parentElement.querySelector("input")?.focus(); return; }
@@ -1532,6 +1547,7 @@
     if (action === "filter-scheduled" || action === "filter-on-site" || action === "filter-report-submitted" || action === "filter-completed") {
       state.workOrderDraft.status = ({ "filter-scheduled": "Scheduled", "filter-on-site": "On Site", "filter-report-submitted": "Report Submitted", "filter-completed": "Completed" })[action]; state.workOrderFilters = { ...state.workOrderDraft }; return render();
     }
+    if (action === "wo-toggle-filters") { state.workOrderFiltersOpen = !state.workOrderFiltersOpen; return render(); }
     if (action === "wo-kpi") { state.workOrderDraft.status = button.dataset.status; state.workOrderFilters = { ...state.workOrderDraft }; return render(); }
     if (action === "wo-apply-filters") {
       if (state.workOrderDraft.range === "custom" && state.workOrderDraft.from && state.workOrderDraft.to && state.workOrderDraft.from > state.workOrderDraft.to) return notice("The start date must be before the end date.");
@@ -1607,10 +1623,15 @@
     }
     if (action === "close-technician") { state.selectedTechnicianId = null; return render(); }
     if (action === "open-report") { state.selectedReportId = id; state.reportTab = "Report Details"; state.reportPreviewFileId = ""; return state.page === "reports" ? render() : navigate("reports", id); }
-    if (action === "upload-report") { state.srUpload = { fields: {}, fileId: "", fileName: "", message: "Choose a clear service report image or PDF. AI will extract what it can; you can correct the fields before review." }; return openDrawer("report-upload"); }
-    if (action === "edit-report") return openDrawer("report-edit", id);
+    if (action === "upload-report") { state.srUpload = { loading: false, message: "Choose a service report image or PDF. It will open in Edit after upload." }; return openDrawer("report-upload"); }
+    if (action === "edit-report") {
+      const item = report(id);
+      if (!item || item.type !== "Handwritten Upload" || (item.status === "Approved" && !canReEditApprovedReport(item))) return;
+      return openDrawer("report-edit", id);
+    }
     if (action === "close-report") { state.selectedReportId = null; state.reportPreviewFileId = ""; return render(); }
     if (action === "report-tab") { state.reportTab = button.dataset.tab; return render(); }
+    if (action === "sr-toggle-filters") { state.reportFiltersOpen = !state.reportFiltersOpen; return render(); }
     if (action === "sr-status") { state.status.reports = button.dataset.status; state.reportFilterDraft.status = state.status.reports; state.reportFilters.status = state.status.reports; state.pageNumber.reports = 1; if (state.selectedReportId !== null) state.selectedReportId = ""; state.reportPreviewFileId = ""; return render(); }
     if (action === "sr-apply") {
       const draft = state.reportFilterDraft;
@@ -1654,13 +1675,12 @@
     if (action === "new-technician") return openDrawer("technician");
     if (action === "edit-technician") return openDrawer("technician", id);
     if (action === "review-approve" || action === "review-revision" || action === "review-reject") return openDrawer(action, id);
-    if (action === "close-drawer") return closeDrawer();
+    if (action === "close-drawer") return state.drawer === "report-upload" && state.srUpload?.loading ? undefined : closeDrawer();
     if (action === "save-amc") return saveAmc();
     if (action === "save-schedule-draft") return saveSchedule("draft");
     if (action === "save-schedule-notify") return saveSchedule("notify");
     if (action === "save-technician") return saveTechnician();
     if (action === "submit-review") return reviewReport(button.dataset.decision);
-    if (action === "submit-report-upload") return saveReportUpload();
     if (action === "save-report-edit") return saveReportEdit();
     if (action === "add-unit") {
       root.querySelector("#maintUnitRows").insertAdjacentHTML("beforeend", `<div class="maint-unit-row">${formField("Reference", "reference")}${formField("Type", "type")}${formField("Qty", "quantity", 1, "number", false, 'min="1"')}${formField("Location", "location")}${iconButton("x", "Remove unit", "remove-unit")}</div>`); return;
@@ -1780,16 +1800,27 @@
     if (input.matches("[data-amc-service-before]")) { state.amcServiceBefore = input.value; return render(); }
     if (input.matches("[data-report-upload]")) {
       const file = input.files?.[0];
-      if (!file) return;
-      state.srUpload ||= { fields: {}, fileId: "" };
-      state.srUpload.message = "Uploading and reading report..."; state.srUpload.error = false; render();
+      if (!file || state.srUpload?.loading) return;
+      state.srUpload ||= {};
+      state.srUpload.loading = true; state.srUpload.message = "Uploading and reading report..."; state.srUpload.error = false; render();
       const form = new FormData(); form.append("file", file, file.name);
       try {
-        const result = await request("/api/maintenance/reports/upload", { method: "POST", body: form });
-        Object.assign(state.srUpload, { fileId: result.file.id, fileName: result.file.originalName, fields: result.fields || {},
-          message: result.message || "Review the extracted fields, then submit for pending review.", error: !result.available });
-      } catch (error) { state.srUpload.message = error.message || "Unable to upload service report"; state.srUpload.error = true; }
-      return render();
+        const result = await request("/api/maintenance/reports/upload?submit=1", { method: "POST", body: form });
+        const item = result.report;
+        if (!item?.id) throw new Error("Report was uploaded, but its details could not be opened. Refresh Service Reports to find it.");
+        upsert("reports", item);
+        if (result.file) upsert("files", result.file);
+        state.srUpload = null; state.selectedReportId = item.id; state.reportTab = "Report Details";
+        state.status.reports = "all"; state.reportFilterDraft = { range: "all", from: "", to: "", customer: "", site: "", technician: "", status: "all" };
+        state.reportFilters = { ...state.reportFilterDraft }; state.search.reports = ""; state.pageNumber.reports = 1;
+        latestRequest++; lastLoadedAt = Date.now();
+        openDrawer("report-edit", item.id);
+        revalidate();
+        return;
+      } catch (error) {
+        state.srUpload.loading = false; state.srUpload.message = error.message || "Unable to upload service report";
+        state.srUpload.error = true; return render();
+      }
     }
     if (input.matches("[data-dash-date]")) {
       if (input.value) { state.selectedDate = input.value; state.dashboardScheduleRange = "today"; state.dashboardMonth = new Date(`${input.value}T12:00:00`); state.dashboardMonth.setDate(1); render(); }
