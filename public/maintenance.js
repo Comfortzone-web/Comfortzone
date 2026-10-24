@@ -1120,13 +1120,14 @@
     const selectable = state.data.technicians.filter(item => item.active);
     const body = `<form id="maintScheduleForm" class="maint-form"><div class="maint-form-section"><h3>Customer / AMC</h3><div class="maint-form-grid">
       ${formField("Customer", "customerName", d.customerName || chosenContract?.customerName || "", "text", true, 'autocomplete="organization"')}
+      ${formField("Work Order Number", "workOrderNumber", d.workOrderNumber || "", "text", true)}
       <label class="maint-field"><span>AMC Contract</span><select name="contractId" data-schedule-change="contract"><option value="">Non-AMC job</option>${state.data.contracts.map(item => `<option value="${item.id}" ${selected(d.contractId, item.id)}>${esc(item.number)} · ${esc(item.site)}</option>`).join("")}</select></label>
-      <label class="maint-field"><span>Planned PM Visit</span><select name="visitId"><option value="">Choose visit (optional)</option>${visits.map(item => `<option value="${item.id}" ${selected(d.visitId, item.id)} ${item.workOrderId && item.workOrderId !== d.workOrderId ? "disabled" : ""}>Visit ${item.sequence} · ${day(item.plannedDate)}${item.workOrderId && item.workOrderId !== d.workOrderId ? " · Already scheduled" : ""}</option>`).join("")}</select></label>
       ${formField("Site / Location", "site", d.site || chosenContract?.site || "", "text", true)}
       ${formField("Contact Person", "contact", d.contact || chosenContract?.contact || "")}${formField("Phone", "phone", d.phone || chosenContract?.phone || "", "tel")}</div></div>
       <div class="maint-form-section"><h3>Visit Details</h3><div class="maint-form-grid"><label class="maint-field"><span>Work Type *</span><select name="workType">${["Preventive Maintenance", "Complaint / Repair", "Inspection", "Emergency Service", "Other"].map(value => `<option ${selected(d.workType || "Preventive Maintenance", value)}>${value}</option>`).join("")}</select></label>
       <label class="maint-field"><span>Priority</span><select name="priority"><option ${selected(d.priority || "Normal", "Normal")}>Normal</option><option ${selected(d.priority, "Urgent")}>Urgent</option></select></label>
       ${formField("Service Date", "serviceDate", d.serviceDate || state.selectedDate, "date", true, 'data-schedule-change="time"')}
+      <label class="maint-field"><span>Planned PM Visit</span><select name="visitId"><option value="">Choose visit (optional)</option>${visits.map(item => `<option value="${item.id}" ${selected(d.visitId, item.id)} ${item.workOrderId && item.workOrderId !== d.workOrderId ? "disabled" : ""}>Visit ${item.sequence} · ${day(item.plannedDate)}${item.workOrderId && item.workOrderId !== d.workOrderId ? " · Already scheduled" : ""}</option>`).join("")}</select></label>
       ${formField("Start Time", "startTime", d.startTime || "09:00", "time", true, 'data-schedule-change="time"')}
       ${formField("End Time", "endTime", d.endTime || "12:00", "time", true, 'data-schedule-change="time"')}</div></div>
       <div class="maint-form-section"><h3>Assign Individual Technicians</h3>
@@ -1210,9 +1211,9 @@
     state.drawerId = id;
     if (type === "schedule") {
       const existing = state.data.schedules.find(item => item.id === id) || state.data.schedules.find(item => item.workOrderId === id);
-      state.scheduleDraft = existing ? { ...existing, technicianIds: [...existing.technicianIds] }
+      state.scheduleDraft = existing ? { ...existing, workOrderNumber: job(existing.workOrderId)?.number || existing.workOrderNumber || "", technicianIds: [...existing.technicianIds] }
         : { clientKey: crypto.randomUUID(), customerName: "", contractId: options.contractId || "", visitId: options.visitId || "",
-          serviceDate: options.serviceDate || state.selectedDate, startTime: "09:00", endTime: "12:00",
+          workOrderNumber: state.data.nextWorkOrderNumber || "", serviceDate: options.serviceDate || state.selectedDate, startTime: "09:00", endTime: "12:00",
           workType: options.workType || "Preventive Maintenance", priority: "Normal", technicianIds: [...(options.technicianIds || [])], instructions: "" };
       if (options.contractId) {
         const item = contract(options.contractId);
@@ -1278,7 +1279,8 @@
     const data = new FormData(form);
     const draft = { ...state.scheduleDraft };
     delete draft.leadTechnicianId;
-    return { ...draft, customerName: formValue(form, "customerName"), contractId: formValue(form, "contractId"), visitId: formValue(form, "visitId"),
+    return { ...draft, customerName: formValue(form, "customerName"), workOrderNumber: formValue(form, "workOrderNumber"),
+      contractId: formValue(form, "contractId"), visitId: formValue(form, "visitId"),
       site: formValue(form, "site"), contact: formValue(form, "contact"), phone: formValue(form, "phone"),
       workType: formValue(form, "workType"), priority: formValue(form, "priority"), serviceDate: formValue(form, "serviceDate"),
       startTime: formValue(form, "startTime"), endTime: formValue(form, "endTime"),
@@ -1436,7 +1438,8 @@
       const reportCount = state.data.reports.filter(row => jobIds.includes(row.workOrderId)).length;
       const impact = kind === "contracts" ? ` Its planned visits, ${jobIds.length} linked work orders, and ${reportCount} service reports will also be removed.`
         : kind === "schedules" ? " Its linked work order and report will also be removed."
-        : kind === "work-orders" ? ` Its schedule and ${reportCount} service reports will also be removed.` : "";
+        : kind === "work-orders" ? ` Its schedule and ${reportCount} service reports will also be removed.`
+        : kind === "reports" ? " Its uploaded files will also be permanently deleted." : "";
       if (!confirm(`Delete ${labels[kind]} ${name}?${impact} This action cannot be undone.`)) return;
       state.pmMenuId = ""; state.workOrderMenuId = ""; state.amcMenuId = ""; state.technicianMoreMenu = false; state.reportMoreMenu = false;
       try {
@@ -1446,7 +1449,9 @@
         if (kind === "reports" && state.selectedReportId === id) state.selectedReportId = null;
         if (kind === "work-orders" && state.selectedWorkOrderId === id) state.selectedWorkOrderId = null;
         if (kind === "work-orders" && state.recordId === id) { state.recordId = ""; history.replaceState(null, "", "/maintenance/work-orders"); }
-        await refresh(); notice(`${response.deleted.label} deleted`);
+        await refresh(); notice(response.cleanupPending
+          ? `${response.deleted.label} deleted. Storage cleanup was delayed and will retry when Maintenance reloads.`
+          : `${response.deleted.label} deleted`);
       } catch (error) { handleError(error); }
       return;
     }

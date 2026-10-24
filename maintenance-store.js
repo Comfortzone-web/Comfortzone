@@ -7,7 +7,7 @@ const emptyStore = () => ({
   sequence: { contract: 0, workOrder: 0, report: 0, technician: 0 },
   contracts: [], visits: [], schedules: [], workOrders: [], technicians: [],
   attendance: [], reports: [], files: [], notifications: [], subscriptions: [],
-  invites: [], drafts: [], activity: []
+  invites: [], drafts: [], activity: [], pendingUploadDeletes: []
 });
 
 function normalize(value) {

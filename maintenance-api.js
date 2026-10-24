@@ -52,6 +52,20 @@ function nextNumber(store, key, prefix) {
   return `${prefix}-${String(new Date().getFullYear())}-${String(store.sequence[key]).padStart(4, "0")}`;
 }
 
+function nextWorkOrderNumber(store) {
+  const defaultPrefix = `WO-${new Date().getFullYear()}-`;
+  const latest = String(store.workOrders[0]?.number || store.schedules[0]?.workOrderNumber || "").trim();
+  const match = latest.match(/^(.*?)(\d+)$/);
+  const prefix = match ? match[1] : defaultPrefix;
+  const numbers = [...store.workOrders.map(item => item.number), ...store.schedules.map(item => item.workOrderNumber)];
+  const suffixes = numbers.map(number => String(number || "").toUpperCase().startsWith(prefix.toUpperCase()) ? String(number).slice(prefix.length) : "")
+    .filter(value => /^\d+$/.test(value));
+  const next = Math.max(prefix.toUpperCase() === defaultPrefix ? Number(store.sequence.workOrder || 0) : 0,
+    ...suffixes.map(Number), 0) + 1;
+  const width = Math.max(match?.[2].length || 4, ...suffixes.map(value => value.length));
+  return `${prefix}${String(next).padStart(width, "0")}`;
+}
+
 function reportNumberTaken(store, number, exceptId = "") {
   return store.reports.some(item => item.id !== exceptId && [item.number, item.extracted?.reportNumber]
     .some(value => trim(value, 100).toLowerCase() === number.toLowerCase()));
@@ -109,8 +123,10 @@ function createNotice(store, technicianId, workOrder, type, message) {
 }
 
 function publicState(store) {
-  const { invites: _invites, subscriptions: _subscriptions, drafts: _drafts, ...visible } = store;
-  return { ...visible, files: store.files.map(({ storedName: _storedName, ...file }) => file) };
+  const { invites: _invites, subscriptions: _subscriptions, drafts: _drafts,
+    pendingUploadDeletes: _pendingUploadDeletes, ...visible } = store;
+  return { ...visible, nextWorkOrderNumber: nextWorkOrderNumber(store),
+    files: store.files.map(({ storedName: _storedName, ...file }) => file) };
 }
 
 function createMaintenanceApi(deps) {
@@ -283,8 +299,8 @@ function createMaintenanceApi(deps) {
 
   function workOrderFromSchedule(store, schedule, existing) {
     const now = isoNow();
-    const base = existing || { id: random(), number: nextNumber(store, "workOrder", "WO"), createdAt: now };
-    Object.assign(base, { scheduleId: schedule.id, contractId: schedule.contractId, visitId: schedule.visitId,
+    const base = existing || { id: random(), createdAt: now };
+    Object.assign(base, { number: schedule.workOrderNumber, scheduleId: schedule.id, contractId: schedule.contractId, visitId: schedule.visitId,
       customerId: schedule.customerId, customerName: schedule.customerName, site: schedule.site, contact: schedule.contact,
       phone: schedule.phone, workType: schedule.workType, serviceDate: schedule.serviceDate, startTime: schedule.startTime,
       endTime: schedule.endTime, priority: schedule.priority, technicianIds: schedule.technicianIds,
@@ -293,19 +309,41 @@ function createMaintenanceApi(deps) {
     return base;
   }
 
+  async function flushUploadDeletes(names) {
+    if (!deleteUpload) return;
+    for (const storedName of names) {
+      try {
+        await deleteUpload("maintenance", storedName);
+        await storage.mutate(store => {
+          store.pendingUploadDeletes = store.pendingUploadDeletes.filter(name => name !== storedName);
+        });
+      } catch (error) {
+        console.error("Maintenance upload cleanup:", error);
+      }
+    }
+  }
+
   async function routeOffice(req, res, url, user) {
     try {
       if (!user || !["admin", "mts"].includes(String(user.role).toLowerCase())) fail("Admin or MTS access required", 403);
       if (req.method !== "GET") sameOrigin(req);
       const parts = url.pathname.split("/").filter(Boolean).slice(2);
-      if (req.method === "GET" && parts[0] === "summary") return send(res, 200, publicState(await storage.read()));
+      if (req.method === "GET" && parts[0] === "summary") {
+        const state = await storage.read();
+        if (state.pendingUploadDeletes.length) await flushUploadDeletes(state.pendingUploadDeletes);
+        return send(res, 200, publicState(state.pendingUploadDeletes.length ? await storage.read() : state));
+      }
 
       if (req.method === "DELETE" && parts.length === 2 && ["contracts", "schedules", "work-orders", "technicians", "reports"].includes(parts[0])) {
         const deleted = await storage.mutate(store => {
           const [kind, id] = parts;
           const priorFiles = store.files;
-          const finish = result => ({ ...result, removedUploads: priorFiles.filter(file => !store.files.some(current => current.id === file.id))
-            .map(file => file.storedName).filter(Boolean) });
+          const finish = result => {
+            const removedUploads = priorFiles.filter(file => !store.files.some(current => current.id === file.id))
+              .map(file => file.storedName).filter(Boolean);
+            store.pendingUploadDeletes = [...new Set([...store.pendingUploadDeletes, ...removedUploads])];
+            return { ...result, removedUploads };
+          };
           if (kind === "contracts") {
             const item = find(store.contracts, id);
             if (!item) fail("AMC contract not found", 404);
@@ -353,6 +391,13 @@ function createMaintenanceApi(deps) {
           const item = find(store.reports, id);
           if (!item) fail("Service report not found", 404);
           store.reports = store.reports.filter(report => report.id !== id);
+          const reportFiles = new Set([...(item.fileIds || []), item.originalFileId, item.signatureFileId,
+            ...(item.versions || []).flatMap(version => version.fileIds || [])].filter(Boolean));
+          const referencedElsewhere = fileId => store.reports.some(report => [
+            ...(report.fileIds || []), report.originalFileId, report.signatureFileId,
+            ...(report.versions || []).flatMap(version => version.fileIds || [])].includes(fileId))
+            || store.drafts.some(draft => draft.data?.fileIds?.includes(fileId));
+          store.files = store.files.filter(file => !reportFiles.has(file.id) || referencedElsewhere(file.id));
           const linked = find(store.workOrders, item.workOrderId);
           if (linked) {
             const onSite = store.attendance.some(entry => entry.workOrderId === linked.id && !entry.checkOutAt);
@@ -365,11 +410,10 @@ function createMaintenanceApi(deps) {
           addActivity(store, "deletion", id, user.name, `${item.number} deleted`);
           return finish({ label: item.number });
         });
-        for (const storedName of deleted.removedUploads) {
-          if (deleteUpload) await deleteUpload("maintenance", storedName).catch(error => console.error("Maintenance upload cleanup:", error));
-        }
+        await flushUploadDeletes(deleted.removedUploads);
+        const cleanupPending = (await storage.read()).pendingUploadDeletes.some(name => deleted.removedUploads.includes(name));
         const { removedUploads: _removedUploads, ...result } = deleted;
-        return send(res, 200, { ok: true, deleted: result });
+        return send(res, 200, { ok: true, deleted: result, cleanupPending });
       }
 
       if (parts[0] === "contracts" && parts.length === 1 && req.method === "POST") {
@@ -421,6 +465,12 @@ function createMaintenanceApi(deps) {
           if (body.id && !current) fail("Schedule not found", 404);
           const linked = current?.workOrderId ? find(store.workOrders, current.workOrderId) : null;
           if (linked && ["Report Submitted", "Completed"].includes(linked.status)) fail("Work orders with submitted reports cannot be rescheduled", 409);
+          const workOrderNumber = trim(body.workOrderNumber, 100) || linked?.number || current?.workOrderNumber || nextWorkOrderNumber(store);
+          const normalizedNumber = workOrderNumber.toLocaleLowerCase("en-US");
+          if (store.workOrders.some(item => item.id !== linked?.id && trim(item.number, 100).toLocaleLowerCase("en-US") === normalizedNumber)
+            || store.schedules.some(item => item.id !== current?.id && !item.workOrderId
+              && trim(item.workOrderNumber, 100).toLocaleLowerCase("en-US") === normalizedNumber))
+            fail(`Work Order Number ${workOrderNumber} already exists`, 409);
           const input = validateSchedule(store, body, published ? (current || {}) : null);
           const now = isoNow();
           const priorDate = current?.serviceDate;
@@ -432,7 +482,10 @@ function createMaintenanceApi(deps) {
             const previousVisit = find(store.visits, current.visitId);
             if (previousVisit && previousVisit.workOrderId === current.workOrderId) Object.assign(previousVisit, { workOrderId: "", status: "Planned" });
           }
-          Object.assign(schedule, input, { status: published ? "Scheduled" : "Draft", updatedAt: now });
+          Object.assign(schedule, input, { workOrderNumber, status: published ? "Scheduled" : "Draft", updatedAt: now });
+          const sequencePrefix = `WO-${new Date().getFullYear()}-`;
+          const suffix = workOrderNumber.toUpperCase().startsWith(sequencePrefix) ? workOrderNumber.slice(sequencePrefix.length) : "";
+          if (/^\d+$/.test(suffix)) store.sequence.workOrder = Math.max(Number(store.sequence.workOrder || 0), Number(suffix));
           if (!current) store.schedules.unshift(schedule);
           if (published) {
             const job = workOrderFromSchedule(store, schedule, linked);

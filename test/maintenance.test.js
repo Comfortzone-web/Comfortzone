@@ -94,27 +94,37 @@ test("maintenance lifecycle and field access", async () => {
       startTime: "09:00", endTime: "11:00", workType: "Preventive Maintenance", mode: "draft" });
     assert.equal(freeDraft.status, 201);
     assert.equal(freeDraft.result.workOrder, null);
+    assert.match(freeDraft.result.schedule.workOrderNumber, /^WO-\d{4}-\d{4}$/);
 
+    const requestedWorkOrderNumber = `WO-${new Date().getFullYear()}-0042`;
     const scheduleBody = { clientKey: "stable-client-key", contractId: amc.result.id, customerName: customer.name,
       visitId: planned.id, site: customer.site, serviceDate: "2026-10-15", startTime: "09:00", endTime: "12:00",
-      workType: "Preventive Maintenance", technicianIds: ids, mode: "notify" };
+      workType: "Preventive Maintenance", workOrderNumber: requestedWorkOrderNumber, technicianIds: ids, mode: "notify" };
     const scheduled = await office("POST", "/api/maintenance/schedules", scheduleBody);
     assert.equal(scheduled.status, 201);
     const workOrder = scheduled.result.workOrder;
-    assert.ok(workOrder.number.startsWith("WO-"));
+    assert.equal(workOrder.number, requestedWorkOrderNumber);
     assert.equal((await office("POST", "/api/maintenance/schedules", scheduleBody)).result.workOrder.id, workOrder.id);
     summary = (await office("GET", "/api/maintenance/summary")).result;
+    assert.equal(summary.nextWorkOrderNumber, `WO-${new Date().getFullYear()}-0043`);
     assert.equal(summary.workOrders.length, 1);
     assert.equal(summary.notifications.length, 2);
+
+    const duplicateNumber = await office("POST", "/api/maintenance/schedules", { ...scheduleBody,
+      clientKey: "duplicate-work-order-number", visitId: "", workOrderNumber: requestedWorkOrderNumber });
+    assert.equal(duplicateNumber.status, 409);
+    assert.match(duplicateNumber.result.error, /Work Order Number .* already exists/);
 
     const overlap = await office("POST", "/api/maintenance/schedules", { ...scheduleBody, clientKey: "overlap",
       visitId: "", contractId: "", technicianIds: [ids[0], third.result.id], mode: "notify" });
     assert.equal(overlap.status, 409);
 
     const reschedule = await office("POST", "/api/maintenance/schedules", { ...scheduleBody,
-      id: scheduled.result.schedule.id, serviceDate: "2026-10-16" });
+      id: scheduled.result.schedule.id, workOrderNumber: "WO-CLIENT-77", serviceDate: "2026-10-16" });
     assert.equal(reschedule.status, 200);
     summary = (await office("GET", "/api/maintenance/summary")).result;
+    assert.equal(summary.workOrders[0].number, "WO-CLIENT-77");
+    assert.equal(summary.schedules.find(item => item.id === scheduled.result.schedule.id).workOrderNumber, "WO-CLIENT-77");
     assert.equal(summary.workOrders[0].serviceDate, "2026-10-16");
     assert.equal(summary.notifications.length, 4);
 
@@ -347,6 +357,20 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(directSubmit.status, 201);
     assert.equal(directSubmit.result.status, "Pending Review");
     assert.equal(directSubmit.result.number, "FIELD-1732");
+
+    const customWorkOrderNumber = `CZWO-${new Date().getFullYear()}-001`;
+    const customJob = await office("POST", "/api/maintenance/schedules", { clientKey: "custom-work-order-sequence",
+      customerName: "Custom Number Customer", site: "Dubai", serviceDate: "2026-11-10", startTime: "14:00", endTime: "15:00",
+      workType: "Complaint / Repair", technicianIds: [ids[0]], workOrderNumber: customWorkOrderNumber, mode: "notify" });
+    assert.equal(customJob.status, 201);
+    assert.equal(customJob.result.workOrder.number, customWorkOrderNumber);
+    assert.equal((await office("GET", "/api/maintenance/summary")).result.nextWorkOrderNumber,
+      `CZWO-${new Date().getFullYear()}-002`);
+    const nextCustomJob = await office("POST", "/api/maintenance/schedules", { clientKey: "next-custom-work-order",
+      customerName: "Next Custom Customer", site: "Dubai", serviceDate: "2026-11-11", startTime: "14:00", endTime: "15:00",
+      workType: "Complaint / Repair", technicianIds: [ids[0]], mode: "notify" });
+    assert.equal(nextCustomJob.status, 201);
+    assert.equal(nextCustomJob.result.workOrder.number, `CZWO-${new Date().getFullYear()}-002`);
 
     const revoked = await office("POST", `/api/maintenance/technicians/${ids[0]}/revoke`, {});
     assert.equal(revoked.status, 200);

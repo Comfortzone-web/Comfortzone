@@ -11,6 +11,7 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
     status, customerName, site: "JVC, Dubai", contractId, technicianIds, leadTechnicianId: technicianIds[0],
     priority: id === "2" ? "Urgent" : "Normal", serviceDate: today, startTime: "09:00", endTime: "12:00", createdAt: `${today}T08:00:00Z` });
   const summary = {
+    nextWorkOrderNumber: "WO-2026-0005",
     workOrders: [makeJob("1", "Scheduled", "A Very Long Customer Name Across Multiple Words", ["t1", "t2", "t3"]),
       makeJob("2", "On Site", "Office Two", ["t2"]), makeJob("3", "Report Submitted", "Site Three", ["t3"]),
       makeJob("4", "Completed", "Site Four", ["t1"])],
@@ -100,8 +101,13 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
   assert.deepEqual(routes.at(-1), ["work-orders", "2"]);
   await click("edit-job", { id: "2" });
   assert.match(root.innerHTML, /Edit WO-2/);
+  assert.match(root.innerHTML, /name="workOrderNumber" type="text" value="WO-2"/);
   await click("close-drawer");
   await click("new-work-order");
   assert.match(root.innerHTML, /New Maintenance Schedule/);
+  assert.match(root.innerHTML, /name="workOrderNumber" type="text" value="WO-2026-0005"/);
+  assert.match(root.innerHTML, /Customer.*Work Order Number.*AMC Contract.*Site \/ Location/s);
+  assert.match(root.innerHTML, /Visit Details.*Planned PM Visit.*Assign Individual Technicians/s);
+  assert.match(root.innerHTML, /Service Date.*Planned PM Visit.*Start Time.*End Time/s);
   assert.doesNotMatch(root.innerHTML, /Lead Technician|Choose 2-5 technicians/);
 });

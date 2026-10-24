@@ -236,7 +236,8 @@ async function readUpload(scope, storedName) {
 async function deleteUpload(scope, storedName) {
   if (!storedName) return;
   if (USE_SUPABASE) {
-    await supabase.storage.from(SUPABASE_BUCKET).remove([storagePath(scope, storedName)]);
+    const { error } = await supabase.storage.from(SUPABASE_BUCKET).remove([storagePath(scope, storedName)]);
+    if (error) throw new Error(`Upload deletion failed: ${error.message}`);
     return;
   }
   fs.rmSync(localUploadPath(scope, storedName), { force: true });
