@@ -23,7 +23,7 @@
     workOrderFilters: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" }
   };
   let lastRenderKey = "", lastRenderedDrawer = "", drawerReturnFocus = null;
-  let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null;
+  let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null, savePending = false;
   const icon = (name, className = "") => `<img class="maint-icon ${className}" src="/assets/maintenance-icons/${name}.svg" alt="" aria-hidden="true">`;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const day = value => value ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
@@ -63,6 +63,40 @@
     state.data = data;
     lastLoadedAt = Date.now();
     if (!background || !state.drawer) render();
+  }
+
+  function revalidate() {
+    const pending = refresh({ background: true }).catch(error => console.warn("Maintenance refresh failed:", error))
+      .finally(() => { if (backgroundRefresh === pending) backgroundRefresh = null; });
+    backgroundRefresh = pending;
+  }
+
+  function upsert(collection, item) {
+    const rows = state.data[collection];
+    const index = rows.findIndex(row => row.id === item.id);
+    if (index === -1) rows.unshift(item);
+    else rows[index] = item;
+  }
+
+  function showSavedRecord() {
+    latestRequest++;
+    lastLoadedAt = Date.now();
+    state.drawer = "";
+    render();
+    revalidate();
+  }
+
+  async function whileSaving(action, task) {
+    if (savePending) return;
+    savePending = true;
+    const button = root.querySelector(`[data-action="${action}"]`);
+    const original = button?.innerHTML;
+    if (button) { button.disabled = true; button.textContent = "Saving..."; }
+    try { await task(); }
+    finally {
+      savePending = false;
+      if (button?.isConnected) { button.disabled = false; button.innerHTML = original; }
+    }
   }
 
   function prefetch() {
@@ -107,8 +141,7 @@
     if (state.data) {
       render();
       if (Date.now() - lastLoadedAt > 15000 && !backgroundRefresh) {
-        const pending = refresh({ background: true }).catch(handleError).finally(() => { if (backgroundRefresh === pending) backgroundRefresh = null; });
-        backgroundRefresh = pending;
+        revalidate();
       }
       return;
     }
@@ -1297,14 +1330,14 @@
       quantity: Number(row.querySelector('[name="quantity"]').value || 1), location: row.querySelector('[name="location"]').value.trim()
     })).filter(unit => unit.reference || unit.type || unit.location);
     const body = { ...fields, units, unitCount: Number(fields.unitCount), visitsPerYear: Number(fields.visitsPerYear), contractValue: Number(fields.contractValue || 0) };
-    try {
+    await whileSaving("save-amc", async () => { try {
       const item = await request(state.drawerId ? `/api/maintenance/contracts/${encodeURIComponent(state.drawerId)}` : "/api/maintenance/contracts",
         { method: state.drawerId ? "PUT" : "POST", body: JSON.stringify(body) });
-      state.drawer = "";
+      upsert("contracts", item);
       state.selectedContractId = item.id;
-      await refresh();
+      showSavedRecord();
       notice(`${item.number} saved`);
-    } catch (error) { formError(error.message || "Unable to save AMC"); }
+    } catch (error) { formError(error.message || "Unable to save AMC"); } });
   }
 
   async function saveSchedule(mode) {
@@ -1314,14 +1347,18 @@
     if (mode === "notify" && (body.technicianIds.length < 1 || body.technicianIds.length > 5)) {
       formError("Assign 1 to 5 technicians"); return;
     }
-    try {
+    await whileSaving(mode === "notify" ? "save-schedule-notify" : "save-schedule-draft", async () => { try {
       const result = await request("/api/maintenance/schedules", { method: "POST", body: JSON.stringify(body) });
       state.scheduleDraft = { ...result.schedule };
-      state.drawer = "";
-      await refresh();
+      upsert("schedules", result.schedule);
+      if (result.workOrder) upsert("workOrders", result.workOrder);
+      const usedNumber = result.workOrder?.number || result.schedule.workOrderNumber;
+      const match = String(usedNumber || "").match(/^(.*?)(\d+)$/);
+      if (!body.id && match) state.data.nextWorkOrderNumber = `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+      showSavedRecord();
       if (result.workOrder) navigate("work-orders", result.workOrder.id);
       else notice("Schedule draft saved");
-    } catch (error) { formError(error.message || "Unable to save schedule"); }
+    } catch (error) { formError(error.message || "Unable to save schedule"); } });
   }
 
   async function saveTechnician() {
@@ -1330,14 +1367,14 @@
     const fields = Object.fromEntries(new FormData(form).entries());
     fields.active = fields.active !== "false";
     fields.offDuty = form.querySelector('[name="offDuty"]').checked;
-    try {
+    await whileSaving("save-technician", async () => { try {
       const item = await request(state.drawerId ? `/api/maintenance/technicians/${encodeURIComponent(state.drawerId)}` : "/api/maintenance/technicians",
         { method: state.drawerId ? "PUT" : "POST", body: JSON.stringify(fields) });
-      state.drawer = "";
+      upsert("technicians", item);
       state.selectedTechnicianId = item.id;
-      await refresh();
+      showSavedRecord();
       notice(`${item.name} saved`);
-    } catch (error) { formError(error.message || "Unable to save technician"); }
+    } catch (error) { formError(error.message || "Unable to save technician"); } });
   }
 
   async function reviewReport(decision) {
@@ -1363,13 +1400,14 @@
     const payload = { fileId: state.srUpload?.fileId, extracted: fields,
       details: { customerName: fields.customerName, workCarriedOut: fields.workCarriedOut, materialsUsed: fields.materialsUsed, remarks: fields.remarks } };
     if (!payload.fileId) return formError("Upload the service report image or PDF first.");
-    try {
+    await whileSaving("submit-report-upload", async () => { try {
       const item = await request("/api/maintenance/reports", { method: "POST", body: JSON.stringify(payload) });
-      state.drawer = ""; state.srUpload = null; state.selectedReportId = item.id; state.reportTab = "Report Details";
+      upsert("reports", item);
+      state.srUpload = null; state.selectedReportId = item.id; state.reportTab = "Report Details";
       state.status.reports = "all"; state.reportFilterDraft = { range: "all", from: "", to: "", customer: "", site: "", technician: "", status: "all" };
       state.reportFilters = { ...state.reportFilterDraft }; state.search.reports = ""; state.pageNumber.reports = 1;
-      await refresh(); notice(`${item.number} submitted for review`);
-    } catch (error) { formError(error.message || "Unable to submit service report"); }
+      showSavedRecord(); notice(`${item.number} submitted for review`);
+    } catch (error) { formError(error.message || "Unable to submit service report"); } });
   }
 
   async function saveReportEdit() {

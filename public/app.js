@@ -336,14 +336,12 @@ async function init() {
   const authenticated = await loadAuth();
   if (!authenticated) return;
   applyRoleAccess();
-  if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(error => console.warn(error));
   if (isPoOnlyUser()) {
     if (location.pathname.match(/^\/projects(?:\/[^/]+)?\/?$/)) await showProjects(location.pathname.split("/")[2] || "");
     else await showProjects();
     warmViewData();
     return;
   }
-  await loadSalesCrm().catch(() => {});
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
   const projectManagementPath = location.pathname.match(/^\/projects(?:\/([^/]+))?\/?$/);
@@ -353,10 +351,13 @@ async function init() {
   } else if (projectManagementPath && canAccessModule("projects")) {
     await showProjects(projectManagementPath[1] || "");
   } else if (projectId) {
+    await loadSalesCrm().catch(() => {});
     await loadProject(projectId);
   } else {
+    await loadSalesCrm().catch(() => {});
     await showSalesDesk("dashboard");
   }
+  warmNavigationData();
   warmViewData();
 }
 
@@ -375,11 +376,15 @@ function bindShell() {
     if (!canAccessModule("projects")) return showLockedModuleToast();
     showProjects();
   });
+  $("#projectsBtn").addEventListener("mouseenter", () => { if (canAccessModule("projects")) window.projectManagement?.prefetch?.().catch(() => {}); });
+  $("#projectsBtn").addEventListener("focus", () => { if (canAccessModule("projects")) window.projectManagement?.prefetch?.().catch(() => {}); });
   $("#maintenanceBtn").addEventListener("click", () => {
     if (!canAccessModule("maintenance")) return showLockedModuleToast();
     if (toggleActiveSidebarGroup("maintenance")) return;
     showMaintenance("dashboard");
   });
+  $("#maintenanceBtn").addEventListener("mouseenter", () => { if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(() => {}); });
+  $("#maintenanceBtn").addEventListener("focus", () => { if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(() => {}); });
   document.querySelectorAll("[data-maintenance-view]").forEach(button => {
     button.addEventListener("click", () => {
       if (!canAccessModule("maintenance")) return showLockedModuleToast();
@@ -528,7 +533,6 @@ async function login(event) {
     appSettings = auth.settings;
     applyAppSettings();
     applyRoleAccess();
-    if (canAccessModule("maintenance")) window.maintenanceModule?.prefetch?.().catch(error => console.warn(error));
     hideLogin();
     if (isPoOnlyUser()) {
       await showProjects();
@@ -540,6 +544,7 @@ async function login(event) {
     const projectId = url.searchParams.get("project");
     if (projectId) await loadProject(projectId);
     else await showSalesDesk("dashboard");
+    warmNavigationData();
     warmViewData();
   } catch {
     $("#loginMessage").textContent = "Invalid email or password.";
@@ -559,9 +564,21 @@ function warmViewData() {
   }
 }
 
+function warmNavigationData() {
+  const run = async () => {
+    if (canAccessModule("maintenance") && activeView !== "maintenance")
+      await window.maintenanceModule?.prefetch?.().catch(() => {});
+    if (canAccessModule("projects") && activeView !== "projects")
+      await window.projectManagement?.prefetch?.().catch(() => {});
+  };
+  if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 800 });
+  else setTimeout(run, 200);
+}
+
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
   window.maintenanceModule?.reset?.();
+  window.projectManagement?.reset?.();
   currentUser = null;
   salesCrmState = null;
   costingState = null;

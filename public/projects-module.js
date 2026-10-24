@@ -11,6 +11,10 @@
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
   let projectSaveQueue = Promise.resolve();
   let projectSaveVersion = 0;
+  let dashboardPrefetch = null;
+  let cacheGeneration = 0;
+  let projectRequest = 0;
+  const projectCache = new Map();
   let gridDragItemId = "";
   let gridDragCategoryId = "";
   const documentCategories = ["Shop Drawings", "Submittals", "Correspondence", "Payment", "Testing & Commissioning", "Handover"];
@@ -58,7 +62,9 @@
       const text = await response.text();
       let message = text;
       try { message = JSON.parse(text).error || message; } catch {}
-      throw new Error(message || "Request failed");
+      const error = new Error(message || "Request failed");
+      error.status = response.status;
+      throw error;
     }
     const type = response.headers.get("content-type") || "";
     return type.includes("application/json") ? response.json() : response.blob();
@@ -68,7 +74,24 @@
     history.replaceState(null, "", path);
   }
 
+  function prefetch() {
+    if (state.dashboard) return Promise.resolve(state.dashboard);
+    if (!dashboardPrefetch) {
+      const generation = cacheGeneration;
+      const pending = api("/api/project-management/dashboard").then(dashboard => {
+        if (generation === cacheGeneration && !state.dashboard) {
+          state.dashboard = dashboard;
+          state.dashboardQuery = "";
+        }
+        return dashboard;
+      }).finally(() => { if (dashboardPrefetch === pending) dashboardPrefetch = null; });
+      dashboardPrefetch = pending;
+    }
+    return dashboardPrefetch;
+  }
+
   async function open(projectId = "", tab = "overview", access = {}) {
+    const request = ++projectRequest;
     state.loginUser = access.user || null;
     state.loginUsers = (access.users || []).filter(user => user.active !== false && user.id && user.name);
     state.tab = tab;
@@ -94,12 +117,35 @@
         state.submittalSearch = "";
         state.expandedSubmittals.clear();
       }
-      state.project = await api(`/api/project-management/projects/${encodeURIComponent(projectId)}`);
+      const cached = state.project?.id === projectId ? state.project : projectCache.get(projectId);
       navigate(`/projects/${encodeURIComponent(projectId)}`);
-      renderDetail();
-      if (tab === "lpos") await loadProjectLpos();
+      if (cached) {
+        state.project = cached;
+        renderDetail();
+      } else {
+        state.project = null;
+        root.innerHTML = `<div class="pm-loading"><span class="pm-spinner"></span> Loading Project...</div>`;
+      }
+      const saveVersion = projectSaveVersion;
+      try {
+        const project = await api(`/api/project-management/projects/${encodeURIComponent(projectId)}`);
+        if (request !== projectRequest || saveVersion !== projectSaveVersion) return;
+        state.project = project;
+        projectCache.set(projectId, project);
+        renderDetail();
+        if (tab === "lpos") await loadProjectLpos();
+      } catch (error) {
+        if (request !== projectRequest) return;
+        if ([401, 403, 404].includes(error.status)) {
+          projectCache.delete(projectId);
+          state.project = null;
+          root.innerHTML = `<div class="pm-empty"><h2>Project unavailable</h2><p>${esc(error.message)}</p></div>`;
+        } else if (cached) toast(`Could not refresh Project: ${error.message}`);
+        else root.innerHTML = `<div class="pm-empty"><h2>Project could not be loaded</h2><p>${esc(error.message)}</p></div>`;
+      }
       return;
     }
+    if (state.project?.id) projectCache.set(state.project.id, state.project);
     state.project = null;
     navigate("/projects");
     await loadDashboard();
@@ -111,9 +157,9 @@
     const hasCachedDashboard = state.dashboard && state.dashboardQuery === query;
     clearTimeout(state.dashboardExpiryTimer);
     if (hasCachedDashboard) renderDashboard();
-    else root.innerHTML = `<div class="pm-loading"><span class="pm-spinner"></span> Loading Projects...</div>`;
+    else if (!state.dashboard) root.innerHTML = `<div class="pm-loading"><span class="pm-spinner"></span> Loading Projects...</div>`;
     try {
-      const dashboard = await api(`/api/project-management/dashboard?q=${encodeURIComponent(query)}`);
+      const dashboard = query || !dashboardPrefetch ? await api(`/api/project-management/dashboard?q=${encodeURIComponent(query)}`) : await dashboardPrefetch;
       if (request !== state.dashboardRequest || state.project) return;
       state.dashboard = dashboard;
       state.dashboardQuery = query;
@@ -121,7 +167,11 @@
       renderDashboard();
     } catch (error) {
       if (request !== state.dashboardRequest || state.project) return;
-      if (hasCachedDashboard) toast(`Could not refresh Projects: ${error.message}`);
+      if ([401, 403].includes(error.status)) {
+        state.dashboard = null;
+        state.dashboardQuery = "";
+        root.innerHTML = `<div class="pm-empty"><h2>Projects unavailable</h2><p>${esc(error.message)}</p></div>`;
+      } else if (state.dashboard) toast(`Could not refresh Projects: ${error.message}`);
       else root.innerHTML = `<div class="pm-empty"><h2>Projects could not be loaded</h2><p>${esc(error.message)}</p></div>`;
     }
   }
@@ -1803,5 +1853,7 @@
   root.addEventListener("change", onChange);
   root.addEventListener("input", onInput);
   root.addEventListener("submit", onSubmit);
-  window.projectManagement = { open };
+  window.projectManagement = { open, prefetch,
+    reset() { cacheGeneration++; projectRequest++; state.dashboardRequest++; state.dashboard = null; state.dashboardQuery = "";
+      state.project = null; projectCache.clear(); dashboardPrefetch = null; } };
 })();
