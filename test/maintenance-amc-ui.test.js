@@ -21,7 +21,7 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
     ],
     workOrders: [{ id: "w1", number: "WO-1", contractId: "a1", workType: "Preventive Maintenance", serviceDate: shift(-5) }],
     reports: [{ id: "r1", number: "SR-1", contractId: "a1", workOrderId: "w1", status: "Approved" }],
-    files: [{ id: "f1", contractId: "a1", originalName: "contract.pdf" }],
+    files: [{ id: "f1", contractId: "a1", kind: "contract", originalName: "contract.pdf" }],
     activity: [1, 2, 3, 4].map(number => ({ targetId: "a1", kind: "contract", message: `Activity ${number}`, actor: "Admin", createdAt: `${shift(-number)}T10:00:00Z` })),
     technicians: [], attendance: [], schedules: [], notifications: []
   };
@@ -35,6 +35,7 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
     fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => summary }),
     crypto: webcrypto, Intl, Date, FormData, Blob, URL: { createObjectURL: () => "blob:amc", revokeObjectURL() {} }, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("amc");
   assert.match(root.innerHTML, /class="maint-page maint-amc-page"/);
@@ -73,16 +74,22 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
   await click("open-contract", { id: "a1" });
   assert.match(root.innerHTML, /Service Schedule/);
   assert.doesNotMatch(root.innerHTML, /Activity 4/);
-  await click("amc-full-details");
+  await click("amc-full-details", { id: "a1" });
+  assert.deepEqual(routes.at(-1), ["amc", "a1"]);
+  await context.window.maintenanceModule.open("amc", "a1");
+  assert.match(root.innerHTML, /class="maint-page maint-amc-full-page"/);
   assert.match(root.innerHTML, /Activity 4/);
-  await click("contract-tab", { tab: "Service Schedule" });
-  assert.match(root.innerHTML, /Visit 1/);
-  await click("contract-tab", { tab: "Service Reports" });
+  await click("billing-amc-tab", { tab: "Service Schedule" });
+  assert.match(root.innerHTML, /Service Schedule/);
+  assert.match(root.innerHTML, /<td>1<\/td>/);
+  await click("billing-amc-tab", { tab: "Service Reports" });
   assert.match(root.innerHTML, /SR-1/);
-  await click("amc-documents", { id: "a1" });
+  await click("billing-amc-tab", { tab: "Documents" });
   assert.match(root.innerHTML, /contract\.pdf/);
-  await click("amc-full-details");
-  assert.match(root.innerHTML, /Full Contract Details/);
+  await click("billing-amc-tab", { tab: "Billing & Payments" });
+  assert.match(root.innerHTML, /Payment Schedule/);
+  await context.window.maintenanceModule.open("amc");
+  assert.match(root.innerHTML, /class="maint-page maint-amc-page"/);
   await click("amc-menu", { id: "a1" });
   assert.match(root.innerHTML, /class="amc-menu-popover"/);
   await click("close-contract");
@@ -97,5 +104,5 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
   await click("close-drawer");
   await click("schedule-for-amc", { id: "a1" });
   assert.match(root.innerHTML, /New Maintenance Schedule/);
-  assert.deepEqual(routes, []);
+  assert.deepEqual(routes.at(-1), ["amc", "a1"]);
 });

@@ -36,6 +36,7 @@ test("AMC save shows the confirmed record without waiting for the summary refres
     FormData: class { constructor(element) { this.values = element.values; } entries() { return Object.entries(this.values)[Symbol.iterator](); } },
     Date, Intl, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("amc");
   const click = () => listeners.click({ target: { dataset: { action: "save-amc" }, classList: { contains: () => false },
@@ -83,6 +84,7 @@ test("editing an AMC immediately updates linked work orders and reports", async 
     FormData: class { constructor(element) { this.values = element.values; } entries() { return Object.entries(this.values)[Symbol.iterator](); } },
     Date, Intl, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("amc");
   const click = (action, id = "") => listeners.click({ target: { dataset: { action, id }, classList: { contains: () => false }, closest() { return this; } } });

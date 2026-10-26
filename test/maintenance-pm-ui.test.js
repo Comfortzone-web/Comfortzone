@@ -37,6 +37,7 @@ test("PM Schedule uses live visits without duplicates and keeps calendar actions
     fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => summary }),
     crypto: webcrypto, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("schedule");
   const click = async (action, extra = {}) => {

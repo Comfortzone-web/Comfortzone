@@ -51,6 +51,7 @@ test("service report directory, filters, details and review controls remain live
         : summary }),
     Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("reports");
   const click = async (action, extra = {}) => {

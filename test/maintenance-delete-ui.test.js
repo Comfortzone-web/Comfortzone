@@ -22,6 +22,7 @@ test("AMC delete menu uses one standard confirmation and refreshes live data", a
     }
     return { ok: true, headers: { get: () => "application/json" }, json: async () => summary };
   }, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   const click = async (action, data = {}, inDialog = false) => {
     const button = { dataset: { action, ...data }, classList: { contains: () => false }, disabled: false,

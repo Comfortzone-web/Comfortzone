@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { createMaintenanceStore } = require("./maintenance-store");
+const { roundMoney, billingRows, billingFor, saveBilling } = require("./maintenance-billing");
 
 let webPush = null;
 try { webPush = require("web-push"); } catch {}
@@ -39,6 +40,11 @@ const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 const fail = (message, status = 400) => { const error = new Error(message); error.status = status; throw error; };
 const find = (items, id) => items.find(item => item.id === id);
 const dateOnly = value => String(value || "").slice(0, 10);
+const dubaiToday = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const part = type => parts.find(item => item.type === type).value;
+  return `${part("year")}-${part("month")}-${part("day")}`;
+};
 
 function planDates(start, end, count) {
   const first = Date.parse(`${start}T12:00:00Z`);
@@ -102,6 +108,7 @@ function deleteWorkOrder(store, id) {
   const reportIds = new Set(store.reports.filter(item => item.workOrderId === id).map(item => item.id));
   const fileIds = new Set(store.files.filter(item => item.workOrderId === id).map(item => item.id));
   store.reports = store.reports.filter(item => !reportIds.has(item.id));
+  store.billingRecords = (store.billingRecords || []).filter(item => item.workOrderId !== id);
   store.files = store.files.filter(item => !fileIds.has(item.id));
   store.attendance = store.attendance.filter(item => item.workOrderId !== id);
   store.drafts = store.drafts.filter(item => item.workOrderId !== id);
@@ -111,6 +118,13 @@ function deleteWorkOrder(store, id) {
   store.visits.filter(item => item.workOrderId === id).forEach(item => Object.assign(item, { workOrderId: "", status: "Planned", completedAt: "" }));
   store.activity = store.activity.filter(item => !reportIds.has(item.targetId) && item.targetId !== id);
   return { job, reports: reportIds.size };
+}
+
+function guardApprovedReportDeletion(store, workOrderIds, role) {
+  if (String(role).toLowerCase() === "admin") return;
+  const ids = new Set(workOrderIds.filter(Boolean));
+  if (store.reports.some(report => ids.has(report.workOrderId) && report.status === "Approved"))
+    fail("Only an Admin can delete approved service reports", 403);
 }
 
 function createNotice(store, technicianId, workOrder, type, message) {
@@ -125,7 +139,7 @@ function createNotice(store, technicianId, workOrder, type, message) {
 function publicState(store) {
   const { invites: _invites, subscriptions: _subscriptions, drafts: _drafts,
     pendingUploadDeletes: _pendingUploadDeletes, ...visible } = store;
-  return { ...visible, nextWorkOrderNumber: nextWorkOrderNumber(store),
+  return { ...visible, billing: billingRows(store), nextWorkOrderNumber: nextWorkOrderNumber(store),
     files: store.files.map(({ storedName: _storedName, ...file }) => file) };
 }
 
@@ -263,7 +277,7 @@ function createMaintenanceApi(deps) {
       units: Array.isArray(body.units) ? body.units.slice(0, 100).map(unit => ({ reference: trim(unit.reference, 80), type: trim(unit.type, 80), quantity: Math.max(1, Number(unit.quantity || 1)), location: trim(unit.location, 120) })) : (existing.units || []) };
   }
 
-  function validateSchedule(store, body, active) {
+  function validateSchedule(store, body, active, { allowUnassigned = false } = {}) {
     const contract = body.contractId ? find(store.contracts, body.contractId) : null;
     if (body.contractId && !contract) fail("AMC contract not found");
     const customerName = contract?.customerName || trim(body.customerName, 150);
@@ -276,7 +290,7 @@ function createMaintenanceApi(deps) {
     const workType = ["Preventive Maintenance", "Complaint / Repair", "Inspection", "Emergency Service", "Other"].includes(body.workType)
       ? body.workType : "Preventive Maintenance";
     const technicianIds = unique(body.technicianIds);
-    if (active && (technicianIds.length < 1 || technicianIds.length > 5)) fail("Assign 1 to 5 technicians");
+    if (active && (technicianIds.length > 5 || (!allowUnassigned && technicianIds.length < 1))) fail("Assign 1 to 5 technicians");
     if (technicianIds.some(id => !find(store.technicians, id) || find(store.technicians, id).active === false)) fail("Select active technicians");
     const visit = body.visitId ? find(store.visits, body.visitId) : null;
     if (body.visitId && (!visit || visit.contractId !== contract?.id)) fail("Selected PM visit does not belong to this AMC");
@@ -323,16 +337,255 @@ function createMaintenanceApi(deps) {
     }
   }
 
+  async function pruneBillingUploads(state) {
+    const referenced = new Set((state.billingRecords || []).flatMap(record => [record.invoice?.fileId,
+      ...(record.payments || []).map(payment => payment.receiptFileId)].filter(Boolean)));
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    if (!state.files.some(file => ["invoice", "receipt"].includes(file.kind) && file.billingId
+      && !referenced.has(file.id) && Date.parse(file.createdAt || "") < cutoff)) return state;
+    const removed = await storage.mutate(store => {
+      const used = new Set((store.billingRecords || []).flatMap(record => [record.invoice?.fileId,
+        ...(record.payments || []).map(payment => payment.receiptFileId)].filter(Boolean)));
+      const orphaned = store.files.filter(file => ["invoice", "receipt"].includes(file.kind) && file.billingId
+        && !used.has(file.id) && Date.parse(file.createdAt || "") < cutoff);
+      const ids = new Set(orphaned.map(file => file.id));
+      store.files = store.files.filter(file => !ids.has(file.id));
+      const names = orphaned.map(file => file.storedName).filter(Boolean);
+      store.pendingUploadDeletes = [...new Set([...store.pendingUploadDeletes, ...names])];
+      return names;
+    });
+    if (removed.length) await flushUploadDeletes(removed);
+    return storage.read();
+  }
+
   async function routeOffice(req, res, url, user) {
     try {
       if (!user || !["admin", "mts"].includes(String(user.role).toLowerCase())) fail("Admin or MTS access required", 403);
       if (req.method !== "GET") sameOrigin(req);
       const parts = url.pathname.split("/").filter(Boolean).slice(2);
       if (req.method === "GET" && parts[0] === "summary") {
-        const state = await storage.read();
+        let state = await storage.read();
         if (state.pendingUploadDeletes.length) await flushUploadDeletes(state.pendingUploadDeletes);
-        return send(res, 200, { ...publicState(state.pendingUploadDeletes.length ? await storage.read() : state),
+        if (state.pendingUploadDeletes.length) state = await storage.read();
+        state = await pruneBillingUploads(state);
+        return send(res, 200, { ...publicState(state),
           viewerRole: String(user.role).toLowerCase() });
+      }
+
+      if (parts[0] === "billing" && parts.length === 2 && parts[1] === "extra" && req.method === "POST") {
+        const body = await readJson(req);
+        const result = await storage.mutate(store => {
+          const job = find(store.workOrders, trim(body.workOrderId, 80));
+          if (!job?.contractId) fail("Choose a work order linked to an AMC");
+          const amountExVat = roundMoney(body.amountExVat);
+          if (!Number.isFinite(Number(body.amountExVat)) || amountExVat <= 0) fail("Enter an additional charge greater than zero");
+          const description = trim(body.description, 300);
+          if (!description) fail("Describe the additional work or parts");
+          const now = isoNow();
+          const record = { id: `extra:${random()}`, sourceType: "Additional Charge", contractId: job.contractId,
+            workOrderId: job.id, reference: job.number, customerName: job.customerName, site: job.site,
+            periodStart: job.serviceDate, periodEnd: job.serviceDate, dueDate: job.serviceDate,
+            amountExVat, vatRate: 5, description, notes: "", request: null, invoice: null,
+            payments: [], credits: 0, createdAt: now, updatedAt: now };
+          saveBilling(store, record);
+          addActivity(store, "billing", job.id, user.name, `Additional charge AED ${amountExVat.toFixed(2)} recorded: ${description}`);
+          return record;
+        });
+        return send(res, 201, result);
+      }
+
+      if (parts[0] === "billing" && parts[1] === "notes" && parts[2] && parts.length === 3 && req.method === "PUT") {
+        const body = await readJson(req);
+        const notes = await storage.mutate(store => {
+          if (!find(store.contracts, parts[2])) fail("AMC contract not found", 404);
+          store.billingNotes ||= {};
+          store.billingNotes[parts[2]] = trim(body.notes, 3000);
+          return store.billingNotes[parts[2]];
+        });
+        return send(res, 200, { notes });
+      }
+
+      if (parts[0] === "billing" && parts[1] && parts.length >= 2) {
+        const id = decodeURIComponent(parts[1]);
+        const action = parts[2] || "";
+        if (action === "uploads" && parts[3] && parts.length === 4 && req.method === "DELETE") {
+          const fileId = parts[3];
+          const removed = await storage.mutate(store => {
+            const file = find(store.files, fileId);
+            if (!file || file.billingId !== id || !["invoice", "receipt"].includes(file.kind)) fail("Billing upload not found", 404);
+            if ((store.billingRecords || []).some(record => record.invoice?.fileId === fileId
+              || (record.payments || []).some(payment => payment.receiptFileId === fileId)))
+              fail("This document is attached to an invoice or payment", 409);
+            store.files = store.files.filter(item => item.id !== fileId);
+            store.pendingUploadDeletes = [...new Set([...store.pendingUploadDeletes, file.storedName])];
+            return file.storedName;
+          });
+          await flushUploadDeletes([removed]);
+          return send(res, 200, { ok: true });
+        }
+        if (!action && req.method === "PUT") {
+          const body = await readJson(req);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record) fail("Billing record not found", 404);
+            if (Object.hasOwn(body, "notes")) record.notes = trim(body.notes, 3000);
+            if (Object.hasOwn(body, "amountExVat")) {
+              if (record.sourceType === "AMC" || record.request || record.invoice) fail("The amount is locked once billing starts", 409);
+              const amount = Number(body.amountExVat);
+              if (!Number.isFinite(amount) || amount < 0) fail("Enter a valid service amount");
+              record.amountExVat = roundMoney(amount);
+            }
+            if (Object.hasOwn(body, "vatRate")) {
+              if (record.invoice) fail("VAT is locked after the invoice is saved", 409);
+              const rate = Number(body.vatRate);
+              if (!Number.isFinite(rate) || rate < 0 || rate > 100) fail("Enter a VAT percentage from 0 to 100");
+              record.vatRate = rate;
+            }
+            if (Object.hasOwn(body, "credits")) {
+              if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can record credits", 403);
+              const credits = Number(body.credits);
+            const paid = (record.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+            if (!Number.isFinite(credits) || credits < 0 || credits > roundMoney(Number(record.invoice?.total || 0) - paid))
+              fail("Credits cannot exceed the unpaid invoice balance");
+              record.credits = roundMoney(credits);
+            }
+            record.updatedAt = isoNow();
+            return saveBilling(store, record);
+          });
+          return send(res, 200, updated);
+        }
+        if (action === "request" && req.method === "POST") {
+          const body = await readJson(req);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record) fail("Billing record not found", 404);
+            if (record.request || record.invoice) fail("An invoice request already exists for this installment or charge", 409);
+            if (Number(record.amountExVat) <= 0) fail("Set the billing amount before requesting an invoice");
+            record.request = { requestedBy: user.name, requestedAt: isoNow(), remarks: trim(body.remarks, 2000),
+              preparedAt: "", handledBy: "" };
+            record.updatedAt = isoNow();
+            saveBilling(store, record);
+            addActivity(store, "billing", record.contractId || record.workOrderId,
+              user.name, `Invoice requested for ${record.reference}${record.installmentNumber ? ` installment ${record.installmentNumber}` : ""}`);
+            return record;
+          });
+          return send(res, 201, updated);
+        }
+        if (action === "handoff" && req.method === "POST") {
+          if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can confirm accountant handoff", 403);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record?.request) fail("Request an invoice first", 409);
+            if (record.request.preparedAt) fail("This invoice was already marked prepared", 409);
+            record.request.preparedAt = isoNow();
+            record.request.handledBy = user.name;
+            record.updatedAt = isoNow();
+            return saveBilling(store, record);
+          });
+          return send(res, 200, updated);
+        }
+        if (["invoice-upload", "receipt-upload"].includes(action) && req.method === "POST") {
+          const record = billingFor(await storage.read(), id);
+          if (!record) fail("Billing record not found", 404);
+          if (action === "receipt-upload" && String(user.role).toLowerCase() !== "admin") fail("Only Admin can upload payment receipts", 403);
+          const kind = action === "invoice-upload" ? "invoice" : "receipt";
+          const file = await acceptFile(req, { kind, billingId: id, contractId: record.contractId, workOrderId: record.workOrderId });
+          await storage.mutate(store => { store.files.push(file); });
+          const extraction = await extractBillingDocument(file, kind);
+          const fields = extraction.fields || {};
+          const warnings = [];
+          if (kind === "invoice") {
+            if (fields.invoiceNumber && billingRows(await storage.read()).some(item => item.invoice?.number?.toLowerCase() === fields.invoiceNumber.toLowerCase()))
+              warnings.push("This invoice number is already recorded.");
+            if (fields.customerName && fields.customerName.toLowerCase() !== record.customerName.toLowerCase())
+              warnings.push("The invoice customer differs from this billing record.");
+            if (fields.sourceReference && fields.sourceReference.toLowerCase() !== record.reference.toLowerCase())
+              warnings.push("The AMC or work order reference differs from this billing record.");
+            if (fields.amountExVat && Math.abs(roundMoney(fields.amountExVat) - roundMoney(record.amountExVat)) > 0.01)
+              warnings.push("The invoice amount before VAT differs from the expected amount.");
+          } else {
+            if (fields.invoiceNumber && record.invoice?.number && fields.invoiceNumber.toLowerCase() !== record.invoice.number.toLowerCase())
+              warnings.push("The receipt invoice number differs from this billing record.");
+            if (fields.amountReceived && roundMoney(fields.amountReceived) > record.outstanding)
+              warnings.push("The receipt amount exceeds the outstanding balance.");
+          }
+          return send(res, 201, { file: publicFile(file), ...extraction, warnings });
+        }
+        if (action === "invoice" && req.method === "POST") {
+          const body = await readJson(req);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record) fail("Billing record not found", 404);
+            if (record.invoice) fail("An invoice is already linked to this installment or charge", 409);
+            const number = trim(body.number, 100);
+            if (!number) fail("Enter the invoice number");
+            if (billingRows(store).some(item => item.invoice?.number?.toLowerCase() === number.toLowerCase())) fail("This invoice number is already used", 409);
+            const date = trim(body.date, 10), dueDate = trim(body.dueDate, 10);
+            if (!validDate(date) || (dueDate && !validDate(dueDate))) fail("Enter a valid invoice date and due date");
+            const exVat = Number(body.amountExVat), vat = Number(body.vatAmount), total = Number(body.total);
+            if (![exVat, vat, total].every(Number.isFinite) || exVat < 0 || vat < 0 || roundMoney(total) <= 0
+              || Math.abs(roundMoney(exVat + vat) - roundMoney(total)) > 0.01) fail("Invoice amounts must add up and be greater than zero");
+            const customerName = trim(body.customerName, 150);
+            const sourceReference = trim(body.sourceReference, 100);
+            const mismatch = (customerName && record.customerName && customerName.toLowerCase() !== record.customerName.toLowerCase())
+              || (sourceReference && sourceReference.toLowerCase() !== record.reference.toLowerCase())
+              || Math.abs(roundMoney(exVat) - roundMoney(record.amountExVat)) > 0.01;
+            if (mismatch && body.confirmMismatch !== true) fail("Invoice customer or amount differs from the billing record. Review and confirm the mismatch.", 409);
+            const fileId = trim(body.fileId, 80);
+            if (fileId && !store.files.some(file => file.id === fileId && file.kind === "invoice" && file.billingId === id))
+              fail("Uploaded invoice does not belong to this billing record", 403);
+            record.request ||= { requestedBy: user.name, requestedAt: isoNow(), remarks: "Entered with invoice", preparedAt: "", handledBy: "" };
+            record.invoice = { number, date, dueDate, customerName: customerName || record.customerName, sourceReference,
+              amountExVat: roundMoney(exVat), vatAmount: roundMoney(vat), total: roundMoney(total),
+              fileId, recordedBy: user.name, recordedAt: isoNow(), sentAt: "", sentBy: "", mismatchConfirmed: !!mismatch };
+            record.updatedAt = isoNow();
+            saveBilling(store, record);
+            addActivity(store, "billing", record.contractId || record.workOrderId,
+              user.name, `Invoice ${number} recorded for ${record.reference}`);
+            return record;
+          });
+          return send(res, 201, updated);
+        }
+        if (action === "sent" && req.method === "POST") {
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record?.invoice) fail("Upload or enter the invoice first", 409);
+            if (record.invoice.sentAt) fail("Invoice already marked sent to customer", 409);
+            record.invoice.sentAt = isoNow(); record.invoice.sentBy = user.name; record.updatedAt = isoNow();
+            return saveBilling(store, record);
+          });
+          return send(res, 200, updated);
+        }
+        if (action === "payments" && req.method === "POST") {
+          if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can confirm payments", 403);
+          const body = await readJson(req);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record?.invoice) fail("Record an invoice before confirming payment", 409);
+            const amount = Number(body.amount);
+            if (!Number.isFinite(amount) || roundMoney(amount) <= 0 || roundMoney(amount) > record.outstanding)
+              fail("Payment must be at least AED 0.01 and no more than the outstanding balance");
+            const date = trim(body.date, 10);
+            if (!validDate(date)) fail("Enter a valid payment date");
+            const reference = trim(body.reference, 120), method = trim(body.method, 80);
+            if (!reference || !method) fail("Enter the payment reference and method");
+            if (billingRows(store).some(item => (item.payments || []).some(payment => payment.reference.toLowerCase() === reference.toLowerCase()
+              && (item.id === id || payment.date === date && roundMoney(payment.amount) === roundMoney(amount)))))
+              fail("This payment reference is already recorded", 409);
+            const receiptFileId = trim(body.receiptFileId, 80);
+            if (receiptFileId && !store.files.some(file => file.id === receiptFileId && file.kind === "receipt" && file.billingId === id))
+              fail("Uploaded receipt does not belong to this billing record", 403);
+            record.payments ||= [];
+            record.payments.push({ id: random(), amount: roundMoney(amount), date, method, reference, receiptFileId,
+              confirmedAt: isoNow(), confirmedBy: user.name });
+            record.updatedAt = isoNow();
+            saveBilling(store, record);
+            addActivity(store, "billing", record.contractId || record.workOrderId,
+              user.name, `Payment AED ${roundMoney(amount).toFixed(2)} confirmed for ${record.invoice.number}`);
+            return record;
+          });
+          return send(res, 201, updated);
+        }
       }
 
       if (req.method === "DELETE" && parts.length === 2 && ["contracts", "schedules", "work-orders", "technicians", "reports"].includes(parts[0])) {
@@ -349,10 +602,13 @@ function createMaintenanceApi(deps) {
             const item = find(store.contracts, id);
             if (!item) fail("AMC contract not found", 404);
             const jobs = store.workOrders.filter(job => job.contractId === id).map(job => job.id);
+            guardApprovedReportDeletion(store, jobs, user.role);
             jobs.forEach(jobId => deleteWorkOrder(store, jobId));
             store.schedules = store.schedules.filter(schedule => schedule.contractId !== id);
             store.visits = store.visits.filter(visit => visit.contractId !== id);
             store.files = store.files.filter(file => file.contractId !== id);
+            store.billingRecords = (store.billingRecords || []).filter(item => item.contractId !== id);
+            if (store.billingNotes) delete store.billingNotes[id];
             store.contracts = store.contracts.filter(contract => contract.id !== id);
             store.activity = store.activity.filter(entry => entry.targetId !== id);
             addActivity(store, "deletion", id, user.name, `${item.number} deleted with ${jobs.length} linked work orders`);
@@ -361,6 +617,7 @@ function createMaintenanceApi(deps) {
           if (kind === "schedules") {
             const item = find(store.schedules, id);
             if (!item) fail("PM schedule not found", 404);
+            guardApprovedReportDeletion(store, [item.workOrderId], user.role);
             const removed = item.workOrderId ? deleteWorkOrder(store, item.workOrderId) : null;
             store.schedules = store.schedules.filter(schedule => schedule.id !== id);
             store.activity = store.activity.filter(entry => entry.targetId !== id);
@@ -368,6 +625,7 @@ function createMaintenanceApi(deps) {
             return finish({ label: item.customerName, linkedWorkOrders: removed ? 1 : 0 });
           }
           if (kind === "work-orders") {
+            guardApprovedReportDeletion(store, [id], user.role);
             const removed = deleteWorkOrder(store, id);
             if (!removed) fail("Work order not found", 404);
             addActivity(store, "deletion", id, user.name, `${removed.job.number} deleted with ${removed.reports} service reports`);
@@ -391,6 +649,8 @@ function createMaintenanceApi(deps) {
           }
           const item = find(store.reports, id);
           if (!item) fail("Service report not found", 404);
+          if (item.status === "Approved" && String(user.role).toLowerCase() !== "admin")
+            fail("Only an Admin can delete approved service reports", 403);
           store.reports = store.reports.filter(report => report.id !== id);
           const reportFiles = new Set([...(item.fileIds || []), item.originalFileId, item.signatureFileId,
             ...(item.versions || []).flatMap(version => version.fileIds || [])].filter(Boolean));
@@ -439,6 +699,10 @@ function createMaintenanceApi(deps) {
           const contract = find(store.contracts, parts[1]);
           if (!contract) fail("AMC contract not found", 404);
           const input = contractInput(body, contract);
+          if ((input.visitsPerYear !== contract.visitsPerYear || input.startDate !== contract.startDate
+            || input.endDate !== contract.endDate || input.contractValue !== contract.contractValue)
+            && (store.billingRecords || []).some(row => row.contractId === contract.id && (row.request || row.invoice || row.payments?.length)))
+            fail("Billing has started for this AMC. Preserve the contract value and payment schedule.", 409);
           if (store.contracts.some(item => item.id !== contract.id
             && String(item.number || "").toLocaleLowerCase("en-US") === input.number.toLocaleLowerCase("en-US")))
             fail("This AMC number is already in use", 409);
@@ -480,6 +744,7 @@ function createMaintenanceApi(deps) {
       if (parts[0] === "schedules" && parts.length === 1 && req.method === "POST") {
         const body = await readJson(req);
         const published = body.mode === "notify";
+        const finished = body.mode === "finished";
         const noticeIds = [];
         const result = await storage.mutate(store => {
           const current = body.id ? find(store.schedules, body.id) : store.schedules.find(item => item.clientKey && item.clientKey === body.clientKey);
@@ -492,7 +757,9 @@ function createMaintenanceApi(deps) {
             || store.schedules.some(item => item.id !== current?.id && !item.workOrderId
               && trim(item.workOrderNumber, 100).toLocaleLowerCase("en-US") === normalizedNumber))
             fail(`Work Order Number ${workOrderNumber} already exists`, 409);
-          const input = validateSchedule(store, body, published ? (current || {}) : null);
+          const input = validateSchedule(store, body, published || finished ? (current || {}) : null, { allowUnassigned: finished });
+          if (finished && (!input.contractId || !input.visitId)) fail("Choose a planned visit from an AMC contract");
+          if (finished && input.serviceDate >= dubaiToday()) fail("Mark as Finished is available only for past service dates");
           const now = isoNow();
           const priorDate = current?.serviceDate;
           const previousIds = [...(current?.technicianIds || [])];
@@ -503,17 +770,37 @@ function createMaintenanceApi(deps) {
             const previousVisit = find(store.visits, current.visitId);
             if (previousVisit && previousVisit.workOrderId === current.workOrderId) Object.assign(previousVisit, { workOrderId: "", status: "Planned" });
           }
-          Object.assign(schedule, input, { workOrderNumber, status: published ? "Scheduled" : "Draft", updatedAt: now });
+          Object.assign(schedule, input, { workOrderNumber, status: finished ? "Report Submitted" : published ? "Scheduled" : "Draft", updatedAt: now });
           const sequencePrefix = `WO-${new Date().getFullYear()}-`;
           const suffix = workOrderNumber.toUpperCase().startsWith(sequencePrefix) ? workOrderNumber.slice(sequencePrefix.length) : "";
           if (/^\d+$/.test(suffix)) store.sequence.workOrder = Math.max(Number(store.sequence.workOrder || 0), Number(suffix));
           if (!current) store.schedules.unshift(schedule);
-          if (published) {
+          if (published || finished) {
             const job = workOrderFromSchedule(store, schedule, linked);
             schedule.workOrderId = job.id;
             if (schedule.visitId) {
               const visit = find(store.visits, schedule.visitId);
-              Object.assign(visit, { workOrderId: job.id, plannedDate: schedule.serviceDate, status: "Scheduled" });
+              Object.assign(visit, { workOrderId: job.id, plannedDate: schedule.serviceDate,
+                status: finished ? "Completed" : "Scheduled", ...(finished ? { completedAt: now } : {}) });
+            }
+            if (finished) {
+              const workCarriedOut = "Marked as Service Work Finished";
+              const reportNumber = nextReportNumber(store);
+              const extracted = Object.fromEntries(REPORT_FIELDS.map(key => [key, ""]));
+              Object.assign(extracted, { reportNumber, serviceDate: input.serviceDate, customerName: input.customerName,
+                siteName: input.site, technicianName: input.technicianIds.map(id => find(store.technicians, id)?.name).filter(Boolean).join(", "),
+                workCarriedOut });
+              const report = { id: random(), number: reportNumber, workOrderId: job.id, contractId: input.contractId,
+                visitId: input.visitId, createdAt: now, history: [{ at: now, actor: user.name, action: "Created from completed AMC visit" }],
+                versions: [], type: "Manual Entry", details: { customerName: input.customerName, workCarriedOut, materialsUsed: "", remarks: "" },
+                checklist: {}, extracted, fileIds: [], originalFileId: "", signatureFileId: "", status: "Pending Review",
+                submittedAt: now, submittedBy: user.name, reviewReason: "" };
+              job.status = "Report Submitted";
+              job.updatedAt = now;
+              store.reports.unshift(report);
+              addActivity(store, "workOrder", job.id, user.name, `${job.number} marked finished; ${report.number} submitted for review`);
+              addActivity(store, "report", report.id, user.name, `${report.number} created from an AMC visit`);
+              return { schedule, workOrder: job, report };
             }
             const type = priorDate && priorDate !== schedule.serviceDate ? "rescheduled" : "assigned";
             if (!current || priorDate !== schedule.serviceDate || priorTechnicians !== JSON.stringify(input.technicianIds)) {
@@ -810,8 +1097,9 @@ function createMaintenanceApi(deps) {
     else if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) { mimeType = "image/jpeg"; extension = ".jpg"; }
     else if (bytes.toString("ascii", 0, 4) === "RIFF" && bytes.toString("ascii", 8, 12) === "WEBP") { mimeType = "image/webp"; extension = ".webp"; }
     else if (bytes.toString("ascii", 0, 5) === "%PDF-") { mimeType = "application/pdf"; extension = ".pdf"; }
-    if (!mimeType || (target.kind !== "contract" && target.kind !== "original" && mimeType === "application/pdf")) fail("Use PNG, JPEG, WebP, or PDF where supported");
+    if (!mimeType || (!["contract", "original", "invoice", "receipt"].includes(target.kind) && mimeType === "application/pdf")) fail("Use PNG, JPEG, WebP, or PDF where supported");
     const file = { id: random(), kind: target.kind, contractId: target.contractId || "", workOrderId: target.workOrderId || "",
+      billingId: target.billingId || "",
       technicianId: target.technicianId || "", originalName: path.basename(part.filename).replace(/[\r\n"\\]/g, "").slice(0, 180),
       storedName: `${random()}${extension}`, mimeType, size: bytes.length, createdAt: isoNow() };
     await saveUpload("maintenance", file.storedName, bytes, mimeType);
@@ -886,7 +1174,8 @@ function createMaintenanceApi(deps) {
         }
       }
     } else {
-      section("Handwritten report details", REPORT_FIELDS.map(key => `${key}: ${report.extracted?.[key] || "-"}`).join("\n"));
+      section(report.type === "Handwritten Upload" ? "Handwritten report details" : "Service report details",
+        REPORT_FIELDS.map(key => `${key}: ${report.extracted?.[key] || "-"}`).join("\n"));
     }
     const attachments = (report.fileIds || []).map(id => find(store.files, id)).filter(Boolean);
     for (const file of attachments.filter(item => item.mimeType.startsWith("image/")).slice(0, 8)) {
@@ -917,8 +1206,8 @@ function createMaintenanceApi(deps) {
       attendance: store.attendance.filter(item => item.workOrderId === job.id),
       report: store.reports.find(item => item.workOrderId === job.id) || null,
       draft: store.drafts.find(item => item.workOrderId === job.id)?.data || null,
-      files: store.files.filter(item => item.workOrderId === job.id).map(publicFile),
-      activity: store.activity.filter(item => item.targetId === job.id).slice(0, 20) };
+      files: store.files.filter(item => item.workOrderId === job.id && !["invoice", "receipt"].includes(item.kind)).map(publicFile),
+      activity: store.activity.filter(item => item.targetId === job.id && item.kind !== "billing").slice(0, 20) };
   }
 
   async function extractHandwritten(file) {
@@ -941,6 +1230,41 @@ function createMaintenanceApi(deps) {
       try { return { available: true, fields: JSON.parse(text), message: "Review every extracted field before submitting." }; }
       catch { return { available: false, fields: {}, message: "AI extraction could not be read. Enter details manually." }; }
     } catch { return { available: false, fields: {}, message: "AI extraction is unavailable. Enter details manually." }; }
+  }
+
+  async function extractBillingDocument(file, kind) {
+    if (!process.env.OPENAI_API_KEY) return { available: false, fields: {},
+      message: "AI extraction is not configured. Enter and verify the document details manually." };
+    const bytes = await readUpload("maintenance", file.storedName);
+    if (!bytes) return { available: false, fields: {}, message: "Document saved. Enter the details manually." };
+    const isInvoice = kind === "invoice";
+    const names = isInvoice
+      ? ["invoiceNumber", "invoiceDate", "customerName", "sourceReference", "amountExVat", "vatAmount", "total", "dueDate"]
+      : ["invoiceNumber", "paymentDate", "amountReceived", "paymentMethod", "paymentReference"];
+    const dataUrl = `data:${file.mimeType};base64,${bytes.toString("base64")}`;
+    const instruction = isInvoice
+      ? "Extract only clearly visible fields from this maintenance invoice: invoice number, invoice date, customer name, AMC or work order reference, amount before VAT, VAT amount, total amount and payment due date."
+      : "Extract only clearly visible fields from this payment receipt: invoice number, payment date, amount received, payment method and payment reference.";
+    const content = [{ type: "input_text", text: `${instruction} Use YYYY-MM-DD for dates and plain decimal numbers without currency symbols or separators for amounts. Return empty strings for missing or uncertain fields. Never infer or invent values. Return JSON only.` },
+      file.mimeType === "application/pdf" ? { type: "input_file", filename: file.originalName, file_data: dataUrl }
+        : { type: "input_image", image_url: dataUrl }];
+    const schema = { type: "object", additionalProperties: false,
+      properties: Object.fromEntries(names.map(name => [name, { type: "string" }])), required: names };
+    try {
+      const response = await fetch("https://api.openai.com/v1/responses", { method: "POST", signal: AbortSignal.timeout(18000),
+        headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: process.env.OPENAI_MODEL || "gpt-4.1-mini", input: [{ role: "user", content }],
+          text: { format: { type: "json_schema", name: isInvoice ? "maintenance_invoice_extract" : "maintenance_receipt_extract", strict: true, schema } } }) });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) return { available: false, fields: {}, message: "AI extraction is unavailable. Enter and verify the document details manually." };
+      const output = result.output_text || (result.output || []).flatMap(item => item.content || [])
+        .filter(item => item.type === "output_text").map(item => item.text).join("");
+      const parsed = JSON.parse(output);
+      const fields = Object.fromEntries(names.map(name => [name, typeof parsed[name] === "string" ? parsed[name].trim() : ""]));
+      return { available: true, fields, message: "AI extracted document details. Verify every field before saving." };
+    } catch {
+      return { available: false, fields: {}, message: "AI extraction is unavailable. Enter and verify the document details manually." };
+    }
   }
 
   async function routeField(req, res, url) {
@@ -1106,7 +1430,8 @@ function createMaintenanceApi(deps) {
           const prior = store.reports.find(item => item.workOrderId === job.id);
           if (prior && !["Revision", "Rejected"].includes(prior.status)) fail("A report is already awaiting review", 409);
           const fileIds = unique(body.fileIds);
-          if (fileIds.some(id => !store.files.some(file => file.id === id && file.workOrderId === job.id))) fail("A report file does not belong to this job", 403);
+          if (fileIds.some(id => !store.files.some(file => file.id === id && file.workOrderId === job.id
+            && ["photo", "original", "signature"].includes(file.kind)))) fail("A report file does not belong to this job", 403);
           const originalFileId = trim(body.originalFileId, 80);
           const signatureFileId = trim(body.signatureFileId, 80);
           if (type === "Handwritten Upload" && !store.files.some(file => file.id === originalFileId && file.workOrderId === job.id && file.kind === "original")) fail("Upload the original handwritten report first");
@@ -1145,7 +1470,8 @@ function createMaintenanceApi(deps) {
       }
       if (parts[0] === "files" && parts[1] && req.method === "GET") {
         const file = find(auth.state.files, parts[1]);
-        if (!file || !file.workOrderId || !auth.state.workOrders.some(job => job.id === file.workOrderId && job.technicianIds.includes(technicianId))) fail("File not found", 404);
+        if (!file || ["invoice", "receipt"].includes(file.kind) || !file.workOrderId
+          || !auth.state.workOrders.some(job => job.id === file.workOrderId && job.technicianIds.includes(technicianId))) fail("File not found", 404);
         return serveFile(res, file);
       }
       if (parts[0] === "push-subscription" && req.method === "POST") {

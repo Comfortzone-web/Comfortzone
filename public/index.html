@@ -6,7 +6,7 @@
   <title>HVAC Workflow App</title>
   <link rel="stylesheet" href="/styles.css?v=20260727-area-ypiece-fix">
   <link rel="stylesheet" href="/projects.css?v=20261006-projects-style-2">
-  <link rel="stylesheet" href="/maintenance.css?v=20261023-accepted-card">
+  <link rel="stylesheet" href="/maintenance.css?v=20261026-billing">
 </head>
 <body class="auth-pending">
   <aside class="sidebar">
@@ -47,6 +47,7 @@
     <div id="maintenanceSubnav" class="subnav maintenance-subnav hidden">
       <button data-maintenance-view="dashboard">Dashboard</button>
       <button data-maintenance-view="amc">AMC Register</button>
+      <button data-maintenance-view="billing">Billing &amp; Payments</button>
       <button data-maintenance-view="schedule">PM Schedule</button>
       <button data-maintenance-view="work-orders">Work Orders</button>
       <button data-maintenance-view="technicians">Technicians</button>
@@ -163,7 +164,8 @@
   </template>
 
   <script src="/projects-module.js?v=20261024-stale-refresh"></script>
-  <script src="/maintenance.js?v=20261024-fast-save"></script>
-  <script src="/app.js?v=20261024-fast-navigation"></script>
+  <script src="/maintenance-billing.js?v=20261026-billing"></script>
+  <script src="/maintenance.js?v=20261026-billing"></script>
+  <script src="/app.js?v=20261026-billing"></script>
 </body>
 </html>

@@ -39,6 +39,7 @@ test("dashboard renders live data and keeps its controls connected", async () =>
     fetch: async () => { summaryRequests++; return { ok: true, headers: { get: () => "application/json" }, json: async () => summary }; },
     crypto: webcrypto, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.prefetch();
   assert.equal(root.innerHTML, "");

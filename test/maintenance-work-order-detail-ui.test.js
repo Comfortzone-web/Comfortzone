@@ -52,6 +52,7 @@ test("single work-order detail keeps live tabs, permissions, workflow timing and
     },
     crypto: webcrypto, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
   };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
   await context.window.maintenanceModule.open("work-orders", "w1");
   const click = async (action, extra = {}) => {

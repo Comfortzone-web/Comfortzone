@@ -345,7 +345,7 @@ async function init() {
   const url = new URL(location.href);
   const projectId = url.searchParams.get("project");
   const projectManagementPath = location.pathname.match(/^\/projects(?:\/([^/]+))?\/?$/);
-  const maintenancePath = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
+  const maintenancePath = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|billing|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
   if (maintenancePath && canAccessModule("maintenance")) {
     await showMaintenance(maintenancePath[1] || "dashboard", maintenancePath[2] || "", false);
   } else if (projectManagementPath && canAccessModule("projects")) {
@@ -393,7 +393,7 @@ function bindShell() {
     });
   });
   window.addEventListener("popstate", () => {
-    const match = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
+    const match = location.pathname.match(/^\/maintenance(?:\/(dashboard|amc|billing|schedule|work-orders|technicians|reports))?(?:\/([^/]+))?\/?$/);
     if (match && canAccessModule("maintenance")) showMaintenance(match[1] || "dashboard", match[2] || "", false);
   });
   $("#documentsBtn").addEventListener("click", () => {
