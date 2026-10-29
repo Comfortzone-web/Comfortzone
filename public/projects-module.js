@@ -11,6 +11,7 @@
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
   let projectSaveQueue = Promise.resolve();
   let projectSaveVersion = 0;
+  let paymentSaveTimer = null;
   let dashboardPrefetch = null;
   let cacheGeneration = 0;
   let projectRequest = 0;
@@ -91,6 +92,8 @@
   }
 
   async function open(projectId = "", tab = "overview", access = {}) {
+    const sameProject = state.project?.id === projectId;
+    flushPaymentSave().catch(error => toast(error.message));
     const request = ++projectRequest;
     state.loginUser = access.user || null;
     state.loginUsers = (access.users || []).filter(user => user.active !== false && user.id && user.name);
@@ -128,6 +131,7 @@
       }
       const saveVersion = projectSaveVersion;
       try {
+        if (sameProject) await projectSaveQueue;
         const project = await api(`/api/project-management/projects/${encodeURIComponent(projectId)}`);
         if (request !== projectRequest || saveVersion !== projectSaveVersion) return;
         state.project = project;
@@ -722,7 +726,7 @@
         ? `<div class="pm-invoice-attached"><strong title="${esc(invoice.originalName)}">${esc(invoice.originalName)}</strong><div class="pm-invoice-meta"><small class="${invoicePending ? "pm-invoice-review-note" : ""}">${invoicePending ? "Needs review" : "Invoice confirmed"}</small><div class="pm-invoice-actions"><button type="button" data-pm-action="preview-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Preview</button><button type="button" data-pm-action="download-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Download</button>${invoicePending ? `<button type="button" class="pm-invoice-verify" data-pm-action="review-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}">Verify</button>` : ""}</div></div></div>`
         : `<button type="button" class="pm-invoice-upload" data-pm-action="choose-invoice" data-pm-section="${paymentSection}" data-pm-row-id="${esc(item.id)}"><span aria-hidden="true">↑</span> Upload Invoice</button>${fileInput}`;
       const amountAttrs = amountLocked ? `disabled title="${invoicePending ? "Verify the invoice to confirm its amounts" : "Received amount is locked"}"` : "";
-      return `<tr><td>${index + 1}</td><td><input data-pm-item="${section}" data-pm-index="${index}" data-pm-field="milestone" value="${esc(item.milestone)}" aria-label="Payment details ${index + 1}"></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amountWithoutVat" value="${esc(item.amountWithoutVat ?? "")}" aria-label="Amount without VAT for ${esc(label)}" ${amountAttrs}></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amount" value="${esc(item.amount)}" aria-label="Amount including VAT for ${esc(label)}" ${amountAttrs}></td>${variation ? "" : `<td><output class="pm-payment-percentage">${item.amount === "" ? "" : `${paymentPercentage(item.amount, project.contractValue)}%`}</output></td>`}<td><input type="date" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="dueDate" value="${esc(item.dueDate)}" aria-label="Payment date for ${esc(label)}" ${invoice ? "disabled" : ""}></td><td>${statusSelect(section, index, "status", ["Pending", "Proforma sent", "Received"], item.status === "Paid" ? "Received" : item.status, Boolean(invoice))}</td><td class="pm-invoice-cell">${invoiceCell}</td><td class="pm-delete-cell"><button class="pm-row-action pm-payment-delete" type="button" title="Delete payment row" aria-label="Delete ${esc(label)}" data-pm-action="delete-row" data-pm-section="${section}" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`;
+      return `<tr data-pm-payment-row><td>${index + 1}</td><td><input data-pm-item="${section}" data-pm-index="${index}" data-pm-field="milestone" value="${esc(item.milestone)}" aria-label="Payment details ${index + 1}"></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amountWithoutVat" value="${esc(item.amountWithoutVat ?? "")}" aria-label="Amount without VAT for ${esc(label)}" ${amountAttrs}></td><td><input type="number" min="0" step="0.01" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="amount" value="${esc(item.amount)}" aria-label="Amount including VAT for ${esc(label)}" ${amountAttrs}></td>${variation ? "" : `<td><output class="pm-payment-percentage">${item.amount === "" ? "" : `${paymentPercentage(item.amount, project.contractValue)}%`}</output></td>`}<td><input type="date" data-pm-item="${section}" data-pm-index="${index}" data-pm-field="dueDate" value="${esc(item.dueDate)}" aria-label="Payment date for ${esc(label)}" ${invoice ? "disabled" : ""}></td><td>${statusSelect(section, index, "status", ["Pending", "Proforma sent", "Received"], item.status === "Paid" ? "Received" : item.status, Boolean(invoice))}</td><td class="pm-invoice-cell">${invoiceCell}</td><td class="pm-delete-cell"><button class="pm-row-action pm-payment-delete" type="button" title="Delete payment row" aria-label="Delete ${esc(label)}" data-pm-action="delete-row" data-pm-section="${section}" data-pm-index="${index}"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 6 8 8M14 6l-8 8"></path></svg></button></td></tr>`;
     }).join("");
     return `<div class="pm-table-wrap"><table class="pm-table pm-edit-table pm-payment-table${variation ? " pm-variation-table" : ""}"><colgroup><col span="${variation ? 7 : 8}"><col class="pm-payment-action-col"></colgroup><thead><tr><th>#</th><th>Payment Details</th><th>Amount (AED) Without VAT</th><th>Amount (AED) Incl VAT</th>${variation ? "" : "<th>%</th>"}<th>Payment Date</th><th>Status</th><th>Upload Invoice</th><th class="pm-delete-col"></th></tr></thead><tbody>${rows || `<tr><td colspan="${variation ? 8 : 9}" class="pm-table-empty">No payment milestones yet.</td></tr>`}</tbody></table></div>`;
   }
@@ -732,6 +736,53 @@
       ? `<section class="pm-panel pm-payment-panel"><div class="pm-panel-head"><div><h2>Variation Payment</h2><p>The outstanding variation payment is ${Number(project.variationContractValue) > 0 ? `<strong class="pm-payment-outstanding">${moneyWithCents(variationPaymentOutstanding(project))} Incl VAT</strong>` : "not specified (set the variation contract value)"}.</p></div></div>${paymentTable(project, "variationPayments")}</section>`
       : "";
     return `<div class="pm-payment-stack"><section class="pm-panel pm-payment-panel"><div class="pm-panel-head"><div><h2>Payment Terms</h2><p>The outstanding payment for the project is <strong class="pm-payment-outstanding">${moneyWithCents(project.derived.pendingPayment)} Incl VAT</strong>.</p></div><div class="pm-payment-actions"><button class="pm-secondary" data-pm-action="add-row" data-pm-section="variationPayments">＋ Add Variation Payment</button><button class="pm-secondary" data-pm-action="add-row" data-pm-section="payments">＋ Add Payment</button></div></div>${paymentTable(project, "payments")}</section>${variation}</div>`;
+  }
+
+  function refreshPaymentFeedback(project) {
+    const received = Number((project.payments || []).reduce((sum, row) =>
+      /^received$/i.test(String(row.status || "").trim()) ? sum + Number(row.amount || 0) : sum, 0).toFixed(2));
+    const contractWithVat = vatInclusiveAmount(project.contractValue);
+    const pending = Math.max(0, Number((contractWithVat - received).toFixed(2)));
+    project.derived = { ...project.derived, receivedPayment: received,
+      paymentStatus: `AED ${received.toLocaleString("en-AE", { maximumFractionDigits: 2 })} Received`, pendingPayment: pending };
+    const paymentOutstanding = root.querySelector(".pm-payment-stack > .pm-payment-panel .pm-payment-outstanding");
+    if (paymentOutstanding) paymentOutstanding.textContent = `${moneyWithCents(pending)} Incl VAT`;
+    const variationOutstanding = root.querySelector(".pm-payment-stack > .pm-payment-panel:nth-child(2) .pm-payment-outstanding");
+    if (variationOutstanding) variationOutstanding.textContent = `${moneyWithCents(variationPaymentOutstanding(project))} Incl VAT`;
+    const stats = root.querySelectorAll(".pm-detail-kpis .pm-detail-stat");
+    const paymentStat = stats[2];
+    if (paymentStat) {
+      paymentStat.querySelector("strong").textContent = project.derived.paymentStatus;
+      const receivedPercent = contractWithVat ? Math.min(100, received / contractWithVat * 100) : 0;
+      paymentStat.querySelector(".pm-mini-progress i").style.width = `${receivedPercent}%`;
+      paymentStat.querySelector("small").textContent = contractWithVat ? `${Math.max(0, Math.round(100 - receivedPercent))}% Pending` : "Pending amount not specified";
+    }
+    const variationStat = stats[3];
+    if (variationStat) {
+      const variationReceived = variationPaymentReceived(project);
+      const variationContractWithVat = vatInclusiveAmount(project.variationContractValue);
+      const variationPercent = variationContractWithVat > 0 ? Math.min(100, variationReceived / variationContractWithVat * 100) : 0;
+      variationStat.querySelector("strong").textContent = `${moneyWithCents(variationReceived)} Received`;
+      variationStat.querySelector(".pm-mini-progress i").style.width = `${variationPercent}%`;
+      variationStat.querySelector("small").textContent = variationContractWithVat > 0 ? `${Math.max(0, Math.round(100 - variationPercent))}% Pending` : "Variation contract value not set";
+    }
+  }
+
+  function refreshPaymentRow(input, row, project) {
+    const tableRow = input.closest("tr");
+    if (!tableRow) return;
+    if (["amount", "amountWithoutVat"].includes(input.dataset.pmField)) {
+      const otherField = input.dataset.pmField === "amount" ? "amountWithoutVat" : "amount";
+      const otherInput = tableRow.querySelector(`[data-pm-field="${otherField}"]`);
+      if (otherInput) otherInput.value = row[otherField];
+      const percentage = tableRow.querySelector(".pm-payment-percentage");
+      if (percentage) percentage.textContent = row.amount === "" ? "" : `${paymentPercentage(row.amount, project.contractValue)}%`;
+    }
+    if (input.dataset.pmField === "status") {
+      input.className = `pm-status-select pm-status-${statusClass(row.status)}`;
+      const locked = /^(received|paid)$/i.test(String(row.status || "").trim()) || Boolean(row.invoice);
+      tableRow.querySelectorAll('[data-pm-field="amount"], [data-pm-field="amountWithoutVat"]').forEach(field => { field.disabled = locked; });
+    }
   }
 
   function invoicePath(section, rowId) {
@@ -763,7 +814,7 @@
     const button = cell?.querySelector('[data-pm-action="choose-invoice"]');
     if (button) { button.disabled = true; button.textContent = "Processing invoice..."; }
     try {
-      await projectSaveQueue;
+      await flushPaymentSave();
       const form = new FormData();
       form.append("file", file);
       state.project = await api(invoicePath(section, rowId), { method: "POST", body: form });
@@ -1039,6 +1090,33 @@
     root.querySelector('[data-pm-action="followup-menu"][aria-expanded="true"]')?.setAttribute("aria-expanded", "false");
   }
 
+  function cancelPendingPaymentSave() {
+    if (!paymentSaveTimer) return;
+    clearTimeout(paymentSaveTimer);
+    paymentSaveTimer = null;
+  }
+
+  function reconcilePaymentView(projectId) {
+    if (state.project?.id !== projectId) return;
+    const visiblePayments = root.querySelectorAll(".pm-payment-table:not(.pm-variation-table) [data-pm-payment-row]").length;
+    const visibleVariations = root.querySelectorAll(".pm-variation-table [data-pm-payment-row]").length;
+    if (state.tab === "payment" && (visiblePayments !== state.project.payments.length || visibleVariations !== state.project.variationPayments.length)) renderDetail();
+    else refreshPaymentFeedback(state.project);
+  }
+
+  function flushPaymentSave() {
+    if (!paymentSaveTimer) return projectSaveQueue;
+    cancelPendingPaymentSave();
+    if (!state.project?.id) return projectSaveQueue;
+    const projectId = state.project.id;
+    return saveProjectPayload(projectPayload(state.project), "", { quiet: true }).then(() => reconcilePaymentView(projectId));
+  }
+
+  function schedulePaymentSave() {
+    cancelPendingPaymentSave();
+    paymentSaveTimer = setTimeout(() => flushPaymentSave().catch(error => toast(error.message)), 600);
+  }
+
   function openFollowUpMenu(button) {
     const wasOpen = button.getAttribute("aria-expanded") === "true";
     closeFollowUpMenu();
@@ -1127,7 +1205,7 @@
     const button = root.querySelector('[data-pm-action="choose-boq-import"]');
     if (button) { button.disabled = true; button.textContent = "Importing..."; }
     try {
-      await projectSaveQueue;
+      await flushPaymentSave();
       const form = new FormData();
       form.append("file", file);
       state.project = await api(`/api/project-management/projects/${encodeURIComponent(state.project.id)}/boq/import`, { method: "POST", body: form });
@@ -1263,6 +1341,14 @@
       else row.amountWithoutVat = input.value === "" ? "" : Number((Number(input.value) / 1.05).toFixed(2));
       row.percentage = paymentPercentage(row.amount, Number(next.contractValue || 0));
     }
+    if (payment) {
+      refreshPaymentRow(input, next[collection][index], next);
+      refreshPaymentFeedback(next);
+      state.project = next;
+      projectSaveVersion++;
+      schedulePaymentSave();
+      return;
+    }
     await saveProjectPayload(projectPayload(next), "Project progress saved");
   }
 
@@ -1340,6 +1426,7 @@
         state.filter = target.dataset.pmTab === "followups" ? "attention" : "all";
         return renderDashboard();
       }
+      if (state.tab === "payment") flushPaymentSave().catch(error => toast(error.message));
       state.tab = target.dataset.pmTab;
       renderDetail();
       if (state.tab === "lpos") await loadProjectLpos();
@@ -1596,7 +1683,13 @@
         return Math.max(highest, match ? Number(match[1]) : 0);
       }, next.variationPayments.length) + 1 : 0;
       const row = section === "submittals" ? { id: crypto.randomUUID(), item: "New Submittal", status: "Pending", comments: "" } : section === "installationItems" ? { id: crypto.randomUUID(), item: "New Work Item", lpo_status: "not_started", delivered_status: "not_started", installation_status: "not_started", progress: 0, comments: "" } : section === "testingItems" ? { id: crypto.randomUUID(), activity: "New Activity", status: "Not Started", comments: "" } : { id: crypto.randomUUID(), milestone: section === "variationPayments" ? `Variation ${variationNumber}` : "New Milestone", percentage: 0, amountWithoutVat: "", amount: "", dueDate: "", status: "Pending", comments: "" };
-      next[section].push(row); await saveProjectPayload(projectPayload(next), section === "variationPayments" ? "Variation payment added" : "Checklist row added"); return;
+      next[section].push(row);
+      if (["payments", "variationPayments"].includes(section)) {
+        cancelPendingPaymentSave();
+        await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true })
+          .then(() => reconcilePaymentView(next.id)).catch(error => toast(error.message));
+      } else await saveProjectPayload(projectPayload(next), "Checklist row added");
+      return;
     }
     if (action === "delete-row") {
       const section = target.dataset.pmSection;
@@ -1605,7 +1698,12 @@
       if (!row || !confirm(`Delete ${row.item || row.activity || row.milestone || "this row"}?`)) return;
       const next = structuredClone(state.project);
       next[section].splice(index, 1);
-      await saveProjectPayload(projectPayload(next), section === "variationPayments" ? "Variation payment deleted" : "Work item deleted"); return;
+      if (["payments", "variationPayments"].includes(section)) {
+        cancelPendingPaymentSave();
+        await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true })
+          .then(() => reconcilePaymentView(next.id)).catch(error => toast(error.message));
+      } else await saveProjectPayload(projectPayload(next), "Work item deleted");
+      return;
     }
     if (action === "delete-project") {
       if (!confirm("Delete this project and its documents? This cannot be undone.")) return;
@@ -1737,7 +1835,7 @@
     }
     try {
       if (form.dataset.pmForm === "invoice-review") {
-        await projectSaveQueue;
+        await flushPaymentSave();
         state.project = await api(`${invoicePath(form.dataset.pmSection, form.dataset.pmRowId)}/confirm`, {
           method: "POST", body: JSON.stringify({ ...data, invoiceId: paymentRow(form.dataset.pmSection, form.dataset.pmRowId)?.invoice?.id })
         });
@@ -1853,7 +1951,11 @@
   root.addEventListener("change", onChange);
   root.addEventListener("input", onInput);
   root.addEventListener("submit", onSubmit);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPaymentSave().catch(error => toast(error.message));
+  });
   window.projectManagement = { open, prefetch,
-    reset() { cacheGeneration++; projectRequest++; state.dashboardRequest++; state.dashboard = null; state.dashboardQuery = "";
+    reset() { flushPaymentSave().catch(error => toast(error.message));
+      cacheGeneration++; projectRequest++; state.dashboardRequest++; state.dashboard = null; state.dashboardQuery = "";
       state.project = null; projectCache.clear(); dashboardPrefetch = null; } };
 })();
