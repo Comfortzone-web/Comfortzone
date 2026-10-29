@@ -7397,6 +7397,22 @@ td[contenteditable="true"]:focus {
   gap: 6px;
 }
 
+.sales-project-person-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: #52647d; font-size: 12px; font-weight: 600; }
+.sales-project-person-field [data-project-person-tags] { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 42px; padding: 5px 7px; border: 1px solid #d8e3f3; border-radius: 8px; background: #fff; }
+.sales-project-person-picker { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-height: 44px; padding: 5px 7px; border: 1px solid #d8e3f3; border-radius: 8px; background: #fff; cursor: text; }
+.sales-project-person-picker:focus-within { border-color: #4b8cff; box-shadow: 0 0 0 2px #e5f0ff; }
+.sales-project-person-picker [data-project-person-tags] { min-height: 0; padding: 0; border: 0; display: contents; }
+.sales-project-form-grid .sales-project-person-picker input { flex: 1 1 120px; min-width: 0; padding: 4px 2px; border: 0; outline: 0; box-shadow: none; }
+.sales-project-form-grid .sales-project-person-picker input:disabled { cursor: default; }
+.sales-project-person-options { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 184px; overflow-y: auto; border: 1px solid #c9d8ef; border-radius: 8px; background: #fff; box-shadow: 0 8px 22px #142a4a24; cursor: default; }
+.sales-project-person-options[hidden] { display: none; }
+.sales-project-person-options button { display: block; width: 100%; padding: 9px 11px; border: 0; background: #fff; color: #071b3a; text-align: left; font: inherit; cursor: pointer; }
+.sales-project-person-options button:hover, .sales-project-person-options button.active { background: #edf5ff; color: #075dc9; }
+.sales-project-person-no-match { display: block; padding: 9px 11px; color: #71819a; font-weight: 400; }
+.sales-project-person-tag { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 5px 7px; border: 1px solid #c7dcfa; border-radius: 5px; background: #edf5ff; color: #1157a7; overflow-wrap: anywhere; }
+.sales-project-person-tag button { flex: none; border: 0; padding: 0 2px; background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.sales-project-person-empty { color: #71819a; font-weight: 400; }
+
 .sales-project-info-grid input,
 .sales-project-info-grid select,
 .sales-project-detail-section textarea,
@@ -7831,6 +7847,21 @@ td[contenteditable="true"]:focus {
   font-weight: 700;
   line-height: 18px;
   padding: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.sales-project-boq-edit tr:hover .sales-project-row-delete:not(:disabled),
+.sales-project-boq-edit tr:focus-within .sales-project-row-delete:not(:disabled) {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+@media (hover: none) {
+  .sales-project-boq-edit .sales-project-row-delete:not(:disabled) {
+    visibility: visible;
+    pointer-events: auto;
+  }
 }
 
 .sales-project-detail-actions {

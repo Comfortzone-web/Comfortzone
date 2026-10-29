@@ -884,6 +884,21 @@ function staffOwns(item, user) {
   return item?.ownerId === user.id;
 }
 
+function salesProjectOwnerIds(project) {
+  return Array.isArray(project?.ownerIds) && project.ownerIds.length ? project.ownerIds : project?.ownerId ? [project.ownerId] : [];
+}
+
+function salesProjectAssignedTo(project, user) {
+  return salesProjectOwnerIds(project).includes(user.id);
+}
+
+function tagSalesProjectOwner(project, user) {
+  project.ownerId = user.id;
+  project.ownerIds = [user.id];
+  project.salesPerson = user.name;
+  project.salesPersons = [user.name];
+}
+
 function sendAuthRequired(res) {
   return send(res, 401, { error: "Login required" });
 }
@@ -1442,7 +1457,33 @@ function normalizeSalesCrm(parsed = {}) {
 }
 
 async function readSalesCrm() {
-  return readStore("sales-crm", SALES_CRM_FILE, defaultSalesCrm, normalizeSalesCrm);
+  const store = await readStore("sales-crm", SALES_CRM_FILE, defaultSalesCrm, normalizeSalesCrm);
+  const legacyProjects = store.projects.filter(project => !salesProjectOwnerIds(project).length);
+  if (legacyProjects.length) {
+    const settings = await readSettings();
+    const staff = (settings.users || []).filter(user => isStaff(user) && user.active !== false);
+    for (const project of legacyProjects) {
+      if (!(project.createdById || project.createdByEmail || project.createdBy || project.salesPerson)) continue;
+      const key = cleanCell(project.createdById || project.createdByEmail || project.createdBy || project.salesPerson).toLowerCase();
+      const matches = staff.filter(user => [user.id, user.email, user.name].some(value => cleanCell(value).toLowerCase() === key));
+      if (matches.length !== 1) continue;
+      tagSalesProjectOwner(project, matches[0]);
+    }
+    if (!store.settings.legacyYoonusProjectBackfill && store.projects.length === 3) {
+      const matches = staff.filter(user => cleanCell(user.name).toLowerCase() === "yoonus");
+      const yoonus = matches.length === 1 ? matches[0] : null;
+      const identity = yoonus ? [yoonus.id, yoonus.email, yoonus.name].map(value => cleanCell(value).toLowerCase()) : [];
+      if (yoonus && store.projects.every(project => {
+        const owners = salesProjectOwnerIds(project);
+        const hint = cleanCell(project.createdById || project.createdByEmail || project.createdBy || project.salesPerson).toLowerCase();
+        return (!owners.length || (owners.length === 1 && owners[0] === yoonus.id)) && (!hint || identity.includes(hint));
+      })) {
+        store.projects.forEach(project => tagSalesProjectOwner(project, yoonus));
+        store.settings.legacyYoonusProjectBackfill = true;
+      }
+    }
+  }
+  return store;
 }
 
 async function writeSalesCrm(store) {
@@ -1519,6 +1560,7 @@ async function salesCrmView(store, user) {
     } : store.settings,
     leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
+    projects: staff ? store.projects.filter(item => salesProjectAssignedTo(item, user)) : store.projects,
     customers: mergedSalesCustomers(store.customers || [], inventory.customers || [])
   };
 }
@@ -2373,6 +2415,12 @@ function normalizeSalesItem(collection, input, store) {
     const createdDate = cleanCell(base.createdDate || base.date || todayDisplayDate());
     const project = {
       id: base.id,
+      createdById: cleanCell(base.createdById || ""),
+      createdBy: cleanCell(base.createdBy || ""),
+      ownerId: cleanCell(base.ownerId || ""),
+      ownerIds: Array.isArray(base.ownerIds) ? [...new Set(base.ownerIds.map(cleanCell).filter(Boolean))].slice(0, 3) : base.ownerId ? [cleanCell(base.ownerId)] : [],
+      salesPerson: cleanCell(base.salesPerson || ""),
+      salesPersons: Array.isArray(base.salesPersons) ? base.salesPersons.map(cleanCell).filter(Boolean).slice(0, 3) : [],
       projectNo,
       projectId: projectNo,
       name: cleanCell(base.name || ""),
@@ -3657,6 +3705,7 @@ async function handleApi(req, res) {
     const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
     const filePart = multipart.find(part => part.filename);
     const projectId = cleanCell((multipart.find(part => part.name === "projectId")?.body || Buffer.from("")).toString("utf8"));
+    if (isStaff(user) && projectId && !(await readSalesCrm()).projects.some(project => project.id === projectId && salesProjectAssignedTo(project, user))) return sendForbidden(res);
     if (!filePart) return send(res, 400, { error: "No delivery note uploaded" });
     const uploadId = id();
     const storedName = `${uploadId}-${safeName(filePart.filename)}`;
@@ -3692,6 +3741,7 @@ async function handleApi(req, res) {
     const uploadId = decodeURIComponent(parts[7]);
     const store = await readSalesCrm();
     const project = (store.projects || []).find(item => item.id === projectId);
+    if (isStaff(user) && !salesProjectAssignedTo(project, user)) return sendForbidden(res);
     const upload = (project?.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
     if (!upload) return notFound(res);
     return sendStoredUpload(res, upload, `sales-project-deliveries/${projectId}`);
@@ -3703,6 +3753,7 @@ async function handleApi(req, res) {
     const uploadId = decodeURIComponent(parts[7]);
     const store = await readSalesCrm();
     const project = (store.projects || []).find(item => item.id === projectId);
+    if (isStaff(user) && !salesProjectAssignedTo(project, user)) return sendForbidden(res);
     if (!project) return notFound(res);
     const upload = (project.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
     if (upload) {
@@ -3751,6 +3802,21 @@ async function handleApi(req, res) {
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
+    if (collection === "projects") {
+      const existingProject = existingIndex >= 0 ? store.projects[existingIndex] : null;
+      if (isStaff(user) && existingProject && !salesProjectAssignedTo(existingProject, user)) return sendForbidden(res);
+      item.createdById = existingProject ? cleanCell(existingProject.createdById || "") : user.id;
+      item.createdBy = existingProject ? cleanCell(existingProject.createdBy || "") : user.name;
+      const requestedIds = Array.isArray(rawItem.ownerIds) ? rawItem.ownerIds : rawItem.ownerId ? [rawItem.ownerId] : existingProject ? salesProjectOwnerIds(existingProject) : [user.id];
+      const assignedIds = isAdmin(user) ? [...new Set(requestedIds.map(cleanCell).filter(Boolean))] : existingProject ? salesProjectOwnerIds(existingProject) : [user.id];
+      if (!assignedIds.length || assignedIds.length > 3) return send(res, 400, { error: "Tag between one and three sales people" });
+      const assignees = assignedIds.map(assignedId => (req.authSettings?.users || []).find(entry => entry.id === assignedId && entry.active !== false));
+      if (assignees.some(entry => !entry)) return send(res, 400, { error: "Select active sales people" });
+      item.ownerId = assignedIds[0];
+      item.ownerIds = assignedIds;
+      item.salesPerson = assignees[0].name;
+      item.salesPersons = assignees.map(entry => entry.name);
+    }
     if (collection === "customers" && existingIndex < 0 && !item.salesPerson) {
       item.salesPerson = cleanCell(user.name || "");
     }
@@ -3831,6 +3897,7 @@ async function handleApi(req, res) {
     const collection = parts[3];
     const itemId = decodeURIComponent(parts[4]);
     const deletedItem = (store[collection] || []).find(item => item.id === itemId);
+    if (collection === "projects" && isStaff(user) && !salesProjectAssignedTo(deletedItem, user)) return sendForbidden(res);
     if (isStaff(user) && ["leads", "quotations"].includes(collection)
       && !staffOwns(deletedItem, user)) return sendForbidden(res);
     if (collection === "customers") {

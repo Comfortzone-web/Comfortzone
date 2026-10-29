@@ -2927,6 +2927,9 @@ function salesProjectBlank() {
   const projectNo = nextSalesProjectNo();
   return {
     id: salesProjectNewId(),
+    ownerId: currentUser?.id || "",
+    ownerIds: currentUser?.id ? [currentUser.id] : [],
+    salesPerson: currentUser?.name || "",
     projectNo,
     projectId: projectNo,
     name: "",
@@ -2988,7 +2991,7 @@ function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}) {
           <input type="checkbox" data-project-boq-field="reserve" ${reserve ? "checked" : ""} ${canReserve ? "" : "disabled"}>
           <span></span>
         </label>
-        <button class="sales-project-row-delete" type="button" data-delete-project-boq="${index}" aria-label="Delete BOQ row">x</button>
+        <button class="sales-project-row-delete" type="button" data-delete-project-boq="${index}" aria-label="Delete BOQ row" ${reserve ? "disabled title=\"Unreserve this row before deleting it\"" : ""}>x</button>
       </td>
     </tr>
   `;
@@ -3075,6 +3078,11 @@ function openSalesProjectDrawer(itemId = "") {
   const project = existing || salesProjectBlank();
   const customerOptions = (salesData().customers || []).map(customer => customer.name).filter(Boolean);
   const modelOptions = (inventoryState?.models || inventoryState?.stock || []).map(item => item.modelNo || item.model || item.name || "").filter(Boolean);
+  const salesPeople = (appSettings?.users || []).filter(user => user.active !== false && user.id && user.name);
+  const selectedSalesPeople = [...new Set((project.ownerIds?.length ? project.ownerIds : project.ownerId ? [project.ownerId] : []).filter(Boolean))].slice(0, 3);
+  const salesPersonField = norm(currentUser?.role) === "ADMIN"
+    ? `<div class="sales-project-person-field"><span>Sales Person</span><div class="sales-project-person-picker" data-project-person-picker><div data-project-person-tags></div><input type="text" data-project-person-search role="combobox" aria-label="Search sales people" aria-autocomplete="list" aria-expanded="false" autocomplete="off" placeholder="Search sales people"><div class="sales-project-person-options" data-project-person-options role="listbox" hidden></div></div></div>`
+    : `<div class="sales-project-person-field"><span>Sales Person</span><div data-project-person-tags></div></div>`;
   const modal = document.createElement("div");
   modal.className = "sales-project-drawer-backdrop";
   modal.innerHTML = `
@@ -3098,7 +3106,7 @@ function openSalesProjectDrawer(itemId = "") {
             ${salesProjectDrawerField("Location", "location", project.location)}
             ${salesProjectDrawerField("Project Category", "category", project.category || project.type, salesProjectCategoryOptions())}
             ${salesProjectDrawerField("Status", "status", salesProjectStatus(project), salesProjectStatusOptions())}
-            ${salesProjectDrawerField("Product Type", "productType", salesProjectProduct(project), salesProjectProductTypes())}
+            ${salesPersonField}
             ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
             ${salesProjectDrawerField("Target Completion Date", "targetDate", formatSalesDateInput(project.targetDate || ""), null, "dateText")}
           </div>
@@ -3119,7 +3127,7 @@ function openSalesProjectDrawer(itemId = "") {
                 <col class="sales-project-boq-stock">
                 <col class="sales-project-boq-reserve">
               </colgroup>
-              <thead><tr><th>Model</th><th>Qty</th><th>Delivered Qty</th><th>Pending Qty</th><th>Stock</th><th>Reserve</th></tr></thead>
+              <thead><tr><th>Model</th><th>BOQ</th><th>Delivered Qty</th><th>Pending Qty</th><th>Stock</th><th>Reserve</th></tr></thead>
               <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map((row, index) => salesProjectDrawerBoqRowHtml(row, index, project)).join("")}</tbody>
             </table>
           </div>
@@ -3134,6 +3142,36 @@ function openSalesProjectDrawer(itemId = "") {
     </section>
   `;
   document.body.appendChild(modal);
+  modal._salesPersonIds = selectedSalesPeople;
+  const personSearch = modal.querySelector("[data-project-person-search]");
+  const personOptions = modal.querySelector("[data-project-person-options]");
+  let activePersonIndex = 0;
+  const renderSalesPersonOptions = () => {
+    if (!personSearch) return;
+    const matches = salesPeople.filter(user => !modal._salesPersonIds.includes(user.id) && user.name.toLowerCase().includes(personSearch.value.trim().toLowerCase()));
+    const open = document.activeElement === personSearch && modal._salesPersonIds.length < 3;
+    personOptions.hidden = !open;
+    personSearch.setAttribute("aria-expanded", String(open));
+    if (!open) return;
+    activePersonIndex = Math.min(activePersonIndex, Math.max(matches.length - 1, 0));
+    personOptions.innerHTML = matches.length
+      ? matches.map((user, index) => `<button type="button" role="option" aria-selected="${index === activePersonIndex}" class="${index === activePersonIndex ? "active" : ""}" data-project-person-option="${escapeHtml(user.id)}">${escapeHtml(user.name)}</button>`).join("")
+      : `<span class="sales-project-person-no-match">No matching users</span>`;
+  };
+  const renderSalesPersonTags = () => {
+    modal.querySelector("[data-project-person-tags]").innerHTML = modal._salesPersonIds.map(id => {
+      const assignedIndex = modal._salesPersonIds.indexOf(id);
+      const name = salesPeople.find(user => user.id === id)?.name || project.salesPersons?.[assignedIndex] || (id === project.ownerId ? project.salesPerson : id);
+      return `<span class="sales-project-person-tag">${escapeHtml(name)}${norm(currentUser?.role) === "ADMIN" ? `<button type="button" data-project-person-remove="${escapeHtml(id)}" aria-label="Remove ${escapeHtml(name)}">×</button>` : ""}</span>`;
+    }).join("") || `<span class="sales-project-person-empty">No sales person tagged</span>`;
+    if (personSearch) {
+      personSearch.value = "";
+      personSearch.disabled = modal._salesPersonIds.length >= 3;
+      personSearch.placeholder = personSearch.disabled ? "Maximum 3 sales people" : "Search sales people";
+      renderSalesPersonOptions();
+    }
+  };
+  renderSalesPersonTags();
   modal._directDeliveryUploads = structuredClone(project.directDeliveryUploads || []);
   modal._directDeliveryDetected = [];
   modal._directDeliveryPendingUpload = null;
@@ -3142,6 +3180,11 @@ function openSalesProjectDrawer(itemId = "") {
     modal.querySelector(".sales-project-boq-edit tbody").insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({}, modal.querySelectorAll("[data-project-boq-row]").length, project));
   });
   modal.addEventListener("input", event => {
+    if (event.target === personSearch) {
+      activePersonIndex = 0;
+      renderSalesPersonOptions();
+      return;
+    }
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
     if (row) salesProjectUpdateBoqRow(row, false, project);
@@ -3153,9 +3196,52 @@ function openSalesProjectDrawer(itemId = "") {
     if (row) salesProjectUpdateBoqRow(row, true, project);
     if (event.target.closest("[data-project-direct-detected-row]")) salesProjectRefreshDirectDetectedStatuses(modal);
   });
+  personSearch?.addEventListener("focus", renderSalesPersonOptions);
+  personSearch?.addEventListener("keydown", event => {
+    const options = [...personOptions.querySelectorAll("[data-project-person-option]")];
+    if (event.key === "Escape") {
+      personOptions.hidden = true;
+      personSearch.setAttribute("aria-expanded", "false");
+      personSearch.blur();
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      activePersonIndex = (activePersonIndex + (event.key === "ArrowDown" ? 1 : -1) + options.length) % (options.length || 1);
+      renderSalesPersonOptions();
+    }
+    if (event.key === "Enter" && options.length) {
+      event.preventDefault();
+      options[activePersonIndex]?.click();
+    }
+  });
   modal.addEventListener("click", event => {
+    if (event.target.closest("[data-project-person-picker]") && event.target !== personSearch && !event.target.closest("[data-project-person-option], [data-project-person-remove]")) personSearch?.focus();
+    const personOption = event.target.closest("[data-project-person-option]");
+    if (personOption) {
+      const id = personOption.dataset.projectPersonOption;
+      if (id && modal._salesPersonIds.length < 3 && !modal._salesPersonIds.includes(id)) modal._salesPersonIds.push(id);
+      renderSalesPersonTags();
+      personSearch?.focus();
+      return;
+    }
+    const removePerson = event.target.closest("[data-project-person-remove]");
+    if (removePerson) {
+      modal._salesPersonIds = modal._salesPersonIds.filter(id => id !== removePerson.dataset.projectPersonRemove);
+      renderSalesPersonTags();
+      return;
+    }
+    if (!event.target.closest("[data-project-person-picker]") && personOptions) {
+      personOptions.hidden = true;
+      personSearch.setAttribute("aria-expanded", "false");
+    }
     const deleteButton = event.target.closest("[data-delete-project-boq]");
-    if (deleteButton) deleteButton.closest("[data-project-boq-row]")?.remove();
+    if (deleteButton) {
+      const row = deleteButton.closest("[data-project-boq-row]");
+      if (row?.querySelector('[data-project-boq-field="reserve"]')?.checked) return;
+      row?.remove();
+      return;
+    }
     if (event.target.closest("[data-clear-project-direct]")) clearSalesProjectDirectDelivery(modal);
     if (event.target.closest("[data-verify-project-direct]")) verifySalesProjectDirectDelivery(modal, project);
     const directMenuButton = event.target.closest("[data-project-direct-menu]");
@@ -3181,6 +3267,7 @@ function openSalesProjectDrawer(itemId = "") {
   });
   modal.querySelector("[data-save-project-drawer]").addEventListener("click", async () => {
     const payload = collectSalesProjectDrawer(modal, project);
+    if (!modal._salesPersonIds.length) return alert("Tag at least one sales person.");
     if (!payload.name.trim()) return alert("Project name is required.");
     if (!payload.customer.trim()) return alert("Customer is required.");
     await saveSalesProject(payload);
@@ -3221,6 +3308,11 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false, project = {}) {
   if (reserveToggle) {
     reserveToggle.classList.toggle("is-disabled", !canReserve);
     reserveToggle.title = canReserve ? "Reserve stock" : "No pending quantity to reserve";
+  }
+  const deleteButton = row.querySelector("[data-delete-project-boq]");
+  if (deleteButton) {
+    deleteButton.disabled = !!reserveInput?.checked;
+    deleteButton.title = deleteButton.disabled ? "Unreserve this row before deleting it" : "Delete BOQ row";
   }
 }
 
@@ -3416,6 +3508,7 @@ function salesProjectModelNo(value = "") {
 
 function collectSalesProjectDrawer(modal, baseProject) {
   const payload = { ...baseProject };
+  payload.ownerIds = [...(modal._salesPersonIds || [])];
   modal.querySelectorAll("[data-project-drawer-field]").forEach(field => {
     const key = field.dataset.projectDrawerField;
     payload[key] = field.type === "checkbox" ? field.checked : field.value.trim();
