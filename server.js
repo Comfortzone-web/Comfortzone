@@ -4161,26 +4161,50 @@ async function handleApi(req, res) {
     return send(res, 200, areaCalculationView(store));
   }
 
-    if (req.method === "POST" && url.pathname === "/api/inventory/models") {
+  if (req.method === "POST" && url.pathname === "/api/inventory/models/reserve") {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const inventory = await readInventory();
+    const body = await readJson(req);
+    const modelNo = cleanCell(body.modelNo || "").toUpperCase();
+    const model = inventory.models.find(entry => inventoryNorm(entry.modelNo) === inventoryNorm(modelNo));
+    if (!model) return notFound(res);
+    const reservedQty = Number(body.reservedQty);
+    if (!Number.isInteger(reservedQty) || reservedQty < 0) return send(res, 400, { error: "Reserved quantity must be a non-negative whole number" });
+    const stock = (await inventoryView(inventory)).dashboard.stock.find(entry => inventoryNorm(entry.modelNo) === inventoryNorm(modelNo));
+    const projectReserved = Math.max(0, Number(stock?.reservedQty || 0) - Number(model.reservedQty || 0));
+    const availableForManual = Math.max(0, Number(stock?.qty || 0) - projectReserved);
+    if (reservedQty > availableForManual) return send(res, 400, { error: `Only ${availableForManual} unit(s) can be reserved outside Sales Desk projects` });
+    model.reservedQty = reservedQty;
+    await writeInventory(inventory);
+    return send(res, 200, await inventoryView(inventory));
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/inventory/models") {
+    if (!isAdmin(user)) return sendForbidden(res);
     const inventory = await readInventory();
     const body = await readJson(req);
     const modelNo = cleanCell(body.modelNo || body.model || "").toUpperCase();
     if (!modelNo) return send(res, 400, { error: "Model No. is required" });
     const existing = inventory.models.find(model => inventoryNorm(model.modelNo) === inventoryNorm(modelNo));
     const hasReservedQty = Object.prototype.hasOwnProperty.call(body, "reservedQty");
-    const reservedQty = hasReservedQty ? Math.max(0, Number(body.reservedQty || 0)) : Number(existing?.reservedQty || 0);
+    const hasQuantity = body.quantity !== undefined && body.quantity !== "";
+    const hasReturn = body.returnQuantity !== undefined && body.returnQuantity !== "";
+    const newStock = inventoryNorm(body.reason) === "NEWSTOCK";
+    if (hasQuantity && hasReturn) return send(res, 400, { error: "Choose one stock movement at a time" });
+    if (!isAdmin(user) && !hasReturn && (!hasQuantity || !newStock)) return sendForbidden(res);
+    if (hasReservedQty) return send(res, 400, { error: "Use the Reserve action to change reserved quantity" });
+    if (hasQuantity && (!Number.isInteger(Number(body.quantity)) || Number(body.quantity) < 0)) return send(res, 400, { error: "Quantity must be a non-negative whole number" });
+    if (hasReturn && (!Number.isInteger(Number(body.returnQuantity)) || Number(body.returnQuantity) <= 0)) return send(res, 400, { error: "Returned Qty must be a positive whole number" });
     const modelUpdate = {
       modelNo,
-      description: Object.prototype.hasOwnProperty.call(body, "description") ? body.description || "" : existing?.description || "",
-      brand: Object.prototype.hasOwnProperty.call(body, "brand") ? body.brand || "Daikin" : existing?.brand || "Daikin",
-      type: Object.prototype.hasOwnProperty.call(body, "type") ? body.type || "" : existing?.type || ""
+      description: existing && !isAdmin(user) ? existing.description || "" : Object.prototype.hasOwnProperty.call(body, "description") ? body.description || "" : existing?.description || "",
+      brand: existing && !isAdmin(user) ? existing.brand || "Daikin" : Object.prototype.hasOwnProperty.call(body, "brand") ? body.brand || "Daikin" : existing?.brand || "Daikin",
+      type: existing && !isAdmin(user) ? existing.type || "" : Object.prototype.hasOwnProperty.call(body, "type") ? body.type || "" : existing?.type || ""
     };
-    if (hasReservedQty) modelUpdate.reservedQty = reservedQty;
     if (existing) Object.assign(existing, modelUpdate);
-    else inventory.models.push({ id: id(), ...modelUpdate, reservedQty });
-    if (body.returnQuantity !== undefined && body.returnQuantity !== "") {
+    else inventory.models.push({ id: id(), ...modelUpdate, reservedQty: 0 });
+    if (hasReturn) {
       const returnQty = Number(body.returnQuantity || 0);
-      if (returnQty <= 0) return send(res, 400, { error: "Returned Qty must be greater than 0" });
       inventory.supplierDns.unshift({
         id: id(),
         uploadedDate: todayISO(),
@@ -4192,9 +4216,9 @@ async function handleApi(req, res) {
         lines: [{ id: id(), modelNo, description: modelUpdate.description || "", detectedQty: returnQty, finalQty: returnQty, status: "Ready" }]
       });
     }
-    if (body.quantity !== undefined && body.quantity !== "") {
+    if (hasQuantity) {
       const current = computeInventory(inventory).stockByModel[inventoryNorm(modelNo)]?.qty || 0;
-      const target = Number(body.quantity || 0);
+      const target = newStock ? current + Number(body.quantity) : Number(body.quantity);
       const diff = target - current;
       if (diff !== 0) {
         const uploadedDate = todayISO();
@@ -4216,6 +4240,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/inventory/models/import") {
+    if (!isAdmin(user)) return sendForbidden(res);
     const inventory = await readInventory();
     const body = await readJson(req);
     const rows = Array.isArray(body.models) ? body.models : Array.isArray(body.items) ? body.items : [];
@@ -4229,7 +4254,7 @@ async function handleApi(req, res) {
         description: cleanCell(row.description || ""),
         brand: cleanCell(row.brand || "Daikin"),
         type: cleanCell(row.type || ""),
-        reservedQty: Math.max(0, Number(row.reservedQty || 0))
+        reservedQty: Math.max(0, Number(existing?.reservedQty || 0))
       };
       if (existing) Object.assign(existing, next);
       else inventory.models.push({ id: id(), ...next });
@@ -4240,6 +4265,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/inventory\/models\/[^/]+$/)) {
+    if (!isAdmin(user)) return sendForbidden(res);
     const inventory = await readInventory();
     const modelNo = decodeURIComponent(url.pathname.split("/").pop());
     inventory.models = (inventory.models || []).filter(model => inventoryNorm(model.modelNo) !== inventoryNorm(modelNo));
@@ -4298,6 +4324,8 @@ async function handleApi(req, res) {
   if (req.method === "POST" && url.pathname === "/api/inventory/supplier-dns") {
     const inventory = await readInventory();
     const body = await readJson(req);
+    const existingDn = inventory.supplierDns.find(dn => dn.id === body.id);
+    if (!isAdmin(user) && (body.isManualAdjustment || existingDn?.isManualAdjustment || (body.lines || []).some(line => Number(line.finalQty || 0) < 0))) return sendForbidden(res);
     const supplierDn = {
       id: body.id || id(),
       uploadedDate: body.uploadedDate || todayISO(),
@@ -4365,6 +4393,7 @@ async function handleApi(req, res) {
     const supplierDnId = url.pathname.split("/")[4];
     const supplierDn = inventory.supplierDns.find(dn => dn.id === supplierDnId);
     if (!supplierDn) return notFound(res);
+    if (!isAdmin(user) && supplierDn.isManualAdjustment) return sendForbidden(res);
     for (const line of supplierDn.lines) {
       if (!findModel(inventory, line.modelNo)) {
         inventory.models.push({ id: id(), modelNo: line.modelNo, description: line.description || "", brand: "Daikin", type: "", warehouseLocation: "", minimumStock: 0, needsReview: true });
@@ -4380,6 +4409,7 @@ async function handleApi(req, res) {
     const supplierDnId = url.pathname.split("/")[4];
     const supplierDn = inventory.supplierDns.find(dn => dn.id === supplierDnId);
     if (!supplierDn) return notFound(res);
+    if (!isAdmin(user) && supplierDn.isManualAdjustment) return sendForbidden(res);
     supplierDn.status = "Cancelled";
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));
@@ -4388,6 +4418,7 @@ async function handleApi(req, res) {
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/inventory\/supplier-dns\/[^/]+$/)) {
     const inventory = await readInventory();
     const supplierDnId = url.pathname.split("/").pop();
+    if (!isAdmin(user) && inventory.supplierDns.some(dn => dn.id === supplierDnId && dn.isManualAdjustment)) return sendForbidden(res);
     inventory.supplierDns = (inventory.supplierDns || []).filter(dn => dn.id !== supplierDnId);
     await writeInventory(inventory);
     return send(res, 200, await inventoryView(inventory));

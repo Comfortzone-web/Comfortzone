@@ -20,7 +20,7 @@ test("delivery notes protect reservations by customer and release fulfilled proj
   const base = `http://127.0.0.1:${port}`;
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   fs.writeFileSync(path.join(temp, "server.js"), source.replace("const PORTS = [5175, 5176, 5177, 8085];", `const PORTS = [${port}];`));
-  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js"]) {
+  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js"]) {
     fs.copyFileSync(path.join(__dirname, "..", file), path.join(temp, file));
   }
   const server = spawn(process.execPath, ["server.js"], {
@@ -46,8 +46,9 @@ test("delivery notes protect reservations by customer and release fulfilled proj
       if (response.status !== 200) assert.fail(`${endpoint}: ${response.status} ${await response.text()} ${logs}`);
       return response.json();
     };
-    await saved("/api/inventory/models", { modelNo: "M-1", description: "Test model", reservedQty: 1 });
+    await saved("/api/inventory/models", { modelNo: "M-1", description: "Test model" });
     await saved("/api/inventory/supplier-dns", { supplierDnNo: "IN-1", status: "Confirmed", lines: [{ modelNo: "M-1", finalQty: 6, detectedQty: 6 }] });
+    await saved("/api/inventory/models/reserve", { modelNo: "M-1", reservedQty: 1 });
     await saved("/api/sales-crm/projects", { name: "Project A", customer: "Customer A", boq: [{ model: "M-1", qty: 2, deliveredQty: 0, reserve: true }] });
     await saved("/api/sales-crm/projects", { name: "Project B", customer: "Customer B", boq: [{ model: "M-1", qty: 1, deliveredQty: 0, reserve: true }] });
 

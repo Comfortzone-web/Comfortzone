@@ -1626,7 +1626,8 @@ function inventoryTopbarConfig() {
       searchId: "inventorySearch",
       searchValue: inventoryDashboardSearchQuery,
       search: "Search model, description, or DN...",
-      actions: `<button class="sales-primary" data-inventory-top-action="upload-dn">Upload DN</button>`
+      searchClass: "inventory-dashboard-search",
+      actions: `<button class="sales-primary inventory-dashboard-upload" data-inventory-top-action="upload-dn"><img src="/assets/cloud-upload.svg" alt="">Upload DN</button>`
     },
     supplier: {
       title: "Supplier DN",
@@ -1659,7 +1660,7 @@ function inventoryTopbarConfig() {
       searchValue: "",
       search: "Search model or description",
       searchClass: "stock-top-search",
-      beforeSearchActions: `<button class="sales-primary" data-inventory-top-action="add-stock">New Stock / Return</button>`,
+      beforeSearchActions: isCurrentAdmin() ? `<button class="sales-primary stock-add-button" data-inventory-top-action="add-stock"><img src="/assets/maintenance-icons/plus.svg" alt="">New Stock / Return</button>` : "",
       actions: ""
     }
   };
@@ -6499,6 +6500,8 @@ function renderViewActions() {
   const inventoryTopbar = inventoryTopbarConfig();
   document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar || activeView === "areaCalculation");
   document.querySelector(".topbar")?.classList.toggle("inventory-shell", !!inventoryTopbar);
+  document.querySelector(".topbar")?.classList.toggle("stock-shell", !!inventoryTopbar && inventoryScreen === "stock");
+  document.querySelector(".topbar")?.classList.toggle("inventory-dashboard-shell", !!inventoryTopbar && inventoryScreen === "dashboard");
   actions.classList.add("hidden");
   actions.innerHTML = "";
   if (salesTopbar) {
@@ -6516,13 +6519,15 @@ function renderViewActions() {
     return;
   }
   if (inventoryTopbar) {
+    const stockHeader = inventoryScreen === "stock";
     actions.classList.remove("hidden");
     actions.innerHTML = `
-      ${inventoryTopbar.beforeSearchActions || ""}
+      ${stockHeader ? "" : inventoryTopbar.beforeSearchActions || ""}
       <label class="quotation-search ${escapeHtml(inventoryTopbar.searchClass || "")}">
         <span></span>
         <input id="${escapeHtml(inventoryTopbar.searchId)}" data-inventory-top-search value="${escapeHtml(inventoryTopbar.searchValue || "")}" placeholder="${escapeHtml(inventoryTopbar.search)}">
       </label>
+      ${stockHeader ? inventoryTopbar.beforeSearchActions || "" : ""}
       ${inventoryTopbar.actions}
     `;
     bindInventoryTopbarActions();
@@ -8717,30 +8722,65 @@ function inventoryDashboardHtml() {
   const d = inventoryState.dashboard;
   const totalReservedQty = (d.stock || []).reduce((sum, item) => sum + Number(item.reservedQty || 0), 0);
   const totalFreeStock = (d.stock || []).reduce((sum, item) => sum + Number(item.freeStock ?? (Number(item.qty || 0) - Number(item.reservedQty || 0))), 0);
+  const recentIn = dashboardRecentTransactions(d.recentIn || [], "in");
+  const recentOut = dashboardRecentTransactions(d.recentOut || [], "out");
   return `
+    <div class="inventory-dashboard">
     <div class="inventory-topbar">
       <div class="inventory-title"><h2>Inventory Dashboard</h2><p>Simple AC unit stock summary.</p></div>
       <div class="inventory-search"><input id="inventorySearch" placeholder="Search model, description, or DN..."><button class="primary-button" data-go-inventory="supplier">Upload DN</button></div>
     </div>
-    <div class="kpi-grid">
-      <div class="kpi-card"><span>Total Models</span><strong>${d.totalModels}</strong><span>Different AC Models</span></div>
-      <div class="kpi-card"><span>Total Stock Units</span><strong>${d.totalStockUnits}</strong><span>All AC Units in Stock</span></div>
-      <div class="kpi-card"><span>Total Reserved Qty</span><strong>${totalReservedQty}</strong><span>All Reserved Units</span></div>
-      <div class="kpi-card"><span>Total Free Stock</span><strong>${totalFreeStock}</strong><span>Free Stock After Reserved</span></div>
+    <div class="kpi-grid inventory-dashboard-kpis">
+      <div class="kpi-card inventory-dashboard-kpi blue"><span class="inventory-kpi-icon"><img src="/assets/package.svg" alt=""></span><div><span>Total Models</span><strong>${d.totalModels}</strong><span>Different AC Models</span></div></div>
+      <div class="kpi-card inventory-dashboard-kpi green"><span class="inventory-kpi-icon"><img src="/assets/database.svg" alt=""></span><div><span>Total Stock Units</span><strong>${d.totalStockUnits}</strong><span>All AC Units in Stock</span></div></div>
+      <div class="kpi-card inventory-dashboard-kpi orange"><span class="inventory-kpi-icon"><img src="/assets/lock-keyhole.svg" alt=""></span><div><span>Total Reserved Qty</span><strong>${totalReservedQty}</strong><span>All Reserved Units</span></div></div>
+      <div class="kpi-card inventory-dashboard-kpi purple"><span class="inventory-kpi-icon"><img src="/assets/package-check.svg" alt=""></span><div><span>Total Free Stock</span><strong>${totalFreeStock}</strong><span>Free Stock After Reserved</span></div></div>
     </div>
-    <div class="inventory-grid">
-      <div class="inventory-card inventory-list-card">
-        <div class="inventory-list-heading"><h3>Stock Overview</h3></div>
+    <div class="inventory-dashboard-layout">
+      <section class="inventory-card inventory-list-card inventory-dashboard-overview">
+        <div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon blue"><img src="/assets/chart-no-axes-column.svg" alt=""></span><h3>Stock Overview</h3></div>
         <table class="inventory-table inventory-list-table dashboard-stock-table"><thead><tr><th>Model No.</th><th>Warehouse Qty</th><th>Reserved Qty</th><th>Free Stock</th></tr></thead><tbody>
           ${dashboardStockOverviewRowsHtml()}
         </tbody></table>
-      </div>
-      <div>
-        <div class="inventory-card"><h3>Recent Stock In</h3>${d.recentIn.map(m => `<p><strong>${escapeHtml(m.referenceNo)}</strong> ${escapeHtml(m.modelNo)} <span class="pill green">+${m.quantity}</span><br><span class="inventory-muted">${formatInventoryDate(m.date)}</span></p>`).join("") || `<p class="inventory-muted">No stock in yet.</p>`}</div>
-        <div class="inventory-card"><h3>Recent Stock Out</h3>${d.recentOut.map(m => `<p><strong>${escapeHtml(m.referenceNo)}</strong> ${escapeHtml(m.modelNo)} <span class="pill red">${m.quantity}</span><br><span class="inventory-muted">${formatInventoryDate(m.date)}</span></p>`).join("") || `<p class="inventory-muted">No stock out yet.</p>`}</div>
+      </section>
+      <div class="inventory-dashboard-activity">
+        <section class="inventory-card inventory-dashboard-timeline inventory-dashboard-in"><div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon green"><img src="/assets/arrow-down-to-line.svg" alt=""></span><h3>Recent Stock In</h3></div><div class="inventory-activity-list">${recentIn.map(item => dashboardRecentTransactionHtml(item, "in")).join("") || `<p class="inventory-muted inventory-activity-empty">No stock in yet.</p>`}</div></section>
+        <section class="inventory-card inventory-dashboard-timeline inventory-dashboard-out"><div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon red"><img src="/assets/arrow-up-from-line.svg" alt=""></span><h3>Recent Stock Out</h3></div><div class="inventory-activity-list">${recentOut.map(item => dashboardRecentTransactionHtml(item, "out")).join("") || `<p class="inventory-muted inventory-activity-empty">No stock out yet.</p>`}</div></section>
       </div>
     </div>
+    </div>
   `;
+}
+
+function dashboardRecentTransactions(movements, direction) {
+  const records = direction === "in"
+    ? (inventoryState.supplierDns || []).filter(item => norm(item.status) === "CONFIRMED")
+    : (inventoryState.deliveryNotes || []).filter(item => ["ISSUED", "DELIVERED"].includes(norm(item.status)));
+  const seen = new Set();
+  return movements.map(movement => {
+    const referenceNo = String(movement.referenceNo || "").trim();
+    const recordReference = item => direction === "in" ? item.supplierDnNo : item.dnNo;
+    const recordDate = item => direction === "in" ? item.uploadedDate : item.date;
+    const matching = referenceNo ? records.filter(item => norm(recordReference(item)) === norm(referenceNo)) : [];
+    const record = matching.find(item => String(recordDate(item) || "") === String(movement.date || "")) || matching[0];
+    const key = record?.id || `${referenceNo}|${movement.date}|${movement.modelNo}`;
+    if (seen.has(key)) return null;
+    seen.add(key);
+    const lines = (record?.lines || []).map(line => ({
+      modelNo: line.modelNo || line.model || "",
+      qty: Number(direction === "in" ? line.finalQty || 0 : line.qtyGoingOut || 0)
+    })).filter(line => line.modelNo && line.qty > 0);
+    return {
+      referenceNo: recordReference(record || {}) || referenceNo,
+      date: record ? recordDate(record) || movement.date : movement.date,
+      customerName: direction === "out" ? record?.customerName || "" : "",
+      lines: lines.length ? lines : [{ modelNo: movement.modelNo || "", qty: Math.abs(Number(movement.quantity || 0)) }]
+    };
+  }).filter(Boolean);
+}
+
+function dashboardRecentTransactionHtml(item, direction) {
+  return `<article class="inventory-activity-item"><div class="inventory-activity-meta"><strong>${escapeHtml(item.referenceNo || (direction === "in" ? "Stock In" : "Delivery Note"))}</strong><time>${escapeHtml(formatInventoryDate(item.date))}</time></div>${item.customerName ? `<div class="inventory-activity-customer">${escapeHtml(item.customerName)}</div>` : ""}<div class="inventory-activity-models">${item.lines.map(line => `<div class="inventory-activity-model"><span>${escapeHtml(line.modelNo)}</span><b>${line.qty} pcs</b></div>`).join("")}</div></article>`;
 }
 
 function dashboardStockOverviewRowsHtml() {
@@ -8756,7 +8796,7 @@ function dashboardStockOverviewRowsHtml() {
   return overviewStock.map(item => {
     const reservedQty = Number(item.reservedQty || 0);
     const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
-    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description">${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty}</td><td>${freeStock}</td></tr>`;
+    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description">${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link inventory-dashboard-qty ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><span class="inventory-dashboard-qty ${reservedQty > 0 ? "reserved" : "neutral"}">${reservedQty}</span></td><td><span class="inventory-dashboard-qty ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td></tr>`;
   }).join("") || `<tr><td colspan="4">${query ? "No matching models found." : "No stock yet."}</td></tr>`;
 }
 
@@ -8820,7 +8860,8 @@ function supplierDnRows(dns) {
     const detailsHtml = dn.uploadId
       ? `<a class="supplier-dn-upload-link" href="/api/inventory/uploads/${encodeURIComponent(dn.uploadId)}" download><strong>${escapeHtml(details)}</strong></a>`
       : `<strong>${escapeHtml(details)}</strong>`;
-    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td>${detailsHtml}</td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${rowMenu(supplierDnMenuItems(dn))}</td></tr>`;
+    const actions = supplierDnMenuItems(dn);
+    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td>${detailsHtml}</td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${actions.length ? rowMenu(actions) : "-"}</td></tr>`;
   }).join("") || `<tr><td colspan="6">No Supplier DN uploaded.</td></tr>`;
 }
 
@@ -8846,6 +8887,7 @@ function supplierDnPagination(total, pageSize, currentPage) {
 }
 
 function supplierDnMenuItems(dn) {
+  if (dn.isManualAdjustment && !isCurrentAdmin()) return [];
   const items = [];
   items.push({ label: "Edit", action: "edit-supplier", id: dn.id });
   items.push({ label: "Cancel", action: "cancel-supplier", id: dn.id, danger: true });
@@ -9236,20 +9278,30 @@ function handleDeliveryModalKeydown(event) {
 
 function stockViewHtml() {
   const stock = inventoryState.dashboard.stock || [];
+  const canManageStock = isCurrentAdmin();
   return `
     <div class="inventory-topbar">
       <div class="inventory-title"><h2>Stock</h2><p>Manage AC unit model master and view full stock details.</p></div>
       <div class="inventory-search"><input id="stockSearchInput" placeholder="Search model or description"></div>
     </div>
     <div class="inventory-card inventory-list-card stock-full-card">
-      <div class="inventory-list-heading"><h3>Full Stock Details</h3><span>${stock.length} model${stock.length === 1 ? "" : "s"}</span></div>
-      <table class="inventory-table inventory-list-table stock-details-table"><thead><tr><th>Model No.</th><th>Description</th><th>Current Qty</th><th>Reserved Qty</th><th>Free Stock</th><th>Action</th></tr></thead><tbody>
+      <div class="stock-card-heading">
+        <div class="stock-card-icon"><img src="/assets/stock-air-vent.svg" alt=""></div>
+        <div class="stock-card-heading-copy"><div class="stock-card-title"><h3>Full Stock Details</h3><span>${stock.length} model${stock.length === 1 ? "" : "s"}</span></div><p>Complete list of AC unit models with current stock, reserved quantity and available stock.</p></div>
+      </div>
+      <div class="stock-table-frame"><table class="inventory-table inventory-list-table stock-details-table${canManageStock ? "" : " stock-readonly-table"}"><thead><tr><th>#</th><th>Model No.</th><th>Description</th><th><span class="stock-th-label"><img src="/assets/chart-column-increasing.svg" alt="">Current Qty</span></th><th><span class="stock-th-label"><img src="/assets/maintenance-icons/clock-3.svg" alt="">Reserved Qty</span></th><th><span class="stock-th-label"><img src="/assets/maintenance-icons/circle-check.svg" alt="">Free Stock</span></th>${canManageStock ? "<th>Action</th>" : ""}</tr></thead><tbody>
         ${stock.map(item => {
           const reservedQty = Number(item.reservedQty || 0);
           const freeStock = Number(item.qty || 0) - reservedQty;
-          return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><input class="stock-reserved-input" type="number" min="0" data-stock-reserved-model="${escapeHtml(item.modelNo)}" value="${reservedQty}"></td><td data-stock-free="${escapeHtml(item.modelNo)}">${freeStock}</td><td>${rowMenu([{label:"Edit",action:"edit-stock-model",id:item.modelNo},{label:"Return",action:"return-stock-model",id:item.modelNo},{label:"Delete",action:"delete-stock-model",id:item.modelNo,danger:true}])}</td></tr>`;
-        }).join("") || `<tr><td colspan="6">No models yet. Add a model manually.</td></tr>`}
-      </tbody></table>
+          const actions = [
+            ...[{ label: "Edit", action: "edit-stock-model", id: item.modelNo }, { label: "Reserve", action: "reserve-stock-model", id: item.modelNo }],
+            { label: "Return", action: "return-stock-model", id: item.modelNo },
+            { label: "Delete", action: "delete-stock-model", id: item.modelNo, danger: true }
+          ];
+          return `<tr><td class="stock-row-number"></td><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link stock-qty-tag ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><span class="stock-qty-tag ${reservedQty > 0 ? "reserved" : "neutral"}">${reservedQty}</span></td><td><span class="stock-qty-tag ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td>${canManageStock ? `<td>${rowMenu(actions)}</td>` : ""}</tr>`;
+        }).join("") || `<tr><td colspan="${canManageStock ? 7 : 6}">No models yet.</td></tr>`}
+      </tbody></table></div>
+      <div class="stock-table-footer"><span data-stock-count>Showing ${stock.length ? 1 : 0} to ${stock.length} of ${stock.length} models</span></div>
     </div>
   `;
 }
@@ -9265,7 +9317,7 @@ function stockModelModalHtml(mode = "edit") {
     ${stockModelOptions.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || item.brand || item.type || "")}</option>`).join("")}
   </datalist>`;
   const descriptionField = isReturn ? "" : `<label>Description<input id="stockDescription"></label>`;
-  const reasonField = isAdd ? `<label>Reason<select id="stockReason"><option value="new-stock">New Stock</option><option value="return">Return</option><option value="adjustment">Adjustment</option></select></label>` : "";
+  const reasonField = isAdd ? `<label>Reason<select id="stockReason"><option value="new-stock">New Stock</option><option value="return">Return</option>${isCurrentAdmin() ? `<option value="adjustment">Adjustment</option>` : ""}</select></label>` : "";
   const brandField = isAdd || isReturn ? "" : `<label>Brand<input id="stockBrand" value="Daikin"></label>`;
   return `
     <div class="modal stock-model-modal">
@@ -9288,6 +9340,7 @@ function stockModelModalHtml(mode = "edit") {
 }
 
 function openStockModelModal(modelNo = "", mode = "edit") {
+  if (!isCurrentAdmin()) return;
   document.querySelector("[data-stock-model-modal]")?.remove();
   const modal = document.createElement("div");
   modal.className = "modal-backdrop";
@@ -9303,6 +9356,44 @@ function openStockModelModal(modelNo = "", mode = "edit") {
 
 function closeStockModelModal() {
   document.querySelector("[data-stock-model-modal]")?.remove();
+}
+
+function openStockReserveModal(modelNo) {
+  if (!isCurrentAdmin()) return;
+  const info = findStockModelInfo(modelNo);
+  if (!info) return;
+  const stock = (inventoryState.dashboard?.stock || []).find(item => norm(item.modelNo) === norm(modelNo));
+  const manualQty = Number((inventoryState.models || []).find(item => norm(item.modelNo) === norm(modelNo))?.reservedQty || 0);
+  const projectQty = Math.max(0, Number(stock?.reservedQty || 0) - manualQty);
+  const maxManual = Math.max(0, Number(stock?.qty || 0) - projectQty);
+  document.querySelector("[data-stock-reserve-modal]")?.remove();
+  const modal = document.createElement("div");
+  modal.className = "modal-backdrop";
+  modal.dataset.stockReserveModal = modelNo;
+  modal.innerHTML = `<div class="modal stock-reserve-modal">
+    <div class="inventory-topbar"><div><h2>Reserve Stock</h2><p class="inventory-muted">${escapeHtml(modelNo)} - ${escapeHtml(info.description)}</p></div><button class="mini-button" data-close-stock-reserve>Close</button></div>
+    <div class="stock-reserve-summary"><span>Current Qty <strong>${Number(stock?.qty || 0)}</strong></span><span>Project Reserved <strong>${projectQty}</strong></span><span>Available for Manual Reserve <strong>${maxManual}</strong></span></div>
+    <label>Manual Reserved Qty<input id="stockManualReserveQty" type="number" min="0" max="${maxManual}" step="1" value="${manualQty}"></label>
+    <div class="inventory-actions"><button class="ghost-button" data-close-stock-reserve>Cancel</button><button class="primary-button" id="saveStockReserveBtn">Save Reserve</button></div>
+  </div>`;
+  $("#inventoryRoot")?.appendChild(modal);
+  modal.querySelector("#stockManualReserveQty")?.focus();
+}
+
+async function saveStockReservation() {
+  const modal = document.querySelector("[data-stock-reserve-modal]");
+  if (!modal || !isCurrentAdmin()) return;
+  const input = modal.querySelector("#stockManualReserveQty");
+  const reservedQty = Number(input.value);
+  if (input.value === "" || !Number.isInteger(reservedQty) || reservedQty < 0 || reservedQty > Number(input.max)) return alert(`Enter a whole number from 0 to ${input.max}.`);
+  try {
+    inventoryState = await api("/api/inventory/models/reserve", { method: "POST", body: JSON.stringify({ modelNo: modal.dataset.stockReserveModal, reservedQty }) });
+    modal.remove();
+    renderInventory();
+    toast("Reservation saved");
+  } catch (error) {
+    toast(error.message || "Reservation could not be saved.");
+  }
 }
 
 function bindInventoryEvents() {
@@ -9376,6 +9467,8 @@ function handleInventoryClick(event) {
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
   if (target.id === "saveStockModelBtn") return openStockModelModal();
   if (target.id === "saveStockModelBtn2") return saveStockModel();
+  if (target.id === "saveStockReserveBtn") return saveStockReservation();
+  if (target.dataset.closeStockReserve !== undefined) return target.closest("[data-stock-reserve-modal]")?.remove();
   if (target.id === "saveStockReturnBtn") return saveStockReturn();
   if (target.id === "deleteStockModelBtn") return deleteStockModel();
   if (target.id === "clearStockModelBtn") return clearStockModelForm();
@@ -10188,6 +10281,7 @@ function handleInventoryMenuAction(action, idValue) {
   }
   if (action === "delete-customer") return deleteCustomer(idValue);
   if (action === "edit-stock-model") return openStockModelModal(idValue);
+  if (action === "reserve-stock-model") return openStockReserveModal(idValue);
   if (action === "return-stock-model") return openStockModelModal(idValue, "return");
   if (action === "delete-stock-model") {
     return deleteStockModel(idValue);
@@ -10205,7 +10299,6 @@ function handleInventoryInput(event) {
   }
   if (input.id === "stockSearchInput") return filterInventoryTable(input.value);
   if (input.id === "stockModelNo") return autofillStockModelFields(input.value);
-  if (input.dataset.stockReservedModel) return updateStockReservedQty(input.dataset.stockReservedModel, input.value);
   if (input.id === "deliverySearchInput") {
     deliverySearchQuery = input.value;
     deliveryListPage = 1;
@@ -10715,6 +10808,7 @@ function clearStockModelForm() {
 async function saveStockModel() {
   const isAdd = document.querySelector("[data-stock-model-modal]")?.dataset.stockMode === "add";
   const reason = isAdd ? $("#stockReason")?.value || "new-stock" : "adjustment";
+  if ((!isAdd || reason === "adjustment") && !isCurrentAdmin()) return;
   const isReturn = isAdd && reason === "return";
   const payload = {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
@@ -10734,6 +10828,7 @@ async function saveStockModel() {
 }
 
 async function saveStockReturn() {
+  if (!isCurrentAdmin()) return;
   const payload = {
     modelNo: $("#stockModelNo")?.value.trim().toUpperCase(),
     returnQuantity: Number($("#stockQuantity")?.value || 0)
@@ -10750,24 +10845,8 @@ async function saveStockReturn() {
   }
 }
 
-async function updateStockReservedQty(modelNo, value) {
-  const info = findStockModelInfo(modelNo);
-  if (!info) return;
-  const reservedQty = Math.max(0, Number(value || 0));
-  const freeCell = document.querySelector(`[data-stock-free="${CSS.escape(modelNo)}"]`);
-  if (freeCell) freeCell.textContent = String(Number(info.quantity || 0) - reservedQty);
-  inventoryState = await api("/api/inventory/models", {
-    method: "POST",
-    body: JSON.stringify({
-      modelNo: info.modelNo,
-      description: info.description || "",
-      brand: info.brand || "Daikin",
-      reservedQty
-    })
-  });
-}
-
 async function deleteStockModel(modelNoValue = "") {
+  if (!isCurrentAdmin()) return;
   const modelNo = (modelNoValue || $("#stockModelNo")?.value || "").trim().toUpperCase();
   if (!modelNo) return alert("Select a model to delete.");
   if (!confirm(`Delete model ${modelNo}? Manual stock entries for this model will also be removed.`)) return;
@@ -10780,9 +10859,16 @@ async function deleteStockModel(modelNoValue = "") {
 
 function filterInventoryTable(query) {
   const q = String(query || "").toLowerCase();
+  let visible = 0;
   document.querySelectorAll(".inventory-table tbody tr").forEach(row => {
     row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none";
+    if (row.style.display !== "none") visible += 1;
   });
+  const count = document.querySelector("[data-stock-count]");
+  if (count) {
+    const total = inventoryState.dashboard.stock.length;
+    count.textContent = `Showing ${visible && total ? 1 : 0} to ${total ? Math.min(visible, total) : 0} of ${total} models`;
+  }
 }
 
 function filterScopedTable(selector, query) {
