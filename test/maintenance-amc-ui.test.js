@@ -21,6 +21,10 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
     ],
     workOrders: [{ id: "w1", number: "WO-1", contractId: "a1", workType: "Preventive Maintenance", serviceDate: shift(-5) }],
     reports: [{ id: "r1", number: "SR-1", contractId: "a1", workOrderId: "w1", status: "Approved" }],
+    billing: [{ id: "amc:a1:1", sourceType: "AMC", contractId: "a1", installmentNumber: 1,
+      amountExVat: 3000, vatRate: 5, dueDate: shift(20), invoiceTotal: 3150, totalPaid: 1500,
+      outstanding: 1650, invoiceStatus: "Invoice Received", paymentStatus: "Partially Paid",
+      request: { status: "send", requestedBy: "Admin" }, invoice: { number: "INV-001", date: today }, payments: [] }],
     files: [{ id: "f1", contractId: "a1", kind: "contract", originalName: "contract.pdf" }],
     activity: [1, 2, 3, 4].map(number => ({ targetId: "a1", kind: "contract", message: `Activity ${number}`, actor: "Admin", createdAt: `${shift(-number)}T10:00:00Z` })),
     technicians: [], attendance: [], schedules: [], notifications: []
@@ -74,11 +78,29 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
   await click("open-contract", { id: "a1" });
   assert.match(root.innerHTML, /Service Schedule/);
   assert.doesNotMatch(root.innerHTML, /Activity 4/);
+  await click("contract-tab", { tab: "Billing & Payments" });
+  assert.match(root.innerHTML, /class="amc-billing-table"/);
+  assert.match(root.innerHTML, /INV-001/);
+  assert.match(root.innerHTML, /AED 3,150\.00/);
+  assert.doesNotMatch(root.innerHTML, /data-action="contract-tab" data-tab="Documents"/);
+  assert.doesNotMatch(root.innerHTML, /View Full Billing & Payments/);
   await click("amc-full-details", { id: "a1" });
   assert.deepEqual(routes.at(-1), ["amc", "a1"]);
   await context.window.maintenanceModule.open("amc", "a1");
   assert.match(root.innerHTML, /class="maint-page maint-amc-full-page"/);
-  assert.match(root.innerHTML, /Activity 4/);
+  assert.match(root.innerHTML, /data-tab="Billing & Payments" class="active"/);
+  const fullTabs = root.innerHTML.match(/<nav class="mb-tabs"[^>]*>[\s\S]*?<\/nav>/)?.[0] || "";
+  assert.ok(fullTabs.indexOf("Service Reports") < fullTabs.indexOf("Billing & Payments"));
+  assert.ok(fullTabs.indexOf("Billing & Payments") < fullTabs.indexOf("Documents"));
+  for (const tab of ["Overview", "Service Schedule", "Service Reports"]) {
+    await context.window.maintenanceModule.open("amc");
+    await click("open-contract", { id: "a1" });
+    await click("contract-tab", { tab });
+    await click("amc-full-details", { id: "a1" });
+    await context.window.maintenanceModule.open("amc", "a1");
+    assert.match(root.innerHTML, new RegExp(`data-tab="${tab}" class="active"`));
+    if (tab === "Overview") assert.match(root.innerHTML, /Activity 4/);
+  }
   await click("billing-amc-tab", { tab: "Service Schedule" });
   assert.match(root.innerHTML, /Service Schedule/);
   assert.match(root.innerHTML, /<td>1<\/td>/);
@@ -92,6 +114,12 @@ test("AMC Register renders live contracts and keeps its controls connected", asy
   assert.match(root.innerHTML, /class="maint-page maint-amc-page"/);
   await click("amc-menu", { id: "a1" });
   assert.match(root.innerHTML, /class="amc-menu-popover"/);
+  await click("amc-documents", { id: "a1" });
+  assert.deepEqual(routes.at(-1), ["amc", "a1"]);
+  await context.window.maintenanceModule.open("amc", "a1");
+  assert.match(root.innerHTML, /data-tab="Documents" class="active"/);
+  assert.match(root.innerHTML, /contract\.pdf/);
+  await context.window.maintenanceModule.open("amc");
   await click("close-contract");
   assert.doesNotMatch(root.innerHTML, /class="amc-detail-panel"/);
   await click("export-amc");

@@ -5,9 +5,9 @@ const crypto = require("crypto");
 const emptyStore = () => ({
   version: 1,
   sequence: { contract: 0, workOrder: 0, report: 0, technician: 0 },
-  contracts: [], visits: [], schedules: [], workOrders: [], technicians: [],
+  customers: [], contracts: [], visits: [], schedules: [], workOrders: [], technicians: [],
   attendance: [], reports: [], files: [], notifications: [], subscriptions: [],
-  invites: [], drafts: [], activity: [], pendingUploadDeletes: [], billingRecords: [], billingNotes: {}
+  invites: [], drafts: [], activity: [], pendingUploadDeletes: [], billingRecords: [], billingDeletedIds: [], billingNotes: {}
 });
 
 function normalize(value) {
@@ -16,6 +16,15 @@ function normalize(value) {
   const next = { ...blank, ...value, sequence: { ...blank.sequence, ...(value.sequence || {}) } };
   for (const key of Object.keys(blank)) {
     if (Array.isArray(blank[key])) next[key] = Array.isArray(value[key]) ? value[key] : [];
+  }
+  const known = new Set(next.customers.map(item => String(item.name || "").trim().toLocaleLowerCase("en-US")));
+  for (const source of [...next.contracts, ...next.workOrders, ...next.schedules]) {
+    const name = String(source.customerName || "").trim();
+    const key = name.toLocaleLowerCase("en-US");
+    if (!key || known.has(key)) continue;
+    known.add(key);
+    next.customers.push({ id: source.customerId || `maintenance:${crypto.createHash("sha256").update(key).digest("hex").slice(0, 20)}`,
+      name, contact: source.contact || "", phone: source.phone || "", email: source.email || "" });
   }
   return next;
 }

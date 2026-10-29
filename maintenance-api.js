@@ -102,6 +102,58 @@ function addActivity(store, kind, targetId, actor, message) {
   if (store.activity.length > 3000) store.activity.length = 3000;
 }
 
+const AMC_BILLING_KINDS = new Set(["custom_installment", "full_contract", "advance_billing", "additional_adjustment"]);
+const WORK_ORDER_BILLING_KINDS = new Set(["advance_payment", "final_payment", "variation_charge", "materials_charge"]);
+
+function saveInvoiceRequest(store, record, body, user, editing = false) {
+  if (editing && !record.request) fail("Invoice request not found", 404);
+  if (record.invoice || record.request && record.request.status !== "draft" && !editing)
+    fail("An invoice request already exists for this installment or charge", 409);
+  const resend = editing && body.resend === true;
+  const mode = editing ? resend ? "send" : record.request.status : body.mode === "draft" ? "draft" : "send";
+  const requestDate = trim(body.requestDate, 10) || dubaiToday();
+  if (!validDate(requestDate)) fail("Enter a valid request date");
+  if (record.sourceType === "AMC" && (store.billingRecords || []).some(item => item.sourceType === "AMC Special"
+    && item.contractId === record.contractId && item.billingType === "full_contract" && (item.request || item.invoice)))
+    fail("Full contract billing already covers this AMC", 409);
+  const requestedAmount = Object.hasOwn(body, "amountExVat") ? Number(body.amountExVat) : Number(record.amountExVat);
+  if (!Number.isFinite(requestedAmount) || requestedAmount < 0) fail("Enter a valid amount before VAT");
+  if (record.contractId && record.sourceType !== "Additional Charge") {
+    const contract = find(store.contracts, record.contractId);
+    if (!contract) fail("AMC contract not found", 404);
+    if (record.billingType === "full_contract"
+      && Math.abs(roundMoney(requestedAmount) - roundMoney(contract.contractValue)) > 0.01)
+      fail("Full Contract Billing must match the contract value. Choose an installment or another billing option for a partial amount", 409);
+    const committed = billingRows(store).filter(item => item.contractId === record.contractId
+      && item.id !== record.id && item.sourceType !== "Additional Charge" && (item.request || item.invoice))
+      .reduce((total, item) => total + Number(item.amountExVat || 0), 0);
+    if (roundMoney(requestedAmount + committed) > roundMoney(contract.contractValue))
+      fail(`This request exceeds the AMC contract value. AED ${roundMoney(Math.max(0, contract.contractValue - committed)).toFixed(2)} remains available.`, 409);
+  }
+  if (record.sourceType === "Work Order") {
+    record.serviceAmountExVat ??= roundMoney(record.amountExVat);
+    record.serviceVatRate ??= record.vatRate;
+  }
+  record.amountExVat = roundMoney(requestedAmount);
+  if (Object.hasOwn(body, "vatRate")) {
+    const rate = Number(body.vatRate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 100) fail("Enter a VAT percentage from 0 to 100");
+    record.vatRate = rate;
+  }
+  if (mode === "send" && Number(record.amountExVat) <= 0) fail("Set the billing amount before requesting an invoice");
+  const now = isoNow();
+  record.request = editing ? { ...record.request, requestDate, remarks: trim(body.remarks, 500),
+    ...(resend ? { status: "send", requestedAt: now, preparedAt: "", handledBy: "", resentAt: now, resentBy: user.name } : {}) }
+    : { requestedBy: user.name, createdAt: record.request?.createdAt || now,
+      requestedAt: mode === "send" ? now : "", requestDate, status: mode,
+      remarks: trim(body.remarks, 500), preparedAt: "", handledBy: "" };
+  record.updatedAt = now;
+  saveBilling(store, record);
+  addActivity(store, "billing", record.contractId || record.workOrderId,
+    user.name, `Invoice request ${resend ? "sent again to accounts" : editing ? "edited" : mode === "draft" ? "draft saved" : "sent to accounts"} for ${record.reference}${record.installmentNumber ? ` installment ${record.installmentNumber}` : record.billingType ? ` · ${record.billingType.replaceAll("_", " ")}` : ""}`);
+  return record;
+}
+
 function deleteWorkOrder(store, id) {
   const job = find(store.workOrders, id);
   if (!job) return null;
@@ -196,6 +248,25 @@ function createMaintenanceApi(deps) {
 
   const maintenanceCustomerId = name => `maintenance:${sha(name.toLocaleLowerCase("en-US")).slice(0, 20)}`;
 
+  function resolveInlineCustomer(store, body, user, existing) {
+    if (body.customerId !== "__new__") return body;
+    const name = trim(body.newCustomer?.name, 150);
+    const contact = trim(body.newCustomer?.contact, 100);
+    const phone = trim(body.newCustomer?.phone, 50);
+    const email = trim(body.newCustomer?.email, 150);
+    if (!name) fail("Enter the new customer name");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Enter a valid customer email address");
+    if (existing?.customerId && existing.customerName?.toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US"))
+      return { ...body, customerId: existing.customerId };
+    if (store.customers.some(item => item.name.trim().toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US")))
+      fail("This customer already exists. Select it from the list instead.", 409);
+    const now = isoNow();
+    const customer = { id: random(), name, contact, phone, email, createdAt: now, updatedAt: now };
+    store.customers.unshift(customer);
+    addActivity(store, "customer", customer.id, user.name, `${name} created`);
+    return { ...body, customerId: customer.id };
+  }
+
   async function attemptPush(notificationId) {
     const state = await storage.read();
     const notice = find(state.notifications, notificationId);
@@ -249,10 +320,13 @@ function createMaintenanceApi(deps) {
     if (!validDate(start) || !validDate(end) || end < start) fail("Enter a valid contract period");
   }
 
-  function contractInput(body, existing = {}) {
+  function contractInput(store, body, existing = {}) {
     const number = Object.hasOwn(body, "number") ? trim(body.number, 100) : trim(existing.number, 100);
     if (existing.id && !number) fail("Enter an AMC number");
-    const customerName = trim(body.customerName, 150);
+    const selectedCustomer = body.customerId ? find(store.customers, trim(body.customerId, 80)) : null;
+    if (body.customerId && !selectedCustomer) fail("Select a customer from the Customer List");
+    const customerName = selectedCustomer && selectedCustomer.id === existing.customerId
+      ? existing.customerName : selectedCustomer?.name || trim(body.customerName, 150);
     if (!customerName) fail("Enter a customer name");
     const startDate = trim(body.startDate, 10);
     const endDate = trim(body.endDate, 10);
@@ -269,8 +343,8 @@ function createMaintenanceApi(deps) {
     const email = trim(body.email, 150);
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
       fail("Email is incomplete. Enter an address like name@example.com, or leave Email blank.");
-    return { ...existing, ...(number ? { number } : {}), customerId: existing.customerName === customerName && existing.customerId
-      ? existing.customerId : maintenanceCustomerId(customerName), customerName, site, contact, phone,
+    return { ...existing, ...(number ? { number } : {}), customerId: selectedCustomer?.id || (existing.customerName === customerName && existing.customerId
+      ? existing.customerId : maintenanceCustomerId(customerName)), customerName, site, contact, phone,
       email, startDate, endDate, frequency, visitsPerYear, unitCount,
       status: ["Active", "Paused", "Cancelled"].includes(body.status) ? body.status : "Active",
       contractValue: Number(body.contractValue || 0) || 0, notes: trim(body.notes, 4000),
@@ -280,7 +354,10 @@ function createMaintenanceApi(deps) {
   function validateSchedule(store, body, active, { allowUnassigned = false } = {}) {
     const contract = body.contractId ? find(store.contracts, body.contractId) : null;
     if (body.contractId && !contract) fail("AMC contract not found");
-    const customerName = contract?.customerName || trim(body.customerName, 150);
+    const selectedCustomer = !contract && body.customerId ? find(store.customers, trim(body.customerId, 80)) : null;
+    if (!contract && body.customerId && !selectedCustomer) fail("Select a customer from the Customer List");
+    const customerName = contract?.customerName || (selectedCustomer && selectedCustomer.id === active?.customerId
+      ? active.customerName : selectedCustomer?.name) || trim(body.customerName, 150);
     if (!customerName) fail("Enter a customer name");
     const serviceDate = trim(body.serviceDate, 10);
     if (!validDate(serviceDate)) fail("Enter a valid service date");
@@ -303,7 +380,7 @@ function createMaintenanceApi(deps) {
     }
     const site = trim(body.site || contract?.site, 200);
     if (!site) fail("Enter a site or location");
-    return { contractId: contract?.id || "", visitId: visit?.id || "", customerId: contract?.customerId
+    return { contractId: contract?.id || "", visitId: visit?.id || "", customerId: contract?.customerId || selectedCustomer?.id
       || (active?.customerName === customerName && active.customerId ? active.customerId : maintenanceCustomerId(customerName)),
       customerName, site,
       contact: trim(body.contact || contract?.contact, 100), phone: trim(body.phone || contract?.phone, 50),
@@ -363,13 +440,80 @@ function createMaintenanceApi(deps) {
       if (!user || !["admin", "mts"].includes(String(user.role).toLowerCase())) fail("Admin or MTS access required", 403);
       if (req.method !== "GET") sameOrigin(req);
       const parts = url.pathname.split("/").filter(Boolean).slice(2);
+      if (parts[0] === "customers" && parts.length <= 2) {
+        if (req.method === "POST" && parts.length === 1 || req.method === "PUT" && parts.length === 2) {
+          const body = await readJson(req);
+          const name = trim(body.name, 150);
+          const contact = trim(body.contact, 100);
+          const phone = trim(body.phone, 50);
+          const email = trim(body.email, 150);
+          if (!name) fail("Enter a customer name");
+          if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("Enter a valid email address");
+          const customer = await storage.mutate(store => {
+            const current = parts.length === 2 ? find(store.customers, parts[1]) : null;
+            if (parts.length === 2 && !current) fail("Customer not found", 404);
+            if (store.customers.some(item => item.id !== current?.id && item.name.trim().toLocaleLowerCase("en-US") === name.toLocaleLowerCase("en-US")))
+              fail("A customer with this name already exists", 409);
+            const oldName = current?.name || "";
+            const now = isoNow();
+            const item = current || { id: random(), createdAt: now };
+            Object.assign(item, { name, contact, phone, email, updatedAt: now });
+            if (!current) store.customers.unshift(item);
+            else {
+              const linked = row => row.customerId === item.id || (!row.customerId && row.customerName?.toLocaleLowerCase("en-US") === oldName.toLocaleLowerCase("en-US"));
+              for (const agreement of store.contracts.filter(linked)) Object.assign(agreement,
+                { customerId: item.id, customerName: name, contact, phone, email, updatedAt: now });
+              for (const row of [...store.schedules, ...store.workOrders].filter(linked)) Object.assign(row,
+                { customerId: item.id, customerName: name, contact, phone, updatedAt: now });
+              const linkedJobIds = new Set(store.workOrders.filter(row => row.customerId === item.id).map(row => row.id));
+              for (const notice of store.notifications.filter(row => linkedJobIds.has(row.workOrderId))) {
+                notice.message = notice.message?.replace(` | ${oldName} - `, ` | ${name} - `) || notice.message;
+              }
+              for (const report of store.reports) {
+                const workOrder = find(store.workOrders, report.workOrderId);
+                const agreement = find(store.contracts, report.contractId);
+                if (workOrder?.customerId !== item.id && agreement?.customerId !== item.id
+                  && report.extracted?.customerName?.toLocaleLowerCase("en-US") !== oldName.toLocaleLowerCase("en-US")
+                  && report.details?.customerName?.toLocaleLowerCase("en-US") !== oldName.toLocaleLowerCase("en-US")) continue;
+                if (report.extracted) report.extracted = { ...report.extracted, customerName: name };
+                if (report.details) report.details = { ...report.details, customerName: name };
+                report.updatedAt = now;
+              }
+              for (const record of store.billingRecords || []) {
+                if (record.customerName?.toLocaleLowerCase("en-US") === oldName.toLocaleLowerCase("en-US")
+                  || find(store.contracts, record.contractId)?.customerId === item.id
+                  || find(store.workOrders, record.workOrderId)?.customerId === item.id) record.customerName = name;
+              }
+            }
+            addActivity(store, "customer", item.id, user.name, `${name} ${current ? "updated" : "created"}`);
+            return item;
+          });
+          return send(res, parts.length === 1 ? 201 : 200, customer);
+        }
+        if (req.method === "DELETE" && parts.length === 2) {
+          const result = await storage.mutate(store => {
+            const customer = find(store.customers, parts[1]);
+            if (!customer) fail("Customer not found", 404);
+            const linked = row => row.customerId === customer.id || row.customerName?.toLocaleLowerCase("en-US") === customer.name.toLocaleLowerCase("en-US");
+            if (store.contracts.some(linked) || store.workOrders.some(linked) || store.schedules.some(linked)
+              || store.reports.some(report => [report.extracted?.customerName, report.details?.customerName]
+                .some(name => name?.toLocaleLowerCase("en-US") === customer.name.toLocaleLowerCase("en-US")))
+              || (store.billingRecords || []).some(record => record.customerName?.toLocaleLowerCase("en-US") === customer.name.toLocaleLowerCase("en-US")))
+              fail("This customer is used by a maintenance record. Change the linked record before deleting.", 409);
+            store.customers = store.customers.filter(item => item.id !== customer.id);
+            addActivity(store, "customer", customer.id, user.name, `${customer.name} deleted`);
+            return { ok: true, id: customer.id };
+          });
+          return send(res, 200, result);
+        }
+      }
       if (req.method === "GET" && parts[0] === "summary") {
         let state = await storage.read();
         if (state.pendingUploadDeletes.length) await flushUploadDeletes(state.pendingUploadDeletes);
         if (state.pendingUploadDeletes.length) state = await storage.read();
         state = await pruneBillingUploads(state);
         return send(res, 200, { ...publicState(state),
-          viewerRole: String(user.role).toLowerCase() });
+          viewerRole: String(user.role).toLowerCase(), viewerName: user.name });
       }
 
       if (parts[0] === "billing" && parts.length === 2 && parts[1] === "extra" && req.method === "POST") {
@@ -405,9 +549,95 @@ function createMaintenanceApi(deps) {
         return send(res, 200, { notes });
       }
 
+      if (parts[0] === "billing" && parts[1] === "special" && parts[2] === "request" && parts.length === 3 && req.method === "POST") {
+        const body = await readJson(req);
+        const updated = await storage.mutate(store => {
+          const sourceType = trim(body.sourceType, 30), sourceId = trim(body.sourceId, 80);
+          const billingType = trim(body.billingType, 40), clientKey = trim(body.clientKey, 80);
+          if (!/^[a-zA-Z0-9-]{8,80}$/.test(clientKey)) fail("Invalid billing request key");
+          const isAmc = sourceType === "AMC";
+          if (!isAmc && sourceType !== "Work Order") fail("Select an AMC or non-AMC work order");
+          if (!(isAmc ? AMC_BILLING_KINDS : WORK_ORDER_BILLING_KINDS).has(billingType)) fail("Select a valid billing option");
+          const parent = isAmc ? find(store.contracts, sourceId) : find(store.workOrders, sourceId);
+          if (!parent || !isAmc && parent.contractId) fail("Selected billing record was not found", 404);
+          const id = `special:${clientKey}`;
+          let record = billingFor(store, id);
+          if (record && (record.sourceType !== (isAmc ? "AMC Special" : "Work Order Special")
+            || (isAmc ? record.contractId : record.workOrderId) !== sourceId || record.billingType !== billingType))
+            fail("This billing request key belongs to another charge", 409);
+          if (!record) {
+            if (billingType === "full_contract" && billingRows(store).some(item => item.contractId === sourceId
+              && (item.request || item.invoice))) fail("This AMC already has billing activity", 409);
+            const now = isoNow();
+            record = { id, sourceType: isAmc ? "AMC Special" : "Work Order Special", billingType,
+              contractId: isAmc ? sourceId : "", workOrderId: isAmc ? "" : sourceId,
+              reference: parent.number, customerName: parent.customerName, site: parent.site,
+              periodStart: isAmc ? parent.startDate : parent.serviceDate,
+              periodEnd: isAmc ? parent.endDate : parent.serviceDate,
+              dueDate: trim(body.requestDate, 10) || dubaiToday(), amountExVat: billingType === "full_contract" ? roundMoney(parent.contractValue) : 0,
+              vatRate: 5, notes: "", request: null, invoice: null, payments: [], credits: 0, createdAt: now, updatedAt: now };
+          }
+          if (billingType === "custom_installment") {
+            const start = trim(body.periodStart, 10), end = trim(body.periodEnd, 10);
+            if (!validDate(start) || !validDate(end) || end < start
+              || start < parent.startDate || end > parent.endDate)
+              fail("Enter a custom period within this AMC contract");
+            record.periodStart = start;
+            record.periodEnd = end;
+            record.dueDate = end;
+          }
+          return saveInvoiceRequest(store, record, body, user);
+        });
+        return send(res, updated.request.status === "draft" ? 200 : 201, updated);
+      }
+
       if (parts[0] === "billing" && parts[1] && parts.length >= 2) {
         const id = decodeURIComponent(parts[1]);
         const action = parts[2] || "";
+        if (!action && parts.length === 2 && req.method === "DELETE") {
+          if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can delete payment schedule rows", 403);
+          const deleted = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record || record.sourceType !== "AMC") fail("Payment schedule row not found", 404);
+            if (record.request || record.invoice || record.payments?.length)
+              fail("This installment has billing activity and cannot be deleted", 409);
+            store.billingDeletedIds ||= [];
+            if (!store.billingDeletedIds.includes(id)) store.billingDeletedIds.push(id);
+            store.billingRecords = (store.billingRecords || []).filter(item => item.id !== id);
+            addActivity(store, "billing", record.contractId, user.name,
+              `${record.reference} installment ${record.installmentNumber} removed from payment schedule`);
+            return record;
+          });
+          return send(res, 200, { ok: true, id: deleted.id });
+        }
+        if (action === "request" && parts.length === 3 && req.method === "DELETE") {
+          if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can delete invoice requests", 403);
+          const result = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record || !record.request && !record.invoice) fail("Invoice request not found", 404);
+            if (record.paymentStatus === "Paid") fail("Paid invoices cannot be deleted. Mark the invoice unpaid first.", 409);
+            const invoiceNumber = record.invoice?.number;
+            const removedUploads = store.files.filter(file => file.billingId === id && ["invoice", "receipt"].includes(file.kind))
+              .map(file => file.storedName).filter(Boolean);
+            store.files = store.files.filter(file => file.billingId !== id || !["invoice", "receipt"].includes(file.kind));
+            store.pendingUploadDeletes = [...new Set([...(store.pendingUploadDeletes || []), ...removedUploads])];
+            if (["AMC Special", "Work Order Special"].includes(record.sourceType))
+              store.billingRecords = (store.billingRecords || []).filter(item => item.id !== id);
+            else {
+              record.request = null;
+              record.invoice = null;
+              record.payments = [];
+              record.credits = 0;
+              record.updatedAt = isoNow();
+              saveBilling(store, record);
+            }
+            addActivity(store, "billing", record.contractId || record.workOrderId, user.name,
+              `Invoice request${invoiceNumber ? ` and invoice ${invoiceNumber}` : ""} for ${record.reference}${record.installmentNumber ? ` installment ${record.installmentNumber}` : ""} deleted`);
+            return { removedUploads };
+          });
+          await flushUploadDeletes(result.removedUploads);
+          return send(res, 200, { ok: true, id });
+        }
         if (action === "uploads" && parts[3] && parts.length === 4 && req.method === "DELETE") {
           const fileId = parts[3];
           const removed = await storage.mutate(store => {
@@ -429,22 +659,38 @@ function createMaintenanceApi(deps) {
             const record = billingFor(store, id);
             if (!record) fail("Billing record not found", 404);
             if (Object.hasOwn(body, "notes")) record.notes = trim(body.notes, 3000);
+            if (Object.hasOwn(body, "serviceAmountExVat")) {
+              if (record.sourceType !== "Work Order") fail("Service amount is only available for non-AMC work orders", 409);
+              const amount = Number(body.serviceAmountExVat);
+              if (!Number.isFinite(amount) || amount < 0) fail("Enter a valid service amount");
+              record.serviceAmountExVat = roundMoney(amount);
+              if (!record.request && !record.invoice) record.amountExVat = record.serviceAmountExVat;
+            }
+            if (Object.hasOwn(body, "serviceVatRate")) {
+              if (record.sourceType !== "Work Order") fail("Service VAT is only available for non-AMC work orders", 409);
+              const rate = Number(body.serviceVatRate);
+              if (!Number.isFinite(rate) || rate < 0 || rate > 100) fail("Enter a VAT percentage from 0 to 100");
+              record.serviceVatRate = rate;
+              if (!record.request && !record.invoice) record.vatRate = rate;
+            }
             if (Object.hasOwn(body, "amountExVat")) {
               if (record.sourceType === "AMC" || record.request || record.invoice) fail("The amount is locked once billing starts", 409);
               const amount = Number(body.amountExVat);
               if (!Number.isFinite(amount) || amount < 0) fail("Enter a valid service amount");
               record.amountExVat = roundMoney(amount);
+              if (record.sourceType === "Work Order") record.serviceAmountExVat = record.amountExVat;
             }
             if (Object.hasOwn(body, "vatRate")) {
               if (record.invoice) fail("VAT is locked after the invoice is saved", 409);
               const rate = Number(body.vatRate);
               if (!Number.isFinite(rate) || rate < 0 || rate > 100) fail("Enter a VAT percentage from 0 to 100");
               record.vatRate = rate;
+              if (record.sourceType === "Work Order") record.serviceVatRate = rate;
             }
             if (Object.hasOwn(body, "credits")) {
               if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can record credits", 403);
               const credits = Number(body.credits);
-            const paid = (record.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+            const paid = (record.payments || []).filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
             if (!Number.isFinite(credits) || credits < 0 || credits > roundMoney(Number(record.invoice?.total || 0) - paid))
               fail("Credits cannot exceed the unpaid invoice balance");
               record.credits = roundMoney(credits);
@@ -459,23 +705,24 @@ function createMaintenanceApi(deps) {
           const updated = await storage.mutate(store => {
             const record = billingFor(store, id);
             if (!record) fail("Billing record not found", 404);
-            if (record.request || record.invoice) fail("An invoice request already exists for this installment or charge", 409);
-            if (Number(record.amountExVat) <= 0) fail("Set the billing amount before requesting an invoice");
-            record.request = { requestedBy: user.name, requestedAt: isoNow(), remarks: trim(body.remarks, 2000),
-              preparedAt: "", handledBy: "" };
-            record.updatedAt = isoNow();
-            saveBilling(store, record);
-            addActivity(store, "billing", record.contractId || record.workOrderId,
-              user.name, `Invoice requested for ${record.reference}${record.installmentNumber ? ` installment ${record.installmentNumber}` : ""}`);
-            return record;
+            return saveInvoiceRequest(store, record, body, user);
           });
-          return send(res, 201, updated);
+          return send(res, updated.request.status === "draft" ? 200 : 201, updated);
+        }
+        if (action === "request" && req.method === "PUT") {
+          const body = await readJson(req);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record) fail("Billing record not found", 404);
+            return saveInvoiceRequest(store, record, body, user, true);
+          });
+          return send(res, 200, updated);
         }
         if (action === "handoff" && req.method === "POST") {
           if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can confirm accountant handoff", 403);
           const updated = await storage.mutate(store => {
             const record = billingFor(store, id);
-            if (!record?.request) fail("Request an invoice first", 409);
+            if (!record?.request || record.request.status === "draft") fail("Send the invoice request to accounts first", 409);
             if (record.request.preparedAt) fail("This invoice was already marked prepared", 409);
             record.request.preparedAt = isoNow();
             record.request.handledBy = user.name;
@@ -511,20 +758,49 @@ function createMaintenanceApi(deps) {
           }
           return send(res, 201, { file: publicFile(file), ...extraction, warnings });
         }
-        if (action === "invoice" && req.method === "POST") {
+        if (action === "invoice-file" && parts.length === 3 && req.method === "DELETE") {
+          const removed = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record?.invoice?.fileId) fail("Invoice attachment not found", 404);
+            if (record.paymentStatus === "Paid") fail("Paid invoices cannot be edited. Mark the invoice unpaid first.", 409);
+            const file = store.files.find(item => item.id === record.invoice.fileId && item.billingId === id && item.kind === "invoice");
+            if (!file) fail("Invoice attachment not found", 404);
+            record.invoice.fileId = "";
+            record.invoice.updatedBy = user.name;
+            record.invoice.updatedAt = isoNow();
+            record.updatedAt = isoNow();
+            saveBilling(store, record);
+            store.files = store.files.filter(item => item.id !== file.id);
+            store.pendingUploadDeletes = [...new Set([...(store.pendingUploadDeletes || []), file.storedName])];
+            addActivity(store, "billing", record.contractId || record.workOrderId, user.name,
+              `Invoice attachment removed for ${record.reference}`);
+            return file.storedName;
+          });
+          await flushUploadDeletes([removed]);
+          return send(res, 200, { ok: true });
+        }
+        if (action === "invoice" && ["POST", "PUT"].includes(req.method)) {
           const body = await readJson(req);
-          const updated = await storage.mutate(store => {
+          const editing = req.method === "PUT";
+          const result = await storage.mutate(store => {
             const record = billingFor(store, id);
             if (!record) fail("Billing record not found", 404);
-            if (record.invoice) fail("An invoice is already linked to this installment or charge", 409);
+            if (editing && !record.invoice) fail("Invoice not found", 404);
+            if (!editing && record.invoice) fail("An invoice is already linked to this installment or charge", 409);
+            if (editing && record.paymentStatus === "Paid") fail("Paid invoices cannot be edited. Mark the invoice unpaid first.", 409);
+            if (!editing && record.sourceType === "AMC" && (store.billingRecords || []).some(item => item.sourceType === "AMC Special"
+              && item.contractId === record.contractId && item.billingType === "full_contract" && (item.request || item.invoice)))
+              fail("Full contract billing already covers this AMC", 409);
             const number = trim(body.number, 100);
             if (!number) fail("Enter the invoice number");
-            if (billingRows(store).some(item => item.invoice?.number?.toLowerCase() === number.toLowerCase())) fail("This invoice number is already used", 409);
+            if (billingRows(store).some(item => item.id !== id && item.invoice?.number?.toLowerCase() === number.toLowerCase())) fail("This invoice number is already used", 409);
             const date = trim(body.date, 10), dueDate = trim(body.dueDate, 10);
             if (!validDate(date) || (dueDate && !validDate(dueDate))) fail("Enter a valid invoice date and due date");
             const exVat = Number(body.amountExVat), vat = Number(body.vatAmount), total = Number(body.total);
             if (![exVat, vat, total].every(Number.isFinite) || exVat < 0 || vat < 0 || roundMoney(total) <= 0
               || Math.abs(roundMoney(exVat + vat) - roundMoney(total)) > 0.01) fail("Invoice amounts must add up and be greater than zero");
+            if (editing && roundMoney(total) < roundMoney(record.totalPaid + Number(record.credits || 0)))
+              fail("Invoice total cannot be less than payments and credits already recorded", 409);
             const customerName = trim(body.customerName, 150);
             const sourceReference = trim(body.sourceReference, 100);
             const mismatch = (customerName && record.customerName && customerName.toLowerCase() !== record.customerName.toLowerCase())
@@ -534,17 +810,27 @@ function createMaintenanceApi(deps) {
             const fileId = trim(body.fileId, 80);
             if (fileId && !store.files.some(file => file.id === fileId && file.kind === "invoice" && file.billingId === id))
               fail("Uploaded invoice does not belong to this billing record", 403);
+            const previousInvoice = record.invoice;
+            const previousFile = editing && previousInvoice?.fileId && previousInvoice.fileId !== fileId
+              ? store.files.find(file => file.id === previousInvoice.fileId) : null;
             record.request ||= { requestedBy: user.name, requestedAt: isoNow(), remarks: "Entered with invoice", preparedAt: "", handledBy: "" };
             record.invoice = { number, date, dueDate, customerName: customerName || record.customerName, sourceReference,
               amountExVat: roundMoney(exVat), vatAmount: roundMoney(vat), total: roundMoney(total),
-              fileId, recordedBy: user.name, recordedAt: isoNow(), sentAt: "", sentBy: "", mismatchConfirmed: !!mismatch };
+              fileId, recordedBy: previousInvoice?.recordedBy || user.name, recordedAt: previousInvoice?.recordedAt || isoNow(),
+              updatedBy: editing ? user.name : "", updatedAt: editing ? isoNow() : "",
+              sentAt: previousInvoice?.sentAt || "", sentBy: previousInvoice?.sentBy || "", mismatchConfirmed: !!mismatch };
             record.updatedAt = isoNow();
             saveBilling(store, record);
+            if (previousFile) {
+              store.files = store.files.filter(file => file.id !== previousFile.id);
+              store.pendingUploadDeletes = [...new Set([...(store.pendingUploadDeletes || []), previousFile.storedName])];
+            }
             addActivity(store, "billing", record.contractId || record.workOrderId,
-              user.name, `Invoice ${number} recorded for ${record.reference}`);
-            return record;
+              user.name, `Invoice ${number} ${editing ? "updated" : "recorded"} for ${record.reference}`);
+            return { record, removedUploads: previousFile?.storedName ? [previousFile.storedName] : [] };
           });
-          return send(res, 201, updated);
+          if (result.removedUploads.length) await flushUploadDeletes(result.removedUploads);
+          return send(res, editing ? 200 : 201, result.record);
         }
         if (action === "sent" && req.method === "POST") {
           const updated = await storage.mutate(store => {
@@ -553,6 +839,33 @@ function createMaintenanceApi(deps) {
             if (record.invoice.sentAt) fail("Invoice already marked sent to customer", 409);
             record.invoice.sentAt = isoNow(); record.invoice.sentBy = user.name; record.updatedAt = isoNow();
             return saveBilling(store, record);
+          });
+          return send(res, 200, updated);
+        }
+        if (["mark-paid", "mark-unpaid"].includes(action) && req.method === "POST") {
+          if (String(user.role).toLowerCase() !== "admin") fail("Only Admin can change payment status", 403);
+          const updated = await storage.mutate(store => {
+            const record = billingFor(store, id);
+            if (!record?.invoice) fail("Record an invoice before changing payment status", 409);
+            record.payments ||= [];
+            if (action === "mark-paid") {
+              if (record.paymentStatus === "Paid") fail("This invoice is already paid", 409);
+              const amount = roundMoney(record.outstanding);
+              if (amount <= 0) fail("This invoice has no outstanding balance", 409);
+              record.payments.push({ id: random(), amount, date: dubaiToday(), method: "Marked as Paid",
+                reference: `MARK-${random()}`, receiptFileId: "", confirmedAt: isoNow(), confirmedBy: user.name });
+            } else {
+              if (record.paymentStatus !== "Paid") fail("This invoice is not marked paid", 409);
+              if (Number(record.credits || 0) >= record.invoiceTotal) fail("Remove the full invoice credit before marking it unpaid", 409);
+              const active = record.payments.filter(payment => !payment.reversedAt);
+              if (!active.length) fail("No payment entry is available to reverse", 409);
+              for (const payment of active) { payment.reversedAt = isoNow(); payment.reversedBy = user.name; }
+            }
+            record.updatedAt = isoNow();
+            saveBilling(store, record);
+            addActivity(store, "billing", record.contractId || record.workOrderId, user.name,
+              `Invoice ${record.invoice.number} marked ${action === "mark-paid" ? "paid" : "unpaid"}`);
+            return record;
           });
           return send(res, 200, updated);
         }
@@ -608,6 +921,7 @@ function createMaintenanceApi(deps) {
             store.visits = store.visits.filter(visit => visit.contractId !== id);
             store.files = store.files.filter(file => file.contractId !== id);
             store.billingRecords = (store.billingRecords || []).filter(item => item.contractId !== id);
+            store.billingDeletedIds = (store.billingDeletedIds || []).filter(rowId => !rowId.startsWith(`amc:${id}:`));
             if (store.billingNotes) delete store.billingNotes[id];
             store.contracts = store.contracts.filter(contract => contract.id !== id);
             store.activity = store.activity.filter(entry => entry.targetId !== id);
@@ -679,8 +993,8 @@ function createMaintenanceApi(deps) {
 
       if (parts[0] === "contracts" && parts.length === 1 && req.method === "POST") {
         const body = await readJson(req);
-        const input = contractInput(body);
         const contract = await storage.mutate(store => {
+          const input = contractInput(store, resolveInlineCustomer(store, body, user));
           const now = isoNow();
           const item = { ...input, id: random(), number: nextContractNumber(store), createdAt: now, updatedAt: now };
           store.contracts.unshift(item);
@@ -698,7 +1012,7 @@ function createMaintenanceApi(deps) {
         const result = await storage.mutate(store => {
           const contract = find(store.contracts, parts[1]);
           if (!contract) fail("AMC contract not found", 404);
-          const input = contractInput(body, contract);
+          const input = contractInput(store, resolveInlineCustomer(store, body, user, contract), contract);
           if ((input.visitsPerYear !== contract.visitsPerYear || input.startDate !== contract.startDate
             || input.endDate !== contract.endDate || input.contractValue !== contract.contractValue)
             && (store.billingRecords || []).some(row => row.contractId === contract.id && (row.request || row.invoice || row.payments?.length)))
@@ -707,6 +1021,7 @@ function createMaintenanceApi(deps) {
             && String(item.number || "").toLocaleLowerCase("en-US") === input.number.toLocaleLowerCase("en-US")))
             fail("This AMC number is already in use", 409);
           if (input.visitsPerYear !== contract.visitsPerYear || input.startDate !== contract.startDate || input.endDate !== contract.endDate) {
+            store.billingDeletedIds = (store.billingDeletedIds || []).filter(rowId => !rowId.startsWith(`amc:${contract.id}:`));
             const visits = store.visits.filter(item => item.contractId === contract.id);
             if (visits.some(item => item.workOrderId || item.status !== "Planned")) fail("Existing scheduled visits must be completed before changing the visit plan", 409);
             store.visits = store.visits.filter(item => item.contractId !== contract.id);
@@ -757,7 +1072,8 @@ function createMaintenanceApi(deps) {
             || store.schedules.some(item => item.id !== current?.id && !item.workOrderId
               && trim(item.workOrderNumber, 100).toLocaleLowerCase("en-US") === normalizedNumber))
             fail(`Work Order Number ${workOrderNumber} already exists`, 409);
-          const input = validateSchedule(store, body, published || finished ? (current || {}) : null, { allowUnassigned: finished });
+          const inputBody = body.contractId ? body : resolveInlineCustomer(store, body, user, current);
+          const input = validateSchedule(store, inputBody, published || finished ? (current || {}) : null, { allowUnassigned: finished });
           if (finished && (!input.contractId || !input.visitId)) fail("Choose a planned visit from an AMC contract");
           if (finished && input.serviceDate >= dubaiToday()) fail("Mark as Finished is available only for past service dates");
           const now = isoNow();

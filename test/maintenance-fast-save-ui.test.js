@@ -5,13 +5,13 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 test("AMC save shows the confirmed record without waiting for the summary refresh", async () => {
-  const summary = { contracts: [], visits: [], workOrders: [], reports: [], files: [], activity: [], technicians: [],
+  const summary = { customers: [{ id: "fast-customer", name: "Fast Customer" }], contracts: [], visits: [], workOrders: [], reports: [], files: [], activity: [], technicians: [],
     attendance: [], schedules: [], notifications: [] };
-  const saved = { id: "amc-new", number: "AMC-2026-001", customerName: "Fast Customer", site: "Dubai",
+  const saved = { id: "amc-new", number: "AMC-2026-001", customerId: "fast-customer", customerName: "Fast Customer", site: "Dubai",
     status: "Active", startDate: "2026-10-24", endDate: "2027-10-23", visitsPerYear: 4, unitCount: 1, units: [] };
   const listeners = {};
   const button = { disabled: false, innerHTML: "Save AMC", textContent: "Save AMC", isConnected: true };
-  const form = { values: { customerName: saved.customerName, site: saved.site, startDate: saved.startDate,
+  const form = { values: { customerId: saved.customerId, customerName: saved.customerName, site: saved.site, startDate: saved.startDate,
     endDate: saved.endDate, visitsPerYear: "4", unitCount: "1" },
   querySelector: () => null, querySelectorAll: () => [] };
   const root = { innerHTML: "", closest: () => ({ scrollTop: 0 }), contains: () => false,
@@ -57,7 +57,7 @@ test("editing an AMC immediately updates linked work orders and reports", async 
   const original = { id: "amc-1", number: "AMC-1", customerId: "old-customer", customerName: "Old Villa", site: "Old Site",
     status: "Active", startDate: "2026-01-01", endDate: "2026-12-31", visitsPerYear: 4, unitCount: 1, units: [] };
   const updated = { ...original, customerId: "new-customer", customerName: "Updated Villa", site: "Updated Site", updatedAt: "2026-10-24T12:00:00Z" };
-  const summary = { contracts: [original], visits: [], schedules: [{ id: "schedule-1", contractId: original.id,
+  const summary = { customers: [{ id: "old-customer", name: "Old Villa" }, { id: "new-customer", name: "Updated Villa" }], contracts: [original], visits: [], schedules: [{ id: "schedule-1", contractId: original.id,
     customerName: original.customerName, site: original.site }], workOrders: [{ id: "job-1", number: "WO-1", contractId: original.id,
     customerName: original.customerName, site: original.site, serviceDate: "2026-10-24", startTime: "09:00", endTime: "10:00",
     status: "Scheduled", priority: "Normal", technicianIds: [] }], reports: [{ id: "report-1", number: "SR-1", contractId: original.id,

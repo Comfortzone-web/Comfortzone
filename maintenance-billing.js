@@ -33,12 +33,14 @@ function billingRows(store) {
   const part = type => dateParts.find(item => item.type === type).value;
   const today = `${part("year")}-${part("month")}-${part("day")}`;
   const saved = new Map((store.billingRecords || []).map(row => [row.id, row]));
-  const base = (store.contracts || []).flatMap(installments);
+  const deleted = new Set(store.billingDeletedIds || []);
+  const base = (store.contracts || []).flatMap(installments).filter(item => !deleted.has(item.id));
   for (const job of store.workOrders || []) {
     if (job.contractId) continue;
     base.push({ id: `wo:${job.id}`, sourceType: "Work Order", contractId: "", workOrderId: job.id,
       reference: job.number, customerName: job.customerName, site: job.site, periodStart: job.serviceDate,
       periodEnd: job.serviceDate, dueDate: job.serviceDate, amountExVat: 0, vatRate: 5,
+      serviceAmountExVat: 0, serviceVatRate: 5,
       notes: "", request: null, invoice: null, payments: [], credits: 0 });
   }
   const rows = base.map(item => {
@@ -47,23 +49,33 @@ function billingRows(store) {
     saved.delete(item.id);
     return { ...item, ...prior, reference: item.reference, customerName: item.customerName, site: item.site,
       amountExVat: prior.request || prior.invoice ? prior.amountExVat : item.sourceType === "AMC" ? item.amountExVat : prior.amountExVat,
+      ...(item.sourceType === "Work Order" ? {
+        serviceAmountExVat: prior.serviceAmountExVat ?? prior.amountExVat ?? 0,
+        serviceVatRate: prior.serviceVatRate ?? prior.vatRate ?? 5
+      } : {}),
       payments: prior.payments || [] };
   });
   for (const item of saved.values()) {
-    if (item.sourceType !== "Additional Charge") continue;
+    if (item.sourceType === "AMC Special") {
+      const contract = (store.contracts || []).find(row => row.id === item.contractId);
+      if (!contract) continue;
+      rows.push({ ...item, reference: contract.number, customerName: contract.customerName, site: contract.site, payments: item.payments || [] });
+      continue;
+    }
+    if (!["Additional Charge", "Work Order Special"].includes(item.sourceType)) continue;
     const job = (store.workOrders || []).find(row => row.id === item.workOrderId);
-    if (!job || !job.contractId) continue;
+    if (!job || item.sourceType === "Additional Charge" && !job.contractId || item.sourceType === "Work Order Special" && job.contractId) continue;
     rows.push({ ...item, reference: job.number, customerName: job.customerName, site: job.site, payments: item.payments || [] });
   }
   return rows.map(item => {
     const invoiceTotal = roundMoney(item.invoice?.total || 0);
-    const totalPaid = roundMoney((item.payments || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    const totalPaid = roundMoney((item.payments || []).filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
     const outstanding = roundMoney(Math.max(0, invoiceTotal - totalPaid - Number(item.credits || 0)));
     const paymentStatus = !item.invoice ? "Upcoming" : outstanding <= 0 ? "Paid"
       : item.invoice.dueDate && item.invoice.dueDate < today ? "Overdue"
         : totalPaid > 0 ? "Partially Paid" : "Unpaid";
     const invoiceStatus = item.invoice ? item.invoice.sentAt ? "Sent to Customer" : "Invoice Received"
-      : item.request ? item.request.preparedAt ? "Prepared" : "Pending Accountant Action" : "Not Requested";
+      : item.request ? item.request.status === "draft" ? "Draft" : item.request.preparedAt ? "Prepared" : "Pending Accountant Action" : "Not Requested";
     return { ...item, invoiceTotal, totalPaid, outstanding, invoiceStatus, paymentStatus };
   });
 }

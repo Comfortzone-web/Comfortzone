@@ -55,6 +55,11 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(first.status, 201, JSON.stringify(first.result));
     assert.equal(second.status, 201);
     const ids = [first.result.id, second.result.id];
+    const addedCustomer = await office("POST", "/api/maintenance/customers", { name: "No Contact Sample" });
+    assert.equal(addedCustomer.status, 201);
+    const temporaryCustomer = await office("POST", "/api/maintenance/customers", { name: "Temporary Customer", email: "temporary@example.com" });
+    assert.equal(temporaryCustomer.status, 201);
+    assert.equal((await office("DELETE", `/api/maintenance/customers/${temporaryCustomer.result.id}`)).status, 200);
 
     const invalidEmail = await office("POST", "/api/maintenance/contracts", { customerName: customer.name,
       site: customer.site, contact: customer.contact, phone: customer.phone, email: "ac@gmail.",
@@ -74,9 +79,11 @@ test("maintenance lifecycle and field access", async () => {
       startDate: "2026-01-01", endDate: "2026-12-31", frequency: "Half-Yearly", unitCount: 2 });
     assert.equal(secondAmc.status, 201);
     assert.equal(secondAmc.result.customerId, amc.result.customerId);
-    const contactlessAmc = await office("POST", "/api/maintenance/contracts", { customerName: "No Contact Sample",
+    const contactlessAmc = await office("POST", "/api/maintenance/contracts", { customerId: addedCustomer.result.id,
       site: "Service Site", startDate: "2026-01-01", endDate: "2026-12-31", frequency: "Quarterly", unitCount: 1 });
     assert.equal(contactlessAmc.status, 201);
+    assert.equal(contactlessAmc.result.customerName, "No Contact Sample");
+    assert.equal((await office("DELETE", `/api/maintenance/customers/${addedCustomer.result.id}`)).status, 409);
     assert.equal(contactlessAmc.result.contact, "");
     assert.equal(contactlessAmc.result.phone, "");
     const contactlessEdit = await office("PUT", `/api/maintenance/contracts/${contactlessAmc.result.id}`,
@@ -86,7 +93,7 @@ test("maintenance lifecycle and field access", async () => {
     let summary = (await office("GET", "/api/maintenance/summary")).result;
     assert.equal(summary.visits.filter(item => item.contractId === amc.result.id).length, 4);
     assert.equal(summary.visits.filter(item => item.contractId === secondAmc.result.id).length, 2);
-    assert.equal(Object.hasOwn(summary, "customers"), false);
+    assert.ok(summary.customers.some(item => item.name === customer.name));
     const planned = summary.visits.find(item => item.contractId === amc.result.id);
 
     const freeDraft = await office("POST", "/api/maintenance/schedules", { clientKey: "standalone-draft",
@@ -386,7 +393,7 @@ test("maintenance lifecycle and field access", async () => {
 
     const customWorkOrderNumber = `CZWO-${new Date().getFullYear()}-001`;
     const customJob = await office("POST", "/api/maintenance/schedules", { clientKey: "custom-work-order-sequence",
-      customerName: "Custom Number Customer", site: "Dubai", serviceDate: "2026-11-10", startTime: "14:00", endTime: "15:00",
+      customerId: addedCustomer.result.id, site: "Dubai", serviceDate: "2026-11-10", startTime: "14:00", endTime: "15:00",
       workType: "Complaint / Repair", technicianIds: [ids[0]], workOrderNumber: customWorkOrderNumber, mode: "notify" });
     assert.equal(customJob.status, 201);
     assert.equal(customJob.result.workOrder.number, customWorkOrderNumber);
@@ -402,8 +409,11 @@ test("maintenance lifecycle and field access", async () => {
       contractId: amc.result.id, extracted: fieldStandalone.result.extracted, details: fieldStandalone.result.details });
     assert.equal(linkedStandalone.status, 200, JSON.stringify(linkedStandalone.result));
     const currentAmc = (await office("GET", "/api/maintenance/summary")).result.contracts.find(item => item.id === amc.result.id);
+    const renamedCustomer = await office("PUT", `/api/maintenance/customers/${currentAmc.customerId}`,
+      { name: "Villa 14 Updated", contact: customer.contact, phone: customer.phone });
+    assert.equal(renamedCustomer.status, 200, JSON.stringify(renamedCustomer.result));
     const renamedAmc = await office("PUT", `/api/maintenance/contracts/${amc.result.id}`, {
-      ...currentAmc, customerName: "Villa 14 Updated", site: "JVC, Updated" });
+      ...currentAmc, site: "JVC, Updated" });
     assert.equal(renamedAmc.status, 200, JSON.stringify(renamedAmc.result));
     summary = (await office("GET", "/api/maintenance/summary")).result;
     const renamedJob = summary.workOrders.find(item => item.id === workOrder.id);
@@ -418,7 +428,7 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(renamedHandwritten.extracted.customerName, "Villa 14 Updated");
     assert.equal(renamedHandwritten.extracted.siteName, "JVC, Updated");
     assert.equal(renamedHandwritten.details.customerName, "Villa 14 Updated");
-    assert.equal(digitalReport.details.customerName, "Mr Raza");
+    assert.equal(digitalReport.details.customerName, "Villa 14 Updated");
     assert.equal(digitalReport.status, "Approved");
     assert.equal(digitalReport.versions.length, 1);
     assert.equal(summary.attendance.find(item => item.workOrderId === workOrder.id).site, "JVC, Updated");
@@ -426,6 +436,27 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(summary.schedules.find(item => item.id === freeDraft.result.schedule.id).customerName, "Standalone Sample");
     assert.equal(summary.reports.find(item => item.id === standalone.result.id).details.customerName, "Walk-in Customer");
     assert.equal((await field("GET", `/api/field/work-orders/${workOrder.id}`, null, cookie)).result.customerName, "Villa 14 Updated");
+
+    const invalidInlineAmc = await office("POST", "/api/maintenance/contracts", {
+      customerId: "__new__", newCustomer: { name: "Invalid Inline Customer" }, site: "",
+      startDate: "2026-10-01", endDate: "2027-09-30", frequency: "Quarterly", unitCount: 1 });
+    assert.equal(invalidInlineAmc.status, 400);
+    assert.equal((await office("GET", "/api/maintenance/summary")).result.customers.some(item => item.name === "Invalid Inline Customer"), false);
+    const inlineAmc = await office("POST", "/api/maintenance/contracts", {
+      customerId: "__new__", newCustomer: { name: "Inline AMC Customer", contact: "Mina", phone: "0509991111", email: "mina@example.com" },
+      site: "Dubai Hills", contact: "Mina", phone: "0509991111", email: "mina@example.com",
+      startDate: "2026-10-01", endDate: "2027-09-30", frequency: "Quarterly", unitCount: 1 });
+    assert.equal(inlineAmc.status, 201, JSON.stringify(inlineAmc.result));
+    assert.equal(inlineAmc.result.customerName, "Inline AMC Customer");
+    const inlineSchedule = await office("POST", "/api/maintenance/schedules", {
+      clientKey: "inline-customer-schedule", customerId: "__new__",
+      newCustomer: { name: "Inline Schedule Customer", contact: "Omar", email: "omar@example.com" },
+      site: "Al Quoz", contact: "Omar", serviceDate: "2026-11-12", startTime: "09:00", endTime: "11:00", mode: "draft" });
+    assert.equal(inlineSchedule.status, 201, JSON.stringify(inlineSchedule.result));
+    summary = (await office("GET", "/api/maintenance/summary")).result;
+    assert.equal(summary.customers.find(item => item.id === inlineAmc.result.customerId).email, "mina@example.com");
+    assert.equal(summary.customers.find(item => item.id === inlineSchedule.result.schedule.customerId).email, "omar@example.com");
+    assert.equal(summary.schedules.find(item => item.id === inlineSchedule.result.schedule.id).customerName, "Inline Schedule Customer");
 
     const revoked = await office("POST", `/api/maintenance/technicians/${ids[0]}/revoke`, {});
     assert.equal(revoked.status, 200);

@@ -11,11 +11,12 @@
     month: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     selectedDate: "", scheduleView: "month", pmFiltersOpen: false, pmUpcomingOffset: 0, pmMenuId: "", dashboardMonth: null, dashboardScheduleRange: "week", dashboardCalendarView: "month",
     drawer: "", drawerId: "", scheduleDraft: null, accessLink: "", message: "",
-    search: { dashboard: "", amc: "", schedule: "", "work-orders": "", technicians: "", reports: "" },
+    search: { dashboard: "", customers: "", amc: "", schedule: "", "work-orders": "", technicians: "", reports: "" },
     status: { amc: "all", schedule: "all", "work-orders": "all", technicians: "all", reports: "all" },
     filters: { date: "", customer: "", site: "", technician: "", contract: "" },
-    pageNumber: { amc: 1, schedule: 1, "work-orders": 1, technicians: 1, reports: 1 },
+    pageNumber: { customers: 1, amc: 1, schedule: 1, "work-orders": 1, technicians: 1, reports: 1 },
     pageSize: 10, sort: { page: "", key: "", direction: 1 },
+    customerSort: "name", customerSortDirection: 1,
     amcSort: "next-service", amcFiltersOpen: false, amcServiceBefore: "", amcMenuId: "", amcFullDetails: false,
     selectedWorkOrderId: "", workOrderTab: "Overview", workOrderMenuId: "", workOrderMenuLocation: "",
     workOrderDetailTab: "Overview", workOrderDetailMenu: false,
@@ -179,6 +180,99 @@
   }
 
   function navigate(page, id = "") { window.showMaintenance(page, id); }
+
+  function customerRows() {
+    return (state.data?.customers || []).filter(item => item.name).map(item => ({ ...item,
+      site: state.data.contracts.filter(agreement => agreement.customerId === item.id
+        || !agreement.customerId && agreement.customerName?.toLocaleLowerCase("en-US") === item.name.toLocaleLowerCase("en-US"))
+        .map(agreement => agreement.site).filter(Boolean).join(" ") }));
+  }
+  function customerPicker(currentId = "", newName = "", disabled = false, fallbackName = "") {
+    const customer = (state.data.customers || []).find(item => item.id === currentId)
+      || (state.data.customers || []).find(item => fallbackName && item.name.toLocaleLowerCase("en-US") === fallbackName.toLocaleLowerCase("en-US"));
+    const resolvedId = currentId || customer?.id || "";
+    const choices = (state.data.customers || []).slice().sort((a, b) => a.name.localeCompare(b.name));
+    return `<div class="maint-field maint-customer-picker"><span>Customer *</span><div class="maint-customer-combo">
+      <input type="text" data-customer-query role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="maintCustomerChoices" autocomplete="off" placeholder="Type to search customers..." value="${esc(currentId === "__new__" ? "New Customer" : customer?.name || fallbackName || "")}" ${disabled ? "disabled" : ""}>
+      <input type="hidden" name="customerId" value="${esc(resolvedId)}" ${disabled ? "disabled" : ""}>
+      <div class="maint-customer-options" data-customer-options id="maintCustomerChoices" role="listbox" hidden>
+        ${choices.map(item => `<button type="button" role="option" data-action="customer-pick" data-customer-id="${esc(item.id)}" data-customer-name="${esc(item.name)}">${esc(item.name)}</button>`).join("")}
+        <button type="button" role="option" class="maint-customer-add" data-action="customer-pick" data-customer-id="__new__">${icon("plus")} New Customer</button>
+      </div></div></div><label class="maint-field maint-new-customer-field" data-new-customer-field ${currentId === "__new__" && !disabled ? "" : "hidden"}><span>New Customer Name *</span><input name="newCustomerName" value="${esc(newName)}" ${currentId === "__new__" && !disabled ? "required" : ""} placeholder="Enter customer name" autocomplete="organization"></label>`;
+  }
+
+  function customerPickerOptions(input) {
+    const picker = input.closest(".maint-customer-picker");
+    const options = picker.querySelector("[data-customer-options]");
+    const query = input.value.trim().toLocaleLowerCase("en-US");
+    if (!query || input.dataset.customerTyped !== "true") return hideCustomerPickerOptions(input);
+    options.querySelectorAll("[data-customer-name]").forEach(button => {
+      button.hidden = !button.dataset.customerName.toLocaleLowerCase("en-US").includes(query);
+    });
+    options.hidden = false;
+    input.setAttribute("aria-expanded", "true");
+  }
+
+  function hideCustomerPickerOptions(input) {
+    if (!input) return;
+    input.closest(".maint-customer-picker")?.querySelector("[data-customer-options]")?.setAttribute("hidden", "");
+    input.setAttribute("aria-expanded", "false");
+  }
+
+  function chooseCustomer(button) {
+    const form = button.closest("form");
+    const picker = button.closest(".maint-customer-picker");
+    const query = picker.querySelector("[data-customer-query]");
+    const id = button.dataset.customerId;
+    const customer = (state.data.customers || []).find(item => item.id === id);
+    const typedName = query.value.trim();
+    picker.querySelector('[name="customerId"]').value = id;
+    query.value = customer?.name || "New Customer";
+    query.dataset.customerTyped = "false";
+    const newField = form.querySelector("[data-new-customer-field]");
+    newField.hidden = id !== "__new__";
+    const newName = newField.querySelector("input");
+    newName.required = id === "__new__";
+    newName.value = id === "__new__" && typedName !== "New Customer" ? typedName : "";
+    const emailField = form.querySelector("[data-new-customer-email]");
+    if (emailField) emailField.hidden = id !== "__new__";
+    for (const field of ["contact", "phone", "email"]) {
+      const control = form.elements.namedItem(field);
+      if (control) control.value = customer?.[field] || "";
+    }
+    hideCustomerPickerOptions(query);
+    if (id === "__new__") newName.focus();
+    else query.focus();
+  }
+
+  function selectedCustomerValid(form) {
+    const values = Object.fromEntries(new FormData(form).entries());
+    const id = String(values.customerId || "");
+    if (values.contractId) return true;
+    if (id && (id === "__new__" || (state.data.customers || []).some(item => item.id === id))) return true;
+    formError("Select a customer from the list or choose New Customer.", form.querySelector("[data-customer-query]"));
+    return false;
+  }
+
+  function customers() {
+    const query = state.search.customers.trim().toLocaleLowerCase("en-US");
+    const filtered = customerRows().filter(item => !query || [item.name, item.contact, item.phone, item.email, item.site].join(" ").toLocaleLowerCase("en-US").includes(query));
+    const key = state.customerSort;
+    filtered.sort((a, b) => state.customerSortDirection * String(a[key] || "").localeCompare(String(b[key] || ""), undefined, { sensitivity: "base", numeric: true }) || a.name.localeCompare(b.name));
+    const pages = Math.max(1, Math.ceil(filtered.length / state.pageSize));
+    const page = state.pageNumber.customers = Math.min(Math.max(1, state.pageNumber.customers), pages);
+    const start = (page - 1) * state.pageSize;
+    const shown = filtered.slice(start, start + state.pageSize);
+    const heading = (label, field) => `<button type="button" data-action="customer-sort" data-field="${field}">${label}<span aria-hidden="true">${state.customerSort === field ? state.customerSortDirection === 1 ? "↑" : "↓" : "↕"}</span></button>`;
+    return `<div class="maint-customers"><header class="maint-header"><div><h1>${icon("users-round")}<span>Customer List</span></h1><p>Manage customers used in Maintenance contracts and service records.</p></div><div class="maint-header-actions"><label class="maint-search">${icon("search")}<input data-search="customers" value="${esc(state.search.customers)}" placeholder="Search customer name, contact or location..." aria-label="Search customers"></label><button class="maint-primary" data-action="new-customer">${icon("plus")} Add Customer</button></div></header><div class="maint-customer-body"><section class="maint-customer-card"><table class="maint-customer-table"><colgroup><col class="number"><col class="name"><col class="contact"><col class="phone"><col class="email"><col class="action"></colgroup><thead><tr><th>#</th><th>${heading("Customer Name", "name")}</th><th>${heading("Contact Person", "contact")}</th><th>${heading("Phone", "phone")}</th><th>${heading("Email", "email")}</th><th>Action</th></tr></thead><tbody>${shown.map((item, index) => `<tr><td data-label="#">${start + index + 1}</td><td data-label="Customer Name"><strong>${esc(item.name)}</strong></td><td data-label="Contact Person">${esc(item.contact || "—")}</td><td data-label="Phone">${esc(item.phone || "—")}</td><td data-label="Email">${esc(item.email || "—")}</td><td data-label="Action"><details class="maint-customer-menu"><summary aria-label="Actions for ${esc(item.name)}">•••</summary><div><button data-action="edit-customer" data-id="${esc(item.id)}">Edit</button><button data-action="delete-customer" data-id="${esc(item.id)}">Delete</button></div></details></td></tr>`).join("") || `<tr><td colspan="6" class="maint-customer-empty">No customers match your search.</td></tr>`}</tbody></table><div class="maint-customer-footer"><span>Showing ${filtered.length ? start + 1 : 0} to ${Math.min(start + state.pageSize, filtered.length)} of ${filtered.length} customers</span><div><label>Rows per page <select data-page-size><option ${selected(state.pageSize, 10)}>10</option><option ${selected(state.pageSize, 20)}>20</option><option ${selected(state.pageSize, 50)}>50</option></select></label><button data-action="customer-prev" ${page === 1 ? "disabled" : ""} aria-label="Previous page">‹</button><strong>${page} / ${pages}</strong><button data-action="customer-next" ${page === pages ? "disabled" : ""} aria-label="Next page">›</button></div></div></section></div></div>`;
+  }
+
+  function customerDrawer() {
+    const item = (state.data.customers || []).find(customer => customer.id === state.drawerId) || {};
+    return drawerShell(item.id ? `Edit ${item.name}` : "Add Customer",
+      `<form id="maintCustomerForm" class="maint-form"><div class="maint-form-grid">${formField("Customer Name", "name", item.name, "text", true)}${formField("Contact Person", "contact", item.contact)}${formField("Phone", "phone", item.phone, "tel")}${formField("Email", "email", item.email, "email")}</div></form>`,
+      `<button class="maint-outline" data-action="close-drawer">Cancel</button><button class="maint-primary" data-action="save-customer">${icon("save")} Save Customer</button>`);
+  }
   function notice(message) {
     state.message = message;
     root.querySelector(".maint-toast")?.remove();
@@ -202,9 +296,9 @@
   const stack = (first, second) => `<span class="maint-stack"><strong>${esc(first || "--")}</strong><small>${esc(second || "")}</small></span>`;
   const iconButton = (name, title, action, id = "", disabled = false) => `<button class="maint-icon-button" title="${esc(title)}" aria-label="${esc(title)}" data-action="${action}" ${id ? `data-id="${esc(id)}"` : ""} ${disabled ? "disabled" : ""}>${icon(name)}</button>`;
 
-  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true, filterAction = "", filtersOpen = false) {
+  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true, filterAction = "", filtersOpen = false, leadingButton = "") {
     return `<header class="maint-header"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>
-      <div class="maint-header-actions">${searchPlaceholder ? `<label class="maint-search">${icon("search")}<input data-search="${esc(state.page)}" value="${esc(state.search[state.page] || "")}" placeholder="${esc(searchPlaceholder)}" aria-label="Search ${esc(title)}"></label>` : ""}
+      <div class="maint-header-actions">${leadingButton}${searchPlaceholder ? `<label class="maint-search">${icon("search")}<input data-search="${esc(state.page)}" value="${esc(state.search[state.page] || "")}" placeholder="${esc(searchPlaceholder)}" aria-label="Search ${esc(title)}"></label>` : ""}
       ${showDate ? `<span class="maint-date">${icon("calendar-days")}${day(today())}</span>` : ""}
       ${filterAction ? `<button class="maint-filter-toggle${filtersOpen ? " active" : ""}" data-action="${filterAction}" aria-expanded="${filtersOpen}" aria-controls="${filterAction === "wo-toggle-filters" ? "woFilterPanel" : "srFilterPanel"}">${icon("filter")}Filter</button>` : ""}
       ${primaryLabel ? `<button class="maint-primary" data-action="${primaryAction}">${icon("plus")}${esc(primaryLabel)}</button>` : ""}</div></header>`;
@@ -465,7 +559,7 @@
         <span class="dash-tech-meta">${icon("clock-3")}<span>${checkInToday ? esc(timeLabel(checkInToday.checkInAt?.slice(11, 16))) : "--"}<small>Check-in</small></span></span>
         <span class="dash-tech-meta">${icon("map-pin")}<span title="${esc(site)}">${esc(site)}<small>Current site</small></span><b>${todayJobs.length}<small>Jobs today</small></b></span></button>`;
     }).join("");
-    return `<div class="maint-dashboard">${header("Maintenance Dashboard", "Monitor contracts, schedules, work orders and service performance.", "New Schedule", "new-schedule", "Search customer, site, work order, report...")}
+    return `<div class="maint-dashboard">${header("Maintenance Dashboard", "Monitor contracts, schedules, work orders and service performance.", "New Schedule", "new-schedule", "Search customer, site, work order, report...", true, "", false, `<button class="maint-customer-link" data-action="go-customers">${icon("users-round")} Customers</button>`)}
       <div class="maint-body dash-body"><div class="dash-kpi-grid">
         ${dashKpi("Active AMC Contracts", active.length, previousActive, "vs last month", activeCounts, "file-text", "green", "go-amc")}
         ${dashKpi("PM Visits This Month", visitsMonth, previousVisits, "vs last month", monthlyCounts, "calendar-days", "blue", "go-schedule")}
@@ -550,7 +644,7 @@
   }
 
   function contractDetail(item) {
-    const tabs = ["Overview", "Service Schedule", "Service Reports", "Documents"];
+    const tabs = ["Overview", "Service Schedule", "Service Reports", "Billing & Payments"];
     const visits = state.data.visits.filter(row => row.contractId === item.id).sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
     const completed = visits.filter(row => row.status === "Completed").length;
     const next = visits.find(row => row.status !== "Completed" && row.plannedDate >= today());
@@ -578,9 +672,23 @@
         if (!names.length) names.push(...(linked?.technicianIds || []).map(id => tech(id)?.name).filter(Boolean));
         return `<div><span class="amc-card-icon ${row.status === "Approved" ? "green" : "blue"}">${icon("file-text")}</span><span><strong>${esc(row.number)}</strong><small>${esc(reportDay(row.extracted?.serviceDate || linked?.serviceDate || row.submittedAt?.slice(0, 10)))}${linked ? ` · ${esc(linked.number)}` : ""}</small><small>Technicians: ${esc(names.join(", ") || "Not specified")}</small></span>${badge(row.status)}${iconButton("eye", "View report", "open-report", row.id)}</div>`;
       }).join("") : `<p class="maint-muted">No service reports for this AMC yet.</p>`}</div>`;
-    } else {
-      const files = state.data.files.filter(file => file.contractId === item.id && file.kind === "contract");
-      content = `<div class="maint-file-list">${files.length ? files.map(file => `<a href="/api/maintenance/files/${encodeURIComponent(file.id)}" target="_blank" rel="noopener">${icon("paperclip")}${esc(file.originalName)}</a>`).join("") : `<p class="maint-muted">No contract documents uploaded.</p>`}</div><label class="maint-upload">${icon("upload")} Upload contract document<input type="file" data-contract-file="${item.id}" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden></label>`;
+    } else if (state.contractTab === "Billing & Payments") {
+      const billing = (state.data.billing || []).filter(row => row.contractId === item.id && ["AMC", "AMC Special"].includes(row.sourceType));
+      const schedule = billing.filter(row => row.sourceType === "AMC").sort((a, b) => Number(a.installmentNumber) - Number(b.installmentNumber));
+      const otherRequests = billing.filter(row => row.sourceType === "AMC Special" && (row.request || row.invoice));
+      const amount = value => `AED ${Number(value || 0).toLocaleString("en-AE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const invoiced = billing.reduce((sum, row) => sum + Number(row.invoiceTotal || 0), 0);
+      const paid = billing.reduce((sum, row) => sum + Number(row.totalPaid || 0), 0);
+      const outstanding = billing.reduce((sum, row) => sum + Number(row.outstanding || 0), 0);
+      const billingStatus = row => !row.invoice ? ({ "Pending Accountant Action": "Invoice Pending" })[row.invoiceStatus] || row.invoiceStatus || "Not Requested"
+        : ["Paid", "Overdue", "Partially Paid"].includes(row.paymentStatus) ? row.paymentStatus : row.invoice.sentAt ? "Sent to Customer" : "Unpaid";
+      const billingRows = [...schedule, ...otherRequests].map(row => {
+        const label = row.installmentNumber ? `Installment #${row.installmentNumber}` : row.billingType?.replaceAll("_", " ") || "Other charge";
+        const status = billingStatus(row);
+        const tone = ({ "Invoice Pending": "yellow", Prepared: "gold", "Sent to Customer": "teal", Unpaid: "rose", "Partially Paid": "rose", Overdue: "crimson", Paid: "paid" })[status] || "";
+        return `<tr><td><strong>${esc(label)}</strong><small>${esc(amount(row.amountExVat))} excl. VAT</small></td><td>${shortDay(row.dueDate)}</td><td><span class="amc-billing-status ${tone}">${esc(status)}</span>${row.invoice?.number ? `<small>${esc(row.invoice.number)}</small>` : ""}</td></tr>`;
+      }).join("");
+      content = `<div class="amc-billing-overview"><div class="amc-billing-totals"><div><small>Contract Value</small><strong>${esc(amount(item.contractValue))}</strong><small>excl. VAT</small></div><div><small>Total Invoiced</small><strong>${esc(amount(invoiced))}</strong><small>incl. VAT</small></div><div><small>Total Paid</small><strong>${esc(amount(paid))}</strong><small>incl. VAT</small></div><div><small>Outstanding</small><strong>${esc(amount(outstanding))}</strong><small>incl. VAT</small></div></div><div class="amc-billing-table-card"><div class="amc-subpanel-head"><h3>Payment Schedule</h3></div><table class="amc-billing-table"><thead><tr><th>Billing</th><th>Due</th><th>Status</th></tr></thead><tbody>${billingRows || `<tr><td colspan="3" class="amc-billing-empty">No billing records yet.</td></tr>`}</tbody></table></div></div>`;
     }
     return `<section class="amc-detail-panel"><div class="amc-detail-title"><div><h2>${esc(item.number)} ${badge(contractStatus(item))}</h2><p>${esc(item.customerName)} <span>·</span> ${esc(item.site)}</p></div>${iconButton("x", "Close AMC details", "close-contract")}</div>
       <div class="amc-detail-tabs">${tabs.map(tab => `<button data-action="contract-tab" data-tab="${tab}" class="${tab === state.contractTab ? "active" : ""}" aria-pressed="${tab === state.contractTab}">${tab}</button>`).join("")}</div>
@@ -1146,7 +1254,7 @@
     const end = item.endDate || contractEndOneYear(start);
     const rows = (item.units?.length ? item.units : [{ reference: "", type: "", quantity: 1, location: "" }]).map(unit => `<div class="maint-unit-row">${formField("Reference", "reference", unit.reference)}${formField("Type", "type", unit.type)}${formField("Qty", "quantity", unit.quantity, "number", false, 'min="1"')}${formField("Location", "location", unit.location)}${iconButton("x", "Remove unit", "remove-unit")}</div>`).join("");
     const body = `<form id="maintAmcForm" class="maint-form">
-      <div class="maint-form-grid">${item.id ? formField("AMC Number", "number", item.number, "text", true, 'autocomplete="off" spellcheck="false"') : ""}${formField("Customer", "customerName", item.customerName, "text", true, 'autocomplete="organization"')}
+      <div class="maint-form-grid">${item.id ? formField("AMC Number", "number", item.number, "text", true, 'autocomplete="off" spellcheck="false"') : ""}${customerPicker(item.customerId, item.newCustomerName, false, item.customerName)}
       ${formField("Site / Location", "site", item.site, "text", true)}
       ${formField("Contact Person", "contact", item.contact)}${formField("Phone", "phone", item.phone, "tel")}
       ${formField("Email", "email", item.email, "email")}
@@ -1175,11 +1283,12 @@
     const visits = state.data.visits.filter(item => item.contractId === d.contractId && (item.status !== "Completed" || item.id === d.visitId));
     const selectable = state.data.technicians.filter(item => item.active);
     const body = `<form id="maintScheduleForm" class="maint-form"><div class="maint-form-section"><h3>Customer / AMC</h3><div class="maint-form-grid">
-      ${formField("Customer", "customerName", d.customerName || chosenContract?.customerName || "", "text", true, 'autocomplete="organization"')}
+      ${customerPicker(d.customerId || chosenContract?.customerId, d.newCustomerName, !!chosenContract, d.customerName || chosenContract?.customerName)}
       ${formField("Work Order Number", "workOrderNumber", d.workOrderNumber || "", "text", true)}
       <label class="maint-field"><span>AMC Contract</span><select name="contractId" data-schedule-change="contract"><option value="">Non-AMC job</option>${state.data.contracts.map(item => `<option value="${item.id}" ${selected(d.contractId, item.id)}>${esc(item.number)} · ${esc(item.site)}</option>`).join("")}</select></label>
       ${formField("Site / Location", "site", d.site || chosenContract?.site || "", "text", true)}
-      ${formField("Contact Person", "contact", d.contact || chosenContract?.contact || "")}${formField("Phone", "phone", d.phone || chosenContract?.phone || "", "tel")}</div></div>
+      ${formField("Contact Person", "contact", d.contact || chosenContract?.contact || "")}${formField("Phone", "phone", d.phone || chosenContract?.phone || "", "tel")}
+      <label class="maint-field" data-new-customer-email ${d.customerId === "__new__" && !chosenContract ? "" : "hidden"}><span>Customer Email</span><input name="newCustomerEmail" type="email" value="${esc(d.newCustomerEmail || "")}" placeholder="Optional"></label></div></div>
       <div class="maint-form-section"><h3>Visit Details</h3><div class="maint-form-grid"><label class="maint-field"><span>Work Type *</span><select name="workType">${["Preventive Maintenance", "Complaint / Repair", "Inspection", "Emergency Service", "Other"].map(value => `<option ${selected(d.workType || "Preventive Maintenance", value)}>${value}</option>`).join("")}</select></label>
       <label class="maint-field"><span>Priority</span><select name="priority"><option ${selected(d.priority || "Normal", "Normal")}>Normal</option><option ${selected(d.priority, "Urgent")}>Urgent</option></select></label>
       ${formField("Service Date", "serviceDate", d.serviceDate || state.selectedDate, "date", true, 'data-schedule-change="time"')}
@@ -1219,6 +1328,7 @@
   function drawer() {
     if (state.drawer?.startsWith("billing-")) return billingUi.drawer();
     if (!state.drawer) return "";
+    if (state.drawer === "customer") return customerDrawer();
     if (state.drawer === "amc") return amcDrawer();
     if (state.drawer === "schedule") return scheduleDrawer();
     if (state.drawer === "technician") return technicianDrawer();
@@ -1249,10 +1359,10 @@
       : active.name ? `.maint-form [name="${CSS.escape(active.name)}"]${active.type === "checkbox" ? `[value="${CSS.escape(active.value)}"]` : ""}` : "" : "";
     let selection = null;
     try { selection = restoreFocus ? [active.selectionStart, active.selectionEnd] : null; } catch {}
-    const content = state.page === "amc" ? state.recordId ? billingUi.fullAmc(contract(state.recordId)) : amc()
+    const content = state.page === "customers" ? customers() : state.page === "amc" ? state.recordId ? billingUi.fullAmc(contract(state.recordId)) : amc()
       : state.page === "billing" ? billingUi.main() : state.page === "schedule" ? schedule() : state.page === "work-orders" ? workOrders()
       : state.page === "technicians" ? technicians() : state.page === "reports" ? reports() : dashboard();
-    root.innerHTML = `<div class="maint-page ${state.page === "amc" ? state.recordId ? "maint-amc-full-page" : "maint-amc-page" : state.page === "billing" ? "maint-billing-page" : state.page === "schedule" ? "maint-pm-page" : state.page === "work-orders" ? state.recordId ? "maint-wo-detail-page" : "maint-wo-page" : state.page === "technicians" ? "maint-tech-page" : state.page === "reports" ? "maint-reports-page" : ""}">${content}${state.message ? `<div class="maint-toast" role="status">${esc(state.message)}</div>` : ""}${drawer()}</div>`;
+    root.innerHTML = `<div class="maint-page ${state.page === "customers" ? "maint-customers-page" : state.page === "amc" ? state.recordId ? "maint-amc-full-page" : "maint-amc-page" : state.page === "billing" ? "maint-billing-page" : state.page === "schedule" ? "maint-pm-page" : state.page === "work-orders" ? state.recordId ? "maint-wo-detail-page" : "maint-wo-page" : state.page === "technicians" ? "maint-tech-page" : state.page === "reports" ? "maint-reports-page" : ""}">${content}${state.message ? `<div class="maint-toast" role="status">${esc(state.message)}</div>` : ""}${drawer()}</div>`;
     document.body.classList.toggle("maint-drawer-open", !!state.drawer);
     if (scroller) scroller.scrollTop = scrollTop;
     const nextDrawerScroll = root.querySelector(".maint-drawer-scroll");
@@ -1283,7 +1393,7 @@
           allowMarkFinished: options.allowMarkFinished === true };
       if (options.contractId) {
         const item = contract(options.contractId);
-        Object.assign(state.scheduleDraft, { customerName: item?.customerName || "", site: item?.site || "", contact: item?.contact || "", phone: item?.phone || "" });
+        Object.assign(state.scheduleDraft, { customerId: item?.customerId || "", customerName: item?.customerName || "", site: item?.site || "", contact: item?.contact || "", phone: item?.phone || "" });
       }
     }
     render();
@@ -1346,9 +1456,18 @@
     const data = new FormData(form);
     const draft = { ...state.scheduleDraft };
     delete draft.leadTechnicianId;
-    return { ...draft, customerName: formValue(form, "customerName"), workOrderNumber: formValue(form, "workOrderNumber"),
-      contractId: formValue(form, "contractId"), visitId: formValue(form, "visitId"),
+    const contractId = formValue(form, "contractId");
+    const customerId = contract(contractId)?.customerId || formValue(form, "customerId");
+    const newCustomerName = formValue(form, "newCustomerName");
+    const newCustomerEmail = formValue(form, "newCustomerEmail");
+    const customerName = customerId === "__new__" ? newCustomerName
+      : (state.data.customers || []).find(item => item.id === customerId)?.name || contract(contractId)?.customerName || "";
+    return { ...draft, customerId, customerName, workOrderNumber: formValue(form, "workOrderNumber"),
+      contractId, visitId: formValue(form, "visitId"),
       site: formValue(form, "site"), contact: formValue(form, "contact"), phone: formValue(form, "phone"),
+      newCustomerName, newCustomerEmail,
+      newCustomer: customerId === "__new__" ? { name: newCustomerName, contact: formValue(form, "contact"),
+        phone: formValue(form, "phone"), email: newCustomerEmail } : undefined,
       workType: formValue(form, "workType"), priority: formValue(form, "priority"), serviceDate: formValue(form, "serviceDate"),
       startTime: formValue(form, "startTime"), endTime: formValue(form, "endTime"),
       technicianIds: data.getAll("technicianIds").map(String),
@@ -1358,17 +1477,22 @@
   async function saveAmc() {
     const form = root.querySelector("#maintAmcForm");
     if (!validForm(form)) return;
+    if (!selectedCustomerValid(form)) return;
     const fields = Object.fromEntries(new FormData(form).entries());
     const units = [...form.querySelectorAll(".maint-unit-row")].map(row => ({
       reference: row.querySelector('[name="reference"]').value.trim(), type: row.querySelector('[name="type"]').value.trim(),
       quantity: Number(row.querySelector('[name="quantity"]').value || 1), location: row.querySelector('[name="location"]').value.trim()
     })).filter(unit => unit.reference || unit.type || unit.location);
-    const body = { ...fields, units, unitCount: Number(fields.unitCount), visitsPerYear: Number(fields.visitsPerYear), contractValue: Number(fields.contractValue || 0) };
+    const body = { ...fields, units, unitCount: Number(fields.unitCount), visitsPerYear: Number(fields.visitsPerYear), contractValue: Number(fields.contractValue || 0),
+      newCustomer: fields.customerId === "__new__" ? { name: fields.newCustomerName, contact: fields.contact,
+        phone: fields.phone, email: fields.email } : undefined };
     await whileSaving("save-amc", async () => { try {
       const previous = contract(state.drawerId);
       const item = await request(state.drawerId ? `/api/maintenance/contracts/${encodeURIComponent(state.drawerId)}` : "/api/maintenance/contracts",
         { method: state.drawerId ? "PUT" : "POST", body: JSON.stringify(body) });
       upsert("contracts", item);
+      if (fields.customerId === "__new__") upsert("customers", { id: item.customerId, name: item.customerName,
+        contact: fields.contact || "", phone: fields.phone || "", email: fields.email || "" });
       if (previous && (previous.customerName !== item.customerName || previous.site !== item.site)) {
         const identity = { customerId: item.customerId, customerName: item.customerName, site: item.site, updatedAt: item.updatedAt };
         state.data.schedules.filter(row => row.contractId === item.id).forEach(row => Object.assign(row, identity));
@@ -1391,9 +1515,25 @@
     } catch (error) { formError(error.message || "Unable to save AMC"); } });
   }
 
+  async function saveCustomer() {
+    const form = root.querySelector("#maintCustomerForm");
+    if (!validForm(form)) return;
+    const body = Object.fromEntries(new FormData(form).entries());
+    await whileSaving("save-customer", async () => {
+      try {
+        await request(state.drawerId ? `/api/maintenance/customers/${encodeURIComponent(state.drawerId)}` : "/api/maintenance/customers",
+          { method: state.drawerId ? "PUT" : "POST", body: JSON.stringify(body) });
+        state.drawer = "";
+        await refresh();
+        notice("Customer saved");
+      } catch (error) { formError(error.message || "Unable to save customer"); }
+    });
+  }
+
   async function saveSchedule(mode) {
     const form = root.querySelector("#maintScheduleForm");
     if (!validForm(form)) return;
+    if (!selectedCustomerValid(form)) return;
     const body = { ...scheduleFormData(), mode };
     if (mode === "notify" && (body.technicianIds.length < 1 || body.technicianIds.length > 5)) {
       formError("Assign 1 to 5 technicians"); return;
@@ -1404,6 +1544,9 @@
       const result = await request("/api/maintenance/schedules", { method: "POST", body: JSON.stringify(body) });
       state.scheduleDraft = { ...result.schedule };
       upsert("schedules", result.schedule);
+      if (body.customerId === "__new__") upsert("customers", { id: result.schedule.customerId,
+        name: result.schedule.customerName, contact: body.contact || "", phone: body.phone || "",
+        email: body.newCustomerEmail || "" });
       if (result.workOrder) upsert("workOrders", result.workOrder);
       if (result.report) upsert("reports", result.report);
       const usedNumber = result.workOrder?.number || result.schedule.workOrderNumber;
@@ -1481,9 +1624,12 @@
   root.addEventListener("click", async event => {
     const customerInput = root.querySelector("#maintReportEditForm [data-report-customer-input]");
     if (customerInput && !event.target.closest(".maint-report-customer")) hideReportCustomerOptions(customerInput);
+    const pickerInput = root.querySelector(".maint-drawer [data-customer-query]");
+    if (pickerInput && !event.target.closest(".maint-customer-picker")) hideCustomerPickerOptions(pickerInput);
     const button = event.target.closest("[data-action]");
     if (!button) { if (state.amcMenuId || state.pmMenuId || state.workOrderMenuId || state.workOrderDetailMenu || state.technicianMoreMenu || state.reportMoreMenu) { state.amcMenuId = ""; state.pmMenuId = ""; state.workOrderMenuId = ""; state.workOrderDetailMenu = false; state.technicianMoreMenu = false; state.reportMoreMenu = false; render(); } return; }
     const action = button.dataset.action, id = button.dataset.id || "";
+    if (action === "customer-pick") { chooseCustomer(button); return; }
     if (action === "report-customer-choice") {
       const chosen = contract(button.dataset.id);
       if (!chosen) return;
@@ -1510,6 +1656,22 @@
     if (action !== "sr-more") state.reportMoreMenu = false;
     if (button.classList.contains("maint-overlay") && event.target !== button) return;
     if (action.startsWith("billing-")) { await billingUi.handleAction(button); return; }
+    if (action === "go-customers") return navigate("customers");
+    if (action === "new-customer") return openDrawer("customer");
+    if (action === "edit-customer") return (state.data.customers || []).some(item => item.id === id) ? openDrawer("customer", id) : notice("Customer not found");
+    if (action === "delete-customer") {
+      const item = (state.data.customers || []).find(customer => customer.id === id);
+      if (!item) return notice("Customer not found");
+      if (!confirm(`Delete customer ${item.name}? Customers used by an AMC or work order cannot be deleted.`)) return;
+      try {
+        await request(`/api/maintenance/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await refresh();
+        notice("Customer deleted");
+      } catch (error) { handleError(error); }
+      return;
+    }
+    if (action === "customer-sort") { const field = button.dataset.field; if (state.customerSort === field) state.customerSortDirection *= -1; else { state.customerSort = field; state.customerSortDirection = 1; } state.pageNumber.customers = 1; return render(); }
+    if (action === "customer-prev" || action === "customer-next") { state.pageNumber.customers += action === "customer-next" ? 1 : -1; return render(); }
     if (action === "delete-request") {
       const kind = button.dataset.kind;
       const item = ({ contracts: contract, schedules: key => state.data.schedules.find(row => row.id === key), "work-orders": job,
@@ -1554,8 +1716,8 @@
     if (action === "amc-toggle-filters") { state.amcFiltersOpen = !state.amcFiltersOpen; return render(); }
     if (action === "amc-clear-filters") { state.status.amc = "all"; state.amcServiceBefore = ""; return render(); }
     if (action === "amc-menu") { state.amcMenuId = state.amcMenuId === id ? "" : id; return render(); }
-    if (action === "amc-documents") { state.amcMenuId = ""; state.selectedContractId = id; state.contractTab = "Documents"; return render(); }
-    if (action === "amc-full-details") { billingUi.setTab("Overview"); return navigate("amc", id || state.selectedContractId); }
+    if (action === "amc-documents") { state.amcMenuId = ""; billingUi.setTab("Documents"); return navigate("amc", id); }
+    if (action === "amc-full-details") { billingUi.setTab(state.contractTab); return navigate("amc", id || state.selectedContractId); }
     if (action === "pm-toggle-filters") { state.pmFiltersOpen = !state.pmFiltersOpen; return render(); }
     if (action === "pm-kpi") { state.status.schedule = button.dataset.status; state.pmUpcomingOffset = 0; return render(); }
     if (action === "pm-view" || action === "pm-view-all") { state.scheduleView = action === "pm-view-all" ? "list" : button.dataset.view; return render(); }
@@ -1716,6 +1878,7 @@
     if (action === "review-approve" || action === "review-revision" || action === "review-reject") return openDrawer(action, id);
     if (action === "close-drawer") return state.drawer === "report-upload" && state.srUpload?.loading ? undefined : closeDrawer();
     if (action === "save-amc") return saveAmc();
+    if (action === "save-customer") return saveCustomer();
     if (action === "save-schedule-draft") return saveSchedule("draft");
     if (action === "save-schedule-notify") return saveSchedule("notify");
     if (action === "mark-visit-finished") return saveSchedule("finished");
@@ -1755,6 +1918,19 @@
   root.addEventListener("input", event => {
     const input = event.target;
     if (billingUi.handleInput(input)) return;
+    if (input.matches("[data-customer-query]")) {
+      input.closest(".maint-customer-picker").querySelector('[name="customerId"]').value = "";
+      input.dataset.customerTyped = "true";
+      const form = input.closest("form");
+      const newField = form.querySelector("[data-new-customer-field]");
+      newField.hidden = true;
+      newField.querySelector("input").required = false;
+      const emailField = form.querySelector("[data-new-customer-email]");
+      if (emailField) emailField.hidden = true;
+      if (input.value.trim()) customerPickerOptions(input);
+      else hideCustomerPickerOptions(input);
+      return;
+    }
     if (input.matches('[data-wo-filter="from"], [data-wo-filter="to"]')) { state.workOrderDraft[input.dataset.woFilter] = input.value; return; }
     if (input.closest(".maint-form")) {
       input.classList.remove("maint-invalid");
@@ -1789,6 +1965,30 @@
   });
 
   root.addEventListener("keydown", event => {
+    if (event.target.matches("[data-customer-query]")) {
+      const input = event.target;
+      const list = input.closest(".maint-customer-picker").querySelector("[data-customer-options]");
+      if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); hideCustomerPickerOptions(input); return; }
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        if (input.dataset.customerTyped !== "true" || !input.value.trim()) return;
+        if (list.hidden) customerPickerOptions(input);
+        const choices = [...list.querySelectorAll("button:not([hidden])")];
+        if (!choices.length) return;
+        event.preventDefault();
+        const active = choices.findIndex(option => option.classList.contains("active"));
+        const next = event.key === "ArrowDown" ? (active + 1) % choices.length
+          : active < 0 ? choices.length - 1 : (active + choices.length - 1) % choices.length;
+        choices.forEach(option => option.classList.remove("active"));
+        choices[next].classList.add("active");
+        choices[next].scrollIntoView({ block: "nearest" });
+        return;
+      }
+      if (event.key === "Enter" && !list.hidden) {
+        event.preventDefault();
+        chooseCustomer(list.querySelector("button.active") || list.querySelector("button:not([hidden])"));
+        return;
+      }
+    }
     if (event.target.matches("[data-report-customer-input]")) {
       const input = event.target;
       const list = input.parentElement.querySelector("[data-report-customer-options]");
@@ -1828,15 +2028,28 @@
     }
   });
 
+  root.addEventListener("focusout", event => {
+    if (event.target.matches("[data-billing-inline-notes]")) billingUi.handleBlur(event.target);
+  });
+
   root.addEventListener("change", async event => {
     const input = event.target;
-    if (input.matches("[data-billing-filter], [data-billing-sort], [data-billing-size], [data-billing-record], [data-billing-file]")) {
+    if (input.matches('[data-billing-filter], [data-billing-sort], [data-billing-size], [data-billing-record], [data-billing-file], [data-billing-installment], #maintBillingForm [name="sendToAccountant"]')) {
       await billingUi.handleChange(input); return;
     }
     if (input.matches('#maintAmcForm [name="startDate"]')) {
       const endDate = root.querySelector('#maintAmcForm [name="endDate"]');
       const calculatedEnd = contractEndOneYear(input.value);
       if (endDate && calculatedEnd) endDate.value = calculatedEnd;
+      return;
+    }
+    if (input.matches("[data-amc-customer]")) {
+      const customer = (state.data.customers || []).find(item => item.id === input.value);
+      const form = input.closest("form");
+      for (const field of ["contact", "phone", "email"]) {
+        const control = form?.elements.namedItem(field);
+        if (control) control.value = customer?.[field] || "";
+      }
       return;
     }
     if (input.matches("[data-report-tech-input]")) { commitReportTechnicianInput(input.closest("form")); return; }
@@ -1894,7 +2107,8 @@
     if (input.matches("[data-filter]")) { state.filters[input.dataset.filter] = input.value; state.pageNumber[state.page] = 1; return render(); }
     if (input.closest("#maintScheduleForm")) {
       const draft = scheduleFormData();
-      if (input.dataset.scheduleChange === "contract") { const item = contract(draft.contractId); Object.assign(draft, { visitId: "", customerName: item?.customerName || draft.customerName, site: item?.site || draft.site, contact: item?.contact || draft.contact, phone: item?.phone || draft.phone }); }
+      if (input.dataset.scheduleChange === "contract") { const item = contract(draft.contractId); Object.assign(draft, { visitId: "", customerId: item?.customerId || draft.customerId, customerName: item?.customerName || draft.customerName, site: item?.site || draft.site, contact: item?.contact || draft.contact, phone: item?.phone || draft.phone }); }
+      if (input.dataset.scheduleChange === "customer") { const item = (state.data.customers || []).find(customer => customer.id === draft.customerId); Object.assign(draft, { customerName: item?.name || "", contact: item?.contact || "", phone: item?.phone || "" }); }
       state.scheduleDraft = draft;
       return render();
     }

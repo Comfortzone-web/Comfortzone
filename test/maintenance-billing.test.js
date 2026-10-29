@@ -58,9 +58,35 @@ test("AMC, non-AMC and additional billing share one ledger without duplicate cha
     assert.equal(data.billing.find(row => row.workOrderId === "standalone-job").sourceType, "Work Order");
 
     const first = installments[0].id;
+    const savedOnly = installments[2].id;
+    assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(savedOnly)}/request`,
+      { mode: "draft", requestDate: "2026-01-04", amountExVat: 1000, vatRate: 5 }, mts)).status, 200);
+    assert.equal((await billing(savedOnly)).invoiceStatus, "Draft");
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(savedOnly)}/request`,
+      { requestDate: "2026-01-05", amountExVat: 1100, vatRate: 5, resend: false }, mts)).status, 200);
+    assert.equal((await billing(savedOnly)).invoiceStatus, "Draft");
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(savedOnly)}/request`,
+      { requestDate: "2026-01-05", amountExVat: 3000, vatRate: 5, resend: false }, mts)).status, 200);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/request`, { remarks: "First installment" }, mts)).status, 201);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/request`, {}, mts)).status, 409);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/handoff`, {}, mts)).status, 403);
+    assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/handoff`)).status, 200);
+    const handoff = (await billing(first)).request;
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(first)}/request`,
+      { requestDate: "2026-01-04", amountExVat: 2900, vatRate: 5, remarks: "Corrected installment" }, mts)).status, 200);
+    assert.equal((await billing(first)).amountExVat, 2900);
+    assert.equal((await billing(first)).request.remarks, "Corrected installment");
+    assert.equal((await billing(first)).request.preparedAt, handoff.preparedAt);
+    assert.equal((await billing(first)).request.requestedBy, handoff.requestedBy);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(first)}/request`,
+      { requestDate: "2026-01-04", amountExVat: 12001, vatRate: 5 }, mts)).status, 409);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(first)}/request`,
+      { requestDate: "2026-01-04", amountExVat: 3000, vatRate: 5 }, mts)).status, 200);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(first)}/request`,
+      { requestDate: "2026-01-05", amountExVat: 3000, vatRate: 5, resend: true }, mts)).status, 200);
+    assert.equal((await billing(first)).invoiceStatus, "Pending Accountant Action");
+    assert.equal((await billing(first)).request.preparedAt, "");
+    assert.equal((await billing(first)).request.resentBy, "Engineer");
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/handoff`)).status, 200);
     const uploaded = await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/invoice-upload`);
     assert.equal(uploaded.status, 201);
@@ -70,6 +96,8 @@ test("AMC, non-AMC and additional billing share one ledger without duplicate cha
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/invoice`,
       { ...invoice, customerName: "Different Customer" })).status, 409);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/invoice`, invoice)).status, 201);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(first)}/request`,
+      { requestDate: "2026-01-04", amountExVat: 3000, vatRate: 5 })).status, 409);
     const invoiceFile = await call("GET", `/api/maintenance/files/${uploaded.body.file.id}`);
     assert.equal(invoiceFile.status, 200);
     assert.match(invoiceFile.headers["Content-Type"], /application\/pdf/);
@@ -78,7 +106,54 @@ test("AMC, non-AMC and additional billing share one ledger without duplicate cha
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice`, invoice)).status, 409);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice`,
       { ...invoice, number: "INV-002", dueDate: "2026-01-31", fileId: "" })).status, 201);
+    const editRoute = `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice`;
+    const firstReplacement = await call("POST", `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice-upload`);
+    assert.equal(firstReplacement.status, 201);
+    assert.equal((await call("PUT", editRoute, { ...invoice, number: "INV-002", dueDate: "2026-01-31",
+      fileId: firstReplacement.body.file.id })).status, 200);
+    const secondReplacement = await call("POST", `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice-upload`);
+    assert.equal(secondReplacement.status, 201);
+    assert.equal((await call("PUT", editRoute, { ...invoice, number: "INV-002-REV", dueDate: "2026-01-31",
+      fileId: secondReplacement.body.file.id })).status, 200);
+    assert.equal((await billing(installments[1].id)).invoice.number, "INV-002-REV");
+    assert.equal((await billing(installments[1].id)).invoice.fileId, secondReplacement.body.file.id);
+    assert.equal((await call("GET", `/api/maintenance/files/${firstReplacement.body.file.id}`)).status, 404);
+    const fileRoute = `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice-file`;
+    assert.equal((await call("DELETE", fileRoute)).status, 200);
+    assert.equal((await billing(installments[1].id)).invoice.number, "INV-002-REV");
+    assert.equal((await billing(installments[1].id)).invoice.fileId, "");
+    assert.equal((await call("GET", `/api/maintenance/files/${secondReplacement.body.file.id}`)).status, 404);
+    assert.equal((await call("DELETE", fileRoute)).status, 404);
+    const finalFile = await call("POST", `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}/invoice-upload`);
+    assert.equal(finalFile.status, 201);
+    assert.equal((await call("PUT", editRoute, { ...invoice, number: "INV-002-REV", dueDate: "2026-01-31",
+      fileId: finalFile.body.file.id })).status, 200);
     assert.equal((await billing(installments[1].id)).paymentStatus, "Overdue");
+    const markRoute = `/api/maintenance/billing/${encodeURIComponent(installments[1].id)}`;
+    assert.equal((await call("POST", `${markRoute}/mark-paid`, {}, mts)).status, 403);
+    assert.equal((await call("POST", `${markRoute}/mark-paid`)).status, 200);
+    assert.equal((await billing(installments[1].id)).paymentStatus, "Paid");
+    assert.equal((await call("DELETE", fileRoute)).status, 409);
+    assert.equal((await call("PUT", editRoute, { ...invoice, number: "INV-PAID" })).status, 409);
+    assert.equal((await billing(installments[1].id)).totalPaid, 3150);
+    assert.equal((await call("POST", `${markRoute}/mark-paid`)).status, 409);
+    assert.equal((await call("POST", `${markRoute}/mark-unpaid`)).status, 200);
+    assert.equal((await billing(installments[1].id)).paymentStatus, "Overdue");
+    assert.equal((await billing(installments[1].id)).totalPaid, 0);
+    assert.equal((await billing(installments[1].id)).payments.length, 1);
+    assert.ok((await billing(installments[1].id)).payments[0].reversedAt);
+    assert.equal((await call("POST", `${markRoute}/mark-unpaid`)).status, 409);
+    const deleteRequestRoute = `${markRoute}/request`;
+    assert.equal((await call("POST", `${markRoute}/payments`,
+      { amount: 100, date: "2026-01-21", method: "Bank Transfer", reference: "TRF-DELETE" })).status, 201);
+    assert.equal((await billing(installments[1].id)).totalPaid, 100);
+    assert.equal((await call("DELETE", deleteRequestRoute, undefined, mts)).status, 403);
+    assert.equal((await call("DELETE", deleteRequestRoute)).status, 200);
+    assert.equal((await billing(installments[1].id)).request, null);
+    assert.equal((await billing(installments[1].id)).invoice, null);
+    assert.deepEqual((await billing(installments[1].id)).payments, []);
+    assert.equal((await billing(installments[1].id)).invoiceStatus, "Not Requested");
+    assert.equal((await call("GET", `/api/maintenance/files/${finalFile.body.file.id}`)).status, 404);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/sent`)).status, 200);
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/payments`,
       { amount: 1500, date: "2026-01-18", method: "Bank Transfer", reference: "TRF-001" }, mts)).status, 403);
@@ -90,6 +165,7 @@ test("AMC, non-AMC and additional billing share one ledger without duplicate cha
     assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(first)}/payments`,
       { amount: 1650, date: "2026-01-20", method: "Bank Transfer", reference: "TRF-002" })).status, 201);
     assert.equal((await billing(first)).paymentStatus, "Paid");
+    assert.equal((await call("DELETE", `/api/maintenance/billing/${encodeURIComponent(first)}/request`)).status, 409);
     assert.equal((await billing(first)).outstanding, 0);
     assert.equal((await billing(first)).invoice.fileId, uploaded.body.file.id);
 
@@ -102,7 +178,19 @@ test("AMC, non-AMC and additional billing share one ledger without duplicate cha
     const standaloneId = data.billing.find(row => row.workOrderId === "standalone-job").id;
     assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}`,
       { amountExVat: 1000, vatRate: 5 })).status, 200);
-    assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}/request`, {}, mts)).status, 201);
+    assert.equal((await billing(standaloneId)).serviceAmountExVat, 1000);
+    assert.equal((await call("POST", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}/request`,
+      { amountExVat: 500, vatRate: 5 }, mts)).status, 201);
+    assert.equal((await billing(standaloneId)).amountExVat, 500);
+    assert.equal((await billing(standaloneId)).serviceAmountExVat, 1000);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}`,
+      { serviceAmountExVat: 1200, serviceVatRate: 5 })).status, 200);
+    assert.equal((await billing(standaloneId)).amountExVat, 500);
+    assert.equal((await billing(standaloneId)).serviceAmountExVat, 1200);
+    assert.equal((await call("PUT", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}/request`,
+      { amountExVat: 600, vatRate: 5, requestDate: "2026-10-28" }, mts)).status, 200);
+    assert.equal((await billing(standaloneId)).amountExVat, 600);
+    assert.equal((await billing(standaloneId)).serviceAmountExVat, 1200);
     assert.equal((await billing(standaloneId)).reference, "CZWO-2026-002");
     assert.equal((await summary()).billing.filter(row => row.sourceType === "Work Order").length, 1);
     const standaloneInvoice = await call("POST", `/api/maintenance/billing/${encodeURIComponent(standaloneId)}/invoice-upload`);

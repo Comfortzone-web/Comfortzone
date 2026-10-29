@@ -11,7 +11,8 @@ test("dashboard renders live data and keeps its controls connected", async () =>
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const nextDay = tomorrow.toISOString().slice(0, 10);
   const summary = {
-    contracts: [{ id: "amc-1", customerName: "Live Customer", site: "Business Bay", status: "Active", startDate: today, endDate: "2027-10-15", units: [] }],
+    customers: [{ id: "customer-1", name: "Live Customer", contact: "Samir", phone: "0501234567", email: "samir@example.com" }],
+    contracts: [{ id: "amc-1", customerId: "customer-1", customerName: "Live Customer", site: "Business Bay", contact: "Samir", phone: "0501234567", email: "samir@example.com", status: "Active", startDate: today, endDate: "2027-10-15", units: [] }],
     visits: [{ id: "visit-1", contractId: "amc-1", plannedDate: today, status: "Planned" }],
     workOrders: [
       { id: "job-1", number: "WO-LIVE-1", customerName: "Live Customer", site: "Business Bay", serviceDate: today, startTime: "09:00", status: "Scheduled", workType: "Preventive Maintenance", technicianIds: ["tech-1"], updatedAt: `${today}T09:00:00Z`, contractId: "amc-1" },
@@ -58,6 +59,7 @@ test("dashboard renders live data and keeps its controls connected", async () =>
   assert.match(root.innerHTML, /SR-LIVE-1/);
   assert.match(root.innerHTML, /Mavis Khan/);
   assert.match(root.innerHTML, /PM Visits \(2\)/);
+  assert.match(root.innerHTML, /data-action="go-customers"/);
 
   const click = async (action, extra = {}) => {
     const button = { dataset: { action, ...extra }, classList: { contains: () => false } };
@@ -85,4 +87,29 @@ test("dashboard renders live data and keeps its controls connected", async () =>
   assert.doesNotMatch(root.innerHTML, /class="maint-drawer"/);
   await click("open-technician", { id: "tech-1" });
   assert.deepEqual(routes.at(-1), ["technicians", "tech-1"]);
+  await context.window.maintenanceModule.open("customers");
+  assert.match(root.innerHTML, /Customer List/);
+  assert.match(root.innerHTML, /Live Customer/);
+  assert.match(root.innerHTML, /samir@example.com/);
+  assert.match(root.innerHTML, /data-action="edit-customer" data-id="customer-1"/);
+  listeners.input({ target: { dataset: { search: "customers" }, value: "not found", closest: () => null, matches: () => false } });
+  assert.match(root.innerHTML, /No customers match your search/);
+  listeners.input({ target: { dataset: { search: "customers" }, value: "Business Bay", closest: () => null, matches: () => false } });
+  assert.match(root.innerHTML, /Live Customer/);
+  await click("edit-customer", { id: "customer-1" });
+  assert.match(root.innerHTML, /id="maintCustomerForm"/);
+  assert.doesNotMatch(root.innerHTML, /id="maintAmcForm"/);
+  await click("close-drawer");
+  await click("new-customer");
+  assert.match(root.innerHTML, /id="maintCustomerForm"/);
+  await click("close-drawer");
+  await click("new-amc");
+  assert.match(root.innerHTML, /data-customer-query role="combobox"/);
+  assert.match(root.innerHTML, /data-action="customer-pick" data-customer-id="customer-1"/);
+  assert.match(root.innerHTML, /data-action="customer-pick" data-customer-id="__new__"/);
+  assert.match(root.innerHTML, /data-new-customer-field hidden/);
+  await click("close-drawer");
+  await click("new-schedule");
+  assert.match(root.innerHTML, /data-customer-query role="combobox"/);
+  assert.match(root.innerHTML, /data-new-customer-email hidden/);
 });
