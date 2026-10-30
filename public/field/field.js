@@ -15,13 +15,26 @@
     return `${part("year")}-${part("month")}-${part("day")}`;
   };
   const time = value => value ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", hour12: true }).format(new Date(`2000-01-01T${value}:00`)) : "--";
+  const homeIconPaths = {
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/>',
+    upload: '<path d="M12 16V4m-4 4 4-4 4 4"/><path d="M20 16.6A4 4 0 0 0 18 9a6 6 0 0 0-11.7 1.4A4 4 0 0 0 7 19h11"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    wrench: '<path d="M14.7 6.3a5 5 0 0 0-6.4 6.4L3 18a2 2 0 0 0 3 3l5.3-5.3a5 5 0 0 0 6.4-6.4L15 12l-3-3z"/>',
+    pin: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2"/>',
+    report: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
+    check: '<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+    arrow: '<path d="M4 12h16m-6-6 6 6-6 6"/>',
+    chevron: '<path d="m9 5 7 7-7 7"/>'
+  };
+  const homeIcon = (name, size = 18) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${homeIconPaths[name]}</svg>`;
 
   async function api(path, options = {}) {
     const response = await fetch(path, { credentials: "same-origin", ...options,
       headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json", ...(options.headers || {}) } });
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
-      const error = new Error(result.error || `Request failed (${response.status})`);
+      const error = new Error(result.error || (response.status === 413 ? "File is too large to upload. Choose a smaller PDF or photo." : `Request failed (${response.status})`));
       error.status = response.status;
       throw error;
     }
@@ -35,6 +48,49 @@
     if (slot) { slot.textContent = message; slot.className = `field-notice ${error ? "error" : "success"}`; slot.hidden = false; }
     const submitNotice = root.querySelector("#fieldSubmitNotice");
     if (submitNotice) { submitNotice.textContent = error ? message : ""; submitNotice.hidden = !error; }
+  }
+
+  function showUploadAlert(message) {
+    let alert = root.querySelector("#fieldUploadAlert");
+    if (!alert) {
+      alert = document.createElement("div");
+      alert.id = "fieldUploadAlert";
+      alert.className = "field-upload-alert";
+      alert.setAttribute("role", "status");
+      root.append(alert);
+    }
+    alert.innerHTML = `<span class="field-upload-spinner" aria-hidden="true"></span><span>${esc(message)}</span>`;
+  }
+
+  function hideUploadAlert() { root.querySelector("#fieldUploadAlert")?.remove(); }
+
+  async function prepareUpload(file) {
+    const maxBytes = 4 * 1024 * 1024;
+    if (file.size <= maxBytes && ["image/jpeg", "image/png", "image/webp", "application/pdf"].includes(file.type)) return file;
+    if (!file.type.startsWith("image/")) throw new Error("This file is too large or unsupported. Choose a PDF smaller than 4 MB or upload a photo.");
+    showUploadAlert("Preparing photo...");
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      if (image.decode) await image.decode();
+      else await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
+      for (const maxSide of [2400, 2000, 1600, 1200]) {
+        const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        const context = canvas.getContext("2d");
+        context.fillStyle = "#fff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", .82));
+        canvas.width = canvas.height = 0;
+        if (!blob) throw new Error("Photo could not be prepared. Try a different image.");
+        if (blob.size <= maxBytes) return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+      }
+      throw new Error("Photo is still too large. Try a lower camera resolution.");
+    } finally { URL.revokeObjectURL(url); }
   }
 
   async function load() {
@@ -70,16 +126,18 @@
       <div class="field-access-note">Ask the office for a new private technician link. Links expire after 48 hours and can only be used once.</div></main>`;
   }
 
-  function header(title, back = false) {
-    return `<header class="field-header"><div>${back ? `<button class="field-back" data-action="home" aria-label="Back to jobs">&#8592;</button>` : `<img src="/field/icon-512.png?v=20261023-logo" alt="">`}
-      <span><strong>${esc(title)}</strong><small>${esc(state.technician?.name || "Comfort Zone AC")}</small></span></div></header>`;
+  function header(title, back = false, dashboard = false) {
+    const pending = dashboard && state.notifications.some(item => item.status !== "Accepted");
+    return `<header class="field-header${dashboard ? " field-home-header" : ""}"><div>${back ? `<button class="field-back" data-action="home" aria-label="Back to jobs">&#8592;</button>` : `<img src="/field/icon-512.png?v=20261023-logo" alt="Comfort Zone logo">`}
+      <span><strong>${esc(title)}</strong><small>${esc(state.technician?.name || "Comfort Zone AC")}</small></span></div>${dashboard ? `<button class="field-header-bell" data-action="scroll-notifications" aria-label="View notifications">${homeIcon("bell", 21)}${pending ? '<i aria-hidden="true"></i>' : ""}</button>` : ""}</header>`;
   }
 
   const badge = status => `<span class="field-badge ${String(status || "").toLowerCase().replace(/[^a-z]+/g, "-")}">${esc(status || "--")}</span>`;
   function jobCard(item) {
-    return `<article class="field-job-card"><div class="field-job-top"><strong>${esc(item.number)}</strong>${badge(item.status)}</div>
-      <h3>${esc(item.customerName)}</h3><p>${esc(item.site)}</p>
-      <dl><div><dt>Date</dt><dd>${date(item.serviceDate)}</dd></div><div><dt>Time</dt><dd>${time(item.startTime)} - ${time(item.endTime)}</dd></div><div><dt>Service</dt><dd>${esc(item.workType)}</dd></div></dl>
+    const complete = ["Report Submitted", "Completed"].includes(item.status);
+    return `<article class="field-job-card ${complete ? "field-job-green" : "field-job-orange"}"><div class="field-job-top"><div class="field-job-number"><span class="field-job-symbol">${homeIcon(complete ? "check" : "report", 19)}</span><strong>${esc(item.number)}</strong></div>${badge(item.status)}</div>
+      <div class="field-job-identity"><h3>${esc(item.customerName)}</h3><p>${homeIcon("pin", 15)}<span>${esc(item.site)}</span></p></div>
+      <dl><div><dt>${homeIcon("calendar", 15)}Date</dt><dd>${date(item.serviceDate)}</dd></div><div><dt>${homeIcon("clock", 15)}Time</dt><dd>${time(item.startTime)} - ${time(item.endTime)}</dd></div><div><dt>${homeIcon("wrench", 15)}Service</dt><dd>${esc(item.workType)}</dd></div></dl>
       <button class="field-primary" data-action="open-job" data-id="${item.id}">View Job <span aria-hidden="true">&#8594;</span></button></article>`;
   }
 
@@ -89,15 +147,15 @@
     const upcoming = state.jobs.filter(item => item.serviceDate > current && item.status !== "Completed");
     const past = state.jobs.filter(item => item.serviceDate < current || item.status === "Completed").slice(-10).reverse();
     const pushStatus = !window.isSecureContext ? "Available over HTTPS" : !("Notification" in window) ? "Unavailable" : !state.pushConfigured ? "Server setup needed" : Notification.permission === "denied" ? "Blocked" : Notification.permission !== "granted" ? "Not enabled" : state.pushSubscribed ? "Enabled" : "Not connected";
-    return `${header("My Maintenance Jobs")}
-      <main class="field-main"><div id="fieldNotice" class="field-notice ${state.error ? "error" : "success"}" ${state.error || state.message ? "" : "hidden"}>${esc(state.error || state.message)}</div>
-      <section class="field-welcome"><div><span>Today · ${date(current)}</span><h1>My Maintenance Jobs</h1><p>${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today</p></div><button class="field-primary field-upload-shortcut" data-action="upload-sr">Upload SR</button></section>
-      <div class="field-toolbar"><span>Notifications: ${pushStatus}</span><button data-action="enable-push">Enable alerts</button></div>
+    return `${header("My Maintenance Jobs", false, true)}
+      <main class="field-main field-home"><div id="fieldNotice" class="field-notice ${state.error ? "error" : "success"}" ${state.error || state.message ? "" : "hidden"}>${esc(state.error || state.message)}</div>
+      <section class="field-welcome"><div><span>Today · ${date(current)}</span><h1>My Maintenance Jobs</h1><p>${todayJobs.length} job${todayJobs.length === 1 ? "" : "s"} today</p></div><button class="field-primary field-upload-shortcut" data-action="upload-sr">${homeIcon("upload", 19)} Upload SR</button></section>
+      <div class="field-toolbar"><span class="field-alert-symbol">${homeIcon("bell", 18)}</span><span class="field-push-copy"><strong>Notifications:</strong> ${esc(pushStatus)}</span><button data-action="enable-push">Enable alerts ${homeIcon("chevron", 15)}</button></div>
       ${/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.navigator.standalone ? `<p class="field-tip">On iPhone, use Share &gt; Add to Home Screen to receive web notifications.</p>` : ""}
       <section class="field-section"><h2>Today <span>${todayJobs.length}</span></h2>${todayJobs.length ? todayJobs.map(jobCard).join("") : `<div class="field-empty">No assigned jobs today.</div>`}</section>
-      <section class="field-section"><h2>Upcoming <span>${upcoming.length}</span></h2>${upcoming.length ? upcoming.map(jobCard).join("") : `<div class="field-empty">No upcoming jobs assigned.</div>`}</section>
+      <section class="field-section"><h2>Upcoming <span>${upcoming.length}</span></h2>${upcoming.length ? upcoming.map(jobCard).join("") : `<div class="field-empty">${homeIcon("calendar", 21)}<span>No upcoming jobs assigned.</span></div>`}</section>
       ${past.length ? `<section class="field-section"><h2>Recent Jobs</h2>${past.map(jobCard).join("")}</section>` : ""}
-      <section class="field-section"><h2>Notifications <span>${state.notifications.length}</span></h2>${state.notifications.length ? state.notifications.slice(0, 20).map(item => `<div class="field-notification"><div><strong>${esc(item.title)}</strong><p>${esc(item.message)}</p><small>${date(item.createdAt)} · ${esc(item.status)}</small></div>${item.status !== "Accepted" ? `<button data-action="accept-notification" data-id="${item.id}">Accept</button>` : ""}</div>`).join("") : `<div class="field-empty">No notifications yet.</div>`}</section></main>`;
+      <section class="field-section field-notifications-section" id="fieldNotifications"><div class="field-section-heading"><h2>Notifications <span>${state.notifications.length}</span></h2>${state.notifications.length ? `<button class="field-see-all" data-action="show-all-notifications">See All ${homeIcon("chevron", 15)}</button>` : ""}</div>${state.notifications.length ? (state.showAllNotifications ? state.notifications : state.notifications.slice(0, 20)).map(item => `<div class="field-notification"><span class="field-notification-icon">${homeIcon("bell", 20)}</span><div class="field-notification-body"><strong>${esc(item.title)}</strong><p>${esc(item.message)}</p><small>${date(item.createdAt)} · ${esc(item.status)}</small></div>${item.status !== "Accepted" ? `<button data-action="accept-notification" data-id="${item.id}">Accept</button>` : ""}</div>`).join("") : `<div class="field-empty">No notifications yet.</div>`}</section></main>`;
   }
 
   function uploadSRForm() {
@@ -253,6 +311,8 @@
   }
 
   async function uploadFile(file, kind) {
+    file = await prepareUpload(file);
+    showUploadAlert(kind === "signature" ? "Uploading signature..." : kind === "original" ? "Uploading report..." : "Uploading photo...");
     const form = new FormData(); form.append("file", file, file.name);
     return api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/files?kind=${kind}`, { method: "POST", body: form });
   }
@@ -261,12 +321,16 @@
     const upload = state.uploadSR;
     if (!upload) return;
     upload.uploading = true; upload.message = "Uploading and reading the report..."; state.error = ""; render();
+    showUploadAlert("Uploading report...");
     try {
+      file = await prepareUpload(file);
+      showUploadAlert("Uploading report...");
       const form = new FormData(); form.append("file", file, file.name);
       const result = await api("/api/field/reports/upload", { method: "POST", body: form });
       Object.assign(upload, { fileId: result.file.id, fileName: result.file.originalName, fields: result.fields || {}, message: result.message || "Review the extracted details." });
     } catch (error) { upload.message = error.message; upload.error = true; }
     upload.uploading = false;
+    hideUploadAlert();
     render();
   }
 
@@ -324,6 +388,7 @@
     render();
     } finally {
       state.submitting = false;
+      hideUploadAlert();
       if (state.screen === "report") {
         const button = root.querySelector('[data-action="submit-report"]');
         if (button) { button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = "Submit Service Report"; }
@@ -355,6 +420,8 @@
     if (!button) return;
     const action = button.dataset.action;
     try {
+      if (action === "scroll-notifications") { root.querySelector("#fieldNotifications")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+      if (action === "show-all-notifications") { state.showAllNotifications = true; render(); root.querySelector("#fieldNotifications")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
       if (action === "home") {
         if (state.screen === "report") { syncFields(); await saveDraft(); state.screen = "job"; render(); }
         else { state.screen = "home"; const url = new URL(location.href); url.searchParams.delete("workOrder"); history.replaceState({}, "", url.pathname + url.search); render(); await load(); }
@@ -434,6 +501,7 @@
       if (!files.length) return;
       input.disabled = true;
       alertMessage(files.length > 1 ? `Uploading ${files.length} files...` : "Uploading file...");
+      showUploadAlert(files.length > 1 ? `Uploading ${files.length} files...` : "Uploading file...");
       for (const file of files) {
         const saved = await uploadFile(file, kind);
         state.job.files.push(saved);
@@ -441,6 +509,7 @@
           state.draft.originalFileId = saved.id;
           state.draft.fileIds = state.draft.fileIds.filter(id => state.job.files.find(item => item.id === id)?.kind !== "original");
           state.draft.fileIds.push(saved.id);
+          showUploadAlert("Reading report...");
           const extracted = await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/extract`, { method: "POST", body: JSON.stringify({ fileId: saved.id }) });
           state.draft.extracted = { ...state.draft.extracted, ...extracted.fields };
           state.message = extracted.message;
@@ -448,7 +517,7 @@
       }
       await saveDraft(); render();
     } catch (error) { alertMessage(error.message, true); }
-    finally { if (input.isConnected) input.disabled = false; }
+    finally { hideUploadAlert(); if (input.isConnected) input.disabled = false; }
   });
 
   init();
