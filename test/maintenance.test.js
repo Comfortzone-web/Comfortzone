@@ -249,7 +249,20 @@ test("maintenance lifecycle and field access", async () => {
     assert.equal(original.status, 201);
     const extraction = await field("POST", `/api/field/work-orders/${paperId}/extract`, { fileId: original.result.id }, outsiderCookie);
     assert.equal(extraction.status, 200);
-    const paperBody = { type: "Handwritten Upload", originalFileId: original.result.id, fileIds: [original.result.id],
+    assert.equal((await field("PUT", `/api/field/work-orders/${paperId}/draft`, { type: "Handwritten Upload",
+      originalFileId: original.result.id, fileIds: [original.result.id], extracted: { reportNumber: "WRONG" } }, outsiderCookie)).status, 200);
+    const removedOriginal = await field("DELETE", `/api/field/work-orders/${paperId}/files/${original.result.id}`, null, outsiderCookie);
+    assert.equal(removedOriginal.status, 200);
+    assert.equal(removedOriginal.result.deleted, true);
+    const afterOriginalRemoval = (await field("GET", `/api/field/work-orders/${paperId}`, null, outsiderCookie)).result;
+    assert.equal(afterOriginalRemoval.draft.originalFileId, "");
+    assert.deepEqual(afterOriginalRemoval.draft.extracted, {});
+    assert.ok(!afterOriginalRemoval.draft.fileIds.includes(original.result.id));
+    assert.equal((await field("GET", `/api/field/files/${original.result.id}`, null, outsiderCookie)).status, 404);
+    const replacementOriginal = await field("POST", `/api/field/work-orders/${paperId}/files?kind=original`, null,
+      outsiderCookie, Buffer.from("%PDF-1.4\n%%EOF", "ascii"));
+    assert.equal(replacementOriginal.status, 201);
+    const paperBody = { type: "Handwritten Upload", originalFileId: replacementOriginal.result.id, fileIds: [replacementOriginal.result.id],
       extracted: { customerName: customer.name, workCarriedOut: "Checked compressor" },
       details: { workCarriedOut: "Checked compressor", remarks: "Original retained" } };
     const paperReport = await field("POST", `/api/field/work-orders/${paperId}/report`, paperBody, outsiderCookie);

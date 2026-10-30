@@ -2,7 +2,7 @@
   const root = document.querySelector("#fieldRoot");
   const state = { technician: null, jobs: [], notifications: [], checklistLabels: {}, pushPublicKey: "", pushConfigured: false, pushSubscribed: false, job: null,
     screen: "home", type: "Digital Checklist", step: 0, draft: null, message: "", error: "", signatureData: "", signatureDirty: false, submitting: false,
-    uploadSR: null };
+    uploadSR: null, uploadingOriginal: false };
   let autoSaveTimer;
   let lastRenderKey = "";
   let draftSaveQueue = Promise.resolve();
@@ -215,27 +215,42 @@
     state.step = 0;
     state.signatureData = "";
     state.signatureDirty = false;
+    state.uploadingOriginal = false;
+    state.message = "";
+    state.error = "";
     state.draft = { type, checklist: structuredClone(existing?.checklist || { maintenance: {} }),
       details: { ...(existing?.details || {}) }, fileIds: [...(existing?.fileIds || [])],
       signatureFileId: existing?.signatureFileId || "", originalFileId: existing?.originalFileId || "", extracted: { ...(existing?.extracted || {}) } };
+    if (type === "Handwritten Upload" && !state.draft.extracted.technicianName) {
+      state.draft.extracted.technicianName = state.job.technicians.map(row => row.name).filter(Boolean).join(", ");
+    }
     state.screen = "report";
     render();
   }
 
   function checklistStep() {
     const d = state.draft;
-    if (state.type === "Handwritten Upload") {
-      const keys = ["reportNumber", "customerName", "siteName", "serviceDate", "technicianName", "unitNumber", "modelNumber", "serialNumber", "refrigerant", "workCarriedOut", "materialsUsed", "quantity", "remarks", "jobCompletion"];
-      return `<section class="field-info"><h2>Original Report</h2><p>Photograph the complete paper report. The original stays available to the office.</p>
-        <label class="field-file">Take photo or choose file<input type="file" data-upload="original" accept="image/*,.pdf,application/pdf" capture="environment"></label>
-        ${d.originalFileId ? `<a href="/api/field/files/${encodeURIComponent(d.originalFileId)}" target="_blank" rel="noopener">View original upload</a>` : ""}</section>
-        <section class="field-info"><h2>Review Extracted Details</h2><p class="field-tip">Leave unreadable or missing fields blank.</p>
-        <div class="field-form-grid">${keys.map(key => `<label>${esc(key === "reportNumber" ? "Service Report Number" : key.replace(/([A-Z])/g, " $1"))}<input data-extracted="${key}" value="${esc(d.extracted?.[key] || "")}"></label>`).join("")}</div></section>`;
-    }
     const labels = state.checklistLabels.maintenance || [];
     return `<section class="field-info field-checklist-section"><h2>AC Maintenance Checklist</h2><div class="field-checklist-rows">
       ${labels.map((label, index) => { const item = d.checklist?.maintenance?.[label] || {}; return `<div class="field-check-item"><span class="field-check-number">${index + 1}</span><strong>${esc(label)}</strong><div class="field-radio-row">${["OK", "Issue"].map(value => `<label class="field-check-choice ${value.toLowerCase()}"><input type="radio" name="maintenance-${index}" data-check-group="maintenance" data-check-label="${esc(label)}" value="${value}" ${item.value === value ? "checked" : ""}><span>${value}</span></label>`).join("")}</div></div>`; }).join("")}</div></section>
       <section class="field-info field-service-details"><h2>Service Details</h2>${detailsFields()}</section>`;
+  }
+
+  function handwrittenUploadStep() {
+    const file = state.job.files.find(item => item.id === state.draft.originalFileId);
+    return `<section class="field-info"><h2>Original Report</h2><p>Photograph the complete paper report. It will be scanned before you review the details.</p>
+      <label class="field-file">Take photo or choose file<input type="file" data-upload="original" accept="image/*,.pdf,application/pdf" capture="environment" ${state.uploadingOriginal ? "disabled" : ""}></label>
+      ${file ? `<p class="field-upload-file">${esc(file.originalName || "Service report uploaded")}</p><div class="field-original-actions"><a href="/api/field/files/${encodeURIComponent(file.id)}" target="_blank" rel="noopener">View original upload</a><button type="button" data-action="remove-original" data-id="${esc(file.id)}" ${state.uploadingOriginal ? "disabled" : ""}>Delete</button></div>` : ""}</section>`;
+  }
+
+  function handwrittenDetailsStep() {
+    const fields = [["reportNumber", "Service Report Number"], ["customerName", "Customer Name"], ["siteName", "Site / Location"], ["serviceDate", "Service Date"],
+      ["technicianName", "Technician Name"], ["unitNumber", "Unit Number"], ["modelNumber", "Model Number"], ["serialNumber", "Serial Number"],
+      ["refrigerant", "Refrigerant"], ["quantity", "Quantity"], ["jobCompletion", "Job Completion"]];
+    const descriptions = [["workCarriedOut", "Work Carried Out"], ["materialsUsed", "Materials Used"], ["remarks", "Remarks"]];
+    return `<section class="field-info"><h2>Review Extracted Details</h2><p class="field-tip">Check the scanned information and correct any missing or incorrect details.</p>
+      <div class="field-form-grid">${fields.map(([key, label]) => `<label>${label}<input data-extracted="${key}" value="${esc(state.draft.extracted?.[key] || "")}"></label>`).join("")}
+      ${descriptions.map(([key, label]) => `<label>${label}<textarea data-extracted="${key}" rows="3">${esc(state.draft.extracted?.[key] || "")}</textarea></label>`).join("")}</div></section>`;
   }
 
   function detailsFields() {
@@ -259,16 +274,18 @@
   }
 
   function reportForm() {
-    const steps = state.type === "Digital Checklist" ? ["Checklist", "Photos", "Signature & Submit"] : ["Report", "Photos", "Review & Submit"];
+    const handwritten = state.type === "Handwritten Upload";
+    const steps = handwritten ? ["Report", "Details", "Photos", "Review & Submit"] : ["Checklist", "Photos", "Signature & Submit"];
+    const lastStep = steps.length - 1;
     const checklistPage = state.type === "Digital Checklist" && state.step === 0;
     return `${header(state.type, true)}<main class="field-main ${checklistPage ? "field-checklist-page" : ""}"><div id="fieldNotice" class="field-notice ${state.error ? "error" : "success"}" ${state.error || state.message ? "" : "hidden"}>${esc(state.error || state.message)}</div>
       <div class="field-report-heading"><span>${esc(state.job.number)} · ${esc(state.job.customerName)}</span>${checklistPage ? "" : `<h1>${esc(steps[state.step])}</h1>`}</div>
       <nav class="field-steps" aria-label="Report steps">${steps.map((label, index) => `<span class="${index === state.step ? "active" : index < state.step ? "done" : ""}"><b>${index + 1}</b><small>${esc(label)}</small></span>`).join("")}</nav>
-      ${state.step === 0 ? checklistStep() : state.step === 1 ? photosStep() : signatureStep()}
-      ${state.step === 2 ? `<div id="fieldSubmitNotice" class="field-notice error" ${state.error ? "" : "hidden"}>${esc(state.error)}</div>` : ""}
+      ${handwritten ? (state.step === 0 ? handwrittenUploadStep() : state.step === 1 ? handwrittenDetailsStep() : state.step === 2 ? photosStep() : signatureStep()) : (state.step === 0 ? checklistStep() : state.step === 1 ? photosStep() : signatureStep())}
+      ${state.step === lastStep ? `<div id="fieldSubmitNotice" class="field-notice error" ${state.error ? "" : "hidden"}>${esc(state.error)}</div>` : ""}
       <div class="field-report-footer"><button class="field-secondary" data-action="save-draft">Save Draft</button>
       ${state.step > 0 ? `<button class="field-secondary" data-action="previous">Previous</button>` : ""}
-      <button class="field-primary" data-action="${state.step < 2 ? "next" : "submit-report"}" ${state.step === 2 && state.submitting ? "disabled aria-busy=\"true\"" : ""}>${state.step < 2 ? "Next" : state.submitting ? "Submitting..." : "Submit Service Report"}</button></div></main>`;
+      <button class="field-primary" data-action="${state.step < lastStep ? "next" : "submit-report"}" ${state.step === lastStep && state.submitting ? "disabled aria-busy=\"true\"" : handwritten && state.step === 0 && (!state.draft.originalFileId || state.uploadingOriginal) ? "disabled" : ""}>${state.step < lastStep ? "Next" : state.submitting ? "Submitting..." : "Submit Service Report"}</button></div></main>`;
   }
 
   function render() {
@@ -439,14 +456,40 @@
       if (action === "digital" || action === "handwritten") return beginReport(action === "digital" ? "Digital Checklist" : "Handwritten Upload");
       if (action === "previous") { syncFields(); state.step -= 1; return render(); }
       if (action === "next") {
+        if (state.type === "Handwritten Upload" && state.step === 0 && (!state.draft.originalFileId || state.uploadingOriginal)) return;
         if (Date.now() - lastNextTap < 700) return;
         lastNextTap = Date.now();
-        const saving = saveDraft();
+        const saving = saveDraft(!(state.type === "Handwritten Upload" && state.step === 0 && state.error));
         state.step += 1; render();
         saving.catch(error => alertMessage(`Draft could not be saved: ${error.message}`, true));
         return;
       }
       if (action === "save-draft") { if (button.disabled) return; button.disabled = true; button.textContent = "Saving..."; try { await saveDraft(); } finally { if (button.isConnected) { button.disabled = false; button.textContent = "Save Draft"; } } return; }
+      if (action === "remove-original") {
+        if (button.disabled || state.uploadingOriginal || button.dataset.id !== state.draft.originalFileId) return;
+        state.uploadingOriginal = true;
+        button.disabled = true; button.setAttribute("aria-busy", "true");
+        const nextButton = root.querySelector('[data-action="next"]');
+        if (nextButton) nextButton.disabled = true;
+        try {
+          await draftSaveQueue.catch(() => {});
+          const result = await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/files/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
+          state.draft.fileIds = state.draft.fileIds.filter(id => id !== button.dataset.id);
+          state.draft.originalFileId = "";
+          state.draft.extracted = { technicianName: state.job.technicians.map(row => row.name).filter(Boolean).join(", ") };
+          if (result.deleted) state.job.files = state.job.files.filter(file => file.id !== button.dataset.id);
+          state.message = "Original report removed. Upload the correct file to continue.";
+          state.error = "";
+          state.uploadingOriginal = false;
+          render();
+          await saveDraft(false, false);
+        } finally {
+          state.uploadingOriginal = false;
+          if (button.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); }
+          if (nextButton?.isConnected && state.draft.originalFileId) nextButton.disabled = false;
+        }
+        return;
+      }
       if (action === "remove-photo") {
         if (button.disabled) return;
         button.disabled = true; button.setAttribute("aria-busy", "true");
@@ -495,11 +538,16 @@
       syncFields(); queueDraft(); return;
     }
     if (!input.matches("[data-upload]")) return;
+    const kind = input.dataset.upload;
     try {
-      const kind = input.dataset.upload;
       const files = [...input.files];
       if (!files.length) return;
       input.disabled = true;
+      if (kind === "original") {
+        state.uploadingOriginal = true;
+        const nextButton = root.querySelector('[data-action="next"]');
+        if (nextButton) nextButton.disabled = true;
+      }
       alertMessage(files.length > 1 ? `Uploading ${files.length} files...` : "Uploading file...");
       showUploadAlert(files.length > 1 ? `Uploading ${files.length} files...` : "Uploading file...");
       for (const file of files) {
@@ -511,14 +559,26 @@
           state.draft.fileIds = state.draft.fileIds.filter(id => state.job.files.find(item => item.id === id)?.kind !== "original");
           state.draft.fileIds.push(saved.id);
           showUploadAlert("Reading report...");
-          const extracted = await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/extract`, { method: "POST", body: JSON.stringify({ fileId: saved.id }) });
-          state.draft.extracted = { ...state.draft.extracted, ...extracted.fields };
-          state.message = extracted.message;
+          let extracted;
+          try { extracted = await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/extract`, { method: "POST", body: JSON.stringify({ fileId: saved.id }) }); }
+          catch (error) { extracted = { available: false, fields: {}, message: `Report scan failed: ${error.message}. Continue and enter the details manually.` }; }
+          const technicianName = state.job.technicians.map(row => row.name).filter(Boolean).join(", ");
+          state.draft.extracted = { ...state.draft.extracted, ...extracted.fields, ...(technicianName ? { technicianName } : {}) };
+          state.message = extracted.available === false ? "" : extracted.message;
+          state.error = extracted.available === false ? extracted.message : "";
         } else state.draft.fileIds.push(saved.id);
       }
-      await saveDraft(kind !== "original", kind !== "original"); render();
+      await saveDraft(kind !== "original", kind !== "original");
+      state.uploadingOriginal = false;
+      render();
     } catch (error) { alertMessage(error.message, true); }
-    finally { hideUploadAlert(); if (input.isConnected) input.disabled = false; }
+    finally {
+      state.uploadingOriginal = false;
+      hideUploadAlert();
+      if (input.isConnected) input.disabled = false;
+      const nextButton = root.querySelector('[data-action="next"]');
+      if (kind === "original" && nextButton && state.draft.originalFileId) nextButton.disabled = false;
+    }
   });
 
   init();

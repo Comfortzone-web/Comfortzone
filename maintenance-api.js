@@ -1709,22 +1709,29 @@ function createMaintenanceApi(deps) {
         return send(res, 201, publicFile(file));
       }
       if (parts[0] === "work-orders" && parts[2] === "files" && parts[3] && req.method === "DELETE") {
-        const storedName = await storage.mutate(store => {
+        const removal = await storage.mutate(store => {
           const job = assignedJob(store, technicianId, parts[1]);
-          if (job.status === "Completed") fail("Photo removal is unavailable for this job", 403);
+          if (job.status === "Completed") fail("File removal is unavailable for this job", 403);
           const file = find(store.files, parts[3]);
           const draft = store.drafts.find(item => item.workOrderId === job.id);
-          if (!file || file.workOrderId !== job.id || file.kind !== "photo" || !draft?.data.fileIds?.includes(file.id)) fail("Draft photo not found", 404);
+          const isOriginal = file?.kind === "original";
+          if (!file || file.workOrderId !== job.id || !["photo", "original"].includes(file.kind)
+            || !draft?.data.fileIds?.includes(file.id) || (isOriginal && draft.data.originalFileId !== file.id)) fail("Draft file not found", 404);
           draft.data.fileIds = draft.data.fileIds.filter(id => id !== file.id);
+          if (isOriginal) {
+            draft.data.originalFileId = "";
+            draft.data.extracted = {};
+          }
           draft.updatedAt = isoNow();
           const usedByReport = store.reports.some(report => (report.fileIds || []).includes(file.id)
-            || (report.versions || []).some(version => (version.fileIds || []).includes(file.id)));
-          if (usedByReport) return "";
+            || report.originalFileId === file.id || (report.versions || []).some(version =>
+              (version.fileIds || []).includes(file.id) || version.originalFileId === file.id));
+          if (usedByReport) return { storedName: "", deleted: false };
           store.files = store.files.filter(item => item.id !== file.id);
-          return file.storedName;
+          return { storedName: file.storedName, deleted: true };
         });
-        if (storedName && deleteUpload) await deleteUpload("maintenance", storedName).catch(error => console.error("Maintenance upload cleanup:", error));
-        return send(res, 200, { ok: true });
+        if (removal.storedName && deleteUpload) await deleteUpload("maintenance", removal.storedName).catch(error => console.error("Maintenance upload cleanup:", error));
+        return send(res, 200, { ok: true, deleted: removal.deleted });
       }
       if (parts[0] === "work-orders" && parts[2] === "extract" && req.method === "POST") {
         const job = assignedJob(auth.state, technicianId, parts[1]);
