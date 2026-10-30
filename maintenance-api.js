@@ -1604,10 +1604,6 @@ function createMaintenanceApi(deps) {
         res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": secureCookie(req, token), "Cache-Control": "no-store" });
         return res.end(JSON.stringify({ technician: { id: technician.id, name: technician.name, code: technician.code } }));
       }
-      if (parts[0] === "logout" && req.method === "POST") {
-        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Set-Cookie": secureCookie(req, "", 0), "Cache-Control": "no-store" });
-        return res.end(JSON.stringify({ ok: true }));
-      }
       const auth = await fieldUser(req);
       if (!auth) fail("Technician access expired. Request a new link from the office.", 401);
       if (auth.expiresAt - Date.now() <= FIELD_SESSION_RENEW_MS) {

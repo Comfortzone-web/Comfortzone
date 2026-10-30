@@ -1629,7 +1629,7 @@
     const button = event.target.closest("[data-action]");
     if (!button) { if (state.amcMenuId || state.pmMenuId || state.workOrderMenuId || state.workOrderDetailMenu || state.technicianMoreMenu || state.reportMoreMenu) { state.amcMenuId = ""; state.pmMenuId = ""; state.workOrderMenuId = ""; state.workOrderDetailMenu = false; state.technicianMoreMenu = false; state.reportMoreMenu = false; render(); } return; }
     const action = button.dataset.action, id = button.dataset.id || "";
-    if (action === "customer-pick") { chooseCustomer(button); return; }
+    if (action === "customer-pick") { event.preventDefault(); event.stopPropagation(); chooseCustomer(button); return; }
     if (action === "report-customer-choice") {
       const chosen = contract(button.dataset.id);
       if (!chosen) return;

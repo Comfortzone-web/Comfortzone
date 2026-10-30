@@ -71,8 +71,7 @@
 
   function header(title, back = false) {
     return `<header class="field-header"><div>${back ? `<button class="field-back" data-action="home" aria-label="Back to jobs">&#8592;</button>` : `<img src="/field/icon-512.png?v=20261023-logo" alt="">`}
-      <span><strong>${esc(title)}</strong><small>${esc(state.technician?.name || "Comfort Zone AC")}</small></span></div>
-      <button class="field-header-menu" data-action="logout" title="Sign out" aria-label="Sign out">Sign out</button></header>`;
+      <span><strong>${esc(title)}</strong><small>${esc(state.technician?.name || "Comfort Zone AC")}</small></span></div></header>`;
   }
 
   const badge = status => `<span class="field-badge ${String(status || "").toLowerCase().replace(/[^a-z]+/g, "-")}">${esc(status || "--")}</span>`;
@@ -352,7 +351,6 @@
         else { state.screen = "home"; const url = new URL(location.href); url.searchParams.delete("workOrder"); history.replaceState({}, "", url.pathname + url.search); await load(); }
         return;
       }
-      if (action === "logout") { await api("/api/field/logout", { method: "POST", body: "{}" }); state.technician = null; root.innerHTML = accessScreen("Signed out. Ask the office for a new access link when needed."); return; }
       if (action === "open-job") return openJob(button.dataset.id);
       if (action === "upload-sr") { state.uploadSR = { fileId: "", fields: {}, message: "" }; state.error = ""; state.screen = "upload-sr"; return render(); }
       if (action === "submit-upload-sr") return submitStandaloneSR();

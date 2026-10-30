@@ -12,7 +12,7 @@ button:disabled { opacity: .5; cursor: default; }
 .field-header > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .field-header img { width: 44px; height: 44px; border-radius: 8px; background: #fff; object-fit: contain; }
 .field-header span { display: grid; min-width: 0; gap: 1px; }.field-header strong { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }.field-header small { color: #b8c9e3; font-size: 11px; }
-.field-header-menu, .field-back { border: 0; background: transparent; color: #dbeaff; padding: 8px; }.field-back { font-size: 25px; line-height: 1; }
+.field-back { border: 0; background: transparent; color: #dbeaff; padding: 8px; font-size: 25px; line-height: 1; }
 .field-main { width: min(100%, 720px); margin: auto; padding: 16px 16px calc(28px + env(safe-area-inset-bottom)); }
 .field-notice { padding: 11px 13px; margin-bottom: 12px; border-radius: 6px; font-size: 13px; line-height: 1.4; }.field-notice.success { background: #e2f8eb; color: #05693d; }.field-notice.error { background: #ffe6e9; color: #a9233e; }
 .field-welcome { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0 12px; }.field-welcome > div { min-width: 0; flex: 1; }.field-welcome span, .field-report-heading span { color: #516d98; font-size: 12px; }.field-welcome h1, .field-report-heading h1 { margin: 5px 0; font-size: 24px; line-height: 1.2; }.field-welcome p { margin: 0; color: var(--muted); }

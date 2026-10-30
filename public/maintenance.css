@@ -171,7 +171,8 @@
 .maint-report-customer-options button small { color: #637b9f; font-size: 10px; }
 .maint-report-customer-options button:hover, .maint-report-customer-options button.active, .maint-report-customer-options button:focus-visible { background: #eaf3ff; }
 .maint-new-customer-field[hidden], [data-new-customer-email][hidden] { display: none; }
-.maint-customer-picker { position: relative; }
+.maint-customer-picker { position: relative; z-index: 1; }
+.maint-customer-picker:focus-within, .maint-customer-picker:has(.maint-customer-options:not([hidden])) { z-index: 30; }
 .maint-customer-combo { position: relative; min-width: 0; }
 .maint-customer-options { position: absolute; z-index: 25; top: calc(100% + 4px); left: 0; right: 0; max-height: 235px; overflow-y: auto; overscroll-behavior: contain; background: #fff; border: 1px solid #cbd9e9; border-radius: 7px; box-shadow: 0 10px 25px rgba(8, 25, 54, .14); }
 .maint-customer-options[hidden], .maint-customer-options button[hidden] { display: none; }
