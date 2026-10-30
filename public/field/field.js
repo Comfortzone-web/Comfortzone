@@ -5,6 +5,8 @@
     uploadSR: null };
   let autoSaveTimer;
   let lastRenderKey = "";
+  let draftSaveQueue = Promise.resolve();
+  let lastNextTap = 0;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const date = value => value ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
   const today = () => {
@@ -36,8 +38,7 @@
   }
 
   async function load() {
-    const me = await api("/api/field/me");
-    const jobs = await api("/api/field/work-orders");
+    const [me, jobs] = await Promise.all([api("/api/field/me"), api("/api/field/work-orders")]);
     Object.assign(state, { technician: me.technician, notifications: me.notifications, checklistLabels: me.checklist,
       pushPublicKey: me.pushPublicKey, pushConfigured: me.pushConfigured, pushSubscribed: me.pushSubscribed, jobs, error: "" });
     const requested = new URL(location.href).searchParams.get("workOrder");
@@ -115,13 +116,16 @@
       <div class="field-report-footer"><button type="button" class="field-secondary" data-action="home">Cancel</button><button type="button" class="field-primary" data-action="submit-upload-sr" ${upload.fileId && !upload.submitting ? "" : "disabled"}>${upload.submitting ? "Submitting..." : "Submit Service Report"}</button></div></form></main>`;
   }
 
-  async function openJob(id) {
+  async function openJob(id, button) {
+    if (button?.disabled) return;
+    if (button) { button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = "Opening job..."; }
     try {
       state.job = await api(`/api/field/work-orders/${encodeURIComponent(id)}`);
       state.screen = "job";
       const url = new URL(location.href); url.searchParams.set("workOrder", id); history.replaceState({}, "", url.pathname + url.search);
       render();
     } catch (error) { alertMessage(error.message, true); }
+    finally { if (button?.isConnected) { button.disabled = false; button.removeAttribute("aria-busy"); button.innerHTML = 'View Job <span aria-hidden="true">&#8594;</span>'; } }
   }
 
   function jobDetails() {
@@ -148,6 +152,7 @@
 
   function beginReport(type) {
     const existing = state.job.draft || (["Revision", "Rejected"].includes(state.job.report?.status) ? state.job.report : null);
+    lastNextTap = 0;
     state.type = type;
     state.step = 0;
     state.signatureData = "";
@@ -282,11 +287,14 @@
     } catch (error) { upload.submitting = false; state.error = error.message; render(); }
   }
 
-  async function saveDraft() {
+  async function saveDraft(showNotice = true) {
     clearTimeout(autoSaveTimer);
     syncFields();
-    await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/draft`, { method: "PUT", body: JSON.stringify(state.draft) });
-    alertMessage("Draft saved");
+    const jobId = state.job.id;
+    const snapshot = JSON.stringify(state.draft);
+    draftSaveQueue = draftSaveQueue.catch(() => {}).then(() => api(`/api/field/work-orders/${encodeURIComponent(jobId)}/draft`, { method: "PUT", body: snapshot }));
+    await draftSaveQueue;
+    if (showNotice && state.job?.id === jobId && state.screen === "report") alertMessage("Draft saved");
   }
 
   async function submit() {
@@ -297,6 +305,7 @@
     const submitButton = root.querySelector('[data-action="submit-report"]');
     if (submitButton) { submitButton.disabled = true; submitButton.setAttribute("aria-busy", "true"); submitButton.textContent = "Submitting..."; }
     try {
+    await draftSaveQueue.catch(() => {});
     if (state.type === "Handwritten Upload" && !state.draft.originalFileId) throw new Error("Upload the original paper report first");
     if (state.type === "Digital Checklist") {
       if (!state.draft.details.customerName?.trim()) throw new Error("Enter the customer name");
@@ -348,21 +357,32 @@
     try {
       if (action === "home") {
         if (state.screen === "report") { syncFields(); await saveDraft(); state.screen = "job"; render(); }
-        else { state.screen = "home"; const url = new URL(location.href); url.searchParams.delete("workOrder"); history.replaceState({}, "", url.pathname + url.search); await load(); }
+        else { state.screen = "home"; const url = new URL(location.href); url.searchParams.delete("workOrder"); history.replaceState({}, "", url.pathname + url.search); render(); await load(); }
         return;
       }
-      if (action === "open-job") return openJob(button.dataset.id);
+      if (action === "open-job") return openJob(button.dataset.id, button);
       if (action === "upload-sr") { state.uploadSR = { fileId: "", fields: {}, message: "" }; state.error = ""; state.screen = "upload-sr"; return render(); }
       if (action === "submit-upload-sr") return submitStandaloneSR();
       if (action === "check-in" || action === "check-out") {
+        if (button.disabled) return;
+        button.disabled = true; button.setAttribute("aria-busy", "true"); button.textContent = action === "check-in" ? "Checking in..." : "Checking out...";
         await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/attendance`, { method: "POST", body: JSON.stringify({ action: action === "check-in" ? "checkIn" : "checkOut" }) });
         state.job = await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}`); state.message = action === "check-in" ? "Checked in" : "Checked out"; render(); return;
       }
       if (action === "digital" || action === "handwritten") return beginReport(action === "digital" ? "Digital Checklist" : "Handwritten Upload");
       if (action === "previous") { syncFields(); state.step -= 1; return render(); }
-      if (action === "next") { syncFields(); await saveDraft(); state.step += 1; return render(); }
-      if (action === "save-draft") return saveDraft();
+      if (action === "next") {
+        if (Date.now() - lastNextTap < 700) return;
+        lastNextTap = Date.now();
+        const saving = saveDraft();
+        state.step += 1; render();
+        saving.catch(error => alertMessage(`Draft could not be saved: ${error.message}`, true));
+        return;
+      }
+      if (action === "save-draft") { if (button.disabled) return; button.disabled = true; button.textContent = "Saving..."; try { await saveDraft(); } finally { if (button.isConnected) { button.disabled = false; button.textContent = "Save Draft"; } } return; }
       if (action === "remove-photo") {
+        if (button.disabled) return;
+        button.disabled = true; button.setAttribute("aria-busy", "true");
         await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/files/${encodeURIComponent(button.dataset.id)}`, { method: "DELETE" });
         state.draft.fileIds = state.draft.fileIds.filter(fileId => fileId !== button.dataset.id);
         state.job.files = state.job.files.filter(file => file.id !== button.dataset.id);
@@ -373,8 +393,8 @@
       if (action === "submit-report") return await submit();
       if (action === "clear-signature") { state.signatureData = ""; state.signatureDirty = false; state.draft.signatureFileId = ""; return setupSignatureClear(); }
       if (action === "enable-push") return enablePush();
-      if (action === "accept-notification") { await api(`/api/field/notifications/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: "{}" }); await load(); return; }
-    } catch (error) { alertMessage(error.message, true); }
+      if (action === "accept-notification") { if (button.disabled) return; button.disabled = true; button.textContent = "Accepting..."; await api(`/api/field/notifications/${encodeURIComponent(button.dataset.id)}/accept`, { method: "POST", body: "{}" }); await load(); return; }
+    } catch (error) { alertMessage(error.message, true); if (button.isConnected && button.disabled) { button.disabled = false; button.removeAttribute("aria-busy"); button.textContent = action === "check-in" ? "Check In" : action === "check-out" ? "Check Out" : action === "accept-notification" ? "Accept" : button.textContent; } }
   });
 
   function queueDraft() {
@@ -383,7 +403,7 @@
     autoSaveTimer = setTimeout(async () => {
       if (state.screen !== "report") return;
       syncFields();
-      try { await api(`/api/field/work-orders/${encodeURIComponent(state.job.id)}/draft`, { method: "PUT", body: JSON.stringify(state.draft) }); }
+      try { await saveDraft(false); }
       catch (error) { alertMessage(`Draft could not be saved: ${error.message}`, true); }
     }, 900);
   }
@@ -412,6 +432,8 @@
       const kind = input.dataset.upload;
       const files = [...input.files];
       if (!files.length) return;
+      input.disabled = true;
+      alertMessage(files.length > 1 ? `Uploading ${files.length} files...` : "Uploading file...");
       for (const file of files) {
         const saved = await uploadFile(file, kind);
         state.job.files.push(saved);
@@ -426,6 +448,7 @@
       }
       await saveDraft(); render();
     } catch (error) { alertMessage(error.message, true); }
+    finally { if (input.isConnected) input.disabled = false; }
   });
 
   init();
