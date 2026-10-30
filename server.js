@@ -4331,6 +4331,7 @@ async function handleApi(req, res) {
       uploadedDate: body.uploadedDate || todayISO(),
       supplierDnNo: body.supplierDnNo || "",
       projectName: body.projectName || "",
+      supplierName: body.supplierName || "",
       status: body.status || "Review Needed",
       lines: enrichSupplierLinesFromStock(inventory, body.lines || []),
       uploadId: body.uploadId || "",
@@ -4375,6 +4376,7 @@ async function handleApi(req, res) {
       uploadedDate: todayISO(),
       supplierDnNo: extracted.supplierDnNo || "",
       projectName: extracted.projectName || "",
+      supplierName: extracted.supplierName || "",
       status: "Review Needed",
       lines: enrichSupplierLinesFromStock(inventory, combineSupplierLines(extracted.lines || [])),
       uploadId,
@@ -6949,7 +6951,7 @@ async function extractSupplierDnWithOpenAI(filePart, uploadId, inventory = null)
   const modelListRule = stockModels
     ? `Known stock model numbers are: ${stockModels}. Compare every detected model against this list and output the exact known stock model spelling when it clearly matches.`
     : "";
-  const content = [{ type: "input_text", text: `Extract supplier delivery note data for AC unit stock only. Return JSON with supplierDnNo, projectName, lines [{modelNo, description, detectedQty, finalQty, status}]. Combine duplicate models. No prices. ${modelListRule} Be extra careful with Daikin model letter order: FXAQ is a valid family and must not be transposed as FXQA. If a model is unclear, keep the closest text you can read and mark it for review instead of inventing a model.` }];
+  const content = [{ type: "input_text", text: `Extract supplier delivery note data for AC unit stock only. Return JSON with supplierDnNo, projectName, supplierName, lines [{modelNo, description, detectedQty, finalQty, status}]. supplierName is the company issuing the delivery note, not the recipient or project name; use an empty string when unclear. Combine duplicate models. No prices. ${modelListRule} Be extra careful with Daikin model letter order: FXAQ is a valid family and must not be transposed as FXQA. If a model is unclear, keep the closest text you can read and mark it for review instead of inventing a model.` }];
   if (mime.includes("pdf")) content.push({ type: "input_file", filename: filePart.filename, file_data: `data:${mime};base64,${base64}` });
   else if (mime.startsWith("image/")) content.push({ type: "input_image", image_url: `data:${mime};base64,${base64}` });
   else return { supplierDnNo: "", projectName: "", lines: [], message: "Unsupported file type for OCR. Add rows manually." };
@@ -6980,6 +6982,7 @@ function supplierDnSchema() {
     properties: {
       supplierDnNo: { type: "string" },
       projectName: { type: "string" },
+      supplierName: { type: "string" },
       lines: {
         type: "array",
         items: {
@@ -6997,7 +7000,7 @@ function supplierDnSchema() {
       },
       message: { type: "string" }
     },
-    required: ["supplierDnNo", "projectName", "lines", "message"]
+    required: ["supplierDnNo", "projectName", "supplierName", "lines", "message"]
   };
 }
 

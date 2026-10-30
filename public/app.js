@@ -8796,7 +8796,7 @@ function dashboardStockOverviewRowsHtml() {
   return overviewStock.map(item => {
     const reservedQty = Number(item.reservedQty || 0);
     const freeStock = Number(item.freeStock ?? (Number(item.qty || 0) - reservedQty));
-    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description">${escapeHtml(item.description)}</span>` : ""}</td><td><button class="qty-link inventory-dashboard-qty ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><span class="inventory-dashboard-qty ${reservedQty > 0 ? "reserved" : "neutral"}">${reservedQty}</span></td><td><span class="inventory-dashboard-qty ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td></tr>`;
+    return `<tr><td><strong>${escapeHtml(item.modelNo)}</strong>${item.description ? `<span class="dashboard-model-description">${escapeHtml(item.description)}</span>` : ""}</td><td><span class="inventory-dashboard-qty ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}">${item.qty}</span></td><td><span class="inventory-dashboard-qty ${reservedQty > 0 ? "reserved" : "neutral"}">${reservedQty}</span></td><td><span class="inventory-dashboard-qty ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td></tr>`;
   }).join("") || `<tr><td colspan="4">${query ? "No matching models found." : "No stock yet."}</td></tr>`;
 }
 
@@ -8898,9 +8898,10 @@ function supplierDnMenuItems(dn) {
 function supplierVerificationHtml(dn) {
   return `
     <div class="form-grid">
-      <label>Uploaded Date<input type="date" data-supplier-field="uploadedDate" value="${nativeDateValue(dn.uploadedDate || "")}"></label>
-      <label>Supplier DN No.<input data-supplier-field="supplierDnNo" value="${escapeHtml(dn.supplierDnNo || "")}"></label>
+      <label>Date<input type="date" data-supplier-field="uploadedDate" value="${nativeDateValue(dn.uploadedDate || "")}"></label>
       <label>Project Name<input data-supplier-field="projectName" value="${escapeHtml(dn.projectName || "")}"></label>
+      <label>Supplier Name<input data-supplier-field="supplierName" value="${escapeHtml(dn.supplierName || "")}"></label>
+      <label>Supplier DN No.<input data-supplier-field="supplierDnNo" value="${escapeHtml(dn.supplierDnNo || "")}"></label>
     </div>
     ${dn.duplicateWarning ? `<p class="pill orange">Duplicate Supplier DN No. warning</p>` : ""}
     <datalist id="supplierModelList">${(inventoryState.dashboard?.stock || inventoryState.models || []).map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || "")}</option>`).join("")}</datalist>
@@ -9037,6 +9038,20 @@ function deliveryReservationRows(stockItem) {
   return rows;
 }
 
+function reservationPopoverHtml(stockItem) {
+  const rows = deliveryReservationRows(stockItem);
+  return `
+    <div class="delivery-reservation-heading">
+      <span class="delivery-reservation-lock"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>
+      <div><strong>Reserved Quantity (${Number(stockItem.reservedQty || 0)})</strong><p>This quantity is reserved for the following customer(s) and project(s).</p></div>
+      <button type="button" data-close-reservation-popover aria-label="Close reservation details" title="Close"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
+    </div>
+    <div class="delivery-reservation-list"><table><thead><tr><th>#</th><th>Customer Name</th><th>Project Name</th><th>Qty</th></tr></thead><tbody>
+      ${rows.map((entry, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(entry.customerName || "Unassigned")}</td><td>${escapeHtml(entry.projectName || "Manual reservation")}</td><td>${entry.qty}</td></tr>`).join("")}
+    </tbody><tfoot><tr><td colspan="3">Total Reserved</td><td>${Number(stockItem.reservedQty || 0)}</td></tr></tfoot></table></div>
+  `;
+}
+
 function deliveryAllowedQty(stockItem, customerName, noteId = "") {
   if (!stockItem) return 0;
   const existing = (inventoryState?.deliveryNotes || []).find(note => note.id === noteId && ["ISSUED", "DELIVERED"].includes(norm(note.status)));
@@ -9171,22 +9186,12 @@ function showDeliveryReservationPopover(lineIndex, trigger) {
   const stockItem = deliveryStockItem(deliveryDraft?.lines?.[lineIndex]?.modelNo);
   if (!modal || !stockItem) return;
   modal.querySelector(".delivery-reservation-popover")?.remove();
-  const rows = deliveryReservationRows(stockItem);
   const popover = document.createElement("div");
   popover.className = "delivery-reservation-popover";
   popover.dataset.deliveryReservationLine = String(lineIndex);
   popover.setAttribute("role", "dialog");
   popover.setAttribute("aria-label", `Reservations for ${stockItem.modelNo}`);
-  popover.innerHTML = `
-    <div class="delivery-reservation-heading">
-      <span class="delivery-reservation-lock"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>
-      <div><strong>Reserved Quantity (${Number(stockItem.reservedQty || 0)})</strong><p>This quantity is reserved for the following customer(s) and project(s).</p></div>
-      <button type="button" data-close-reservation-popover aria-label="Close reservation details" title="Close"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
-    </div>
-    <div class="delivery-reservation-list"><table><thead><tr><th>#</th><th>Customer Name</th><th>Project Name</th><th>Qty</th></tr></thead><tbody>
-      ${rows.map((entry, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(entry.customerName || "Unassigned")}</td><td>${escapeHtml(entry.projectName || "Manual reservation")}</td><td>${entry.qty}</td></tr>`).join("")}
-    </tbody><tfoot><tr><td colspan="3">Total Reserved</td><td>${Number(stockItem.reservedQty || 0)}</td></tr></tfoot></table></div>
-  `;
+  popover.innerHTML = reservationPopoverHtml(stockItem);
   modal.appendChild(popover);
   const anchor = trigger.getBoundingClientRect();
   const width = popover.offsetWidth;
@@ -9298,7 +9303,7 @@ function stockViewHtml() {
             { label: "Return", action: "return-stock-model", id: item.modelNo },
             { label: "Delete", action: "delete-stock-model", id: item.modelNo, danger: true }
           ];
-          return `<tr><td class="stock-row-number"></td><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button class="qty-link stock-qty-tag ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}" data-stock-model="${escapeHtml(item.modelNo)}">${item.qty}</button></td><td><span class="stock-qty-tag ${reservedQty > 0 ? "reserved" : "neutral"}">${reservedQty}</span></td><td><span class="stock-qty-tag ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td>${canManageStock ? `<td>${rowMenu(actions)}</td>` : ""}</tr>`;
+          return `<tr><td class="stock-row-number"></td><td><strong>${escapeHtml(item.modelNo)}</strong></td><td class="stock-description-cell">${escapeHtml(item.description)}</td><td><button type="button" class="stock-qty-tag stock-qty-trigger ${Number(item.qty || 0) > 0 ? "positive" : "neutral"}" data-stock-model="${escapeHtml(item.modelNo)}" aria-label="View stock details for ${escapeHtml(item.modelNo)}">${item.qty}</button></td><td>${reservedQty > 0 ? `<button type="button" class="stock-qty-tag stock-reserved-trigger reserved" data-stock-reservation-model="${escapeHtml(item.modelNo)}" aria-label="View reservations for ${escapeHtml(item.modelNo)}">${reservedQty}</button>` : `<span class="stock-qty-tag neutral">0</span>`}</td><td><span class="stock-qty-tag ${freeStock > 0 ? "positive" : "empty"}">${freeStock}</span></td>${canManageStock ? `<td>${rowMenu(actions)}</td>` : ""}</tr>`;
         }).join("") || `<tr><td colspan="${canManageStock ? 7 : 6}">No models yet.</td></tr>`}
       </tbody></table></div>
       <div class="stock-table-footer"><span data-stock-count>Showing ${stock.length ? 1 : 0} to ${stock.length} of ${stock.length} models</span></div>
@@ -9417,7 +9422,8 @@ function handleInventoryClick(event) {
   }
   if (target.dataset.menuAction) return handleInventoryMenuAction(target.dataset.menuAction, target.dataset.menuId);
   if (target.dataset.goInventory) return showInventory(target.dataset.goInventory);
-  if (target.dataset.stockModel) return openStockPopup(target.dataset.stockModel);
+  if (target.dataset.stockModel) return openStockDetailsPopup(target, target.dataset.stockModel);
+  if (target.dataset.stockReservationModel) return showStockReservationPopover(target, target.dataset.stockReservationModel);
   if (target.dataset.supplierPage) {
     supplierAllPage = Number(target.dataset.supplierPage);
     return renderInventory();
@@ -10748,14 +10754,114 @@ async function downloadDeliveryPdf(note) {
   }
 }
 
-function openStockPopup(modelNo) {
-  const stock = inventoryState.dashboard.stock.find(item => norm(item.modelNo) === norm(modelNo));
-  const lots = inventoryState.dashboard.lots.filter(lot => norm(lot.modelNo) === norm(modelNo));
-  const modal = document.createElement("div");
-  modal.className = "modal-backdrop";
-  modal.innerHTML = `<div class="modal"><div class="inventory-topbar"><div><h2>Stock Details - ${escapeHtml(stock.modelNo)}</h2><p>${escapeHtml(stock.description)}</p></div><button class="mini-button" data-close-modal>Close</button></div><p><strong>Total Available Qty</strong> <span class="qty-link">${stock.qty}</span></p><table class="inventory-table"><thead><tr><th>Received Date</th><th>Project Name</th><th>Supplier DN No.</th><th>Received Qty</th><th>Delivered Qty</th><th>Available Qty</th></tr></thead><tbody>${lots.map(lot => `<tr><td>${formatInventoryDate(lot.date)}</td><td>${escapeHtml(lot.projectName)}</td><td>${escapeHtml(lot.supplierDnNo)}</td><td>${lot.receivedQty}</td><td>${lot.deliveredQty}</td><td>${lot.availableQty}</td></tr>`).join("") || `<tr><td colspan="6">No receipt breakdown.</td></tr>`}</tbody></table></div>`;
-  document.body.appendChild(modal);
-  modal.querySelector("[data-close-modal]").addEventListener("click", () => modal.remove());
+function showStockReservationPopover(anchor, modelNo) {
+  const existing = document.querySelector("[data-stock-reservation-popup]");
+  existing?.querySelector("[data-close-reservation-popover]")?.click();
+  if (existing?.dataset.modelNo === modelNo) return;
+  const stockItem = deliveryStockItem(modelNo);
+  if (!stockItem || Number(stockItem.reservedQty || 0) <= 0) return;
+  const popover = document.createElement("div");
+  popover.className = "delivery-reservation-popover stock-reservation-popover";
+  popover.dataset.stockReservationPopup = "";
+  popover.dataset.modelNo = modelNo;
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `Reservations for ${modelNo}`);
+  popover.innerHTML = reservationPopoverHtml(stockItem);
+  document.body.appendChild(popover);
+  const position = event => {
+    if (event?.target && popover.contains(event.target)) return;
+    if (!anchor.isConnected) return close();
+    const rect = anchor.getBoundingClientRect();
+    const width = popover.offsetWidth;
+    const height = popover.offsetHeight;
+    const below = rect.top - height - 12 < 12;
+    const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2));
+    popover.classList.toggle("delivery-reservation-below", below);
+    popover.style.left = `${left}px`;
+    popover.style.top = `${Math.max(12, Math.min(window.innerHeight - height - 12, below ? rect.bottom + 12 : rect.top - height - 12))}px`;
+    popover.style.setProperty("--stock-reserved-arrow-x", `${Math.max(16, Math.min(width - 16, rect.left + rect.width / 2 - left))}px`);
+  };
+  const onOutside = event => { if (!popover.contains(event.target) && !anchor.contains(event.target)) close(); };
+  const onKey = event => { if (event.key === "Escape") close(); };
+  const close = () => {
+    popover.remove();
+    document.removeEventListener("pointerdown", onOutside, true);
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("scroll", position, true);
+    window.removeEventListener("resize", position);
+  };
+  popover.querySelector("[data-close-reservation-popover]").addEventListener("click", close);
+  document.addEventListener("pointerdown", onOutside, true);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("scroll", position, true);
+  window.addEventListener("resize", position);
+  position();
+}
+
+function openStockDetailsPopup(anchor, modelNo) {
+  const existing = document.querySelector("[data-stock-details-popup]");
+  existing?.querySelector(".stock-popup-close")?.click();
+  if (existing?.dataset.modelNo === modelNo) return;
+  const stock = (inventoryState.dashboard?.stock || []).find(item => norm(item.modelNo) === norm(modelNo));
+  if (!stock) return;
+  const lots = (inventoryState.dashboard?.lots || [])
+    .filter(lot => norm(lot.modelNo) === norm(modelNo))
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const popup = document.createElement("section");
+  popup.className = "stock-details-popup";
+  popup.dataset.stockDetailsPopup = "";
+  popup.dataset.modelNo = modelNo;
+  popup.setAttribute("role", "dialog");
+  popup.setAttribute("aria-label", `Stock details for ${modelNo}`);
+  popup.innerHTML = `
+    <div class="stock-popup-header">
+      <span class="stock-popup-icon"><img src="/assets/package.svg" alt=""></span>
+      <div class="stock-popup-heading"><h3>Stock Details</h3><p>${escapeHtml(stock.modelNo)}${stock.description ? ` · ${escapeHtml(stock.description)}` : ""}</p></div>
+      <button type="button" class="stock-popup-close" aria-label="Close stock details"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
+    </div>
+    <div class="stock-popup-table-wrap"><table class="stock-popup-table"><thead><tr><th>Received Date</th><th>Source</th><th>Received Qty</th><th>Delivered Qty</th><th>Available Qty</th></tr></thead><tbody>
+      ${lots.map(lot => {
+        const source = lot.isManualAdjustment ? "Manual Stock Entry" : lot.isReturn ? "Stock Return" : lot.supplierDnNo || "Supplier Delivery";
+        return `<tr><td>${escapeHtml(formatInventoryDate(lot.date))}</td><td><strong>${escapeHtml(source)}</strong>${!lot.isManualAdjustment && lot.projectName ? `<small>${escapeHtml(lot.projectName)}</small>` : ""}</td><td>${Number(lot.receivedQty || 0)}</td><td>${Number(lot.deliveredQty || 0)}</td><td class="stock-popup-available">${Number(lot.availableQty || 0)}</td></tr>`;
+      }).join("") || `<tr><td colspan="5" class="stock-popup-empty">No receipt history for this model.</td></tr>`}
+    </tbody></table></div>
+    <div class="stock-popup-total"><span>Total Available</span><strong>${Number(stock.qty || 0)}</strong></div>
+  `;
+  document.body.appendChild(popup);
+  const position = () => {
+    if (!popup.isConnected || !anchor.isConnected) return close();
+    const rect = anchor.getBoundingClientRect();
+    const margin = 12;
+    const width = popup.offsetWidth;
+    const left = Math.max(margin, Math.min(rect.left + rect.width / 2 - width / 2, window.innerWidth - width - margin));
+    const tableWrap = popup.querySelector(".stock-popup-table-wrap");
+    tableWrap.style.maxHeight = "";
+    const availableBelow = window.innerHeight - rect.bottom - margin - 12;
+    const availableAbove = rect.top - margin - 12;
+    const placeBelow = popup.offsetHeight <= availableBelow || (popup.offsetHeight > availableAbove && availableBelow >= availableAbove);
+    const available = placeBelow ? availableBelow : availableAbove;
+    const fixedHeight = popup.offsetHeight - tableWrap.offsetHeight;
+    tableWrap.style.maxHeight = `${Math.max(40, Math.min(340, available - fixedHeight))}px`;
+    popup.style.left = `${left}px`;
+    popup.style.top = `${Math.max(margin, Math.min(window.innerHeight - popup.offsetHeight - margin, placeBelow ? rect.bottom + 12 : rect.top - popup.offsetHeight - 12))}px`;
+    popup.classList.toggle("stock-popup-above", !placeBelow);
+    popup.style.setProperty("--stock-popup-arrow-x", `${Math.max(16, Math.min(width - 16, rect.left + rect.width / 2 - left))}px`);
+  };
+  const onOutside = event => { if (!popup.contains(event.target) && !anchor.contains(event.target)) close(); };
+  const onKey = event => { if (event.key === "Escape") close(); };
+  const close = () => {
+    popup.remove();
+    document.removeEventListener("pointerdown", onOutside, true);
+    document.removeEventListener("keydown", onKey);
+    document.removeEventListener("scroll", position, true);
+    window.removeEventListener("resize", position);
+  };
+  popup.querySelector(".stock-popup-close").addEventListener("click", close);
+  document.addEventListener("pointerdown", onOutside, true);
+  document.addEventListener("keydown", onKey);
+  document.addEventListener("scroll", position, true);
+  window.addEventListener("resize", position);
+  position();
 }
 
 function findStockModelInfo(modelNo) {
