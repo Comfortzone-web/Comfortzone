@@ -351,9 +351,9 @@
     } catch (error) { upload.submitting = false; state.error = error.message; render(); }
   }
 
-  async function saveDraft(showNotice = true) {
+  async function saveDraft(showNotice = true, syncFromForm = true) {
     clearTimeout(autoSaveTimer);
-    syncFields();
+    if (syncFromForm) syncFields();
     const jobId = state.job.id;
     const snapshot = JSON.stringify(state.draft);
     draftSaveQueue = draftSaveQueue.catch(() => {}).then(() => api(`/api/field/work-orders/${encodeURIComponent(jobId)}/draft`, { method: "PUT", body: snapshot }));
@@ -506,6 +506,7 @@
         const saved = await uploadFile(file, kind);
         state.job.files.push(saved);
         if (kind === "original") {
+          syncFields();
           state.draft.originalFileId = saved.id;
           state.draft.fileIds = state.draft.fileIds.filter(id => state.job.files.find(item => item.id === id)?.kind !== "original");
           state.draft.fileIds.push(saved.id);
@@ -515,7 +516,7 @@
           state.message = extracted.message;
         } else state.draft.fileIds.push(saved.id);
       }
-      await saveDraft(); render();
+      await saveDraft(kind !== "original", kind !== "original"); render();
     } catch (error) { alertMessage(error.message, true); }
     finally { hideUploadAlert(); if (input.isConnected) input.disabled = false; }
   });
