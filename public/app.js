@@ -8739,8 +8739,15 @@ function inventoryDashboardHtml() {
   const d = inventoryState.dashboard;
   const totalReservedQty = (d.stock || []).reduce((sum, item) => sum + Number(item.reservedQty || 0), 0);
   const totalFreeStock = (d.stock || []).reduce((sum, item) => sum + Number(item.freeStock ?? (Number(item.qty || 0) - Number(item.reservedQty || 0))), 0);
-  const recentIn = dashboardRecentTransactions(d.recentIn || [], "in");
-  const recentOut = dashboardRecentTransactions(d.recentOut || [], "out");
+  const movements = d.movements || [...(d.recentIn || []), ...(d.recentOut || [])];
+  const recentActivity = [
+    ...dashboardRecentTransactions(movements.filter(item => Number(item.quantity || 0) > 0), "in").map(item => ({ ...item, direction: "in" })),
+    ...dashboardRecentTransactions(movements.filter(item => Number(item.quantity || 0) < 0), "out").map(item => ({ ...item, direction: "out" }))
+  ].sort((a, b) => {
+    const dateA = Date.parse(parseInventoryDate(a.date) || "") || 0;
+    const dateB = Date.parse(parseInventoryDate(b.date) || "") || 0;
+    return dateB - dateA || (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0);
+  }).slice(0, 5);
   return `
     <div class="inventory-dashboard">
     <div class="inventory-topbar">
@@ -8761,8 +8768,7 @@ function inventoryDashboardHtml() {
         </tbody></table>
       </section>
       <div class="inventory-dashboard-activity">
-        <section class="inventory-card inventory-dashboard-timeline inventory-dashboard-in"><div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon green"><img src="/assets/arrow-down-to-line.svg" alt=""></span><h3>Recent Stock In</h3></div><div class="inventory-activity-list">${recentIn.map(item => dashboardRecentTransactionHtml(item, "in")).join("") || `<p class="inventory-muted inventory-activity-empty">No stock in yet.</p>`}</div></section>
-        <section class="inventory-card inventory-dashboard-timeline inventory-dashboard-out"><div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon red"><img src="/assets/arrow-up-from-line.svg" alt=""></span><h3>Recent Stock Out</h3></div><div class="inventory-activity-list">${recentOut.map(item => dashboardRecentTransactionHtml(item, "out")).join("") || `<p class="inventory-muted inventory-activity-empty">No stock out yet.</p>`}</div></section>
+        <section class="inventory-card inventory-dashboard-timeline"><div class="inventory-dashboard-section-title"><span class="inventory-dashboard-heading-icon blue"><img src="/assets/chart-no-axes-column.svg" alt=""></span><h3>Recent Stock Activity</h3></div><div class="inventory-activity-list">${recentActivity.map(item => dashboardRecentTransactionHtml(item, item.direction)).join("") || `<p class="inventory-muted inventory-activity-empty">No stock activity yet.</p>`}</div></section>
       </div>
     </div>
     </div>
@@ -8790,6 +8796,7 @@ function dashboardRecentTransactions(movements, direction) {
     return {
       referenceNo: recordReference(record || {}) || referenceNo,
       date: record ? recordDate(record) || movement.date : movement.date,
+      createdAt: record?.createdAt || movement.createdAt || "",
       customerName: direction === "out" ? record?.customerName || "" : "",
       lines: lines.length ? lines : [{ modelNo: movement.modelNo || "", qty: Math.abs(Number(movement.quantity || 0)) }]
     };
@@ -8797,7 +8804,7 @@ function dashboardRecentTransactions(movements, direction) {
 }
 
 function dashboardRecentTransactionHtml(item, direction) {
-  return `<article class="inventory-activity-item"><div class="inventory-activity-meta"><strong>${escapeHtml(item.referenceNo || (direction === "in" ? "Stock In" : "Delivery Note"))}</strong><time>${escapeHtml(formatInventoryDate(item.date))}</time></div>${item.customerName ? `<div class="inventory-activity-customer">${escapeHtml(item.customerName)}</div>` : ""}<div class="inventory-activity-models">${item.lines.map(line => `<div class="inventory-activity-model"><span>${escapeHtml(line.modelNo)}</span><b>${line.qty} pcs</b></div>`).join("")}</div></article>`;
+  return `<article class="inventory-activity-item stock-${direction}"><div class="inventory-activity-meta"><div class="inventory-activity-identity"><span class="inventory-activity-type">Stock ${direction === "in" ? "In" : "Out"}</span><strong>${escapeHtml(item.referenceNo || (direction === "in" ? "Stock In" : "Delivery Note"))}</strong></div><time>${escapeHtml(formatInventoryDate(item.date))}</time></div>${item.customerName ? `<div class="inventory-activity-customer">${escapeHtml(item.customerName)}</div>` : ""}<div class="inventory-activity-models">${item.lines.map(line => `<div class="inventory-activity-model"><span>${escapeHtml(line.modelNo)}</span><b>${line.qty} pcs</b></div>`).join("")}</div></article>`;
 }
 
 function dashboardStockOverviewRowsHtml() {

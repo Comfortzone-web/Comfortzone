@@ -5452,7 +5452,7 @@ td[contenteditable="true"]:focus {
 .inventory-dashboard-layout > * { min-width: 0; }
 .inventory-card.inventory-dashboard-overview,
 .inventory-card.inventory-dashboard-timeline { margin: 0; padding: 14px; border-color: #dce8f7; border-radius: 11px; box-shadow: 0 6px 18px rgba(19, 53, 97, .05); }
-.inventory-dashboard-activity { display: grid; gap: 14px; }
+.inventory-dashboard-activity { min-width: 0; }
 .inventory-dashboard-section-title { display: flex; align-items: center; gap: 9px; min-height: 34px; margin-bottom: 12px; }
 .inventory-dashboard-section-title h3 { margin: 0; color: #10264e; font-size: 16px; font-weight: 700; line-height: 1.2; }
 .inventory-dashboard-heading-icon { display: grid; width: 30px; height: 30px; flex: 0 0 30px; place-items: center; border-radius: 8px; }
@@ -5480,13 +5480,15 @@ td[contenteditable="true"]:focus {
 .inventory-dashboard-qty.reserved { background: #fff0db; color: #a86000; }
 .inventory-dashboard-qty.empty { background: #ffe4e7; color: #bd2434; }
 
-.inventory-activity-list { display: grid; gap: 7px; margin-left: 12px; padding-left: 16px; border-left: 2px solid #d4e9dd; }
-.inventory-dashboard-out .inventory-activity-list { border-left-color: #f4d8dc; }
+.inventory-activity-list { display: grid; gap: 7px; margin-left: 12px; padding-left: 16px; border-left: 2px solid #dce6f2; }
 .inventory-activity-item { position: relative; min-width: 0; padding: 9px 10px; border: 1px solid #d8ecdf; border-radius: 8px; background: #f6fcf8; }
 .inventory-activity-item::before { content: ""; position: absolute; left: -22px; top: 15px; width: 9px; height: 9px; border: 3px solid #e8f8ef; border-radius: 50%; background: #149e58; }
-.inventory-dashboard-out .inventory-activity-item { border-color: #f6dde1; background: #fff8f9; }
-.inventory-dashboard-out .inventory-activity-item::before { border-color: #ffeaed; background: #df3448; }
+.inventory-activity-item.stock-out { border-color: #f6dde1; background: #fff8f9; }
+.inventory-activity-item.stock-out::before { border-color: #ffeaed; background: #df3448; }
 .inventory-activity-meta { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.inventory-activity-identity { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 8px; min-width: 0; }
+.inventory-activity-type { flex: none; padding: 3px 6px; border-radius: 5px; background: #e0f5e9; color: #087d46; font-size: 10px; font-weight: 700; }
+.stock-out .inventory-activity-type { background: #ffe3e6; color: #c6283b; }
 .inventory-activity-meta strong { min-width: 0; color: #102b56; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
 .inventory-activity-meta time { flex: 0 0 auto; color: #7489a6; font-size: 11px; white-space: nowrap; }
 .inventory-activity-customer { margin-top: 5px; color: #bd3546; font-size: 12px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
@@ -5494,18 +5496,16 @@ td[contenteditable="true"]:focus {
 .inventory-activity-model { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; color: #415d7c; font-size: 11px; }
 .inventory-activity-model span { min-width: 0; overflow-wrap: anywhere; }
 .inventory-activity-model b { flex: 0 0 auto; min-width: 48px; padding: 3px 6px; border-radius: 5px; background: #dff5e7; color: #087d46; font-size: 11px; font-weight: 700; text-align: center; white-space: nowrap; }
-.inventory-dashboard-out .inventory-activity-model b { background: #ffe3e6; color: #c6283b; }
+.stock-out .inventory-activity-model b { background: #ffe3e6; color: #c6283b; }
 .inventory-activity-empty { margin: 0; }
 
 @media (max-width: 1100px) {
   .inventory-dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .inventory-dashboard-layout { grid-template-columns: minmax(0, 1fr); }
-  .inventory-dashboard-activity { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (max-width: 640px) {
-  .inventory-dashboard-kpis,
-  .inventory-dashboard-activity { grid-template-columns: minmax(0, 1fr); }
+  .inventory-dashboard-kpis { grid-template-columns: minmax(0, 1fr); }
   .inventory-card.inventory-dashboard-overview,
   .inventory-card.inventory-dashboard-timeline { padding: 10px; }
   .inventory-dashboard .dashboard-stock-table th,
