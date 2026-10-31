@@ -362,6 +362,21 @@ async function init() {
 }
 
 function bindShell() {
+  const setMobileNavOpen = open => {
+    document.body.classList.toggle("mobile-nav-open", open);
+    $("#mobileNavToggle").setAttribute("aria-expanded", String(open));
+  };
+  $("#mobileNavToggle").addEventListener("click", () => setMobileNavOpen(!document.body.classList.contains("mobile-nav-open")));
+  $("#mobileNavClose").addEventListener("click", () => setMobileNavOpen(false));
+  $("#mobileNavBackdrop").addEventListener("click", () => setMobileNavOpen(false));
+  $("#appSidebar").addEventListener("click", event => {
+    const button = event.target.closest("button");
+    if (button && !button.classList.contains("locked-nav") && !["salesDeskBtn", "newProjectBtn", "inventoryBtn", "maintenanceBtn"].includes(button.id)) setMobileNavOpen(false);
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && document.body.classList.contains("mobile-nav-open")) setMobileNavOpen(false);
+  });
+  window.matchMedia("(min-width: 901px)").addEventListener("change", event => { if (event.matches) setMobileNavOpen(false); });
   $("#newProjectBtn").addEventListener("click", () => {
     if (!canAccessModule("workflow")) return showLockedModuleToast();
     if (toggleActiveSidebarGroup("workflow")) return;
@@ -1284,7 +1299,7 @@ function settingsAttachmentsCard() {
         <div><h2>Attachments</h2><p class="inventory-muted">Upload templates, certificates, letterheads, and company files.</p></div>
         <label class="primary-button settings-upload-button">Attach File<input type="file" data-settings-upload-file></label>
       </div>
-      <table class="inventory-table">
+      <table class="inventory-table settings-attachments-table">
         <thead><tr><th>File</th><th>Type</th><th>Size</th><th>Uploaded</th><th>Action</th></tr></thead>
         <tbody>${attachments.map(file => `
           <tr>
@@ -1313,7 +1328,7 @@ function settingsUsersCard() {
           <button class="primary-button" data-add-settings-user>Add User</button>
         </div>
       </div>
-      <table class="inventory-table">
+      <table class="inventory-table settings-users-table">
         <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>${users.map(user => `
           <tr>
@@ -3727,7 +3742,7 @@ function salesQuotationListHtml() {
           ${salesQuotationTabButton("draft", "Draft")}
           ${salesQuotationTabButton("sent", "Sent")}
         </div>
-        <table class="sales-table quotation-table">
+        <table class="sales-table quotation-table sales-quotation-table">
         <thead><tr><th>Quotation No</th><th>Customer</th><th>Project</th><th>Amount</th><th>Status</th><th>Sales Person</th><th>Actions</th></tr></thead>
         <tbody>${rows.map(quote => `
           <tr>
@@ -6496,10 +6511,12 @@ function setCanvasActionsVisible(visible) {
 function renderViewActions() {
   const actions = $("#viewActions");
   if (!actions) return;
+  document.querySelector(".topbar")?.classList.toggle("purchase-shell", activeView === "purchaseOrders");
   const salesTopbar = salesDeskTopbarConfig();
   const inventoryTopbar = inventoryTopbarConfig();
   document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar || activeView === "areaCalculation");
   document.querySelector(".topbar")?.classList.toggle("inventory-shell", !!inventoryTopbar);
+  document.querySelector(".topbar")?.classList.toggle("inventory-customer-shell", activeView === "inventory" && inventoryScreen === "customers");
   document.querySelector(".topbar")?.classList.toggle("stock-shell", !!inventoryTopbar && inventoryScreen === "stock");
   document.querySelector(".topbar")?.classList.toggle("inventory-dashboard-shell", !!inventoryTopbar && inventoryScreen === "dashboard");
   actions.classList.add("hidden");
@@ -7058,7 +7075,7 @@ function purchaseSupplierListHtml() {
           ${isStaffUser() ? "" : `<button class="primary-button" id="poAddSupplierBtn">Create New Supplier</button>`}
         </div>
       </div>
-      <table class="inventory-table">
+      <table class="inventory-table po-supplier-table">
         <thead><tr><th>Supplier Name</th><th>TRN</th><th>Contact</th><th>Email</th><th>Payment Terms</th><th>Action</th></tr></thead>
         <tbody>
           ${suppliers.map(supplier => `<tr><td><strong>${escapeHtml(supplier.supplierName)}</strong><br><span class="inventory-muted">${escapeHtml(supplier.address || "")}</span></td><td>${escapeHtml(supplier.trn || "")}</td><td>${escapeHtml(supplier.contactPerson || "")}<br><span class="inventory-muted">${escapeHtml(supplier.phone || "")}</span></td><td>${escapeHtml(supplier.email || "")}</td><td>${escapeHtml(supplier.paymentTerms || "")}</td><td>${isStaffUser() ? "" : rowMenu([{label:"Edit",action:"edit-po-supplier",id:supplier.id},{label:"Delete",action:"delete-po-supplier",id:supplier.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No suppliers added.</td></tr>`}
@@ -9016,7 +9033,7 @@ function customerListViewHtml() {
       <div class="inventory-title"><h2>Customer List</h2><p>Manage customers used in outbound Delivery Notes.</p></div>
     </div>
     <div class="inventory-card">
-      <table class="inventory-table"><thead><tr><th>Customer Name</th><th>Contact Person</th><th>Phone</th><th>Email</th><th>Default Delivery Location</th><th>Action</th></tr></thead><tbody>
+      <table class="inventory-table inventory-customer-table"><thead><tr><th>Customer Name</th><th>Contact Person</th><th>Phone</th><th>Email</th><th>Default Delivery Location</th><th>Action</th></tr></thead><tbody>
         ${customers.map(customer => `<tr><td><strong>${escapeHtml(customer.customerName)}</strong></td><td>${escapeHtml(customer.contactPerson || "")}</td><td>${escapeHtml(customer.phone || "")}</td><td>${escapeHtml(customer.email || "")}</td><td>${escapeHtml(customer.defaultDeliveryLocation || "")}</td><td>${rowMenu([{label:"Edit",action:"edit-customer",id:customer.id},{label:"Delete",action:"delete-customer",id:customer.id,danger:true}])}</td></tr>`).join("") || `<tr><td colspan="6">No customers added.</td></tr>`}
       </tbody></table>
     </div>
@@ -13241,7 +13258,7 @@ function costingRowHtml(row, index) {
     <td><input type="number" min="0" step="0.01" data-costing-field="increasedFinalPrice" value="${costingNumber(row.increasedFinalPrice).toFixed(2)}" /></td>
     <td><input type="number" min="0" step="0.01" data-costing-field="sellingPrice" value="${costingNumber(row.sellingPrice).toFixed(2)}" /></td>
     <td class="costing-amount">${costingMoney(amount)}</td><td class="costing-margin">${margin.toFixed(1)}%</td>
-    <td><button class="costing-history-view" data-costing-action="view-history" title="View price history">View</button></td></tr>`;
+    <td><button class="costing-history-view" data-costing-action="view-history" title="View price history">View</button><button class="costing-mobile-delete" data-costing-action="remove-row" data-costing-row-index="${index}" aria-label="Remove row ${index + 1}">Remove</button></td></tr>`;
 }
 
 function costingTotals(rows = []) {

@@ -1141,3 +1141,30 @@
 .mb-request-summary { padding: 11px; border: 1px solid #dfe9f6; border-radius: 7px; background: #fff; }.mb-request-summary h3 { display: flex; align-items: center; gap: 7px; margin: 0; color: #12284c; font-size: 12px; }.mb-request-summary .maint-icon { width: 18px; height: 18px; color: #0868f9; }.mb-request-summary p { margin: 4px 0 14px; color: #7890af; font-size: 10px; }
 .mb-request-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; text-align: center; }.mb-request-steps > div { position: relative; display: grid; justify-items: center; align-content: start; gap: 5px; min-width: 0; }.mb-request-steps > div:not(:last-child)::after { content: ""; position: absolute; top: 13px; left: calc(50% + 17px); width: calc(100% - 30px); height: 2px; background: #dfe8f4; }.mb-request-steps span { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 50%; background: #e6edf7; color: #7188a8; font-size: 10px; font-weight: 730; }.mb-request-steps .current span, .mb-request-steps .complete span { background: #0868f9; color: #fff; }.mb-request-steps strong { max-width: 88px; color: #7890af; font-size: 9px; line-height: 1.25; font-weight: 650; overflow-wrap: anywhere; }.mb-request-steps .current strong, .mb-request-steps .complete strong { color: #174f9c; }
 @media (max-width: 640px) { .mb-request-drawer { width: 100vw; }.mb-request-drawer .maint-drawer-scroll { padding: 14px; }.mb-request-grid { grid-template-columns: 1fr; }.mb-request-amounts { grid-template-columns: repeat(2, minmax(0, 1fr)); }.mb-request-amounts > :last-child { grid-column: 1 / -1; }.mb-request-steps strong { font-size: 8px; }.mb-request-drawer > footer { padding: 10px 14px; }.mb-request-drawer > footer button { flex: 1; padding-inline: 5px; font-size: 10px; }.mb-request-drawer > footer [data-action="billing-send-request"] { flex-basis: 100%; order: 3; } }
+
+@media (max-width: 760px) {
+  .mb-main-page .mb-table-wrap { overflow: visible; }
+  .mb-main-page .mb-billing-list-table { display: block; width: 100%; min-width: 0; }
+  .mb-main-page .mb-billing-list-table thead { display: none; }
+  .mb-main-page .mb-billing-list-table tbody { display: grid; gap: 9px; }
+  .mb-main-page .mb-billing-list-table tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; border: 1px solid #dce8f6; border-radius: 7px; background: #fff; }
+  .mb-main-page .mb-billing-list-table tbody td { display: block; min-width: 0; padding: 9px; border: 0; border-bottom: 1px solid #edf2f8; background: transparent; color: #183358; font-size: 11px; overflow-wrap: anywhere; }
+  .mb-main-page .mb-billing-list-table tbody td::before { display: block; margin-bottom: 4px; color: #627794; font-size: 10px; font-weight: 650; }
+  .mb-main-page .mb-billing-list-table tbody td:first-child,
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(2),
+  .mb-main-page .mb-billing-list-table tbody td:last-child,
+  .mb-main-page .mb-billing-list-table tbody td[colspan] { grid-column: 1 / -1; }
+  .mb-main-page .mb-billing-list-table tbody td:first-child { background: #f5f9ff; }
+  .mb-main-page .mb-billing-list-table tbody td:last-child { border-bottom: 0; }
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(2)::before { content: "Customer / Site"; }
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(3)::before { content: "Billing Period / Service Date"; }
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(4)::before { content: "Requested By / Date"; }
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(5)::before { content: "Status"; }
+  .mb-main-page .mb-billing-list-table tbody td:nth-child(6)::before { content: "Amount (AED)"; }
+  .mb-main-page .mb-billing-list-table tbody td:last-child::before,
+  .mb-main-page .mb-billing-list-table tbody td[colspan]::before { content: none; }
+  .mb-main-page .mb-reference-cell .mb-reference,
+  .mb-main-page .mb-reference-detail { white-space: normal; text-overflow: clip; }
+  .mb-main-page .mb-billing-list-table .mb-action-menu { margin: 0; }
+  .mb-main-page .mb-billing-list-table .mb-action-menu summary { width: 42px; height: 40px; border-color: #d8e5f5; background: #f5f9ff; }
+}

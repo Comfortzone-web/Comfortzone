@@ -9,7 +9,13 @@
   <link rel="stylesheet" href="/maintenance.css?v=20261031-fast-feedback">
 </head>
 <body class="auth-pending">
-  <aside class="sidebar">
+  <div class="mobile-app-bar">
+    <button id="mobileNavToggle" class="mobile-nav-button" type="button" aria-label="Open navigation" aria-controls="appSidebar" aria-expanded="false"><img src="/assets/maintenance-icons/menu.svg" alt=""></button>
+    <strong>Comfort Zone AC</strong>
+  </div>
+  <button id="mobileNavBackdrop" class="mobile-nav-backdrop" type="button" aria-label="Close navigation" tabindex="-1"></button>
+  <aside id="appSidebar" class="sidebar">
+    <button id="mobileNavClose" class="mobile-nav-close" type="button" aria-label="Close navigation"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
     <div class="brand">
       <div class="brand-mark">CZ</div>
       <div>
