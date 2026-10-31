@@ -1654,7 +1654,7 @@ function createMaintenanceApi(deps) {
         return send(res, 200, auth.state.workOrders.filter(item => item.technicianIds.includes(technicianId))
           .sort((a, b) => a.serviceDate.localeCompare(b.serviceDate)).map(item => ({ id: item.id, number: item.number,
             customerName: item.customerName, site: item.site, serviceDate: item.serviceDate, startTime: item.startTime,
-            endTime: item.endTime, workType: item.workType, status: item.status })));
+            endTime: item.endTime, workType: item.workType, status: item.status, priority: item.priority })));
       }
       if (parts[0] === "work-orders" && parts[1] && parts.length === 2 && req.method === "GET") {
         const job = assignedJob(auth.state, technicianId, parts[1]);

@@ -135,7 +135,8 @@
   const badge = status => `<span class="field-badge ${String(status || "").toLowerCase().replace(/[^a-z]+/g, "-")}">${esc(status || "--")}</span>`;
   function jobCard(item) {
     const complete = ["Report Submitted", "Completed"].includes(item.status);
-    return `<article class="field-job-card ${complete ? "field-job-green" : "field-job-orange"}"><div class="field-job-top"><div class="field-job-number"><span class="field-job-symbol">${homeIcon(complete ? "check" : "report", 19)}</span><strong>${esc(item.number)}</strong></div>${badge(item.status)}</div>
+    const theme = complete ? "field-job-green" : item.priority === "Urgent" && ["Scheduled", "On Site"].includes(item.status) ? "field-job-red" : "field-job-orange";
+    return `<article class="field-job-card ${theme}"><div class="field-job-top"><div class="field-job-number"><span class="field-job-symbol">${homeIcon(complete ? "check" : "report", 19)}</span><strong>${esc(item.number)}</strong></div>${badge(item.status)}</div>
       <div class="field-job-identity"><h3>${esc(item.customerName)}</h3><p>${homeIcon("pin", 15)}<span>${esc(item.site)}</span></p></div>
       <dl><div><dt>${homeIcon("calendar", 15)}Date</dt><dd>${date(item.serviceDate)}</dd></div><div><dt>${homeIcon("clock", 15)}Time</dt><dd>${time(item.startTime)} - ${time(item.endTime)}</dd></div><div><dt>${homeIcon("wrench", 15)}Service</dt><dd>${esc(item.workType)}</dd></div></dl>
       <button class="field-primary" data-action="open-job" data-id="${item.id}">View Job <span aria-hidden="true">&#8594;</span></button></article>`;

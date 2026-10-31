@@ -107,30 +107,39 @@ button:disabled { opacity: .5; cursor: default; }
 .field-home .field-section h2 span { padding: 3px 8px; border-radius: 7px; }
 .field-home .field-job-card { padding: 11px 12px; margin-bottom: 9px; border-radius: 13px; border-left: 4px solid #ff8119; background: linear-gradient(115deg, #fffaf4, #fff); box-shadow: 0 4px 15px rgba(19, 49, 85, .06); }
 .field-home .field-job-green { border-left-color: #0bb66d; background: linear-gradient(115deg, #f4fff8, #fff); }
+.field-home .field-job-red { border-left-color: #dc3545; background: linear-gradient(115deg, #fff0f1, #fff9f9); }
 .field-home .field-job-top { gap: 6px; }
 .field-job-number { display: flex; align-items: center; min-width: 0; gap: 8px; }
 .field-job-symbol { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: #ed720f; background: #fff0df; }
 .field-job-green .field-job-symbol { color: #0b9e59; background: #e0f8e9; }
+.field-job-red .field-job-symbol { color: #c92136; background: #ffe2e6; }
 .field-home .field-job-top strong { color: #d7660a; font-size: 15px; overflow-wrap: anywhere; }
 .field-home .field-job-green .field-job-top strong { color: #069d59; }
+.field-home .field-job-red .field-job-top strong { color: #c92136; }
 .field-home .field-badge { border-radius: 100px; padding: 5px 8px; font-size: 10px; }
 .field-home .field-badge.scheduled, .field-home .field-badge.on-site { color: #c36504; background: #fff0dd; }
 .field-home .field-badge.report-submitted, .field-home .field-badge.completed { color: #078b4e; background: #e1f9ea; }
+.field-home .field-job-red .field-badge.scheduled, .field-home .field-job-red .field-badge.on-site { color: #be2438; background: #ffe0e5; }
 .field-home .field-job-identity { display: flex; align-items: center; flex-wrap: wrap; column-gap: 10px; margin: 7px 0 9px; }
 .field-home .field-job-card h3 { margin: 0; font-size: 16px; line-height: 1.25; overflow-wrap: anywhere; }
 .field-home .field-job-card p { display: inline-flex; align-items: center; gap: 4px; margin: 0; color: #617592; font-size: 12px; line-height: 1.3; overflow-wrap: anywhere; }
 .field-home .field-job-card p svg { flex: none; }
+.field-home .field-job-red p svg { color: #c92136; }
 .field-home .field-job-card dl { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0 0 8px; padding: 8px 0; border-radius: 9px; background: rgba(255, 237, 218, .45); }
 .field-home .field-job-green dl { background: rgba(222, 248, 233, .55); }
+.field-home .field-job-red dl { background: rgba(255, 224, 229, .55); }
 .field-home .field-job-card dl div { padding: 0 8px; border-right: 1px solid #f3dcca; }
 .field-home .field-job-green dl div { border-right-color: #d1efdd; }
+.field-home .field-job-red dl div { border-right-color: #f3c9d0; }
 .field-home .field-job-card dl div:last-child { border: 0; }
 .field-home .field-job-card dt { display: flex; align-items: center; gap: 4px; color: #60748e; font-size: 11px; }
 .field-home .field-job-card dt svg { flex: none; color: #e87515; }
 .field-home .field-job-green dt svg { color: #0ca45e; }
+.field-home .field-job-red dt svg { color: #c92136; }
 .field-home .field-job-card dd { margin-top: 3px; font-size: 11px; line-height: 1.25; font-weight: 700; overflow-wrap: anywhere; }
 .field-home .field-job-card > .field-primary { min-height: 35px; padding: 6px 10px; border: 0; border-radius: 8px; background: #fb790d; font-size: 13px; }
 .field-home .field-job-green > .field-primary { background: #0aaf62; }
+.field-home .field-job-red > .field-primary { background: #d52b40; }
 .field-home .field-job-card > .field-primary:hover { filter: brightness(.93); }
 .field-home .field-empty { display: flex; align-items: center; justify-content: center; gap: 11px; min-height: 62px; padding: 12px; border-radius: 11px; background: #f9fcff; font-size: 13px; }
 .field-home .field-empty svg { color: #7790b0; }
