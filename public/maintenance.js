@@ -266,6 +266,15 @@
     else query.focus();
   }
 
+  // Select before the input blur can dismiss the list on touch and mobile browsers.
+  root.addEventListener("pointerdown", event => {
+    const option = event.target.closest('[data-action="customer-pick"]');
+    if (!option || !root.contains(option)) return;
+    event.preventDefault();
+    option.dataset.pointerSelected = "true";
+    chooseCustomer(option);
+  });
+
   function selectedCustomerValid(form) {
     const values = Object.fromEntries(new FormData(form).entries());
     const id = String(values.customerId || "");
@@ -1562,6 +1571,7 @@
     }
     if (mode === "finished" && body.technicianIds.length > 5) { formError("Assign no more than 5 technicians"); return; }
     const action = mode === "notify" ? "save-schedule-notify" : mode === "finished" ? "mark-visit-finished" : "save-schedule-draft";
+    if (mode === "notify") { state.scheduleDraft = { ...body }; state.drawer = ""; render(); notice("Saving and notifying technicians…"); }
     await whileSaving(action, async () => { try {
       const result = await request("/api/maintenance/schedules", { method: "POST", body: JSON.stringify(body) });
       state.scheduleDraft = { ...result.schedule };
@@ -1580,7 +1590,10 @@
         notice("Service report created and submitted for review");
       } else if (result.workOrder) navigate("work-orders", result.workOrder.id);
       else notice("Schedule draft saved");
-    } catch (error) { formError(error.message || "Unable to save schedule"); } });
+    } catch (error) {
+      if (mode === "notify") { state.drawer = "schedule"; render(); }
+      formError(error.message || "Unable to save schedule");
+    } });
   }
 
   async function saveTechnician() {
@@ -1651,7 +1664,7 @@
     const button = event.target.closest("[data-action]");
     if (!button) { if (state.amcMenuId || state.pmMenuId || state.workOrderMenuId || state.workOrderDetailMenu || state.technicianMoreMenu || state.reportMoreMenu) { state.amcMenuId = ""; state.pmMenuId = ""; state.workOrderMenuId = ""; state.workOrderDetailMenu = false; state.technicianMoreMenu = false; state.reportMoreMenu = false; render(); } return; }
     const action = button.dataset.action, id = button.dataset.id || "";
-    if (action === "customer-pick") { event.preventDefault(); event.stopPropagation(); chooseCustomer(button); return; }
+    if (action === "customer-pick") { event.preventDefault(); event.stopPropagation(); if (button.dataset.pointerSelected) delete button.dataset.pointerSelected; else chooseCustomer(button); return; }
     if (action === "report-customer-choice") {
       const chosen = contract(button.dataset.id);
       if (!chosen) return;
@@ -1685,14 +1698,15 @@
       const item = (state.data.customers || []).find(customer => customer.id === id);
       if (!item) return notice("Customer not found");
       if (!confirm(`Delete customer ${item.name}? Customers used by an AMC or work order cannot be deleted.`)) return;
-      button.disabled = true;
-      button.textContent = "Deleting...";
+       const previousCustomers = state.data.customers;
+       latestRequest++;
+       state.data.customers = previousCustomers.filter(customer => customer.id !== id);
+       render();
       try {
         await request(`/api/maintenance/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
-        await refresh();
         notice("Customer deleted");
-      } catch (error) { handleError(error); }
-      finally { if (button.isConnected) { button.disabled = false; button.textContent = "Delete"; } }
+         revalidate();
+       } catch (error) { state.data.customers = previousCustomers; render(); handleError(error); }
       return;
     }
     if (action === "customer-sort") { const field = button.dataset.field; if (state.customerSort === field) state.customerSortDirection *= -1; else { state.customerSort = field; state.customerSortDirection = 1; } state.pageNumber.customers = 1; return render(); }
@@ -1713,10 +1727,26 @@
         : kind === "work-orders" ? ` Its schedule and ${reportCount} service reports will also be removed.`
         : kind === "reports" ? " Its uploaded files will also be permanently deleted." : "";
       if (!confirm(`Delete ${labels[kind]} ${name}?${impact} This action cannot be undone.`)) return;
-      button.disabled = true;
-      const buttonContent = button.innerHTML;
-      button.textContent = "Deleting...";
+       const previousData = JSON.parse(JSON.stringify(state.data));
+       latestRequest++;
+       const previousSelection = { contract: state.selectedContractId, technician: state.selectedTechnicianId,
+         report: state.selectedReportId, workOrder: state.selectedWorkOrderId, recordId: state.recordId };
       state.pmMenuId = ""; state.workOrderMenuId = ""; state.amcMenuId = ""; state.technicianMoreMenu = false; state.reportMoreMenu = false;
+       const removedJobIds = kind === "contracts" ? jobIds : kind === "schedules" ? jobIds : kind === "work-orders" ? [id] : [];
+       const removedScheduleIds = kind === "contracts" ? state.data.schedules.filter(row => row.contractId === id).map(row => row.id)
+         : kind === "work-orders" ? state.data.schedules.filter(row => row.workOrderId === id).map(row => row.id) : [];
+       const collection = { contracts: "contracts", schedules: "schedules", "work-orders": "workOrders",
+         technicians: "technicians", reports: "reports" }[kind];
+       state.data[collection] = state.data[collection].filter(row => row.id !== id);
+       if (removedJobIds.length) state.data.workOrders = state.data.workOrders.filter(row => !removedJobIds.includes(row.id));
+       if (removedScheduleIds.length) state.data.schedules = state.data.schedules.filter(row => !removedScheduleIds.includes(row.id));
+       if (removedJobIds.length) state.data.reports = state.data.reports.filter(row => !removedJobIds.includes(row.workOrderId));
+       if (kind === "contracts") state.selectedContractId = null;
+       if (kind === "technicians") state.selectedTechnicianId = null;
+       if (kind === "reports") state.selectedReportId = null;
+       if (kind === "work-orders") state.selectedWorkOrderId = null;
+       if (kind === "work-orders" && state.recordId === id) { state.recordId = ""; history.replaceState(null, "", "/maintenance/work-orders"); }
+       render();
       try {
         const response = await request(`/api/maintenance/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
         if (kind === "contracts" && state.selectedContractId === id) state.selectedContractId = null;
@@ -1724,11 +1754,18 @@
         if (kind === "reports" && state.selectedReportId === id) state.selectedReportId = null;
         if (kind === "work-orders" && state.selectedWorkOrderId === id) state.selectedWorkOrderId = null;
         if (kind === "work-orders" && state.recordId === id) { state.recordId = ""; history.replaceState(null, "", "/maintenance/work-orders"); }
-        await refresh(); notice(response.cleanupPending
+         notice(response.cleanupPending
           ? `${response.deleted.label} deleted. Storage cleanup was delayed and will retry when Maintenance reloads.`
           : `${response.deleted.label} deleted`);
-      } catch (error) { handleError(error); }
-      finally { if (button.isConnected) { button.disabled = false; button.innerHTML = buttonContent; } }
+         revalidate();
+       } catch (error) {
+         state.data = previousData;
+         state.selectedContractId = previousSelection.contract; state.selectedTechnicianId = previousSelection.technician;
+         state.selectedReportId = previousSelection.report; state.selectedWorkOrderId = previousSelection.workOrder;
+         state.recordId = previousSelection.recordId;
+         if (state.recordId) history.replaceState(null, "", `/maintenance/work-orders/${encodeURIComponent(state.recordId)}`);
+         render(); handleError(error);
+       }
       return;
     }
     if (action === "refresh") return refresh().catch(handleError);

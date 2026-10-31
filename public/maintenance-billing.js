@@ -456,16 +456,23 @@ window.createMaintenanceBilling = function createMaintenanceBilling(api) {
       const record = row(id);
       if (!record || !admin()) return true;
       if (!window.confirm(`Delete installment #${record.installmentNumber} from this AMC payment schedule?`)) return true;
-      try { await request(`/api/maintenance/billing/${encodeURIComponent(id)}`, { method: "DELETE" }); await refresh(); notice("Payment schedule row deleted"); }
-      catch (error) { notice(error.message || "Unable to delete the payment schedule row"); }
+      const previous = state.data.billing;
+      state.data.billing = previous.filter(item => item.id !== id);
+      render();
+      try { await request(`/api/maintenance/billing/${encodeURIComponent(id)}`, { method: "DELETE" }); refresh({ background: true }).catch(() => {}); notice("Payment schedule row deleted"); }
+      catch (error) { state.data.billing = previous; render(); notice(error.message || "Unable to delete the payment schedule row"); }
     }
     else if (name === "billing-delete-request") {
       const record = row(id);
       if ((!record?.request && !record?.invoice) || record.paymentStatus === "Paid" || !admin()) return true;
       const details = record.invoice ? " This also deletes the invoice, uploaded file and any recorded payments." : "";
       if (!window.confirm(`Delete the invoice request for ${record.reference}?${details}`)) return true;
-      try { await request(`/api/maintenance/billing/${encodeURIComponent(id)}/request`, { method: "DELETE" }); await refresh(); notice("Invoice request deleted"); }
-      catch (error) { notice(error.message || "Unable to delete the invoice request"); }
+      const previous = state.data.billing;
+      state.data.billing = previous.map(item => item.id === id ? { ...item, request: null, invoice: null,
+        invoiceStatus: "Not Requested", paymentStatus: "Upcoming" } : item);
+      render();
+      try { await request(`/api/maintenance/billing/${encodeURIComponent(id)}/request`, { method: "DELETE" }); refresh({ background: true }).catch(() => {}); notice("Invoice request deleted"); }
+      catch (error) { state.data.billing = previous; render(); notice(error.message || "Unable to delete the invoice request"); }
     }
     else if (name === "billing-save-draft") await submit("draft");
     else if (name === "billing-primary-request") await submit(root.querySelector('#maintBillingForm [name="sendToAccountant"]')?.checked ? "send" : "draft", true);
