@@ -20,6 +20,9 @@
 .pm-page-head, .pm-detail-head, .pm-panel-head { justify-content: space-between; gap: 18px; }
 .pm-page-head { margin-bottom: 20px; }
 .pm-page-head h1, .pm-detail-head h1 { margin: 0; color: #071b3a; font-size: 30px; letter-spacing: 0; }
+.pm-write-indicator { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; vertical-align: middle; color: #2162b4; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pm-write-spinner { width: 13px; height: 13px; border: 2px solid #cfe1fb; border-top-color: #0868f9; border-radius: 50%; animation: pm-write-spin .7s linear infinite; }
+@keyframes pm-write-spin { to { transform: rotate(360deg); } }
 .pm-page-head p, .pm-detail-head p, .pm-panel-head p { margin: 5px 0 0; color: #5a6d8c; font-size: 14px; }
 .pm-toolbar { gap: 10px; }
 .pm-search { display: flex; align-items: center; gap: 8px; width: 305px; height: 40px; padding: 0 12px; border: 1px solid #d3e0f2; border-radius: 8px; background: #fff; }

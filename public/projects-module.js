@@ -11,6 +11,8 @@
     dashboardExpiryTimer: null, dashboardNeedsRefresh: false };
   let projectSaveQueue = Promise.resolve();
   let projectSaveVersion = 0;
+  let activeWrites = 0;
+  let activeUploads = 0;
   let paymentSaveTimer = null;
   let dashboardPrefetch = null;
   let cacheGeneration = 0;
@@ -53,7 +55,18 @@
     setTimeout(() => item.remove(), 2600);
   };
 
+  function syncWriteIndicator() {
+    root.querySelectorAll?.(".pm-write-indicator").forEach(item => item.remove());
+    if (!activeWrites) return;
+    const heading = root.querySelector?.(".pm-detail-head h1, .pm-page-head h1");
+    heading?.insertAdjacentHTML("beforeend", `<span class="pm-write-indicator" role="status"><span class="pm-write-spinner" aria-hidden="true"></span>${activeUploads ? "Uploading..." : "Saving..."}</span>`);
+  }
+
   async function api(path, options = {}) {
+    const writing = options.method && !["GET", "HEAD"].includes(options.method.toUpperCase());
+    const uploading = writing && options.body instanceof FormData;
+    if (writing) { activeWrites++; if (uploading) activeUploads++; syncWriteIndicator(); }
+    try {
     const response = await fetch(path, {
       credentials: "same-origin",
       headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
@@ -68,7 +81,10 @@
       throw error;
     }
     const type = response.headers.get("content-type") || "";
-    return type.includes("application/json") ? response.json() : response.blob();
+    return await (type.includes("application/json") ? response.json() : response.blob());
+    } finally {
+      if (writing) { activeWrites--; if (uploading) activeUploads--; syncWriteIndicator(); }
+    }
   }
 
   function navigate(path) {
@@ -226,6 +242,7 @@
         ${projectsTable(projects)}
       </section>
     `;
+    syncWriteIndicator();
     scheduleDashboardExpiry(dashboard);
   }
 
@@ -359,6 +376,7 @@
     const project = state.project;
     if (!project) return open();
     root.innerHTML = `${detailHeader(project)}<nav class="pm-tabs">${["overview", "information", "boq", "installation", "submittals", "pending", "payment", "followups", "lpos", "documents", "activity"].map(tab => `<button class="${state.tab === tab ? "active" : ""}" data-pm-tab="${tab}">${tab === "information" ? "Project Information" : tab === "boq" ? "BOQ" : tab === "followups" ? "Follow-ups" : tab === "lpos" ? "LPO's" : tab === "activity" ? "Activity History" : tab === "installation" ? "Installation Progress" : tab === "pending" ? "Pending Works" : tab[0].toUpperCase() + tab.slice(1)}</button>`).join("")}</nav><div class="pm-detail-content">${detailTab(project)}</div>`;
+    syncWriteIndicator();
   }
 
   function detailTab(project) {
@@ -515,7 +533,7 @@
     const next = structuredClone(state.project);
     next.submittals = next.submittals.filter(row => row.id !== itemId);
     state.expandedSubmittals.delete(itemId);
-    await saveProjectPayload(projectPayload(next), "Submittal deleted");
+    await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
   }
 
   async function updateSubmittalField(input) {
@@ -548,7 +566,7 @@
     const number = Math.max(-1, ...item.revisions.map(revision => Number(revision.rev.slice(1)) || 0)) + 1;
     item.revisions.push({ id: crypto.randomUUID(), rev: `R${number}`, status: "Preparation", submitted: "", released: "", remarks: "", documentId: "" });
     state.expandedSubmittals.add(item.id);
-    await saveProjectPayload(projectPayload(next), "New revision added");
+    await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
   }
 
   async function deleteSubmittalRevision(submittalId, revisionId) {
@@ -559,7 +577,7 @@
     const next = structuredClone(state.project);
     const nextItem = next.submittals.find(row => row.id === submittalId);
     nextItem.revisions = nextItem.revisions.filter(row => row.id !== revisionId);
-    await saveProjectPayload(projectPayload(next), `${revision.rev} deleted`);
+    await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
   }
 
   async function uploadSubmittalFile(itemId, revisionId, file) {
@@ -1486,7 +1504,7 @@
         next.boqCategories = next.boqCategories.filter(item => item.id !== target.dataset.pmCategoryId);
         next.installationItems = next.installationItems.filter(item => item.categoryId !== target.dataset.pmCategoryId);
       } else next.installationItems = next.installationItems.filter(item => item.id !== target.dataset.pmRowId);
-      await saveProjectPayload(projectPayload(next), "Item deleted").catch(error => toast(error.message));
+      await saveProjectPayload(projectPayload(next), "Item deleted", { quiet: true, renderOptimistic: true }).catch(error => toast(error.message));
       return;
     }
     if (action === "choose-boq-import") { root.querySelector("[data-pm-boq-file]")?.click(); return; }
@@ -1648,7 +1666,7 @@
       const next = structuredClone(state.project);
       next.installationChecklist = next.installationChecklist || [];
       next.installationChecklist.push({ id: crypto.randomUUID(), item: "New checklist item", status: "not_started", updatedAt: new Date().toISOString() });
-      await saveProjectPayload(projectPayload(next), "Checklist item added");
+      await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
       root.querySelector(".pm-checklist-input:last-of-type")?.select(); return;
     }
     if (action === "add-installation-note") {
@@ -1656,14 +1674,14 @@
       const next = structuredClone(state.project);
       next.installationNotes = next.installationNotes || [];
       next.installationNotes.push({ id: crypto.randomUUID(), note: "New installation note", date: now.slice(0, 10), createdAt: now, updatedAt: now });
-      await saveProjectPayload(projectPayload(next), "Installation note added");
+      await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
       root.querySelector(".pm-note-input:last-of-type")?.select(); return;
     }
     if (action === "delete-checklist-item") {
       const index = Number(target.dataset.pmIndex);
       if (!confirm("Delete this checklist item?")) return;
       const next = structuredClone(state.project); next.installationChecklist.splice(index, 1);
-      await saveProjectPayload(projectPayload(next), "Checklist item deleted"); return;
+      await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true }); return;
     }
     if (action === "delete-installation-note") {
       if (!confirm("Delete this installation note?")) return;
@@ -1673,7 +1691,7 @@
         const item = next.installationItems?.find(row => row.id === target.dataset.pmNoteId);
         if (item) item.comments = "";
       }
-      await saveProjectPayload(projectPayload(next), "Installation note deleted"); return;
+      await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true }); return;
     }
     if (action === "add-row") {
       const section = target.dataset.pmSection;
@@ -1688,7 +1706,7 @@
         cancelPendingPaymentSave();
         await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true })
           .then(() => reconcilePaymentView(next.id)).catch(error => toast(error.message));
-      } else await saveProjectPayload(projectPayload(next), "Checklist row added");
+      } else await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
       return;
     }
     if (action === "delete-row") {
@@ -1702,7 +1720,7 @@
         cancelPendingPaymentSave();
         await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true })
           .then(() => reconcilePaymentView(next.id)).catch(error => toast(error.message));
-      } else await saveProjectPayload(projectPayload(next), "Work item deleted");
+      } else await saveProjectPayload(projectPayload(next), "", { quiet: true, renderOptimistic: true });
       return;
     }
     if (action === "delete-project") {
@@ -1853,8 +1871,11 @@
           const upload = new FormData();
           upload.append("file", state.pendingDocumentFile);
           upload.append("category", data.category);
-          await api(`${projectPath}/documents`, { method: "POST", body: upload });
-          state.project = await api(projectPath);
+          const document = await api(`${projectPath}/documents`, { method: "POST", body: upload });
+          state.project = { ...state.project, documents: [document, ...(state.project.documents || [])] };
+          api(projectPath).then(project => {
+            if (state.project?.id === project.id) state.project.activityHistory = project.activityHistory;
+          }).catch(error => console.warn("Project activity refresh failed:", error));
           toast("Document uploaded");
         } else if (mode === "folder") {
           state.project = await api(`${projectPath}/document-folders`, { method: "POST", body: JSON.stringify({ name: data.name }) });

@@ -16,6 +16,9 @@
 .maint-icon { width: 17px; height: 17px; object-fit: contain; flex: 0 0 auto; }
 .maint-header { display: flex; justify-content: space-between; align-items: center; gap: 18px; min-height: 86px; padding: 14px 22px; background: #fff; border-bottom: 1px solid var(--m-border); }
 .maint-header h1 { margin: 0; font-size: 25px; line-height: 1.15; font-weight: 750; letter-spacing: 0; }
+.maint-write-indicator { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; vertical-align: middle; color: #2162b4; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.maint-write-spinner { width: 13px; height: 13px; border: 2px solid #cfe1fb; border-top-color: #0868f9; border-radius: 50%; animation: maint-write-spin .7s linear infinite; }
+@keyframes maint-write-spin { to { transform: rotate(360deg); } }
 .maint-header p { margin: 5px 0 0; color: var(--m-muted); font-size: 13px; }
 .maint-header-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .maint-search { height: 38px; width: min(310px, 28vw); min-width: 180px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid var(--m-border); background: #fff; border-radius: 6px; }

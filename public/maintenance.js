@@ -26,6 +26,9 @@
   };
   let lastRenderKey = "", lastRenderedDrawer = "", drawerReturnFocus = null;
   let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null, savePending = false;
+  let activeWrites = 0;
+  let activeUploads = 0;
+  let activeLoads = 0;
   const icon = (name, className = "") => `<img class="maint-icon ${className}" src="/assets/maintenance-icons/${name}.svg" alt="" aria-hidden="true">`;
   const esc = value => String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
   const day = value => value ? new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(`${value.slice(0, 10)}T12:00:00`)) : "--";
@@ -71,23 +74,41 @@
   const selected = (name, value) => name === value ? "selected" : "";
   const checked = value => value ? "checked" : "";
 
+  function syncWriteIndicator() {
+    root.querySelectorAll?.(".maint-write-indicator").forEach(item => item.remove());
+    if (!activeWrites && !activeLoads) return;
+    root.querySelector?.(".maint-header h1, .wd-header h1, .maint-page h1")?.insertAdjacentHTML("beforeend", `<span class="maint-write-indicator" role="status"><span class="maint-write-spinner" aria-hidden="true"></span>${activeUploads ? "Uploading..." : activeWrites ? "Saving..." : "Loading..."}</span>`);
+  }
+
   async function request(url, options = {}) {
+    const writing = options.method && !["GET", "HEAD"].includes(options.method.toUpperCase());
+    const uploading = writing && options.body instanceof FormData;
+    if (writing) { activeWrites++; if (uploading) activeUploads++; syncWriteIndicator(); }
+    try {
     const response = await fetch(url, { credentials: "same-origin", ...options,
       headers: options.body instanceof FormData ? undefined : { "Content-Type": "application/json", ...(options.headers || {}) } });
     if (!response.ok) {
       const problem = await response.json().catch(() => ({}));
       throw new Error(problem.error || `Request failed (${response.status})`);
     }
-    return response.headers.get("Content-Type")?.includes("application/json") ? response.json() : response.blob();
+    return await (response.headers.get("Content-Type")?.includes("application/json") ? response.json() : response.blob());
+    } finally {
+      if (writing) { activeWrites--; if (uploading) activeUploads--; syncWriteIndicator(); }
+    }
   }
 
   async function refresh({ background = false } = {}) {
     const requestId = ++latestRequest;
-    const data = await request("/api/maintenance/summary");
-    if (requestId !== latestRequest) return;
-    state.data = data;
-    lastLoadedAt = Date.now();
-    if (!background || !state.drawer) render();
+    if (!background) { activeLoads++; syncWriteIndicator(); }
+    try {
+      const data = await request("/api/maintenance/summary");
+      if (requestId !== latestRequest) return;
+      state.data = data;
+      lastLoadedAt = Date.now();
+      if (!background || !state.drawer) render();
+    } finally {
+      if (!background) { activeLoads--; syncWriteIndicator(); }
+    }
   }
 
   function revalidate() {
@@ -1363,6 +1384,7 @@
       : state.page === "billing" ? billingUi.main() : state.page === "schedule" ? schedule() : state.page === "work-orders" ? workOrders()
       : state.page === "technicians" ? technicians() : state.page === "reports" ? reports() : dashboard();
     root.innerHTML = `<div class="maint-page ${state.page === "customers" ? "maint-customers-page" : state.page === "amc" ? state.recordId ? "maint-amc-full-page" : "maint-amc-page" : state.page === "billing" ? "maint-billing-page" : state.page === "schedule" ? "maint-pm-page" : state.page === "work-orders" ? state.recordId ? "maint-wo-detail-page" : "maint-wo-page" : state.page === "technicians" ? "maint-tech-page" : state.page === "reports" ? "maint-reports-page" : ""}">${content}${state.message ? `<div class="maint-toast" role="status">${esc(state.message)}</div>` : ""}${drawer()}</div>`;
+    syncWriteIndicator();
     document.body.classList.toggle("maint-drawer-open", !!state.drawer);
     if (scroller) scroller.scrollTop = scrollTop;
     const nextDrawerScroll = root.querySelector(".maint-drawer-scroll");
@@ -1663,11 +1685,14 @@
       const item = (state.data.customers || []).find(customer => customer.id === id);
       if (!item) return notice("Customer not found");
       if (!confirm(`Delete customer ${item.name}? Customers used by an AMC or work order cannot be deleted.`)) return;
+      button.disabled = true;
+      button.textContent = "Deleting...";
       try {
         await request(`/api/maintenance/customers/${encodeURIComponent(id)}`, { method: "DELETE" });
         await refresh();
         notice("Customer deleted");
       } catch (error) { handleError(error); }
+      finally { if (button.isConnected) { button.disabled = false; button.textContent = "Delete"; } }
       return;
     }
     if (action === "customer-sort") { const field = button.dataset.field; if (state.customerSort === field) state.customerSortDirection *= -1; else { state.customerSort = field; state.customerSortDirection = 1; } state.pageNumber.customers = 1; return render(); }
@@ -1688,6 +1713,9 @@
         : kind === "work-orders" ? ` Its schedule and ${reportCount} service reports will also be removed.`
         : kind === "reports" ? " Its uploaded files will also be permanently deleted." : "";
       if (!confirm(`Delete ${labels[kind]} ${name}?${impact} This action cannot be undone.`)) return;
+      button.disabled = true;
+      const buttonContent = button.innerHTML;
+      button.textContent = "Deleting...";
       state.pmMenuId = ""; state.workOrderMenuId = ""; state.amcMenuId = ""; state.technicianMoreMenu = false; state.reportMoreMenu = false;
       try {
         const response = await request(`/api/maintenance/${kind}/${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -1700,6 +1728,7 @@
           ? `${response.deleted.label} deleted. Storage cleanup was delayed and will retry when Maintenance reloads.`
           : `${response.deleted.label} deleted`);
       } catch (error) { handleError(error); }
+      finally { if (button.isConnected) { button.disabled = false; button.innerHTML = buttonContent; } }
       return;
     }
     if (action === "refresh") return refresh().catch(handleError);
@@ -2097,10 +2126,17 @@
       return;
     }
     if (input.matches("[data-contract-file]")) {
-      if (!input.files?.[0]) return;
+      if (!input.files?.[0] || input.disabled) return;
       const form = new FormData(); form.append("file", input.files[0]);
-      try { await request(`/api/maintenance/contracts/${encodeURIComponent(input.dataset.contractFile)}/files`, { method: "POST", body: form }); await refresh(); notice("Document uploaded"); }
-      catch (error) { handleError(error); } return;
+      input.disabled = true;
+      try {
+        const file = await request(`/api/maintenance/contracts/${encodeURIComponent(input.dataset.contractFile)}/files`, { method: "POST", body: form });
+        upsert("files", file);
+        render(); revalidate(); notice("Document uploaded");
+      }
+      catch (error) { handleError(error); }
+      finally { if (input.isConnected) input.disabled = false; }
+      return;
     }
     if (input.matches("[data-page-size]")) { state.pageSize = Number(input.value); state.pageNumber[state.page] = 1; return render(); }
     if (input.matches("[data-filter-status]")) { state.status[state.page] = input.value; state.pageNumber[state.page] = 1; return render(); }
