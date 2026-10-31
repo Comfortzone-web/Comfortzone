@@ -304,6 +304,11 @@
 .pm-detail-progress span, .pm-detail-stat small { color: var(--pm-muted); font-size: 10px; }
 .pm-detail-stat strong { margin: 5px 0; color: var(--pm-ink); font-size: 17px; font-weight: 650; }
 .pm-detail-stat strong .pm-contract-vat { display: inline; color: var(--pm-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pm-detail-stat strong .pm-kpi-received { display: inline; color: var(--pm-ink); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pm-variation-kpi-meta { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; margin-top: 3px; }
+.pm-variation-kpi-meta small { min-width: 0; overflow-wrap: anywhere; }
+.pm-variation-kpi-total { margin-left: auto; text-align: right; font-weight: 400; }
+.pm-variation-kpi-total b { color: var(--pm-ink); font-weight: 700; }
 .pm-ring { width: 58px; height: 58px; background: conic-gradient(var(--pm-blue) var(--pm-progress), #e9eef5 0); }
 .pm-ring::after { width: 45px; height: 45px; }
 .pm-ring strong { color: var(--pm-ink); font-size: 14px; }

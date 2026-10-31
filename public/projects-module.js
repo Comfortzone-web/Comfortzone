@@ -369,7 +369,7 @@
       return `<div class="pm-quantity-metric"><div class="pm-ring pm-quantity-ring-${key}${percent >= 100 ? " pm-quantity-ring-complete" : ""}" style="--pm-progress:${Math.min(100, percent)}%" role="img" aria-label="${label}: ${displayedPercent}% of BOQ"><strong aria-hidden="true">${displayedPercent}%</strong></div><b>${label}</b></div>`;
     }).join("");
     return `<div class="pm-detail-head"><div><div class="pm-breadcrumb"><button data-pm-action="back">Projects</button><span>›</span><b>${esc(project.code || project.name)}</b></div><h1>${esc(project.code ? `${project.code} – ${project.name}` : project.name)}</h1><p>Client: ${esc(project.customer || "-")} · Consultant: ${esc(project.consultant || "-")} ${project.location ? `· Location: ${esc(project.location)}` : "· Location: -"}</p></div><div class="pm-detail-actions"><button class="pm-secondary" data-pm-action="back">← Back to Projects</button><button class="pm-secondary" data-pm-action="edit-project">✎ Edit Project</button><button class="pm-secondary" data-pm-action="delete-project">...</button>${pill(project.status)}</div></div>
-      <div class="pm-detail-kpis"><div class="pm-detail-quantity-kpi" aria-label="Overall BOQ quantity progress">${quantityKpis}</div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus)}</strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Variation Payment (Incl VAT)</span><strong>${moneyWithCents(variationReceived)} Received</strong><div class="pm-mini-progress pm-variation-progress"><i style="width:${variationReceivedPercent}%"></i></div><small>${esc(variationPendingPercent)}</small></div></div>`;
+      <div class="pm-detail-kpis"><div class="pm-detail-quantity-kpi" aria-label="Overall BOQ quantity progress">${quantityKpis}</div><div class="pm-detail-stat"><span>Current Stage</span><strong>${esc(d.nextMilestone)}</strong>${pill(project.status)}</div><div class="pm-detail-stat"><span>Contract Value</span><strong>${project.contractValue ? `${money(project.contractValue)} <span class="pm-contract-vat">+ VAT</span>` : "-"}</strong><small>${project.contractValue ? `${money(contractWithVat)} Incl VAT` : "Not specified"}</small></div><div class="pm-detail-stat"><span>Payment Received (Incl VAT)</span><strong>${esc(d.paymentStatus.replace(/\s+Received$/, ""))} <span class="pm-kpi-received">Received</span></strong><div class="pm-mini-progress"><i style="width:${receivedPercent}%"></i></div><small>${esc(pendingPaymentPercent)}</small></div><div class="pm-detail-stat"><span>Variation Payment (Incl VAT)</span><strong>${moneyWithCents(variationReceived)} <span class="pm-kpi-received">Received</span></strong><div class="pm-mini-progress pm-variation-progress"><i style="width:${variationReceivedPercent}%"></i></div><div class="pm-variation-kpi-meta"><small>${esc(variationPendingPercent)}</small>${variationContractWithVat > 0 ? `<small class="pm-variation-kpi-total">Total: <b>${moneyWithCents(variationContractWithVat)}</b></small>` : ""}</div></div></div>`;
   }
 
   function renderDetail() {
@@ -770,7 +770,7 @@
     const stats = root.querySelectorAll(".pm-detail-kpis .pm-detail-stat");
     const paymentStat = stats[2];
     if (paymentStat) {
-      paymentStat.querySelector("strong").textContent = project.derived.paymentStatus;
+      paymentStat.querySelector("strong").innerHTML = `${esc(project.derived.paymentStatus.replace(/\s+Received$/, ""))} <span class="pm-kpi-received">Received</span>`;
       const receivedPercent = contractWithVat ? Math.min(100, received / contractWithVat * 100) : 0;
       paymentStat.querySelector(".pm-mini-progress i").style.width = `${receivedPercent}%`;
       paymentStat.querySelector("small").textContent = contractWithVat ? `${Math.max(0, Math.round(100 - receivedPercent))}% Pending` : "Pending amount not specified";
@@ -780,7 +780,7 @@
       const variationReceived = variationPaymentReceived(project);
       const variationContractWithVat = vatInclusiveAmount(project.variationContractValue);
       const variationPercent = variationContractWithVat > 0 ? Math.min(100, variationReceived / variationContractWithVat * 100) : 0;
-      variationStat.querySelector("strong").textContent = `${moneyWithCents(variationReceived)} Received`;
+      variationStat.querySelector("strong").innerHTML = `${moneyWithCents(variationReceived)} <span class="pm-kpi-received">Received</span>`;
       variationStat.querySelector(".pm-mini-progress i").style.width = `${variationPercent}%`;
       variationStat.querySelector("small").textContent = variationContractWithVat > 0 ? `${Math.max(0, Math.round(100 - variationPercent))}% Pending` : "Variation contract value not set";
     }
