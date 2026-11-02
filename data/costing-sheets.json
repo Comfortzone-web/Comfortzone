@@ -1,6 +1,19 @@
 {
   "priceItems": [
     {
+      "id": "aab599a1-34e3-4180-b839-2130c1437d30",
+      "model": "FTKF30UVMKL - RKF30UVMKL",
+      "description": "",
+      "origin": "",
+      "listPrice": 3300,
+      "multiplier": 1,
+      "costPrice": 3300,
+      "finalPrice": 3710,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
       "id": "09e51c65-f987-485d-ad7f-84638a93f4fa",
       "model": "RXQ6ARYFK",
       "description": "VRV OUTDOOR UNIT",
@@ -8,8 +21,9 @@
       "listPrice": 21371,
       "multiplier": 0.55,
       "costPrice": 11754.050000000001,
-      "finalPrice": 9557.63,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 11469.16,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -20,8 +34,9 @@
       "listPrice": 23269,
       "multiplier": 0.55,
       "costPrice": 12797.95,
-      "finalPrice": 10406.03,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 12487.24,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -32,8 +47,9 @@
       "listPrice": 31920,
       "multiplier": 0.55,
       "costPrice": 17556,
-      "finalPrice": 14272.31,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 17126.77,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -44,8 +60,9 @@
       "listPrice": 34955,
       "multiplier": 0.55,
       "costPrice": 19225.25,
-      "finalPrice": 15498.45,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 18598.14,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -56,8 +73,9 @@
       "listPrice": 38452,
       "multiplier": 0.55,
       "costPrice": 21148.600000000002,
-      "finalPrice": 17048.8,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 20458.56,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -68,8 +86,9 @@
       "listPrice": 42299,
       "multiplier": 0.55,
       "costPrice": 23264.45,
-      "finalPrice": 18755.7,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 22506.84,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -81,7 +100,8 @@
       "multiplier": 0.6,
       "costPrice": 8335.8,
       "finalPrice": 8335.8,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -93,7 +113,8 @@
       "multiplier": 0.6,
       "costPrice": 9318,
       "finalPrice": 9318,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -105,7 +126,8 @@
       "multiplier": 0.6,
       "costPrice": 9625.8,
       "finalPrice": 9625.8,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -117,7 +139,8 @@
       "multiplier": 0.6,
       "costPrice": 9935.4,
       "finalPrice": 9935.4,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -129,7 +152,8 @@
       "multiplier": 0.5,
       "costPrice": 15180,
       "finalPrice": 15180,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -141,7 +165,8 @@
       "multiplier": 0.5,
       "costPrice": 19913,
       "finalPrice": 19913,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -153,7 +178,8 @@
       "multiplier": 0.5,
       "costPrice": 21598,
       "finalPrice": 21598,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -165,7 +191,8 @@
       "multiplier": 0.5,
       "costPrice": 26272,
       "finalPrice": 26272,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -177,7 +204,8 @@
       "multiplier": 0.5,
       "costPrice": 27142.5,
       "finalPrice": 27142.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -188,8 +216,9 @@
       "listPrice": 30360,
       "multiplier": 0.5,
       "costPrice": 15180,
-      "finalPrice": 12674.49,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 15209.39,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -200,8 +229,9 @@
       "listPrice": 39826,
       "multiplier": 0.5,
       "costPrice": 19913,
-      "finalPrice": 16665,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 19998,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -212,8 +242,9 @@
       "listPrice": 43196,
       "multiplier": 0.5,
       "costPrice": 21598,
-      "finalPrice": 17826.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 21391.8,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -224,8 +255,9 @@
       "listPrice": 52544,
       "multiplier": 0.5,
       "costPrice": 26272,
-      "finalPrice": 21397.86,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 25677.43,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -236,8 +268,9 @@
       "listPrice": 54285,
       "multiplier": 0.5,
       "costPrice": 27142.5,
-      "finalPrice": 22120.01,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 26544.01,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -248,8 +281,9 @@
       "listPrice": 2206,
       "multiplier": 0.55,
       "costPrice": 1213.3000000000002,
-      "finalPrice": 1200.89,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1441.07,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -260,8 +294,9 @@
       "listPrice": 2332,
       "multiplier": 0.55,
       "costPrice": 1282.6000000000001,
-      "finalPrice": 1235.23,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1482.28,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -272,8 +307,9 @@
       "listPrice": 2395,
       "multiplier": 0.55,
       "costPrice": 1317.25,
-      "finalPrice": 1287.75,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1545.3,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -284,8 +320,9 @@
       "listPrice": 2552,
       "multiplier": 0.55,
       "costPrice": 1403.6000000000001,
-      "finalPrice": 1323.1,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1587.72,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -296,8 +333,9 @@
       "listPrice": 2848,
       "multiplier": 0.55,
       "costPrice": 1566.4,
-      "finalPrice": 1475.61,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1770.73,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -308,8 +346,9 @@
       "listPrice": 2883,
       "multiplier": 0.55,
       "costPrice": 1585.65,
-      "finalPrice": 1494.8,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1793.76,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -320,8 +359,9 @@
       "listPrice": 5072,
       "multiplier": 0.5,
       "costPrice": 2536,
-      "finalPrice": 2253.3807,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2704.06,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -332,8 +372,9 @@
       "listPrice": 5218,
       "multiplier": 0.5,
       "costPrice": 2609,
-      "finalPrice": 2484.6,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2981.52,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -344,8 +385,9 @@
       "listPrice": 5368,
       "multiplier": 0.5,
       "costPrice": 2684,
-      "finalPrice": 2555.3,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3066.36,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -356,8 +398,9 @@
       "listPrice": 5513,
       "multiplier": 0.5,
       "costPrice": 2756.5,
-      "finalPrice": 2626,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3151.2,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -368,8 +411,9 @@
       "listPrice": 6057,
       "multiplier": 0.5,
       "costPrice": 3028.5,
-      "finalPrice": 2911.83,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3494.2,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -380,8 +424,9 @@
       "listPrice": 6254,
       "multiplier": 0.5,
       "costPrice": 3127,
-      "finalPrice": 3006.77,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3608.12,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -392,8 +437,9 @@
       "listPrice": 6450,
       "multiplier": 0.5,
       "costPrice": 3225,
-      "finalPrice": 3100.7,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3720.84,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -405,7 +451,8 @@
       "multiplier": 0.55,
       "costPrice": 1888.7,
       "finalPrice": 1888.7,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -416,8 +463,9 @@
       "listPrice": 3612,
       "multiplier": 0.55,
       "costPrice": 1986.6000000000001,
-      "finalPrice": 1986.6000000000001,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1986.6,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -428,8 +476,9 @@
       "listPrice": 3804,
       "multiplier": 0.55,
       "costPrice": 2092.2000000000003,
-      "finalPrice": 2092.2000000000003,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2092.2,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -441,7 +490,8 @@
       "multiplier": 0.55,
       "costPrice": 2203.3,
       "finalPrice": 2203.3,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -452,8 +502,9 @@
       "listPrice": 4214,
       "multiplier": 0.55,
       "costPrice": 2317.7000000000003,
-      "finalPrice": 2317.7000000000003,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2317.7,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -465,7 +516,8 @@
       "multiplier": 0.55,
       "costPrice": 2439.25,
       "finalPrice": 2439.25,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -477,7 +529,8 @@
       "multiplier": 0.55,
       "costPrice": 2569.05,
       "finalPrice": 2569.05,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -489,7 +542,8 @@
       "multiplier": 0.55,
       "costPrice": 2703.25,
       "finalPrice": 2703.25,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -500,8 +554,9 @@
       "listPrice": 5175,
       "multiplier": 0.55,
       "costPrice": 2846.2500000000005,
-      "finalPrice": 2846.2500000000005,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2846.25,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -512,8 +567,9 @@
       "listPrice": 3218,
       "multiplier": 0.55,
       "costPrice": 1769.9,
-      "finalPrice": 1742.25,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2090.7,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -524,8 +580,9 @@
       "listPrice": 3396,
       "multiplier": 0.55,
       "costPrice": 1867.8000000000002,
-      "finalPrice": 1763.46,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2116.15,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -536,8 +593,9 @@
       "listPrice": 3572,
       "multiplier": 0.55,
       "costPrice": 1964.6000000000001,
-      "finalPrice": 1856.38,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2227.66,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -548,8 +606,9 @@
       "listPrice": 3757,
       "multiplier": 0.55,
       "costPrice": 2066.3500000000004,
-      "finalPrice": 2025.05,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2430.06,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -560,8 +619,9 @@
       "listPrice": 3951,
       "multiplier": 0.55,
       "costPrice": 2173.05,
-      "finalPrice": 2061.1979,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2473.44,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -572,8 +632,9 @@
       "listPrice": 4163,
       "multiplier": 0.55,
       "costPrice": 2289.65,
-      "finalPrice": 2162.41,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2594.89,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -584,8 +645,9 @@
       "listPrice": 4383,
       "multiplier": 0.55,
       "costPrice": 2410.65,
-      "finalPrice": 2276.54,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2731.85,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -596,8 +658,9 @@
       "listPrice": 4612,
       "multiplier": 0.55,
       "costPrice": 2536.6000000000004,
-      "finalPrice": 2405.8806,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2887.06,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -608,8 +671,9 @@
       "listPrice": 4849,
       "multiplier": 0.55,
       "costPrice": 2666.9500000000003,
-      "finalPrice": 2666.9500000000003,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2666.95,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -620,8 +684,9 @@
       "listPrice": 5623,
       "multiplier": 0.65,
       "costPrice": 3654.9500000000003,
-      "finalPrice": 3654.9500000000003,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3654.95,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -633,7 +698,8 @@
       "multiplier": 0.65,
       "costPrice": 4842.5,
       "finalPrice": 4842.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -645,7 +711,8 @@
       "multiplier": 0.65,
       "costPrice": 5651.1,
       "finalPrice": 5651.1,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -656,8 +723,9 @@
       "listPrice": 3422,
       "multiplier": 0.55,
       "costPrice": 1882.1000000000001,
-      "finalPrice": 1882.1000000000001,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1882.1,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -668,8 +736,9 @@
       "listPrice": 3607,
       "multiplier": 0.55,
       "costPrice": 1983.8500000000001,
-      "finalPrice": 1983.8500000000001,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1983.85,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -680,8 +749,9 @@
       "listPrice": 3757,
       "multiplier": 0.55,
       "costPrice": 2066.3500000000004,
-      "finalPrice": 2066.3500000000004,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2066.35,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -693,7 +763,8 @@
       "multiplier": 0.55,
       "costPrice": 2123,
       "finalPrice": 2123,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -705,7 +776,8 @@
       "multiplier": 0.55,
       "costPrice": 2213.75,
       "finalPrice": 2213.75,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -717,7 +789,8 @@
       "multiplier": 0.55,
       "costPrice": 2315.5,
       "finalPrice": 2315.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -729,7 +802,8 @@
       "multiplier": 0.55,
       "costPrice": 2579.5,
       "finalPrice": 2579.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -740,8 +814,9 @@
       "listPrice": 3396,
       "multiplier": 0.55,
       "costPrice": 1867.8000000000002,
-      "finalPrice": 1867.8000000000002,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1867.8,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -753,7 +828,8 @@
       "multiplier": 0.55,
       "costPrice": 1943.15,
       "finalPrice": 1943.15,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -764,8 +840,9 @@
       "listPrice": 3635,
       "multiplier": 0.55,
       "costPrice": 1999.2500000000002,
-      "finalPrice": 1999.2500000000002,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 1999.25,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -777,7 +854,8 @@
       "multiplier": 0.55,
       "costPrice": 2081.75,
       "finalPrice": 2081.75,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -789,7 +867,8 @@
       "multiplier": 0.55,
       "costPrice": 2179.65,
       "finalPrice": 2179.65,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -801,7 +880,8 @@
       "multiplier": 0.55,
       "costPrice": 2428.25,
       "finalPrice": 2428.25,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -812,8 +892,9 @@
       "listPrice": 4490,
       "multiplier": 0.55,
       "costPrice": 2469.5,
-      "finalPrice": 2020,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2424,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -824,8 +905,9 @@
       "listPrice": 4620,
       "multiplier": 0.55,
       "costPrice": 2541,
-      "finalPrice": 2115.95,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2539.14,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -836,8 +918,9 @@
       "listPrice": 5600,
       "multiplier": 0.55,
       "costPrice": 3080.0000000000005,
-      "finalPrice": 2519.95,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3023.94,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -848,8 +931,9 @@
       "listPrice": 5773,
       "multiplier": 0.55,
       "costPrice": 3175.15,
-      "finalPrice": 2597.72,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3117.26,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -860,8 +944,9 @@
       "listPrice": 6581,
       "multiplier": 0.55,
       "costPrice": 3619.55,
-      "finalPrice": 2979.5,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3575.4,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -872,8 +957,9 @@
       "listPrice": 6774,
       "multiplier": 0.55,
       "costPrice": 3725.7000000000003,
-      "finalPrice": 3048.18,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3657.82,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -884,8 +970,9 @@
       "listPrice": 6080,
       "multiplier": 0.55,
       "costPrice": 3344.0000000000005,
-      "finalPrice": 3189.58,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3827.5,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -896,8 +983,9 @@
       "listPrice": 4144,
       "multiplier": 0.55,
       "costPrice": 2279.2000000000003,
-      "finalPrice": 2279.2000000000003,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2279.2,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -909,7 +997,8 @@
       "multiplier": 0.55,
       "costPrice": 2402.4,
       "finalPrice": 2402.4,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -920,8 +1009,9 @@
       "listPrice": 4498,
       "multiplier": 0.55,
       "costPrice": 2473.9,
-      "finalPrice": 1951.32,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2341.58,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -932,8 +1022,9 @@
       "listPrice": 4636,
       "multiplier": 0.55,
       "costPrice": 2549.8,
-      "finalPrice": 2090.7,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2508.84,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -944,8 +1035,9 @@
       "listPrice": 4769,
       "multiplier": 0.55,
       "costPrice": 2622.9500000000003,
-      "finalPrice": 2239.17,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2687,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -956,8 +1048,9 @@
       "listPrice": 4915,
       "multiplier": 0.55,
       "costPrice": 2703.25,
-      "finalPrice": 2305.83,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 2767,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -968,8 +1061,9 @@
       "listPrice": 5955,
       "multiplier": 0.55,
       "costPrice": 3275.2500000000005,
-      "finalPrice": 2617.92,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3141.5,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -980,8 +1074,9 @@
       "listPrice": 6136,
       "multiplier": 0.55,
       "costPrice": 3374.8,
-      "finalPrice": 2695.69,
-      "updatedAt": "2026-08-03T08:49:17.823Z",
+      "finalPrice": 3234.83,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -992,8 +1087,9 @@
       "listPrice": 6994,
       "multiplier": 0.55,
       "costPrice": 3846.7000000000003,
-      "finalPrice": 3074.44,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 3689.33,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1004,8 +1100,9 @@
       "listPrice": 7203,
       "multiplier": 0.55,
       "costPrice": 3961.6500000000005,
-      "finalPrice": 3166.35,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 3799.62,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1016,8 +1113,9 @@
       "listPrice": 7420,
       "multiplier": 0.55,
       "costPrice": 4081.0000000000005,
-      "finalPrice": 3260.28,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 3912.34,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1028,8 +1126,9 @@
       "listPrice": 10498,
       "multiplier": 0.55,
       "costPrice": 5773.900000000001,
-      "finalPrice": 4808.61,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 5770.33,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1040,8 +1139,9 @@
       "listPrice": 12720,
       "multiplier": 0.55,
       "costPrice": 6996.000000000001,
-      "finalPrice": 5397.44,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 6476.93,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1052,8 +1152,9 @@
       "listPrice": 14027,
       "multiplier": 0.55,
       "costPrice": 7714.85,
-      "finalPrice": 5753.97,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 6904.76,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1064,8 +1165,9 @@
       "listPrice": 25536,
       "multiplier": 0.55,
       "costPrice": 14044.800000000001,
-      "finalPrice": 14044.800000000001,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 14044.8,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1076,8 +1178,9 @@
       "listPrice": 25285,
       "multiplier": 0.55,
       "costPrice": 13906.750000000002,
-      "finalPrice": 13906.750000000002,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 13906.75,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1088,20 +1191,10 @@
       "listPrice": 162,
       "multiplier": 0.65,
       "costPrice": 105.3,
-      "finalPrice": 83,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
-      "history": [
-        {
-          "date": "2026-08-03T12:23:27.063Z",
-          "costPrice": 105.3,
-          "finalPrice": 84
-        },
-        {
-          "date": "2026-08-03T12:23:04.895Z",
-          "costPrice": 105.3,
-          "finalPrice": 83
-        }
-      ]
+      "finalPrice": 99.6,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
     },
     {
       "id": "bc039ab8-05b9-4da1-9941-6d015fcf64f1",
@@ -1111,8 +1204,9 @@
       "listPrice": 194,
       "multiplier": 0.65,
       "costPrice": 126.10000000000001,
-      "finalPrice": 99,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 118.8,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1123,8 +1217,9 @@
       "listPrice": 320,
       "multiplier": 0.65,
       "costPrice": 208,
-      "finalPrice": 164,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 196.8,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1135,8 +1230,9 @@
       "listPrice": 477,
       "multiplier": 0.65,
       "costPrice": 310.05,
-      "finalPrice": 245,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 294,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1147,8 +1243,9 @@
       "listPrice": 162,
       "multiplier": 0.65,
       "costPrice": 105.3,
-      "finalPrice": 83,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 99.6,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1159,8 +1256,9 @@
       "listPrice": 639,
       "multiplier": 0.65,
       "costPrice": 415.35,
-      "finalPrice": 328,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 393.6,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1171,8 +1269,9 @@
       "listPrice": 705,
       "multiplier": 0.65,
       "costPrice": 458.25,
-      "finalPrice": 413.5,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 496.2,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1183,8 +1282,9 @@
       "listPrice": 1664,
       "multiplier": 0.65,
       "costPrice": 1081.6000000000001,
-      "finalPrice": 849,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 1018.8,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1195,8 +1295,9 @@
       "listPrice": 726,
       "multiplier": 0.65,
       "costPrice": 471.90000000000003,
-      "finalPrice": 370,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 444,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1207,8 +1308,9 @@
       "listPrice": 805,
       "multiplier": 0.65,
       "costPrice": 523.25,
-      "finalPrice": 412,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 494.4,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1219,8 +1321,9 @@
       "listPrice": 1061,
       "multiplier": 0.65,
       "costPrice": 689.65,
-      "finalPrice": 542,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 650.4,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1231,8 +1334,9 @@
       "listPrice": 2223,
       "multiplier": 0.65,
       "costPrice": 1444.95,
-      "finalPrice": 1134,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 1360.8,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1243,8 +1347,9 @@
       "listPrice": 1124,
       "multiplier": 0.65,
       "costPrice": 730.6,
-      "finalPrice": 573,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 687.6,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1255,8 +1360,9 @@
       "listPrice": 2184,
       "multiplier": 0.65,
       "costPrice": 1419.6000000000001,
-      "finalPrice": 1115,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 1338,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1267,8 +1373,9 @@
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "finalPrice": 253,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 303.6,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1279,8 +1386,9 @@
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "finalPrice": 253,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 303.6,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1291,8 +1399,9 @@
       "listPrice": 493,
       "multiplier": 0.65,
       "costPrice": 320.45,
-      "finalPrice": 253,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 303.6,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1304,7 +1413,8 @@
       "multiplier": 1,
       "costPrice": 5813,
       "finalPrice": 5813,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1316,7 +1426,8 @@
       "multiplier": 1,
       "costPrice": 8795,
       "finalPrice": 8795,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1328,7 +1439,8 @@
       "multiplier": 1,
       "costPrice": 9169,
       "finalPrice": 9169,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1340,7 +1452,8 @@
       "multiplier": 1,
       "costPrice": 9562,
       "finalPrice": 9562,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1351,8 +1464,9 @@
       "listPrice": 10188,
       "multiplier": 1,
       "costPrice": 10188,
-      "finalPrice": 10188,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 8950,
+      "remarks": "Price given by Ehtesam on call on 15/09/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1364,7 +1478,8 @@
       "multiplier": 0.5,
       "costPrice": 5132,
       "finalPrice": 4606,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1376,7 +1491,8 @@
       "multiplier": 0.5,
       "costPrice": 6872.5,
       "finalPrice": 6565,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1388,7 +1504,8 @@
       "multiplier": 0.5,
       "costPrice": 7087,
       "finalPrice": 6705,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1400,7 +1517,8 @@
       "multiplier": 0.5,
       "costPrice": 7256.5,
       "finalPrice": 7288,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1412,7 +1530,8 @@
       "multiplier": 0.5,
       "costPrice": 9544.5,
       "finalPrice": 8716,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1424,7 +1543,8 @@
       "multiplier": 0.5,
       "costPrice": 9985,
       "finalPrice": 9270,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1435,8 +1555,9 @@
       "listPrice": 10904.9,
       "multiplier": 0.5,
       "costPrice": 5452.45,
-      "finalPrice": 5452.45,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 6542.94,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1447,8 +1568,9 @@
       "listPrice": 14385.9,
       "multiplier": 0.5,
       "costPrice": 7192.95,
-      "finalPrice": 7192.95,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 8631.54,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1459,8 +1581,9 @@
       "listPrice": 14814.9,
       "multiplier": 0.5,
       "costPrice": 7407.45,
-      "finalPrice": 7407.45,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 8888.94,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1471,8 +1594,9 @@
       "listPrice": 15153.9,
       "multiplier": 0.5,
       "costPrice": 7576.95,
-      "finalPrice": 7576.95,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 9092.34,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1483,8 +1607,9 @@
       "listPrice": 19729.9,
       "multiplier": 0.5,
       "costPrice": 9864.95,
-      "finalPrice": 9864.95,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 11837.94,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1495,8 +1620,9 @@
       "listPrice": 20610.9,
       "multiplier": 0.5,
       "costPrice": 10305.45,
-      "finalPrice": 10305.45,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 12366.54,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1508,7 +1634,8 @@
       "multiplier": 0.5,
       "costPrice": 3366,
       "finalPrice": 3413,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1520,7 +1647,8 @@
       "multiplier": 0.5,
       "costPrice": 4019,
       "finalPrice": 3932,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1532,7 +1660,8 @@
       "multiplier": 0.5,
       "costPrice": 4874,
       "finalPrice": 4788,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1544,7 +1673,8 @@
       "multiplier": 0.5,
       "costPrice": 5873.5,
       "finalPrice": 5944,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1556,7 +1686,8 @@
       "multiplier": 0.5,
       "costPrice": 7041.5,
       "finalPrice": 6848,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1568,7 +1699,8 @@
       "multiplier": 0.5,
       "costPrice": 9983,
       "finalPrice": 8600,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1580,7 +1712,8 @@
       "multiplier": 0.65,
       "costPrice": 451.1,
       "finalPrice": 451.1,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1592,7 +1725,8 @@
       "multiplier": 0.65,
       "costPrice": 653.9,
       "finalPrice": 653.9,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1604,7 +1738,8 @@
       "multiplier": 0.5,
       "costPrice": 1913,
       "finalPrice": 1925,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1616,7 +1751,8 @@
       "multiplier": 0.5,
       "costPrice": 2296.5,
       "finalPrice": 2450,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1628,7 +1764,8 @@
       "multiplier": 0.5,
       "costPrice": 3068,
       "finalPrice": 2975,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "AMTS/PO/566 - OC dated 17/06/2026",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1640,7 +1777,8 @@
       "multiplier": 0.5,
       "costPrice": 3326.5,
       "finalPrice": 3326.5,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1652,7 +1790,8 @@
       "multiplier": 0.5,
       "costPrice": 3641,
       "finalPrice": 3641,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1664,7 +1803,8 @@
       "multiplier": 0.5,
       "costPrice": 4667,
       "finalPrice": 4667,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1676,7 +1816,8 @@
       "multiplier": 0.5,
       "costPrice": 18000,
       "finalPrice": 18000,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1688,7 +1829,8 @@
       "multiplier": 0.5,
       "costPrice": 27800,
       "finalPrice": 27800,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1700,7 +1842,8 @@
       "multiplier": 0.5,
       "costPrice": 35230,
       "finalPrice": 35230,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1712,7 +1855,8 @@
       "multiplier": 0.5,
       "costPrice": 39573,
       "finalPrice": 39573,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1724,7 +1868,8 @@
       "multiplier": 0.5,
       "costPrice": 45430.5,
       "finalPrice": 45430.5,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1736,7 +1881,8 @@
       "multiplier": 0.5,
       "costPrice": 51616.5,
       "finalPrice": 51616.5,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1747,8 +1893,9 @@
       "listPrice": 2500,
       "multiplier": 0.65,
       "costPrice": 1625,
-      "finalPrice": 460,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 552,
+      "remarks": "Ehtesam Individual Price List",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1760,7 +1907,8 @@
       "multiplier": 0.65,
       "costPrice": 13639.6,
       "finalPrice": 13639.6,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1772,7 +1920,8 @@
       "multiplier": 0.65,
       "costPrice": 3732.3,
       "finalPrice": 3732.3,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1783,8 +1932,9 @@
       "listPrice": 1899,
       "multiplier": 0.65,
       "costPrice": 1234.3500000000001,
-      "finalPrice": 1234.3500000000001,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 1234.35,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1796,7 +1946,8 @@
       "multiplier": 0.65,
       "costPrice": 10197.85,
       "finalPrice": 10197.85,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1807,8 +1958,9 @@
       "listPrice": 1277,
       "multiplier": 0.65,
       "costPrice": 830.0500000000001,
-      "finalPrice": 830.0500000000001,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 830.05,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1820,7 +1972,8 @@
       "multiplier": 0.65,
       "costPrice": 863.2,
       "finalPrice": 863.2,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1832,7 +1985,8 @@
       "multiplier": 0.65,
       "costPrice": 904.15,
       "finalPrice": 904.15,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1844,7 +1998,8 @@
       "multiplier": 0.65,
       "costPrice": 958.1,
       "finalPrice": 958.1,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1856,7 +2011,8 @@
       "multiplier": 0.65,
       "costPrice": 996.45,
       "finalPrice": 996.45,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1867,8 +2023,9 @@
       "listPrice": 1624,
       "multiplier": 0.65,
       "costPrice": 1055.6000000000001,
-      "finalPrice": 1055.6000000000001,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 1055.6,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1880,7 +2037,8 @@
       "multiplier": 0.65,
       "costPrice": 1129.05,
       "finalPrice": 1129.05,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1892,19 +2050,8 @@
       "multiplier": 0.65,
       "costPrice": 1206.4,
       "finalPrice": 1206.4,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
-      "history": []
-    },
-    {
-      "id": "97357374-0abb-467a-a5e6-bbc3502c0d7e",
-      "model": "EKEXVA250",
-      "description": "Expansion valve VRV-FAHU - New",
-      "origin": "",
-      "listPrice": 1856,
-      "multiplier": 0.65,
-      "costPrice": 1206.4,
-      "finalPrice": 1206.4,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1916,7 +2063,8 @@
       "multiplier": 0.65,
       "costPrice": 1188.2,
       "finalPrice": 1188.2,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1928,7 +2076,8 @@
       "multiplier": 0.65,
       "costPrice": 1236.95,
       "finalPrice": 1236.95,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1940,7 +2089,8 @@
       "multiplier": 0.65,
       "costPrice": 1459.25,
       "finalPrice": 1459.25,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1951,8 +2101,9 @@
       "listPrice": 4908,
       "multiplier": 0.65,
       "costPrice": 3190.2000000000003,
-      "finalPrice": 3190.2000000000003,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 2454,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     },
     {
@@ -1963,8 +2114,295 @@
       "listPrice": 4908,
       "multiplier": 0.65,
       "costPrice": 3190.2000000000003,
-      "finalPrice": 3190.2000000000003,
-      "updatedAt": "2026-08-03T08:49:17.824Z",
+      "finalPrice": 3190.2,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "61a4dc5d-a4da-432b-a902-1fd228a82aa6",
+      "model": "BACNET GATEWAY",
+      "description": "Bacnet Gateway",
+      "origin": "",
+      "listPrice": 10250,
+      "multiplier": 1,
+      "costPrice": 10250,
+      "finalPrice": 10250,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "01d623e4-98ab-4a2c-baff-62d075330ca6",
+      "model": "DCPF01",
+      "description": "Reiri Office",
+      "origin": "",
+      "listPrice": 3000,
+      "multiplier": 1,
+      "costPrice": 3000,
+      "finalPrice": 3000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "a44c3413-6783-43c2-8dfe-867c9f6c8787",
+      "model": "DCPF04",
+      "description": "Reiri Office Touchscreen",
+      "origin": "",
+      "listPrice": 7000,
+      "multiplier": 1,
+      "costPrice": 7000,
+      "finalPrice": 7000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "6bb34b26-5dba-4c17-a6a8-c97ad73b0562",
+      "model": "DCPN001",
+      "description": "Reiri Office - Adapter (Commercial Automation Control)",
+      "origin": "",
+      "listPrice": 1000,
+      "multiplier": 1,
+      "costPrice": 1000,
+      "finalPrice": 1000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "75f48d24-2ae4-414a-b092-6b1698cd018f",
+      "model": "EKEXVA100",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "b45ed0df-5976-4e0f-bf6b-325da735c301",
+      "model": "EKEXVA125",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "301d59be-19db-4f78-b478-a57d4e46ce2f",
+      "model": "EKEXVA140",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "22994d36-391f-461a-bbfb-7ad83fd874cc",
+      "model": "EKEXVA200",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "28b63950-8a3e-449e-bea1-e1f5a7d025b2",
+      "model": "EKEXVA250",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "78560dc1-b86f-45d8-bd78-d94abdaeab1b",
+      "model": "EKEXVA300",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 980,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "e8ebb940-8eec-4a76-8063-efbd564ac833",
+      "model": "EKEXVA350",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 980,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "e8920165-4729-4ddc-ad13-fe5c51ab6db6",
+      "model": "EKEXVA400",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 980,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "16bea057-8ddb-4a26-98ab-249f7d7502f9",
+      "model": "EKEXVA450",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 980,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "d380e226-0748-4a1e-a32a-8e2320303c06",
+      "model": "EKEXVA50",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "f16645cd-620c-4a1d-8265-7d10f11b8975",
+      "model": "EKEXVA500",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 980,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "a891c239-6843-4207-8e2b-e8655ff1f886",
+      "model": "EKEXVA63",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "db2cbb42-73de-4f03-9c3e-c29c42394ef8",
+      "model": "EKEXVA80",
+      "description": "Expansion valve VRV-FAHU - New",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 950,
+      "remarks": "Approximate price taken",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "e2e457a0-4901-4d45-97ff-f46326d51893",
+      "model": "ITM",
+      "description": "ITM with Commissioning",
+      "origin": "",
+      "listPrice": 17000,
+      "multiplier": 1,
+      "costPrice": 17000,
+      "finalPrice": 17000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "466897b8-38be-44e5-b82b-82e4082f51fa",
+      "model": "MODBUS GATEWAY",
+      "description": "EKMBDXB",
+      "origin": "",
+      "listPrice": 0,
+      "multiplier": 1,
+      "costPrice": 0,
+      "finalPrice": 0,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "d517e916-2d38-4a2c-a182-f09d9c967ad1",
+      "model": "REIRI OFFICE",
+      "description": "DCPF01 + DCPN001",
+      "origin": "",
+      "listPrice": 4000,
+      "multiplier": 1,
+      "costPrice": 4000,
+      "finalPrice": 4000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "1dbb990e-040c-4f58-9835-d22a5a8f8c50",
+      "model": "REIRI OFFICE FIELD SETTING & COMMISSIONING",
+      "description": "Reiri office commissioning",
+      "origin": "",
+      "listPrice": 2000,
+      "multiplier": 1,
+      "costPrice": 2000,
+      "finalPrice": 2000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
+      "history": []
+    },
+    {
+      "id": "c36047e3-6546-4e64-8ca5-c5cc3f0c61d5",
+      "model": "REIRI OFFICE TOUCHSCREEN",
+      "description": "DCPF04 + DCPN001",
+      "origin": "",
+      "listPrice": 8000,
+      "multiplier": 1,
+      "costPrice": 8000,
+      "finalPrice": 8000,
+      "remarks": "",
+      "updatedAt": "2026-11-02T11:39:17.215653Z",
       "history": []
     }
   ],
@@ -2630,5 +3068,9 @@
       "updatedAt": "2026-08-03T12:59:24.571Z"
     }
   ],
-  "activeSheetId": "a47ed208-0311-4870-9600-e757450a5b4b"
+  "activeSheetId": "a47ed208-0311-4870-9600-e757450a5b4b",
+  "priceVersion": 2,
+  "settings": {
+    "priceListLocked": false
+  }
 }

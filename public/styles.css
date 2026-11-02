@@ -1037,9 +1037,6 @@ td[contenteditable="true"]:focus {
 .costing-price-table input:disabled { background: #f4f7fb; color: #445b7d; cursor: default; }
 .costing-price-locked { display: inline-flex; align-items: center; padding: 8px 10px; border-radius: 6px; background: #fff2db; color: #965b00; font-size: 12px; font-weight: 700; }
 .settings-costing-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
-.settings-costing-controls > label:not(.settings-costing-lock) { display: grid; gap: 6px; min-width: 170px; color: #435777; font-size: 12px; }
-.settings-costing-controls input[type="number"] { width: 170px; max-width: 100%; min-height: 40px; padding: 7px 10px; border: 1px solid #cad9ee; border-radius: 6px; font: 500 14px Inter, sans-serif; }
-.settings-costing-controls input:disabled { background: #f1f4f8; color: #70809a; }
 .settings-costing-lock { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: #10264e; font-size: 13px; font-weight: 600; }
 .settings-costing-lock input { appearance: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 999px; background: #cbd6e6; cursor: pointer; transition: background .18s ease; }
 .settings-costing-lock input::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #10264e33; transition: transform .18s ease; }
@@ -1097,15 +1094,25 @@ td[contenteditable="true"]:focus {
   font-size: 13px;
 }
 
+.costing-price-table { table-layout: fixed; min-width: 1080px; }
+.costing-price-table .price-col-number { width: 5%; }
+.costing-price-table .price-col-model { width: 19%; }
+.costing-price-table .price-col-list { width: 11%; }
+.costing-price-table .price-col-multiplier { width: 8%; }
+.costing-price-table .price-col-cost { width: 12%; }
+.costing-price-table .price-col-final { width: 15%; }
+.costing-price-table .price-col-remarks { width: 23%; }
+.costing-price-table .price-col-actions { width: 7%; }
+
 .costing-table { table-layout: fixed; }
 .costing-table .costing-col-number { width: 6%; }
-.costing-table .costing-col-model { width: 35%; }
+.costing-table .costing-col-model { width: 38%; }
 .costing-table .costing-col-qty { width: 5%; }
-.costing-table .costing-col-increased { width: 20%; }
-.costing-table .costing-col-selling { width: 11%; }
-.costing-table .costing-col-amount { width: 9%; }
+.costing-table .costing-col-increased { width: 22%; }
+.costing-table .costing-col-selling { width: 12%; }
+.costing-table .costing-col-amount { width: 10%; }
 .costing-table .costing-col-margin { width: 7%; }
-.costing-table .costing-col-history { width: 7%; }
+.costing-mobile-action-cell { display: none; }
 
 .costing-table th,
 .costing-price-table th {
@@ -1131,9 +1138,17 @@ td[contenteditable="true"]:focus {
 }
 
 .costing-table td { height: 43px; padding-block: 7px; }
+.costing-final-price-readonly { display: block; padding: 7px 8px; font: 500 13px/1 "Inter", system-ui, sans-serif; }
 
 .costing-table tbody tr:nth-child(even) td,
 .costing-price-table tbody tr:nth-child(even) td { background: #fbfdff; }
+
+.costing-price-table tbody tr td.costing-price-match,
+.costing-table tbody tr td.costing-final-price-cell { background: #fff8d9; }
+.costing-price-table td.costing-price-match input,
+.costing-price-table td.costing-price-match input:disabled,
+.costing-table td.costing-final-price-cell input { background: #fff8d9; color: #51411a; }
+.costing-table td.costing-final-price-cell input:focus { border-color: #d5aa40; background: #fff3bf; box-shadow: 0 0 0 3px rgba(213, 170, 64, .16); }
 
 .costing-table input,
 .costing-price-table input {
@@ -1185,6 +1200,13 @@ td[contenteditable="true"]:focus {
 }
 .costing-price-menu-button:hover { color: #0b63f6; background: #eef5ff; }
 .costing-price-menu-cell .row-menu-list { top: 28px; min-width: 104px; z-index: 100; }
+.costing-price-page.with-history { grid-template-columns: minmax(0, 1fr) minmax(260px, 310px); align-items: start; }
+.costing-price-page.with-history .costing-price-table-wrap { min-width: 0; }
+.costing-price-history { position: sticky; top: 16px; min-width: 0; padding: 18px; }
+.costing-price-history .costing-history-row { padding: 11px; }
+.costing-price-history .costing-history-row small { color: #71819a; font-size: 11px; }
+.costing-price-current { border-color: #c9dcff; background: #f5f9ff; }
+.costing-price-current span { color: #0b63f6; font-size: 16px; font-weight: 700; }
 
 .costing-amount { font-weight: 600; }
 .costing-margin { color: #079454 !important; font-weight: 600; }
@@ -1326,6 +1348,9 @@ td[contenteditable="true"]:focus {
 .costing-all-table th:first-child,
 .costing-all-table td:first-child { padding-inline: 4px; text-align: center; }
 .costing-all-table th:nth-child(2) { text-align: left; }
+.costing-all-date time,
+.costing-all-date span { display: block; line-height: 1.35; }
+.costing-all-date span { margin-top: 3px; color: #61718a; font-size: 11px; overflow-wrap: anywhere; }
 .costing-all-table th:nth-child(n+3):nth-child(-n+7),
 .costing-all-table td:nth-child(n+3):nth-child(-n+7) { text-align: center; }
 .costing-all-table th:last-child,
@@ -1367,7 +1392,7 @@ td[contenteditable="true"]:focus {
   .costing-all-table tbody { display: block; width: 100%; }
   .costing-all-table colgroup,
   .costing-all-table thead { display: none; }
-  .costing-all-table tbody tr { position: relative; display: grid; grid-template-columns: 86px minmax(0, 1fr); border: 1px solid #d8e3f3; margin-bottom: 10px; }
+  .costing-all-table tbody tr { position: relative; display: grid; grid-template-columns: 110px minmax(0, 1fr); border: 1px solid #d8e3f3; margin-bottom: 10px; }
   .costing-all-table tbody tr:last-child { margin-bottom: 0; }
   .costing-all-table tbody td { border: 0; border-bottom: 1px solid #e5edf6; }
   .costing-all-table tbody td:first-child { grid-column: 1; padding: 12px 4px; border-right: 1px solid #e5edf6; }
@@ -8765,12 +8790,13 @@ body.login-active .mobile-app-bar { display: none; }
   .costing-price-table tbody td:nth-child(3)::before { content: "List Price (AED)"; }
   .costing-price-table tbody td:nth-child(4)::before { content: "Multiplier"; }
   .costing-price-table tbody td:nth-child(5)::before { content: "Cost Price (AED)"; }
-  .costing-price-table tbody td:nth-child(6)::before { content: "Unit Price (AED)"; }
-  .costing-price-table tbody td:nth-child(7)::before { content: "Final Unit Price (AED)"; }
-  .costing-price-table tbody td:nth-child(8)::before { content: "Last Updated"; }
+  .costing-price-table tbody td:nth-child(6)::before { content: "Final Unit Price (AED)"; }
+  .costing-price-table tbody td:nth-child(7)::before { content: "Remarks"; }
   .costing-price-table tbody td:last-child::before,
   .costing-price-table tbody td[colspan]::before { content: none; }
   .costing-price-table tbody td[colspan] { grid-column: 1 / -1; }
+  .costing-price-page.with-history { grid-template-columns: minmax(0, 1fr); }
+  .costing-price-history { position: relative; top: auto; }
   .costing-price-table tbody td input,
   .costing-price-table tbody td:nth-child(2) input { width: 100%; min-width: 0; min-height: 40px; border-color: #d8e2f3; text-align: left; }
   .topbar.quotation-shell { height: auto; min-height: 72px; flex-wrap: wrap; gap: 10px; padding: 12px 16px; }
@@ -8796,6 +8822,7 @@ body.login-active .mobile-app-bar { display: none; }
   .costing-table tbody td:last-child { grid-column: 1 / -1; }
   .costing-table tbody td:first-child { background: #f5f9ff; }
   .costing-table tbody td:last-child { display: flex; gap: 8px; border-bottom: 0; }
+  .costing-table tbody td.costing-mobile-action-cell { display: flex; }
   .costing-table tbody td:last-child::before { content: none; }
   .costing-table tbody td:nth-child(2)::before { content: "Model"; }
   .costing-table tbody td:nth-child(3)::before { content: "Qty"; }

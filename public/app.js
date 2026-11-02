@@ -98,6 +98,7 @@ let costingActiveSheetId = "";
 let costingMode = "sheet";
 let costingSearchQuery = "";
 let costingSelectedModel = "";
+let costingPriceHistoryItemId = "";
 let costingHistoryOpen = false;
 let costingProjectSaved = false;
 let costingQuotationCreating = false;
@@ -489,6 +490,11 @@ function bindShell() {
   $("#salesDeskRoot").addEventListener("click", handleSalesClick);
   $("#salesDeskRoot").addEventListener("input", handleSalesInput);
   $("#salesDeskRoot").addEventListener("change", handleSalesChange);
+  $("#salesDeskRoot").addEventListener("focusout", event => {
+    if (event.target.dataset.costingField !== "increasedFinalPrice") return;
+    const rowEl = event.target.closest("[data-costing-row]");
+    if (rowEl) event.target.value = costingMoney(activeCostingOrDraft().rows[Number(rowEl.dataset.costingRow)]?.increasedFinalPrice);
+  });
   $("#salesDeskRoot").addEventListener("dragstart", handleSalesLeadBoardDragStart);
   $("#salesDeskRoot").addEventListener("dragover", handleSalesLeadBoardDragOver);
   $("#salesDeskRoot").addEventListener("dragleave", handleSalesLeadBoardDragLeave);
@@ -1266,13 +1272,11 @@ function renderSettings() {
 }
 
 function settingsCostingCard() {
-  const settings = costingState?.settings || { priceIncrease: 20, priceListLocked: false };
+  const settings = costingState?.settings || { priceListLocked: false };
   return `<section class="inventory-card settings-card settings-costing-card">
-    <div class="inventory-topbar"><div><h2>Costing Sheet Management</h2><p class="inventory-muted">Manage Price List access and the default increase for new costing sheets.</p></div></div>
+    <div class="inventory-topbar"><div><h2>Costing Sheet Management</h2><p class="inventory-muted">Manage Price List editing access.</p></div></div>
     <div class="settings-costing-controls">
       <label class="settings-costing-lock"><input type="checkbox" data-costing-lock ${settings.priceListLocked ? "checked" : ""}><span>Lock Price List</span></label>
-      <label>Price Increase %<input type="number" data-costing-increase min="0" max="1000" step="0.1" value="${settings.priceIncrease}" ${settings.priceListLocked ? "disabled" : ""}></label>
-      <button class="primary-button" data-save-costing-settings ${settings.priceListLocked ? "disabled" : ""}>Save</button>
     </div>
   </section>`;
 }
@@ -1383,7 +1387,6 @@ async function handleSettingsClick(event) {
     return;
   }
   if (target.dataset.saveCompany) return saveSettingsCompany(target.dataset.saveCompany);
-  if (target.dataset.saveCostingSettings !== undefined) return saveCostingSettings();
   if (target.dataset.saveSettingsUsers !== undefined) return saveSettingsUsers(target);
   if (target.dataset.addSettingsUser !== undefined) {
     $("#settingsNewUser")?.classList.remove("hidden");
@@ -1430,12 +1433,8 @@ function handleSettingsChange(event) {
 }
 
 async function saveCostingSettings(locked = false) {
-  const increase = Number(costingState?.settings?.priceListLocked
-    ? costingState.settings.priceIncrease
-    : document.querySelector("[data-costing-increase]")?.value);
-  if (!Number.isFinite(increase) || increase < 0 || increase > 1000) return toast("Price increase must be between 0 and 1000%.");
   try {
-    costingState = await api("/api/costing/settings", { method: "PUT", body: JSON.stringify({ priceIncrease: increase, priceListLocked: locked }) });
+    costingState = await api("/api/costing/settings", { method: "PUT", body: JSON.stringify({ priceListLocked: locked }) });
     costingLoadedAt = Date.now();
     renderSettings();
     toast(locked ? "Price List locked" : "Costing settings saved");
@@ -12885,8 +12884,9 @@ function areaWorkbookRate(value, fallback) {
   return rate || fallback;
 }
 
-function areaCalculationWorkbookStylesXml() {
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="0.0000"/><numFmt numFmtId="165" formatCode="0.00"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="12"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="165" fontId="2" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/></cellXfs></styleSheet>`;
+function areaCalculationWorkbookStylesXml(costing = false) {
+  const costingStyles = costing ? '<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="10" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/><xf numFmtId="4" fontId="2" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>' : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="0.0000"/><numFmt numFmtId="165" formatCode="0.00"/></numFmts><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="12"/><name val="Calibri"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFF00"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${costing ? 13 : 9}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1" applyNumberFormat="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf><xf numFmtId="165" fontId="2" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1" applyNumberFormat="1"/>${costingStyles}</cellXfs></styleSheet>`;
 }
 
 function buildTableWorkbookBlob(payload = {}) {
@@ -13139,7 +13139,6 @@ function newCostingSheet() {
     project: "",
     enquiryNo: "",
     defaultMargin: 10,
-    priceIncrease: costingState?.settings?.priceIncrease ?? 20,
     salesPerson: currentUser?.name || "",
     rows: [{ id: costingId(), model: "", qty: 1, listPrice: 0, multiplier: 1, costPrice: 0, finalPrice: 0, increasedFinalPrice: 0, sellingPrice: 0, priceSource: "Price List" }],
     isSaved: false
@@ -13181,8 +13180,7 @@ function costingRowWithPrice(row, sheet) {
   const price = costingPriceForModel(row.model);
   if (!price) return { ...row };
   const margin = costingNumber(sheet.defaultMargin) / 100;
-  const finalPrice = costingNumber(price.finalPrice) || costingNumber(price.costPrice);
-  const increasedFinalPrice = finalPrice * (1 + costingNumber(sheet.priceIncrease ?? 20) / 100);
+  const finalPrice = costingNumber(price.finalPrice);
   return {
     ...row,
     model: price.model,
@@ -13190,8 +13188,8 @@ function costingRowWithPrice(row, sheet) {
     multiplier: costingNumber(price.multiplier) || 1,
     costPrice: costingNumber(price.costPrice) || costingNumber(price.listPrice) * (costingNumber(price.multiplier) || 1),
     finalPrice,
-    increasedFinalPrice,
-    sellingPrice: increasedFinalPrice / Math.max(.01, 1 - margin),
+    increasedFinalPrice: finalPrice,
+    sellingPrice: finalPrice / Math.max(.01, 1 - margin),
     priceSource: "Price List"
   };
 }
@@ -13205,9 +13203,8 @@ function costingSheetHtml() {
   const customers = costingState?.customers || [];
   const projects = costingState?.projects || [];
   const revisionSuffix = costingRevisionSuffix(sheet);
-  const history = costingHistoryOpen ? costingPriceForModel(costingSelectedModel) : null;
   return `
-    <div class="costing-page ${history ? "with-history" : ""}">
+    <div class="costing-page">
       <section class="costing-main">
         <div class="costing-details">
           <label>Customer<select data-costing-field="customer"><option value="">Select customer</option>${sheet.customer && !customers.some(customer => norm(customer.name) === norm(sheet.customer)) ? `<option value="${escapeHtml(sheet.customer)}" selected>${escapeHtml(sheet.customer)}</option>` : ""}${customers.map(customer => `<option value="${escapeHtml(customer.name)}" ${norm(customer.name) === norm(sheet.customer) ? "selected" : ""}>${escapeHtml(customer.name)}</option>`).join("")}</select></label>
@@ -13218,7 +13215,7 @@ function costingSheetHtml() {
         </div>
         <div class="costing-table-shell">
           <div class="costing-table-wrap">
-            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"><col class="costing-col-history"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Unit Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th><th>History</th></tr></thead>
+            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Unit Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th></tr></thead>
             <tbody>${rows.map((row, index) => costingRowHtml(row, index)).join("")}</tbody></table>
           </div>
           <aside class="costing-row-actions" aria-label="Remove costing rows">
@@ -13228,7 +13225,7 @@ function costingSheetHtml() {
         </div>
         <div class="costing-table-actions"><button class="sales-secondary costing-add-row" data-costing-action="add-row">+ Add Item</button><button class="sales-primary costing-save-button" data-costing-action="save-sheet">Save</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Costing Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div>
         <section class="costing-totals">
-          <div><span>Total Increased Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
+          <div><span>Total Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
           <div class="good"><span>Margin</span><strong>${totals.margin.toFixed(1)}%</strong></div>
           <div class="good"><span>Gross Profit</span><strong>AED ${costingMoney(totals.profit)}</strong></div>
           <div><span>Total Selling</span><strong>AED ${costingMoney(totals.selling)}</strong></div>
@@ -13236,13 +13233,6 @@ function costingSheetHtml() {
           <div class="grand"><span>Grand Total</span><strong>AED ${costingMoney(totals.grand)}</strong></div>
         </section>
       </section>
-      ${history ? `<aside class="costing-history">
-        <button class="costing-history-close" data-costing-action="close-history" title="Close price history" aria-label="Close price history">x</button>
-        <h3>Price History</h3><p>Historical final prices for the selected model.</p>
-        <strong class="costing-history-model">${escapeHtml(history.model)}</strong><span>${escapeHtml(costingDisplayDescription(history))}</span>
-          <div class="costing-history-row"><b>Current</b><span>Final Price AED ${costingMoney(history.finalPrice)}</span></div>
-          ${(history.history || []).map(item => `<div class="costing-history-row"><b>${escapeHtml(new Date(item.date).toLocaleDateString("en-GB"))}</b><span>Final Price AED ${costingMoney(item.finalPrice)}</span></div>`).join("") || `<div class="costing-history-empty">No earlier price changes.</div>`}
-      </aside>` : ""}
       <datalist id="costingModelList">${(costingState?.priceItems || []).map(item => `<option value="${escapeHtml(item.model)}">${escapeHtml(costingDisplayDescription(item))}</option>`).join("")}</datalist>
     </div>`;
 }
@@ -13253,16 +13243,16 @@ function costingAllSheetsHtml() {
     <div class="costing-all-heading"><h3>All Costing Sheets</h3><span>${sheets.length} sheet${sheets.length === 1 ? "" : "s"}</span></div>
     <table class="costing-all-table">
       <colgroup><col class="costing-all-col-date"><col class="costing-all-col-project"><col class="costing-all-col-increase"><col class="costing-all-col-profit"><col class="costing-all-col-selling"><col class="costing-all-col-vat"><col class="costing-all-col-grand"><col class="costing-all-col-action"></colgroup>
-      <thead><tr><th scope="col">Date</th><th scope="col">Project / Customer</th><th scope="col">Total Increase Price</th><th scope="col">Profit / Margin</th><th scope="col">Total Selling</th><th scope="col">VAT 5%</th><th scope="col">Grand Total</th><th scope="col" aria-label="Actions"></th></tr></thead>
+      <thead><tr><th scope="col">Date</th><th scope="col">Project / Customer</th><th scope="col">Total Final Price</th><th scope="col">Profit / Margin</th><th scope="col">Total Selling</th><th scope="col">VAT 5%</th><th scope="col">Grand Total</th><th scope="col" aria-label="Actions"></th></tr></thead>
       <tbody>${sheets.map(sheet => {
       const totals = costingTotals(sheet.rows || []);
       const name = sheet.project || sheet.title || "Untitled Costing";
       const dateValue = Date.parse(sheet.createdAt || sheet.updatedAt || "");
       const date = Number.isFinite(dateValue) ? new Date(dateValue).toLocaleDateString("en-GB") : "-";
       return `<tr>
-        <td data-label="Date">${escapeHtml(date)}</td>
+        <td data-label="Date"><div class="costing-all-date"><time>${escapeHtml(date)}</time><span>${escapeHtml(sheet.salesPerson || "Not recorded")}</span></div></td>
         <td data-label="Project / Customer"><div class="costing-all-project"><button class="costing-all-project-link" data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">${escapeHtml(name)}</button><span>${escapeHtml(sheet.customer || "No customer selected")}</span></div></td>
-        <td data-label="Total Increase Price" class="costing-all-money">AED ${costingMoney(totals.increasedFinalPrice)}</td>
+        <td data-label="Total Final Price" class="costing-all-money">AED ${costingMoney(totals.increasedFinalPrice)}</td>
         <td data-label="Profit / Margin" class="costing-all-profit"><div><strong>AED ${costingMoney(totals.profit)}</strong><span>${totals.margin.toFixed(1)}% margin</span></div></td>
         <td data-label="Total Selling" class="costing-all-money">AED ${costingMoney(totals.selling)}</td>
         <td data-label="VAT 5%" class="costing-all-money">AED ${costingMoney(totals.vat)}</td>
@@ -13291,13 +13281,17 @@ function costingRevisionSuffix(sheet = {}) {
 function costingRowHtml(row, index) {
   const amount = costingNumber(row.qty) * costingNumber(row.sellingPrice);
   const margin = costingNumber(row.sellingPrice) ? ((costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice)) * 100 : 0;
+  const listedModel = Boolean(costingPriceForModel(row.model));
+  const samePrice = costingNumber(row.costPrice) > 0 && Math.round(costingNumber(row.costPrice) * 100) === Math.round(costingNumber(row.increasedFinalPrice) * 100);
   return `<tr data-costing-row="${index}">
     <td>${index + 1}</td><td><input list="costingModelList" data-costing-field="model" value="${escapeHtml(row.model)}" placeholder="Type model..." /></td>
     <td><input type="number" min="1" data-costing-field="qty" value="${costingNumber(row.qty) || 1}" /></td>
-    <td><input type="number" min="0" step="0.01" data-costing-field="increasedFinalPrice" value="${costingNumber(row.increasedFinalPrice).toFixed(2)}" /></td>
+    <td class="${samePrice ? "costing-final-price-cell" : ""}">${listedModel
+      ? `<span class="costing-final-price-readonly">${costingMoney(row.increasedFinalPrice)}</span>`
+      : `<input type="text" inputmode="decimal" data-costing-field="increasedFinalPrice" aria-label="Final Unit Price for ${escapeHtml(row.model || `row ${index + 1}`)}" value="${costingMoney(row.increasedFinalPrice)}" />`}</td>
     <td><input type="number" min="0" step="0.01" data-costing-field="sellingPrice" value="${costingNumber(row.sellingPrice).toFixed(2)}" /></td>
     <td class="costing-amount">${costingMoney(amount)}</td><td class="costing-margin">${margin.toFixed(1)}%</td>
-    <td><button class="costing-history-view" data-costing-action="view-history" title="View price history">View</button><button class="costing-mobile-delete" data-costing-action="remove-row" data-costing-row-index="${index}" aria-label="Remove row ${index + 1}">Remove</button></td></tr>`;
+    <td class="costing-mobile-action-cell"><button class="costing-mobile-delete" data-costing-action="remove-row" data-costing-row-index="${index}" aria-label="Remove row ${index + 1}">Remove</button></td></tr>`;
 }
 
 function costingTotals(rows = []) {
@@ -13314,12 +13308,24 @@ function costingDisplayDescription(item = {}) {
 
 function costingPriceListHtml() {
   const search = norm(costingSearchQuery);
-  const items = (costingState?.priceItems || []).filter(item => !search || [item.model, item.description, item.origin].some(value => norm(value).includes(search)));
+  const items = (costingState?.priceItems || []).filter(item => !search || [item.model, item.description, item.origin, item.remarks].some(value => norm(value).includes(search)));
   const locked = costingState?.settings?.priceListLocked === true;
-  const increase = costingNumber(costingState?.settings?.priceIncrease ?? 20);
-  return `<div class="costing-price-page"><div class="costing-price-table-wrap"><table class="costing-price-table"><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Unit Price (AED)</th><th>Final Unit Price (AED)</th><th>Last Updated</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
-    ${items.map((item, index) => `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td>${costingMoney(item.costPrice)}</td><td><input type="number" step=".01" data-costing-field="price-finalPrice" value="${costingNumber(item.finalPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><strong>${costingMoney(costingNumber(item.finalPrice) * (1 + increase / 100))}</strong></td><td>${escapeHtml(new Date(item.updatedAt).toLocaleDateString("en-GB"))}</td><td class="costing-price-menu-cell">${locked ? "" : `<div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button class="danger" data-costing-action="delete-price">Delete</button></div></div>`}</td></tr>`).join("") || `<tr><td colspan="9" class="costing-empty">No models match this search.</td></tr>`}
-  </tbody></table></div></div>`;
+  const selected = items.find(item => item.id === costingPriceHistoryItemId);
+  const history = selected ? `<aside class="costing-history costing-price-history">
+    <button class="costing-history-close" data-costing-action="close-price-history" title="Close price history" aria-label="Close price history">×</button>
+    <h3>Price History</h3><p>Price changes recorded for this model.</p>
+    <strong class="costing-history-model">${escapeHtml(selected.model)}</strong><span>${escapeHtml(costingDisplayDescription(selected) || "Price List model")}</span>
+    <div class="costing-history-row costing-price-current"><b>Current Price</b><span>${costingMoney(selected.finalPrice)} AED</span><small>Updated ${escapeHtml(costingDateLabel(selected.updatedAt))}</small></div>
+    ${(selected.history || []).map(entry => `<div class="costing-history-row"><b>Earlier Price</b><span>${costingMoney(entry.finalPrice)} AED</span><small>Updated ${escapeHtml(costingDateLabel(entry.date))}</small></div>`).join("")}
+  </aside>` : "";
+  return `<div class="costing-price-page${history ? " with-history" : ""}"><div class="costing-price-table-wrap"><table class="costing-price-table"><colgroup><col class="price-col-number"><col class="price-col-model"><col class="price-col-list"><col class="price-col-multiplier"><col class="price-col-cost"><col class="price-col-final"><col class="price-col-remarks"><col class="price-col-actions"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Final Unit Price (AED)</th><th>Remarks</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
+    ${items.map((item, index) => { const samePrice = costingNumber(item.costPrice) > 0 && Math.round(costingNumber(item.costPrice) * 100) === Math.round(costingNumber(item.finalPrice) * 100); return `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td class="${samePrice ? "costing-price-match" : ""}">${costingMoney(item.costPrice)}</td><td class="${samePrice ? "costing-price-match" : ""}"><input type="text" inputmode="decimal" data-costing-field="price-finalPrice" value="${costingMoney(item.finalPrice)}" ${locked ? "disabled" : ""} /></td><td><input type="text" data-costing-field="price-remarks" value="${escapeHtml(item.remarks || "")}" placeholder="Add a remark" ${locked ? "disabled" : ""} /></td><td class="costing-price-menu-cell"><div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button data-costing-action="view-price-history">View</button>${locked ? "" : `<button class="danger" data-costing-action="delete-price">Delete</button>`}</div></div></td></tr>`; }).join("") || `<tr><td colspan="8" class="costing-empty">No models match this search.</td></tr>`}
+  </tbody></table></div>${history}</div>`;
+}
+
+function costingDateLabel(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Date unavailable" : date.toLocaleDateString("en-GB");
 }
 
 function handleCostingInput(event) {
@@ -13331,17 +13337,23 @@ function handleCostingInput(event) {
   const field = event.target.dataset.costingField;
   const rowEl = event.target.closest("[data-costing-row]");
   const priceEl = event.target.closest("[data-costing-price]");
-  if (priceEl && field?.startsWith("price-")) return;
+  if (priceEl && field?.startsWith("price-")) {
+    if (field === "price-remarks") {
+      const item = (costingState?.priceItems || []).find(entry => entry.id === priceEl.dataset.costingPrice);
+      if (item) item.remarks = event.target.value;
+    }
+    return;
+  }
   const sheet = activeCostingOrDraft();
   if (!rowEl) {
     if (field) sheet[field] = event.target.value;
-    if (field === "defaultMargin" || field === "priceIncrease") {
-      const margin = costingNumber(event.target.value) / 100;
+    if (field === "defaultMargin") {
       sheet.rows.forEach(row => {
-        const finalPrice = costingNumber(row.finalPrice) || costingNumber(costingPriceForModel(row.model)?.finalPrice) || costingNumber(row.costPrice);
-        const priceIncrease = costingNumber(sheet.priceIncrease ?? 20) / 100;
+        const listedPrice = costingPriceForModel(row.model);
         const defaultMargin = costingNumber(sheet.defaultMargin) / 100;
-        row.increasedFinalPrice = finalPrice * (1 + priceIncrease);
+        if (listedPrice) {
+          row.increasedFinalPrice = costingNumber(listedPrice.finalPrice);
+        }
         row.sellingPrice = row.increasedFinalPrice / Math.max(.01, 1 - defaultMargin);
       });
     }
@@ -13349,10 +13361,6 @@ function handleCostingInput(event) {
     const row = sheet.rows[Number(rowEl.dataset.costingRow)];
     if (!row || !field) return;
     row[field] = field === "model" ? event.target.value.toUpperCase() : costingNumber(event.target.value);
-    if (field === "finalPrice") {
-      row.increasedFinalPrice = costingNumber(row.finalPrice) * (1 + costingNumber(sheet.priceIncrease ?? 20) / 100);
-      row.sellingPrice = row.increasedFinalPrice / Math.max(.01, 1 - costingNumber(sheet.defaultMargin) / 100);
-    }
     if (field === "increasedFinalPrice") {
       row.sellingPrice = costingNumber(row.increasedFinalPrice) / Math.max(.01, 1 - costingNumber(sheet.defaultMargin) / 100);
     }
@@ -13364,9 +13372,21 @@ function handleCostingInput(event) {
       renderSalesDesk();
       return;
     }
+    if (field === "model") {
+      const listedPrice = rowEl.querySelector(".costing-final-price-readonly");
+      if (listedPrice) {
+        const priceInput = document.createElement("input");
+        priceInput.type = "text";
+        priceInput.inputMode = "decimal";
+        priceInput.dataset.costingField = "increasedFinalPrice";
+        priceInput.setAttribute("aria-label", `Final Unit Price for ${row.model}`);
+        priceInput.value = costingMoney(row.increasedFinalPrice);
+        listedPrice.replaceWith(priceInput);
+      }
+    }
   }
   scheduleCostingSave();
-  if (["qty", "finalPrice", "increasedFinalPrice", "sellingPrice", "defaultMargin", "priceIncrease"].includes(field)) renderCostingLiveValues();
+  if (["qty", "increasedFinalPrice", "sellingPrice", "defaultMargin"].includes(field)) renderCostingLiveValues();
 }
 
 function handleCostingChange(event) {
@@ -13375,6 +13395,10 @@ function handleCostingChange(event) {
   const rowEl = event.target.closest("[data-costing-row]");
   const priceEl = event.target.closest("[data-costing-price]");
   if (priceEl && field?.startsWith("price-")) return saveCostingPriceFromRow(priceEl, field, event.target.value);
+  if (rowEl && field === "increasedFinalPrice") {
+    event.target.value = costingMoney(activeCostingOrDraft().rows[Number(rowEl.dataset.costingRow)]?.increasedFinalPrice);
+    return;
+  }
   if (rowEl && field === "model") {
     const sheet = activeCostingOrDraft();
     const index = Number(rowEl.dataset.costingRow);
@@ -13393,7 +13417,9 @@ function renderCostingLiveValues() {
     const amount = costingNumber(row.qty) * costingNumber(row.sellingPrice);
     const margin = costingNumber(row.sellingPrice) ? (costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice) * 100 : 0;
     const increasedInput = rowEl.querySelector('[data-costing-field="increasedFinalPrice"]');
-    if (increasedInput) increasedInput.value = costingNumber(row.increasedFinalPrice).toFixed(2);
+    if (increasedInput && document.activeElement !== increasedInput) increasedInput.value = costingMoney(row.increasedFinalPrice);
+    const listedPrice = rowEl.querySelector(".costing-final-price-readonly");
+    if (listedPrice) listedPrice.textContent = costingMoney(row.increasedFinalPrice);
     const sellingInput = rowEl.querySelector('[data-costing-field="sellingPrice"]');
     if (sellingInput) sellingInput.value = costingNumber(row.sellingPrice).toFixed(2);
     rowEl.querySelector(".costing-amount").textContent = costingMoney(amount);
@@ -13447,8 +13473,8 @@ async function recoverLinkedCostingSheet(sheetId) {
     const model = costingModelFromQuotationItem(item);
     const price = costingPriceForModel(model);
     const sellingPrice = costingNumber(item.unitPrice);
-    const increasedFinalPrice = price ? costingNumber(price.finalPrice) * (1 + costingNumber(sheet.priceIncrease) / 100) : sellingPrice * (1 - costingNumber(sheet.defaultMargin) / 100);
-    const finalPrice = price ? costingNumber(price.finalPrice) : increasedFinalPrice / (1 + costingNumber(sheet.priceIncrease) / 100);
+    const increasedFinalPrice = price ? costingNumber(price.finalPrice) : sellingPrice * (1 - costingNumber(sheet.defaultMargin) / 100);
+    const finalPrice = increasedFinalPrice;
     return costingRowWithPrice({
       id: costingId(),
       model,
@@ -13525,15 +13551,11 @@ async function handleCostingClick(action, target) {
     if (costingActiveSheetId === sheetId) costingActiveSheetId = costingState.activeSheetId || costingState.sheets?.[0]?.id || "";
     return renderSalesDesk();
   }
-  if (action === "view-history") {
-    const sheet = activeCostingOrDraft();
-    const rowIndex = Number(target.closest("[data-costing-row]")?.dataset.costingRow);
-    costingSelectedModel = sheet.rows[rowIndex]?.model || "";
-    if (!costingPriceForModel(costingSelectedModel)) return toast("Select a saved Price List model to view its history.");
-    costingHistoryOpen = true;
+  if (action === "view-price-history") {
+    costingPriceHistoryItemId = target.closest("[data-costing-price]")?.dataset.costingPrice || "";
     return renderSalesDesk();
   }
-  if (action === "close-history") { costingHistoryOpen = false; return renderSalesDesk(); }
+  if (action === "close-price-history") { costingPriceHistoryItemId = ""; return renderSalesDesk(); }
   if (action === "save-sheet") {
     await saveCostingSheet();
     renderSalesDesk();
@@ -13572,7 +13594,7 @@ async function saveCostingPriceFromRow(rowEl, field, value) {
   const item = (costingState?.priceItems || []).find(entry => entry.id === rowEl.dataset.costingPrice);
   if (!item) return;
   const key = field.replace(/^price-/, "");
-  const next = { ...item, [key]: key === "model" ? String(value).toUpperCase() : costingNumber(value) };
+  const next = { ...item, [key]: key === "model" ? String(value).toUpperCase() : key === "remarks" ? String(value) : costingNumber(value) };
   if (key === "listPrice" || key === "multiplier") next.costPrice = costingNumber(next.listPrice) * (costingNumber(next.multiplier) || 1);
   await saveCostingPrice(next);
 }
@@ -13634,30 +13656,45 @@ function exportCostingPrices() {
 }
 
 function buildCostingWorkbookBlob(sheet = {}) {
-  const headers = ["S.No", "Model", "Qty", "Final Price (AED)", "Increased Final Price (AED)", "Selling Price (AED)", "Amount (AED)", "Margin %"];
+  const headers = ["S.No", "Model", "Qty", "Final Unit Price (AED)", "Selling Price (AED)", "Amount (AED)", "Margin %"];
   const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })) )];
   (sheet.rows || []).forEach((row, index) => {
     const n = index + 2;
     rows.push(workbookRowXml(n, [
       { column: 1, value: index + 1, style: 5 }, { column: 2, value: row.model || "" }, { column: 3, value: costingNumber(row.qty), style: 5 },
-      { column: 4, value: costingNumber(row.finalPrice), style: 2 }, { column: 5, value: costingNumber(row.increasedFinalPrice), style: 2 }, { column: 6, value: costingNumber(row.sellingPrice), style: 2 },
-      { column: 7, formula: `C${n}*F${n}`, value: costingNumber(row.qty) * costingNumber(row.sellingPrice), style: 2 }, { column: 8, formula: `IFERROR((F${n}-E${n})/F${n},0)`, value: costingNumber(row.sellingPrice) ? (costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice) : 0, style: 3 }
+      { column: 4, value: costingNumber(row.increasedFinalPrice), style: 9 }, { column: 5, value: costingNumber(row.sellingPrice), style: 9 },
+      { column: 6, formula: `C${n}*E${n}`, value: costingNumber(row.qty) * costingNumber(row.sellingPrice), style: 9 }, { column: 7, formula: `IFERROR((E${n}-D${n})/E${n},0)`, value: costingNumber(row.sellingPrice) ? (costingNumber(row.sellingPrice) - costingNumber(row.increasedFinalPrice)) / costingNumber(row.sellingPrice) : 0, style: 10 }
     ]));
   });
   const totalRow = (sheet.rows || []).length + 2;
   const totals = costingTotals(sheet.rows || []);
-  rows.push(workbookRowXml(totalRow, [{ column: 5, value: "Total Increased Final Price", style: 6 }, { column: 6, formula: `SUMPRODUCT(C2:C${Math.max(2, totalRow - 1)},E2:E${Math.max(2, totalRow - 1)})`, value: totals.increasedFinalPrice, style: 4 }, { column: 7, formula: `SUM(G2:G${Math.max(2, totalRow - 1)})`, value: totals.selling, style: 4 }]));
-  rows.push(workbookRowXml(totalRow + 1, [{ column: 6, value: "VAT 5%", style: 6 }, { column: 7, formula: `G${totalRow}*0.05`, value: totals.vat, style: 2 }]));
-  rows.push(workbookRowXml(totalRow + 2, [{ column: 6, value: "Grand Total", style: 7 }, { column: 7, formula: `G${totalRow}+G${totalRow + 1}`, value: totals.grand, style: 8 }]));
-  return costingWorkbookBlob(rows, [8, 28, 8, 18, 22, 19, 17, 12], sheet.title || "Costing Sheet", totalRow + 2);
+  const lastItemRow = totalRow - 1;
+  const finalPriceFormula = lastItemRow >= 2 ? `SUMPRODUCT(C2:C${lastItemRow},D2:D${lastItemRow})` : "0";
+  const sellingFormula = lastItemRow >= 2 ? `SUM(F2:F${lastItemRow})` : "0";
+  rows.push(workbookRowXml(totalRow, [{ column: 5, value: "Total Final Price", style: 6 }, { column: 6, formula: finalPriceFormula, value: totals.increasedFinalPrice, style: 11 }]));
+  rows.push(workbookRowXml(totalRow + 1, [{ column: 5, value: "Margin", style: 6 }, { column: 6, formula: `IFERROR((F${totalRow + 3}-F${totalRow})/F${totalRow + 3},0)`, value: totals.margin / 100, style: 10 }]));
+  rows.push(workbookRowXml(totalRow + 2, [{ column: 5, value: "Gross Profit", style: 6 }, { column: 6, formula: `F${totalRow + 3}-F${totalRow}`, value: totals.profit, style: 9 }]));
+  rows.push(workbookRowXml(totalRow + 3, [{ column: 5, value: "Total Selling", style: 6 }, { column: 6, formula: sellingFormula, value: totals.selling, style: 9 }]));
+  rows.push(workbookRowXml(totalRow + 4, [{ column: 5, value: "VAT 5%", style: 6 }, { column: 6, formula: `F${totalRow + 3}*0.05`, value: totals.vat, style: 9 }]));
+  rows.push(workbookRowXml(totalRow + 5, [{ column: 5, value: "Grand Total", style: 7 }, { column: 6, formula: `F${totalRow + 3}+F${totalRow + 4}`, value: totals.grand, style: 12 }]));
+  return costingWorkbookBlob(rows, [8, 28, 8, 24, 21, 19, 14], sheet.title || "Costing Sheet", totalRow + 5);
 }
 
 function buildCostingPriceListWorkbookBlob(items = []) {
-  const headers = ["S.No", "Model", "Description", "Origin", "List Price (AED)", "Multiplier", "Cost Price (AED)", "Unit Price (AED)", "Final Unit Price (AED)", "Last Updated"];
+  const headers = ["S.No", "Model", "Description", "Origin", "List Price (AED)", "Multiplier", "Cost Price (AED)", "Final Unit Price (AED)", "Remarks"];
   const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })) )];
-  const increase = costingNumber(costingState?.settings?.priceIncrease ?? 20);
-  items.forEach((item, index) => rows.push(workbookRowXml(index + 2, [{ column: 1, value: index + 1, style: 5 }, { column: 2, value: item.model }, { column: 3, value: item.description }, { column: 4, value: item.origin }, { column: 5, value: costingNumber(item.listPrice), style: 2 }, { column: 6, value: costingNumber(item.multiplier), style: 5 }, { column: 7, formula: `E${index + 2}*F${index + 2}`, value: costingNumber(item.costPrice), style: 2 }, { column: 8, value: costingNumber(item.finalPrice), style: 2 }, { column: 9, value: costingNumber(item.finalPrice) * (1 + increase / 100), style: 2 }, { column: 10, value: new Date(item.updatedAt).toLocaleDateString("en-GB") }])));
-  return costingWorkbookBlob(rows, [8, 24, 38, 18, 17, 12, 17, 21, 24, 16], "Price List", Math.max(2, items.length + 1));
+  items.forEach((item, index) => {
+    const n = index + 2;
+    rows.push(workbookRowXml(n, [
+      { column: 1, value: index + 1, style: 5 }, { column: 2, value: item.model },
+      { column: 3, value: item.description }, { column: 4, value: item.origin },
+      { column: 5, value: costingNumber(item.listPrice), style: 9 }, { column: 6, value: costingNumber(item.multiplier), style: 5 },
+      { column: 7, formula: `E${n}*F${n}`, value: costingNumber(item.costPrice), style: 9 },
+      { column: 8, value: costingNumber(item.finalPrice), style: 9 },
+      { column: 9, value: item.remarks || "" }
+    ]));
+  });
+  return costingWorkbookBlob(rows, [8, 24, 38, 18, 17, 12, 17, 24, 16], "Price List", Math.max(2, items.length + 1));
 }
 
 function costingWorkbookBlob(rows, widths, title, lastRow) {
@@ -13665,5 +13702,6 @@ function costingWorkbookBlob(rows, widths, title, lastRow) {
   const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${String.fromCharCode(64 + widths.length)}${lastRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${rows.join("")}</sheetData></worksheet>`;
   const sheetName = workbookSheetName(title);
   const files = { "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`, "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`, "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`, "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`, "xl/styles.xml": areaCalculationWorkbookStylesXml(), "xl/worksheets/sheet1.xml": xml };
+  files["xl/styles.xml"] = areaCalculationWorkbookStylesXml(true);
   return new Blob([workbookZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }

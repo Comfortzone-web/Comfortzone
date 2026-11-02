@@ -1028,8 +1028,13 @@ function defaultCostingSheets() {
     sourceItems = Array.isArray(parsed.items) ? parsed.items : [];
   } catch {}
   return {
-    priceItems: sourceItems.map(item => normalizeCostingPriceItem(item)),
-    settings: { priceIncrease: 20, priceListLocked: false },
+    priceItems: sourceItems.map(item => {
+      const price = normalizeCostingPriceItem(item);
+      price.finalPrice = Number((price.finalPrice * 1.2).toFixed(2));
+      return price;
+    }),
+    priceVersion: 2,
+    settings: { priceListLocked: false },
     sheets: [],
     activeSheetId: ""
   };
@@ -1040,7 +1045,7 @@ function normalizeCostingPriceItem(input = {}) {
   const listPrice = costingNumber(input.listPrice || input.listPriceAed);
   const multiplier = costingNumber(input.multiplier || 1) || 1;
   const costPrice = costingNumber(input.costPrice) || listPrice * multiplier;
-  const finalPrice = costingNumber(input.finalPrice || input.olPrice || input.OLPrice) || costPrice;
+  const finalPrice = costingNumber(input.finalPrice ?? input.finalUnitPrice ?? input.olPrice ?? input.OLPrice ?? costPrice);
   return {
     id: cleanCell(input.id || id()),
     model,
@@ -1050,6 +1055,7 @@ function normalizeCostingPriceItem(input = {}) {
     multiplier,
     costPrice,
     finalPrice,
+    remarks: cleanCell(input.remarks || ""),
     updatedAt: cleanCell(input.updatedAt || new Date().toISOString()),
     history: Array.isArray(input.history) ? input.history.slice(0, 12) : []
   };
@@ -1061,14 +1067,12 @@ function normalizeCostingRow(input = {}, priceItems = []) {
   const listPrice = costingNumber(input.listPrice ?? price?.listPrice);
   const multiplier = costingNumber(input.multiplier ?? price?.multiplier) || 1;
   const costPrice = costingNumber(input.costPrice) || listPrice * multiplier;
-  const finalPrice = costingNumber(input.finalPrice ?? price?.finalPrice) || costPrice;
-  const priceIncrease = Math.max(0, costingNumber(input.priceIncrease ?? 20));
+  const finalPrice = costingNumber(input.finalPrice ?? price?.finalPrice ?? costPrice);
   const savedIncreasedFinalPrice = costingNumber(input.increasedFinalPrice);
-  const increasedFinalPrice = savedIncreasedFinalPrice || finalPrice * (1 + priceIncrease / 100);
+  const increasedFinalPrice = savedIncreasedFinalPrice || costingNumber(price?.finalPrice) || finalPrice;
   const defaultMargin = Math.min(0.95, Math.max(0, costingNumber(input.defaultMargin ?? 10) / 100));
   const savedSellingPrice = costingNumber(input.sellingPrice);
-  const legacySellingPrice = finalPrice / Math.max(0.01, 1 - defaultMargin);
-  const sellingPrice = !savedSellingPrice || (!savedIncreasedFinalPrice && Math.abs(savedSellingPrice - legacySellingPrice) < 0.0001)
+  const sellingPrice = !savedSellingPrice
     ? increasedFinalPrice / Math.max(0.01, 1 - defaultMargin)
     : savedSellingPrice;
   return {
@@ -1088,7 +1092,6 @@ function normalizeCostingRow(input = {}, priceItems = []) {
 
 function normalizeCostingSheet(input = {}, priceItems = []) {
   const defaultMargin = Math.min(95, Math.max(0, costingNumber(input.defaultMargin ?? 10)));
-  const priceIncrease = Math.max(0, costingNumber(input.priceIncrease ?? 20));
   return {
     id: cleanCell(input.id || id()),
     ownerId: cleanCell(input.ownerId || ""),
@@ -1099,8 +1102,7 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
     salesPerson: cleanCell(input.salesPerson || ""),
     sourceWorkflowProjectId: cleanCell(input.sourceWorkflowProjectId || ""),
     defaultMargin,
-    priceIncrease,
-    rows: Array.isArray(input.rows) ? input.rows.map(row => normalizeCostingRow({ ...row, defaultMargin, priceIncrease }, priceItems)) : [],
+    rows: Array.isArray(input.rows) ? input.rows.map(row => normalizeCostingRow({ ...row, defaultMargin }, priceItems)) : [],
     isSaved: Boolean(input.isSaved),
     createdAt: cleanCell(input.createdAt || new Date().toISOString()),
     updatedAt: cleanCell(input.updatedAt || new Date().toISOString())
@@ -1109,6 +1111,8 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
 
 function normalizeCostingSheets(parsed = {}) {
   const fallback = defaultCostingSheets();
+  const legacyIncrease = parsed.settings?.priceIncrease ?? 20;
+  const migratePrices = parsed.priceVersion !== 2;
   const sourcePriceByModel = new Map(
     fallback.priceItems.map(item => [inventoryNorm(item.model), item])
   );
@@ -1117,19 +1121,30 @@ function normalizeCostingSheets(parsed = {}) {
       const item = normalizeCostingPriceItem(rawItem);
       const sourceItem = sourcePriceByModel.get(inventoryNorm(item.model));
       const savedFinalPrice = costingNumber(rawItem.finalPrice ?? rawItem.finalUnitPrice ?? rawItem.olPrice ?? rawItem.OLPrice);
-      if (sourceItem?.finalPrice && (!savedFinalPrice || Math.abs(savedFinalPrice - item.costPrice) < 0.0001)) {
-        item.finalPrice = sourceItem.finalPrice;
+      if (migratePrices) {
+        if (sourceItem?.finalPrice && (!savedFinalPrice || Math.abs(savedFinalPrice - item.costPrice) < 0.0001)) {
+          item.finalPrice = Number((sourceItem.finalPrice / 1.2).toFixed(2));
+        }
+        const factor = 1 + costingNumber(legacyIncrease) / 100;
+        item.finalPrice = Number((item.finalPrice * factor).toFixed(2));
+        item.history = item.history.map(entry => ({ ...entry, finalPrice: Number((costingNumber(entry.finalPrice) * factor).toFixed(2)) }));
       }
       return item;
     }).filter(item => item.model)
     : fallback.priceItems;
-  const sheets = Array.isArray(parsed.sheets) ? parsed.sheets.map(sheet => normalizeCostingSheet(sheet, priceItems)) : [];
+  const sheets = Array.isArray(parsed.sheets) ? parsed.sheets.map(sheet => {
+    if (!migratePrices) return normalizeCostingSheet(sheet, priceItems);
+    const rows = Array.isArray(sheet.rows) ? sheet.rows.map(row => {
+      if (costingNumber(row.increasedFinalPrice) || !costingNumber(row.finalPrice)) return row;
+      if (priceItems.some(item => inventoryNorm(item.model) === inventoryNorm(row.model))) return row;
+      return { ...row, increasedFinalPrice: Number((costingNumber(row.finalPrice) * (1 + costingNumber(legacyIncrease) / 100)).toFixed(2)) };
+    }) : [];
+    return normalizeCostingSheet({ ...sheet, rows }, priceItems);
+  }) : [];
   return {
     priceItems,
-    settings: {
-      priceIncrease: Math.min(1000, Math.max(0, costingNumber(parsed.settings?.priceIncrease ?? 20))),
-      priceListLocked: parsed.settings?.priceListLocked === true
-    },
+    priceVersion: 2,
+    settings: { priceListLocked: parsed.settings?.priceListLocked === true },
     sheets: sheets.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
     activeSheetId: cleanCell(parsed.activeSheetId || sheets[0]?.id || "")
   };
@@ -2333,7 +2348,8 @@ function parseCostingPriceListUpload(filePart) {
     listPrice: valueAt(row, ["LISTPRICEAED", "LISTPRICE", "LISTPRICEAED", "LISTPRICEAED"]),
     multiplier: valueAt(row, ["MULTIPLIER"]),
     costPrice: valueAt(row, ["COSTPRICEAED", "COSTPRICE"]),
-    finalPrice: valueAt(row, ["FINALPRICEAED", "FINALPRICE", "OLPRICEAED", "OLPRICE"])
+    finalPrice: valueAt(row, ["FINALUNITPRICEAED", "FINALUNITPRICE", "FINALPRICEAED", "FINALPRICE", "OLPRICEAED", "OLPRICE"]),
+    remarks: valueAt(row, ["REMARKS", "REMARK", "NOTES"])
   })).filter(row => cleanCell(row.model));
 }
 
@@ -3533,10 +3549,7 @@ async function handleApi(req, res) {
     const store = await readCostingSheets();
     const body = await readJson(req);
     const nextLocked = body.priceListLocked === true;
-    const nextIncrease = Number(body.priceIncrease);
-    if (!Number.isFinite(nextIncrease) || nextIncrease < 0 || nextIncrease > 1000) return send(res, 400, { error: "Price increase must be between 0 and 1000%." });
-    if (store.settings.priceListLocked && nextIncrease !== store.settings.priceIncrease) return send(res, 409, { error: "Unlock the Price List before changing the price increase." });
-    store.settings = { priceIncrease: nextIncrease, priceListLocked: nextLocked };
+    store.settings = { priceListLocked: nextLocked };
     await writeCostingSheets(store);
     return send(res, 200, await costingViewResponse(store, user));
   }
@@ -3546,9 +3559,8 @@ async function handleApi(req, res) {
     const body = await readJson(req);
     const inputSheet = body.sheet || body;
     const existingSheet = store.sheets.find(item => item.id === inputSheet.id);
-    const sheet = normalizeCostingSheet({ ...inputSheet, priceIncrease: existingSheet?.priceIncrease ?? store.settings.priceIncrease }, store.priceItems);
+    const sheet = normalizeCostingSheet(inputSheet, store.priceItems);
     if (isStaff(user) && existingSheet && !staffOwns(existingSheet, user)) return sendForbidden(res);
-    sheet.priceIncrease = existingSheet?.priceIncrease ?? store.settings.priceIncrease;
     sheet.salesPerson = existingSheet?.salesPerson || user.name || "";
     sheet.ownerId = existingSheet?.ownerId || (isStaff(user) ? user.id : sheet.ownerId);
     sheet.isSaved = true;
@@ -3582,7 +3594,8 @@ async function handleApi(req, res) {
       const existing = store.priceItems[existingIndex];
       const changed = ["listPrice", "multiplier", "costPrice", "finalPrice"].some(key => Number(existing[key] || 0) !== Number(item[key] || 0));
       item.id = existing.id;
-      item.history = changed ? [{ date: new Date().toISOString(), costPrice: existing.costPrice, finalPrice: existing.finalPrice }, ...(existing.history || [])].slice(0, 12) : existing.history || [];
+      item.updatedAt = changed ? new Date().toISOString() : existing.updatedAt;
+      item.history = changed ? [{ date: existing.updatedAt || new Date().toISOString(), costPrice: existing.costPrice, finalPrice: existing.finalPrice }, ...(existing.history || [])].slice(0, 12) : existing.history || [];
       store.priceItems[existingIndex] = item;
     } else {
       store.priceItems.unshift(item);
@@ -3616,8 +3629,10 @@ async function handleApi(req, res) {
       const index = store.priceItems.findIndex(entry => inventoryNorm(entry.model) === inventoryNorm(item.model));
       if (index >= 0) {
         const previous = store.priceItems[index];
+        const changed = ["listPrice", "multiplier", "costPrice", "finalPrice"].some(key => Number(previous[key] || 0) !== Number(item[key] || 0));
         item.id = previous.id;
-        item.history = [{ date: new Date().toISOString(), costPrice: previous.costPrice, finalPrice: previous.finalPrice }, ...(previous.history || [])].slice(0, 12);
+        item.updatedAt = changed ? new Date().toISOString() : previous.updatedAt;
+        item.history = changed ? [{ date: previous.updatedAt || new Date().toISOString(), costPrice: previous.costPrice, finalPrice: previous.finalPrice }, ...(previous.history || [])].slice(0, 12) : previous.history || [];
         store.priceItems[index] = item;
       } else store.priceItems.push(item);
       imported++;
