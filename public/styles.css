@@ -1033,6 +1033,19 @@ td[contenteditable="true"]:focus {
   background: #fff;
   font: 500 14px/1 "Inter", system-ui, sans-serif;
 }
+.costing-details input[readonly],
+.costing-price-table input:disabled { background: #f4f7fb; color: #445b7d; cursor: default; }
+.costing-price-locked { display: inline-flex; align-items: center; padding: 8px 10px; border-radius: 6px; background: #fff2db; color: #965b00; font-size: 12px; font-weight: 700; }
+.settings-costing-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
+.settings-costing-controls > label:not(.settings-costing-lock) { display: grid; gap: 6px; min-width: 170px; color: #435777; font-size: 12px; }
+.settings-costing-controls input[type="number"] { width: 170px; max-width: 100%; min-height: 40px; padding: 7px 10px; border: 1px solid #cad9ee; border-radius: 6px; font: 500 14px Inter, sans-serif; }
+.settings-costing-controls input:disabled { background: #f1f4f8; color: #70809a; }
+.settings-costing-lock { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: #10264e; font-size: 13px; font-weight: 600; }
+.settings-costing-lock input { appearance: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 999px; background: #cbd6e6; cursor: pointer; transition: background .18s ease; }
+.settings-costing-lock input::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px #10264e33; transition: transform .18s ease; }
+.settings-costing-lock input:checked { background: #0b63e6; }
+.settings-costing-lock input:checked::before { transform: translateX(16px); }
+.settings-costing-lock input:focus-visible { outline: 2px solid #0b63e6; outline-offset: 2px; }
 
 .costing-table-shell {
   display: grid;
@@ -1086,10 +1099,9 @@ td[contenteditable="true"]:focus {
 
 .costing-table { table-layout: fixed; }
 .costing-table .costing-col-number { width: 6%; }
-.costing-table .costing-col-model { width: 27%; }
+.costing-table .costing-col-model { width: 35%; }
 .costing-table .costing-col-qty { width: 5%; }
-.costing-table .costing-col-final { width: 11%; }
-.costing-table .costing-col-increased { width: 17%; }
+.costing-table .costing-col-increased { width: 20%; }
 .costing-table .costing-col-selling { width: 11%; }
 .costing-table .costing-col-amount { width: 9%; }
 .costing-table .costing-col-margin { width: 7%; }
@@ -8753,8 +8765,9 @@ body.login-active .mobile-app-bar { display: none; }
   .costing-price-table tbody td:nth-child(3)::before { content: "List Price (AED)"; }
   .costing-price-table tbody td:nth-child(4)::before { content: "Multiplier"; }
   .costing-price-table tbody td:nth-child(5)::before { content: "Cost Price (AED)"; }
-  .costing-price-table tbody td:nth-child(6)::before { content: "Final Unit Price (AED)"; }
-  .costing-price-table tbody td:nth-child(7)::before { content: "Last Updated"; }
+  .costing-price-table tbody td:nth-child(6)::before { content: "Unit Price (AED)"; }
+  .costing-price-table tbody td:nth-child(7)::before { content: "Final Unit Price (AED)"; }
+  .costing-price-table tbody td:nth-child(8)::before { content: "Last Updated"; }
   .costing-price-table tbody td:last-child::before,
   .costing-price-table tbody td[colspan]::before { content: none; }
   .costing-price-table tbody td[colspan] { grid-column: 1 / -1; }
@@ -8786,11 +8799,10 @@ body.login-active .mobile-app-bar { display: none; }
   .costing-table tbody td:last-child::before { content: none; }
   .costing-table tbody td:nth-child(2)::before { content: "Model"; }
   .costing-table tbody td:nth-child(3)::before { content: "Qty"; }
-  .costing-table tbody td:nth-child(4)::before { content: "Final Price (AED)"; }
-  .costing-table tbody td:nth-child(5)::before { content: "Increased Final Price (AED)"; }
-  .costing-table tbody td:nth-child(6)::before { content: "Selling Price (AED)"; }
-  .costing-table tbody td:nth-child(7)::before { content: "Amount (AED)"; }
-  .costing-table tbody td:nth-child(8)::before { content: "Margin %"; }
+  .costing-table tbody td:nth-child(4)::before { content: "Final Unit Price (AED)"; }
+  .costing-table tbody td:nth-child(5)::before { content: "Selling Price (AED)"; }
+  .costing-table tbody td:nth-child(6)::before { content: "Amount (AED)"; }
+  .costing-table tbody td:nth-child(7)::before { content: "Margin %"; }
   .costing-table tbody td input,
   .costing-table tbody td:nth-child(2) input { width: 100%; min-width: 0; min-height: 40px; border-color: #d8e2f3; text-align: left; }
   .costing-mobile-delete { display: inline-flex; align-items: center; min-height: 40px; padding: 6px 10px; border: 1px solid #f3b5b5; border-radius: 6px; color: #c62828; background: #fff; cursor: pointer; }

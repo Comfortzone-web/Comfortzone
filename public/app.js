@@ -1231,6 +1231,7 @@ async function showSettings() {
   $("#pageTitle").textContent = "Settings";
   $("#projectMeta").textContent = "Admin settings, company details, attachments, and login access.";
   await loadSettings();
+  await loadCosting({ force: true }).catch(error => toast(error.message || "Unable to load Costing Sheet settings"));
   renderSettings();
 }
 
@@ -1259,8 +1260,21 @@ function renderSettings() {
         ${settingsAttachmentsCard()}
         ${settingsUsersCard()}
       </div>
+      ${settingsCostingCard()}
     </div>
   `;
+}
+
+function settingsCostingCard() {
+  const settings = costingState?.settings || { priceIncrease: 20, priceListLocked: false };
+  return `<section class="inventory-card settings-card settings-costing-card">
+    <div class="inventory-topbar"><div><h2>Costing Sheet Management</h2><p class="inventory-muted">Manage Price List access and the default increase for new costing sheets.</p></div></div>
+    <div class="settings-costing-controls">
+      <label class="settings-costing-lock"><input type="checkbox" data-costing-lock ${settings.priceListLocked ? "checked" : ""}><span>Lock Price List</span></label>
+      <label>Price Increase %<input type="number" data-costing-increase min="0" max="1000" step="0.1" value="${settings.priceIncrease}" ${settings.priceListLocked ? "disabled" : ""}></label>
+      <button class="primary-button" data-save-costing-settings ${settings.priceListLocked ? "disabled" : ""}>Save</button>
+    </div>
+  </section>`;
 }
 
 function isCurrentAdmin() {
@@ -1369,6 +1383,7 @@ async function handleSettingsClick(event) {
     return;
   }
   if (target.dataset.saveCompany) return saveSettingsCompany(target.dataset.saveCompany);
+  if (target.dataset.saveCostingSettings !== undefined) return saveCostingSettings();
   if (target.dataset.saveSettingsUsers !== undefined) return saveSettingsUsers(target);
   if (target.dataset.addSettingsUser !== undefined) {
     $("#settingsNewUser")?.classList.remove("hidden");
@@ -1409,8 +1424,25 @@ function handleSettingsInput(event) {
 
 function handleSettingsChange(event) {
   handleSettingsInput(event);
+  if (event.target.dataset.costingLock !== undefined) return saveCostingSettings(event.target.checked);
   if (event.target.dataset.settingsUploadLogo) uploadSettingsFile(event.target.files?.[0], "Logo", event.target.dataset.settingsUploadLogo);
   if (event.target.dataset.settingsUploadFile !== undefined) uploadSettingsFile(event.target.files?.[0], "Attachment", "");
+}
+
+async function saveCostingSettings(locked = false) {
+  const increase = Number(costingState?.settings?.priceListLocked
+    ? costingState.settings.priceIncrease
+    : document.querySelector("[data-costing-increase]")?.value);
+  if (!Number.isFinite(increase) || increase < 0 || increase > 1000) return toast("Price increase must be between 0 and 1000%.");
+  try {
+    costingState = await api("/api/costing/settings", { method: "PUT", body: JSON.stringify({ priceIncrease: increase, priceListLocked: locked }) });
+    costingLoadedAt = Date.now();
+    renderSettings();
+    toast(locked ? "Price List locked" : "Costing settings saved");
+  } catch (error) {
+    renderSettings();
+    toast(error.message || "Could not save Costing settings");
+  }
 }
 
 async function saveSettingsCompany(companyKey) {
@@ -1585,7 +1617,7 @@ function salesDeskTopbarConfig() {
       subtitle: costingMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
       search: costingMode === "prices" ? "Search model or brand..." : "",
       actions: costingMode === "prices"
-        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button><button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label><button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
+        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button>${costingState?.settings?.priceListLocked ? `<span class="costing-price-locked">Price List Locked</span>` : `<button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label>`}<button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
         : costingMode === "all"
           ? `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button>`
           : costingTopbarActions()
@@ -13107,7 +13139,8 @@ function newCostingSheet() {
     project: "",
     enquiryNo: "",
     defaultMargin: 10,
-    priceIncrease: 20,
+    priceIncrease: costingState?.settings?.priceIncrease ?? 20,
+    salesPerson: currentUser?.name || "",
     rows: [{ id: costingId(), model: "", qty: 1, listPrice: 0, multiplier: 1, costPrice: 0, finalPrice: 0, increasedFinalPrice: 0, sellingPrice: 0, priceSource: "Price List" }],
     isSaved: false
   };
@@ -13180,12 +13213,12 @@ function costingSheetHtml() {
           <label>Customer<select data-costing-field="customer"><option value="">Select customer</option>${sheet.customer && !customers.some(customer => norm(customer.name) === norm(sheet.customer)) ? `<option value="${escapeHtml(sheet.customer)}" selected>${escapeHtml(sheet.customer)}</option>` : ""}${customers.map(customer => `<option value="${escapeHtml(customer.name)}" ${norm(customer.name) === norm(sheet.customer) ? "selected" : ""}>${escapeHtml(customer.name)}</option>`).join("")}</select></label>
           <label>Project<input data-costing-field="project" value="${escapeHtml(sheet.project)}" placeholder="Enter project name" /></label>
           <label>Enquiry No.<input data-costing-field="enquiryNo" value="${escapeHtml(sheet.enquiryNo)}" placeholder="CZ-ENQ-..." /></label>
-          <label>Price Increase %<input data-costing-field="priceIncrease" type="number" min="0" step="0.1" value="${costingNumber(sheet.priceIncrease ?? 20)}" /></label>
+          <label>Sales Person<input value="${escapeHtml(sheet.salesPerson || (sheet.isSaved ? "" : currentUser?.name || ""))}" placeholder="${sheet.isSaved ? "Not recorded" : ""}" readonly /></label>
           <label>Profit Margin<input data-costing-field="defaultMargin" type="number" min="0" max="95" step="0.1" value="${costingNumber(sheet.defaultMargin)}" /></label>
         </div>
         <div class="costing-table-shell">
           <div class="costing-table-wrap">
-            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-final"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"><col class="costing-col-history"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Price (AED)</th><th>Increased Final Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th><th>History</th></tr></thead>
+            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"><col class="costing-col-history"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Unit Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th><th>History</th></tr></thead>
             <tbody>${rows.map((row, index) => costingRowHtml(row, index)).join("")}</tbody></table>
           </div>
           <aside class="costing-row-actions" aria-label="Remove costing rows">
@@ -13261,7 +13294,6 @@ function costingRowHtml(row, index) {
   return `<tr data-costing-row="${index}">
     <td>${index + 1}</td><td><input list="costingModelList" data-costing-field="model" value="${escapeHtml(row.model)}" placeholder="Type model..." /></td>
     <td><input type="number" min="1" data-costing-field="qty" value="${costingNumber(row.qty) || 1}" /></td>
-    <td><input type="number" min="0" step="0.01" data-costing-field="finalPrice" value="${costingNumber(row.finalPrice).toFixed(2)}" /></td>
     <td><input type="number" min="0" step="0.01" data-costing-field="increasedFinalPrice" value="${costingNumber(row.increasedFinalPrice).toFixed(2)}" /></td>
     <td><input type="number" min="0" step="0.01" data-costing-field="sellingPrice" value="${costingNumber(row.sellingPrice).toFixed(2)}" /></td>
     <td class="costing-amount">${costingMoney(amount)}</td><td class="costing-margin">${margin.toFixed(1)}%</td>
@@ -13283,8 +13315,10 @@ function costingDisplayDescription(item = {}) {
 function costingPriceListHtml() {
   const search = norm(costingSearchQuery);
   const items = (costingState?.priceItems || []).filter(item => !search || [item.model, item.description, item.origin].some(value => norm(value).includes(search)));
-  return `<div class="costing-price-page"><div class="costing-price-table-wrap"><table class="costing-price-table"><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Final Unit Price (AED)</th><th>Last Updated</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
-    ${items.map((item, index) => `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" /></td><td>${costingMoney(item.costPrice)}</td><td><input type="number" step=".01" data-costing-field="price-finalPrice" value="${costingNumber(item.finalPrice).toFixed(2)}" /></td><td>${escapeHtml(new Date(item.updatedAt).toLocaleDateString("en-GB"))}</td><td class="costing-price-menu-cell"><div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button class="danger" data-costing-action="delete-price">Delete</button></div></div></td></tr>`).join("") || `<tr><td colspan="8" class="costing-empty">No models match this search.</td></tr>`}
+  const locked = costingState?.settings?.priceListLocked === true;
+  const increase = costingNumber(costingState?.settings?.priceIncrease ?? 20);
+  return `<div class="costing-price-page"><div class="costing-price-table-wrap"><table class="costing-price-table"><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Unit Price (AED)</th><th>Final Unit Price (AED)</th><th>Last Updated</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
+    ${items.map((item, index) => `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td>${costingMoney(item.costPrice)}</td><td><input type="number" step=".01" data-costing-field="price-finalPrice" value="${costingNumber(item.finalPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><strong>${costingMoney(costingNumber(item.finalPrice) * (1 + increase / 100))}</strong></td><td>${escapeHtml(new Date(item.updatedAt).toLocaleDateString("en-GB"))}</td><td class="costing-price-menu-cell">${locked ? "" : `<div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button class="danger" data-costing-action="delete-price">Delete</button></div></div>`}</td></tr>`).join("") || `<tr><td colspan="9" class="costing-empty">No models match this search.</td></tr>`}
   </tbody></table></div></div>`;
 }
 
@@ -13619,15 +13653,16 @@ function buildCostingWorkbookBlob(sheet = {}) {
 }
 
 function buildCostingPriceListWorkbookBlob(items = []) {
-  const headers = ["S.No", "Model", "Description", "Origin", "List Price (AED)", "Multiplier", "Cost Price (AED)", "Final Unit Price (AED)", "Last Updated"];
+  const headers = ["S.No", "Model", "Description", "Origin", "List Price (AED)", "Multiplier", "Cost Price (AED)", "Unit Price (AED)", "Final Unit Price (AED)", "Last Updated"];
   const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })) )];
-  items.forEach((item, index) => rows.push(workbookRowXml(index + 2, [{ column: 1, value: index + 1, style: 5 }, { column: 2, value: item.model }, { column: 3, value: item.description }, { column: 4, value: item.origin }, { column: 5, value: costingNumber(item.listPrice), style: 2 }, { column: 6, value: costingNumber(item.multiplier), style: 5 }, { column: 7, formula: `E${index + 2}*F${index + 2}`, value: costingNumber(item.costPrice), style: 2 }, { column: 8, value: costingNumber(item.finalPrice), style: 2 }, { column: 9, value: new Date(item.updatedAt).toLocaleDateString("en-GB") }])));
-  return costingWorkbookBlob(rows, [8, 24, 38, 18, 17, 12, 17, 21, 16], "Price List", Math.max(2, items.length + 1));
+  const increase = costingNumber(costingState?.settings?.priceIncrease ?? 20);
+  items.forEach((item, index) => rows.push(workbookRowXml(index + 2, [{ column: 1, value: index + 1, style: 5 }, { column: 2, value: item.model }, { column: 3, value: item.description }, { column: 4, value: item.origin }, { column: 5, value: costingNumber(item.listPrice), style: 2 }, { column: 6, value: costingNumber(item.multiplier), style: 5 }, { column: 7, formula: `E${index + 2}*F${index + 2}`, value: costingNumber(item.costPrice), style: 2 }, { column: 8, value: costingNumber(item.finalPrice), style: 2 }, { column: 9, value: costingNumber(item.finalPrice) * (1 + increase / 100), style: 2 }, { column: 10, value: new Date(item.updatedAt).toLocaleDateString("en-GB") }])));
+  return costingWorkbookBlob(rows, [8, 24, 38, 18, 17, 12, 17, 21, 24, 16], "Price List", Math.max(2, items.length + 1));
 }
 
 function costingWorkbookBlob(rows, widths, title, lastRow) {
   const cols = widths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
-  const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:I${lastRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${rows.join("")}</sheetData></worksheet>`;
+  const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:${String.fromCharCode(64 + widths.length)}${lastRow}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols}</cols><sheetData>${rows.join("")}</sheetData></worksheet>`;
   const sheetName = workbookSheetName(title);
   const files = { "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`, "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`, "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`, "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`, "xl/styles.xml": areaCalculationWorkbookStylesXml(), "xl/worksheets/sheet1.xml": xml };
   return new Blob([workbookZip(files)], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });

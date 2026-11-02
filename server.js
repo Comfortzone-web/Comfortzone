@@ -1029,6 +1029,7 @@ function defaultCostingSheets() {
   } catch {}
   return {
     priceItems: sourceItems.map(item => normalizeCostingPriceItem(item)),
+    settings: { priceIncrease: 20, priceListLocked: false },
     sheets: [],
     activeSheetId: ""
   };
@@ -1095,6 +1096,7 @@ function normalizeCostingSheet(input = {}, priceItems = []) {
     customer: cleanCell(input.customer || ""),
     project: cleanCell(input.project || ""),
     enquiryNo: cleanCell(input.enquiryNo || ""),
+    salesPerson: cleanCell(input.salesPerson || ""),
     sourceWorkflowProjectId: cleanCell(input.sourceWorkflowProjectId || ""),
     defaultMargin,
     priceIncrease,
@@ -1124,6 +1126,10 @@ function normalizeCostingSheets(parsed = {}) {
   const sheets = Array.isArray(parsed.sheets) ? parsed.sheets.map(sheet => normalizeCostingSheet(sheet, priceItems)) : [];
   return {
     priceItems,
+    settings: {
+      priceIncrease: Math.min(1000, Math.max(0, costingNumber(parsed.settings?.priceIncrease ?? 20))),
+      priceListLocked: parsed.settings?.priceListLocked === true
+    },
     sheets: sheets.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))),
     activeSheetId: cleanCell(parsed.activeSheetId || sheets[0]?.id || "")
   };
@@ -3522,12 +3528,28 @@ async function handleApi(req, res) {
     return send(res, 200, await costingViewResponse(await readCostingSheets(), user));
   }
 
+  if (req.method === "PUT" && url.pathname === "/api/costing/settings") {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const store = await readCostingSheets();
+    const body = await readJson(req);
+    const nextLocked = body.priceListLocked === true;
+    const nextIncrease = Number(body.priceIncrease);
+    if (!Number.isFinite(nextIncrease) || nextIncrease < 0 || nextIncrease > 1000) return send(res, 400, { error: "Price increase must be between 0 and 1000%." });
+    if (store.settings.priceListLocked && nextIncrease !== store.settings.priceIncrease) return send(res, 409, { error: "Unlock the Price List before changing the price increase." });
+    store.settings = { priceIncrease: nextIncrease, priceListLocked: nextLocked };
+    await writeCostingSheets(store);
+    return send(res, 200, await costingViewResponse(store, user));
+  }
+
   if (req.method === "POST" && url.pathname === "/api/costing/sheets") {
     const store = await readCostingSheets();
     const body = await readJson(req);
-    const sheet = normalizeCostingSheet(body.sheet || body, store.priceItems);
-    const existingSheet = store.sheets.find(item => item.id === sheet.id);
+    const inputSheet = body.sheet || body;
+    const existingSheet = store.sheets.find(item => item.id === inputSheet.id);
+    const sheet = normalizeCostingSheet({ ...inputSheet, priceIncrease: existingSheet?.priceIncrease ?? store.settings.priceIncrease }, store.priceItems);
     if (isStaff(user) && existingSheet && !staffOwns(existingSheet, user)) return sendForbidden(res);
+    sheet.priceIncrease = existingSheet?.priceIncrease ?? store.settings.priceIncrease;
+    sheet.salesPerson = existingSheet?.salesPerson || user.name || "";
     sheet.ownerId = existingSheet?.ownerId || (isStaff(user) ? user.id : sheet.ownerId);
     sheet.isSaved = true;
     sheet.updatedAt = new Date().toISOString();
@@ -3551,6 +3573,7 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/costing/price-items") {
     const store = await readCostingSheets();
+    if (store.settings.priceListLocked) return send(res, 423, { error: "Price List is locked in Settings." });
     const body = await readJson(req);
     const item = normalizeCostingPriceItem(body.item || body);
     if (!item.model) return send(res, 400, { error: "Model is required" });
@@ -3570,6 +3593,7 @@ async function handleApi(req, res) {
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/costing\/price-items\/[^/]+$/)) {
     const store = await readCostingSheets();
+    if (store.settings.priceListLocked) return send(res, 423, { error: "Price List is locked in Settings." });
     const itemId = decodeURIComponent(url.pathname.split("/").pop());
     store.priceItems = store.priceItems.filter(item => item.id !== itemId);
     await writeCostingSheets(store);
@@ -3577,13 +3601,14 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname === "/api/costing/price-items/import") {
+    const store = await readCostingSheets();
+    if (store.settings.priceListLocked) return send(res, 423, { error: "Price List is locked in Settings." });
     const buffer = await collect(req);
     const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
     const filePart = multipart.find(part => part.filename);
     if (!filePart) return send(res, 400, { error: "Choose a price list file first." });
     const rows = parseCostingPriceListUpload(filePart);
     if (!rows.length) return send(res, 400, { error: "No valid model rows were found in this file." });
-    const store = await readCostingSheets();
     let imported = 0;
     for (const raw of rows) {
       const item = normalizeCostingPriceItem(raw);
