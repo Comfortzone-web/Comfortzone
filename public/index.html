@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101d38">
   <title>HVAC Workflow App</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/app-icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/app-icon-192.png">
   <link rel="stylesheet" href="/styles.css?v=20260727-area-ypiece-fix">
   <link rel="stylesheet" href="/projects.css?v=20261031-variation-kpi-type">
   <link rel="stylesheet" href="/maintenance.css?v=20261031-fast-feedback">
@@ -173,5 +177,10 @@
   <script src="/maintenance-billing.js?v=20261031-immediate-actions"></script>
   <script src="/maintenance.js?v=20261031-immediate-actions"></script>
   <script src="/app.js?v=20261026-billing"></script>
+  <script>
+    if ("serviceWorker" in navigator && window.isSecureContext) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {}));
+    }
+  </script>
 </body>
 </html>
