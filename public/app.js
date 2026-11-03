@@ -97,6 +97,8 @@ let costingLoadPromise = null;
 let costingActiveSheetId = "";
 let costingMode = "sheet";
 let costingSearchQuery = "";
+let costingAllSearchQuery = "";
+let costingAllSalesPerson = "";
 let costingSelectedModel = "";
 let costingPriceHistoryItemId = "";
 let costingHistoryOpen = false;
@@ -1614,11 +1616,11 @@ function salesDeskTopbarConfig() {
     costing: {
       title: costingMode === "prices" ? "Price List" : costingMode === "all" ? "All Costing Sheets" : "Costing Sheet",
       subtitle: costingMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
-      search: costingMode === "prices" ? "Search model or brand..." : "",
+      search: "",
       actions: costingMode === "prices"
-        ? `<button class="sales-secondary" data-costing-action="back-to-costing">Back to Costing</button>${costingState?.settings?.priceListLocked ? `<span class="costing-price-locked">Price List Locked</span>` : `<button class="sales-secondary" data-costing-action="add-price">Add Model</button><label class="sales-secondary costing-import-button">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label>`}<button class="sales-primary" data-costing-action="export-prices">Export Excel</button>`
+        ? `${costingState?.settings?.priceListLocked ? `<span class="costing-price-locked">Price List Locked</span>` : ""}<button class="sales-secondary" data-costing-action="back-to-costing"><img src="/assets/maintenance-icons/arrow-left.svg" alt="">Back to Costing</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More Price List actions" aria-label="More Price List actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden">${costingState?.settings?.priceListLocked ? "" : `<button data-costing-action="add-price"><img src="/assets/maintenance-icons/plus.svg" alt="">Add Model</button><label class="costing-menu-import"><img src="/assets/maintenance-icons/upload.svg" alt="">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label>`}<button data-costing-action="export-prices"><img src="/assets/maintenance-icons/download.svg" alt="">Export Excel</button></div></div>`
         : costingMode === "all"
-          ? `<button class="sales-secondary" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button>`
+          ? `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-all-sheets">Export Excel</button></div></div>`
           : costingTopbarActions()
     },
     projects: {
@@ -1656,11 +1658,7 @@ function syncSalesDeskTopbar() {
 }
 
 function costingTopbarActions() {
-  const linkedQuote = costingLinkedQuotation();
-  const quotationNo = linkedQuote?.no || linkedQuote?.quotationNo || "";
-  const creatingAttr = costingQuotationCreating ? " disabled aria-busy=\"true\"" : "";
-  const label = costingQuotationCreating ? "Creating..." : "Create Quotation";
-  return `<button class="sales-primary costing-new-button" data-costing-action="new-sheet">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><button class="sales-secondary" data-costing-action="export-costing">Export Excel</button><div class="costing-quotation-action"><button class="sales-primary" data-costing-action="create-quotation"${creatingAttr}>${label}</button>${quotationNo ? `<small>${escapeHtml(quotationNo)}</small>` : ""}</div>`;
+  return `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets"><img src="/assets/maintenance-icons/list.svg" alt="">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-costing">Export Excel</button></div></div>`;
 }
 
 function inventoryTopbarConfig() {
@@ -5300,6 +5298,17 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.costingAllSearch !== undefined) {
+    const cursor = event.target.selectionStart || 0;
+    costingAllSearchQuery = event.target.value;
+    renderSalesDesk();
+    const input = document.querySelector("[data-costing-all-search]");
+    if (input) {
+      input.focus();
+      input.setSelectionRange(cursor, cursor);
+    }
+    return;
+  }
   if (event.target.dataset.costingField || event.target.dataset.costingSearch !== undefined) {
     handleCostingInput(event);
     return;
@@ -5357,6 +5366,11 @@ function handleSalesInput(event) {
 }
 
 function handleSalesChange(event) {
+  if (event.target.dataset.costingAllFilter !== undefined) {
+    costingAllSalesPerson = event.target.value;
+    renderSalesDesk();
+    return;
+  }
   if (event.target.dataset.costingField || event.target.id === "costingPriceImport") {
     handleCostingChange(event);
     return;
@@ -13194,6 +13208,11 @@ function costingRowWithPrice(row, sheet) {
   };
 }
 
+function appendCostingRowForListedModel(sheet) {
+  if (sheet.rows.some(row => !String(row.model || "").trim())) return;
+  sheet.rows.push({ id: costingId(), model: "", qty: 1, listPrice: 0, multiplier: 1, costPrice: 0, finalPrice: 0, increasedFinalPrice: 0, sellingPrice: 0, priceSource: "Price List" });
+}
+
 function costingSheetHtml() {
   if (costingMode === "prices") return costingPriceListHtml();
   if (costingMode === "all") return costingAllSheetsHtml();
@@ -13203,28 +13222,26 @@ function costingSheetHtml() {
   const customers = costingState?.customers || [];
   const projects = costingState?.projects || [];
   const revisionSuffix = costingRevisionSuffix(sheet);
+  const linkedQuotationNo = costingLinkedQuotation(sheet)?.no || "";
   return `
     <div class="costing-page">
       <section class="costing-main">
+        <div class="costing-details-heading"><div class="costing-section-heading"><img src="/assets/file-text.svg" alt=""><h2>Costing Details</h2></div>${linkedQuotationNo ? `<span class="costing-quotation-tag" title="Linked quotation"><img src="/assets/file-text.svg" alt="">${escapeHtml(linkedQuotationNo)}</span>` : ""}</div>
         <div class="costing-details">
           <label>Customer<select data-costing-field="customer"><option value="">Select customer</option>${sheet.customer && !customers.some(customer => norm(customer.name) === norm(sheet.customer)) ? `<option value="${escapeHtml(sheet.customer)}" selected>${escapeHtml(sheet.customer)}</option>` : ""}${customers.map(customer => `<option value="${escapeHtml(customer.name)}" ${norm(customer.name) === norm(sheet.customer) ? "selected" : ""}>${escapeHtml(customer.name)}</option>`).join("")}</select></label>
           <label>Project<input data-costing-field="project" value="${escapeHtml(sheet.project)}" placeholder="Enter project name" /></label>
           <label>Enquiry No.<input data-costing-field="enquiryNo" value="${escapeHtml(sheet.enquiryNo)}" placeholder="CZ-ENQ-..." /></label>
           <label>Sales Person<input value="${escapeHtml(sheet.salesPerson || (sheet.isSaved ? "" : currentUser?.name || ""))}" placeholder="${sheet.isSaved ? "Not recorded" : ""}" readonly /></label>
-          <label>Profit Margin<input data-costing-field="defaultMargin" type="number" min="0" max="95" step="0.1" value="${costingNumber(sheet.defaultMargin)}" /></label>
+          <label>Profit Margin (%)<input data-costing-field="defaultMargin" type="number" min="0" max="95" step="0.1" value="${costingNumber(sheet.defaultMargin)}" /></label>
         </div>
+        <div class="costing-items-heading"><div class="costing-section-heading"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""><h2>Costing Items</h2></div><button class="sales-secondary costing-add-row" data-costing-action="add-row"><img src="/assets/maintenance-icons/plus.svg" alt="">Add Item</button></div>
         <div class="costing-table-shell">
           <div class="costing-table-wrap">
-            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Unit Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th></tr></thead>
+            <table class="costing-table"><colgroup><col class="costing-col-number"><col class="costing-col-model"><col class="costing-col-qty"><col class="costing-col-increased"><col class="costing-col-selling"><col class="costing-col-amount"><col class="costing-col-margin"><col class="costing-col-action"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>Qty</th><th>Final Unit Price (AED)</th><th>Selling Price (AED)</th><th>Amount (AED)</th><th>Margin %</th><th aria-label="Actions"></th></tr></thead>
             <tbody>${rows.map((row, index) => costingRowHtml(row, index)).join("")}</tbody></table>
           </div>
-          <aside class="costing-row-actions" aria-label="Remove costing rows">
-            <div class="costing-row-actions-head" aria-hidden="true"></div>
-            ${rows.map((row, index) => `<button class="costing-row-rail-delete" data-costing-action="remove-row" data-costing-row-index="${index}" title="Remove row" aria-label="Remove row ${index + 1}">x</button>`).join("")}
-          </aside>
         </div>
-        <div class="costing-table-actions"><button class="sales-secondary costing-add-row" data-costing-action="add-row">+ Add Item</button><button class="sales-primary costing-save-button" data-costing-action="save-sheet">Save</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Costing Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div>
-        <section class="costing-totals">
+        <section class="costing-totals" aria-label="Financial Summary">
           <div><span>Total Final Price</span><strong>AED ${costingMoney(totals.increasedFinalPrice)}</strong></div>
           <div class="good"><span>Margin</span><strong>${totals.margin.toFixed(1)}%</strong></div>
           <div class="good"><span>Gross Profit</span><strong>AED ${costingMoney(totals.profit)}</strong></div>
@@ -13232,15 +13249,26 @@ function costingSheetHtml() {
           <div><span>VAT 5%</span><strong>AED ${costingMoney(totals.vat)}</strong></div>
           <div class="grand"><span>Grand Total</span><strong>AED ${costingMoney(totals.grand)}</strong></div>
         </section>
+        <div class="costing-bottom-actions"><div><button class="sales-secondary costing-save-button" data-costing-action="save-sheet"><img src="/assets/maintenance-icons/save.svg" alt="">Save Draft</button><span class="costing-save-state ${costingProjectSaved ? "is-saved" : ""}">Costing Saved${revisionSuffix ? ` <strong>${escapeHtml(revisionSuffix)}</strong>` : ""}</span></div><div><button class="sales-secondary" data-costing-action="show-all-sheets">Cancel</button><button class="sales-primary" data-costing-action="create-quotation" ${costingQuotationCreating ? "disabled aria-busy=\"true\"" : ""}><img src="/assets/file-text.svg" alt="">${costingQuotationCreating ? (linkedQuotationNo ? "Modifying..." : "Creating...") : (linkedQuotationNo ? "Modify Quotation" : "Save & Create Quotation")}</button></div></div>
       </section>
       <datalist id="costingModelList">${(costingState?.priceItems || []).map(item => `<option value="${escapeHtml(item.model)}">${escapeHtml(costingDisplayDescription(item))}</option>`).join("")}</datalist>
     </div>`;
 }
 
+function filteredCostingSheets() {
+  const search = norm(costingAllSearchQuery);
+  return (costingState?.sheets || []).filter(sheet => sheet.isSaved !== false
+    && (!search || [sheet.project, sheet.title, sheet.customer, sheet.enquiryNo].some(value => norm(value).includes(search)))
+    && (!costingAllSalesPerson || (sheet.salesPerson || "Not recorded") === costingAllSalesPerson));
+}
+
 function costingAllSheetsHtml() {
-  const sheets = (costingState?.sheets || []).filter(sheet => sheet.isSaved !== false);
+  const allSheets = (costingState?.sheets || []).filter(sheet => sheet.isSaved !== false);
+  const sheets = filteredCostingSheets();
+  const salesPeople = [...new Set(allSheets.map(sheet => sheet.salesPerson || "Not recorded"))].sort((a, b) => a.localeCompare(b));
   return `<section class="costing-all-page">
-    <div class="costing-all-heading"><h3>All Costing Sheets</h3><span>${sheets.length} sheet${sheets.length === 1 ? "" : "s"}</span></div>
+    <div class="costing-all-heading"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""><h2>All Costing Sheets</h2><span>${allSheets.length} Sheet${allSheets.length === 1 ? "" : "s"}</span></div>
+    <div class="costing-all-toolbar"><label class="costing-all-search"><img src="/assets/maintenance-icons/search.svg" alt=""><input type="search" data-costing-all-search value="${escapeHtml(costingAllSearchQuery)}" placeholder="Search project, customer or enquiry..." aria-label="Search project, customer or enquiry"></label><details class="costing-all-filter"><summary class="sales-secondary"><img src="/assets/maintenance-icons/filter.svg" alt="">Filter${costingAllSalesPerson ? " (1)" : ""}</summary><div class="costing-all-filter-panel"><label>Sales Person<select data-costing-all-filter><option value="">All sales people</option>${salesPeople.map(person => `<option value="${escapeHtml(person)}" ${person === costingAllSalesPerson ? "selected" : ""}>${escapeHtml(person)}</option>`).join("")}</select></label><button class="sales-secondary" data-costing-action="clear-all-filter">Clear filter</button></div></details><button class="sales-secondary costing-all-export" data-costing-action="export-all-sheets"><img src="/assets/maintenance-icons/download.svg" alt="">Export Excel</button></div>
     <table class="costing-all-table">
       <colgroup><col class="costing-all-col-date"><col class="costing-all-col-project"><col class="costing-all-col-increase"><col class="costing-all-col-profit"><col class="costing-all-col-selling"><col class="costing-all-col-vat"><col class="costing-all-col-grand"><col class="costing-all-col-action"></colgroup>
       <thead><tr><th scope="col">Date</th><th scope="col">Project / Customer</th><th scope="col">Total Final Price</th><th scope="col">Profit / Margin</th><th scope="col">Total Selling</th><th scope="col">VAT 5%</th><th scope="col">Grand Total</th><th scope="col" aria-label="Actions"></th></tr></thead>
@@ -13257,9 +13285,9 @@ function costingAllSheetsHtml() {
         <td data-label="Total Selling" class="costing-all-money">AED ${costingMoney(totals.selling)}</td>
         <td data-label="VAT 5%" class="costing-all-money">AED ${costingMoney(totals.vat)}</td>
         <td data-label="Grand Total" class="costing-all-money costing-all-grand">AED ${costingMoney(totals.grand)}</td>
-        <td class="costing-all-action"><div class="row-menu costing-sheet-menu"><button class="costing-sheet-menu-button" data-row-menu title="Costing sheet actions" aria-label="Costing sheet actions">...</button><div class="row-menu-list hidden"><button data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Open</button><button data-costing-action="revise-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Revision</button><button class="danger" data-costing-action="delete-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Delete</button></div></div></td>
+        <td class="costing-all-action"><div class="row-menu costing-sheet-menu"><button class="costing-sheet-menu-button" data-row-menu title="Costing sheet actions" aria-label="Costing sheet actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="open-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Open</button><button data-costing-action="revise-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Revision</button><button class="danger" data-costing-action="delete-sheet" data-costing-sheet-id="${escapeHtml(sheet.id)}">Delete</button></div></div></td>
       </tr>`;
-    }).join("") || `<tr><td colspan="8" class="costing-all-empty"><strong>No costing sheets yet</strong><span>Create a costing sheet to begin saving project prices.</span></td></tr>`}</tbody>
+    }).join("") || `<tr><td colspan="8" class="costing-all-empty"><strong>${allSheets.length ? "No matching costing sheets" : "No costing sheets yet"}</strong><span>${allSheets.length ? "Try another search or filter." : "Create a costing sheet to begin saving project prices."}</span></td></tr>`}</tbody>
     </table>
   </section>`;
 }
@@ -13291,7 +13319,7 @@ function costingRowHtml(row, index) {
       : `<input type="text" inputmode="decimal" data-costing-field="increasedFinalPrice" aria-label="Final Unit Price for ${escapeHtml(row.model || `row ${index + 1}`)}" value="${costingMoney(row.increasedFinalPrice)}" />`}</td>
     <td><input type="number" min="0" step="0.01" data-costing-field="sellingPrice" value="${costingNumber(row.sellingPrice).toFixed(2)}" /></td>
     <td class="costing-amount">${costingMoney(amount)}</td><td class="costing-margin">${margin.toFixed(1)}%</td>
-    <td class="costing-mobile-action-cell"><button class="costing-mobile-delete" data-costing-action="remove-row" data-costing-row-index="${index}" aria-label="Remove row ${index + 1}">Remove</button></td></tr>`;
+    <td class="costing-row-action-cell"><button class="costing-row-delete-button" data-costing-action="remove-row" data-costing-row-index="${index}" title="Remove row" aria-label="Remove row ${index + 1}"><img src="/assets/maintenance-icons/trash-2.svg" alt=""></button></td></tr>`;
 }
 
 function costingTotals(rows = []) {
@@ -13308,7 +13336,8 @@ function costingDisplayDescription(item = {}) {
 
 function costingPriceListHtml() {
   const search = norm(costingSearchQuery);
-  const items = (costingState?.priceItems || []).filter(item => !search || [item.model, item.description, item.origin, item.remarks].some(value => norm(value).includes(search)));
+  const allItems = costingState?.priceItems || [];
+  const items = allItems.filter(item => !search || [item.model, item.description, item.origin, item.remarks].some(value => norm(value).includes(search)));
   const locked = costingState?.settings?.priceListLocked === true;
   const selected = items.find(item => item.id === costingPriceHistoryItemId);
   const history = selected ? `<aside class="costing-history costing-price-history">
@@ -13318,8 +13347,8 @@ function costingPriceListHtml() {
     <div class="costing-history-row costing-price-current"><b>Current Price</b><span>${costingMoney(selected.finalPrice)} AED</span><small>Updated ${escapeHtml(costingDateLabel(selected.updatedAt))}</small></div>
     ${(selected.history || []).map(entry => `<div class="costing-history-row"><b>Earlier Price</b><span>${costingMoney(entry.finalPrice)} AED</span><small>Updated ${escapeHtml(costingDateLabel(entry.date))}</small></div>`).join("")}
   </aside>` : "";
-  return `<div class="costing-price-page${history ? " with-history" : ""}"><div class="costing-price-table-wrap"><table class="costing-price-table"><colgroup><col class="price-col-number"><col class="price-col-model"><col class="price-col-list"><col class="price-col-multiplier"><col class="price-col-cost"><col class="price-col-final"><col class="price-col-remarks"><col class="price-col-actions"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Final Unit Price (AED)</th><th>Remarks</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
-    ${items.map((item, index) => { const samePrice = costingNumber(item.costPrice) > 0 && Math.round(costingNumber(item.costPrice) * 100) === Math.round(costingNumber(item.finalPrice) * 100); return `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td class="${samePrice ? "costing-price-match" : ""}">${costingMoney(item.costPrice)}</td><td class="${samePrice ? "costing-price-match" : ""}"><input type="text" inputmode="decimal" data-costing-field="price-finalPrice" value="${costingMoney(item.finalPrice)}" ${locked ? "disabled" : ""} /></td><td><input type="text" data-costing-field="price-remarks" value="${escapeHtml(item.remarks || "")}" placeholder="Add a remark" ${locked ? "disabled" : ""} /></td><td class="costing-price-menu-cell"><div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions">...</button><div class="row-menu-list hidden"><button data-costing-action="view-price-history">View</button>${locked ? "" : `<button class="danger" data-costing-action="delete-price">Delete</button>`}</div></div></td></tr>`; }).join("") || `<tr><td colspan="8" class="costing-empty">No models match this search.</td></tr>`}
+  return `<div class="costing-price-page${history ? " with-history" : ""}"><div class="costing-price-table-wrap"><div class="costing-price-heading"><div class="costing-price-title"><img src="/assets/maintenance-icons/tag.svg" alt=""><h2>Model Price List</h2><span>${allItems.length} Model${allItems.length === 1 ? "" : "s"}</span></div><label class="costing-price-search"><img src="/assets/maintenance-icons/search.svg" alt=""><input type="search" data-sales-search value="${escapeHtml(costingSearchQuery)}" placeholder="Search model or brand..." aria-label="Search model or brand"></label></div><table class="costing-price-table"><colgroup><col class="price-col-number"><col class="price-col-model"><col class="price-col-list"><col class="price-col-multiplier"><col class="price-col-cost"><col class="price-col-final"><col class="price-col-remarks"><col class="price-col-actions"></colgroup><thead><tr><th>S.No</th><th>Model</th><th>List Price (AED)</th><th>Multiplier</th><th>Cost Price (AED)</th><th>Final Unit Price (AED)</th><th>Remarks</th><th class="costing-price-menu-heading" aria-label="Actions"></th></tr></thead><tbody>
+    ${items.map((item, index) => { const samePrice = costingNumber(item.costPrice) > 0 && Math.round(costingNumber(item.costPrice) * 100) === Math.round(costingNumber(item.finalPrice) * 100); return `<tr data-costing-price="${escapeHtml(item.id)}"><td>${index + 1}</td><td><input data-costing-field="price-model" value="${escapeHtml(item.model)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-listPrice" value="${costingNumber(item.listPrice).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td><input type="number" step=".01" data-costing-field="price-multiplier" value="${costingNumber(item.multiplier).toFixed(2)}" ${locked ? "disabled" : ""} /></td><td class="${samePrice ? "costing-price-match" : ""}">${costingMoney(item.costPrice)}</td><td class="${samePrice ? "costing-price-match" : ""}"><input type="text" inputmode="decimal" data-costing-field="price-finalPrice" value="${costingMoney(item.finalPrice)}" ${locked ? "disabled" : ""} /></td><td class="costing-price-remarks"><textarea rows="1" data-costing-field="price-remarks" placeholder="Add a remark" ${locked ? "disabled" : ""}>${escapeHtml(item.remarks || "")}</textarea></td><td class="costing-price-menu-cell"><div class="row-menu"><button class="costing-price-menu-button" data-row-menu title="Model actions" aria-label="Model actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="view-price-history">View</button>${locked ? "" : `<button class="danger" data-costing-action="delete-price">Delete</button>`}</div></div></td></tr>`; }).join("") || `<tr><td colspan="8" class="costing-empty">No models match this search.</td></tr>`}
   </tbody></table></div>${history}</div>`;
 }
 
@@ -13367,6 +13396,7 @@ function handleCostingInput(event) {
     if (field === "model" && costingPriceForModel(row.model)) {
       const index = Number(rowEl.dataset.costingRow);
       sheet.rows[index] = costingRowWithPrice(sheet.rows[index], sheet);
+      appendCostingRowForListedModel(sheet);
       costingSelectedModel = sheet.rows[index].model;
       scheduleCostingSave();
       renderSalesDesk();
@@ -13403,6 +13433,7 @@ function handleCostingChange(event) {
     const sheet = activeCostingOrDraft();
     const index = Number(rowEl.dataset.costingRow);
     sheet.rows[index] = costingRowWithPrice({ ...sheet.rows[index], model: event.target.value }, sheet);
+    if (costingPriceForModel(sheet.rows[index].model)) appendCostingRowForListedModel(sheet);
     costingSelectedModel = sheet.rows[index].model;
     scheduleCostingSave();
     renderSalesDesk();
@@ -13491,6 +13522,7 @@ async function recoverLinkedCostingSheet(sheetId) {
 }
 
 async function handleCostingClick(action, target) {
+  if (action === "clear-all-filter") { costingAllSalesPerson = ""; return renderSalesDesk(); }
   if (action === "open-linked-sheet") {
     const sheetId = target.dataset.costingSheetId;
     let latestCosting;
@@ -13578,6 +13610,7 @@ async function handleCostingClick(action, target) {
   }
   if (action === "create-quotation") return createQuotationFromCosting();
   if (action === "export-costing") return exportCostingSheet();
+  if (action === "export-all-sheets") return exportAllCostingSheets();
   if (action === "export-prices") return exportCostingPrices();
   if (action === "add-price") {
     const model = prompt("Model number:");
@@ -13623,32 +13656,76 @@ function costingQuotationDescription(row) {
   return description ? `${model} - ${description}` : model;
 }
 
+function costingQuotationWithSheet(quote, sheet, lines) {
+  return {
+    ...quote,
+    customer: sheet.customer,
+    project: sheet.project,
+    enquiryNo: sheet.enquiryNo,
+    warranty: sheet.enquiryNo,
+    items: lines,
+    manualSubtotal: "",
+    combineRefnets: false,
+    refnetOriginalItems: [],
+    requestedQuotationNo: quote.no || quote.quotationNo
+  };
+}
+
 async function createQuotationFromCosting() {
   if (costingQuotationCreating) return;
   costingQuotationCreating = true;
   renderViewActions();
   try {
     activeCostingOrDraft();
-    if (!salesCrmState) loadSalesCrm().catch(error => {
-      toast(error.message || "Unable to load quotations");
-      return null;
-    });
     const sheet = await saveCostingSheet();
     if (!sheet) return toast("Save the Costing Sheet before creating a quotation.");
-    const linkedQuote = costingLinkedQuotation(sheet);
-    if (linkedQuote?.id) return editSalesQuotation(linkedQuote.id);
     const lines = (sheet.rows || []).filter(row => row.model && costingNumber(row.qty) > 0).map(row => ({ description: costingQuotationDescription(row), qty: costingNumber(row.qty), unit: "Nos", unitPrice: costingNumber(row.sellingPrice) }));
     if (!lines.length) return toast("Add at least one priced model before creating a quotation.");
+    if (costingLinkedQuotation(sheet)?.id) {
+      await loadSalesCrm({ force: true });
+      const linkedQuote = (salesData().quotations || []).find(quote => quote.sourceCostingSheetId === sheet.id);
+      if (!linkedQuote) throw new Error("Linked quotation not found. Costing Sheet was saved, but the quotation was not changed.");
+      const quotation = costingQuotationWithSheet(linkedQuote, sheet, lines);
+      salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quotation) });
+      editSalesQuotation(linkedQuote.id);
+      return toast("Quotation updated from Costing Sheet");
+    }
     return startSalesQuotationDraft({ customer: sheet.customer, project: sheet.project, enquiryNo: sheet.enquiryNo, items: lines, manualSubtotal: "", sourceCostingSheetId: sheet.id });
+  } catch (error) {
+    toast(error.message || "Could not update quotation");
   } finally {
     costingQuotationCreating = false;
-    renderViewActions();
+    if (activeView === "salesDesk" && salesDeskScreen === "costing" && costingMode === "sheet") renderSalesDesk();
+    else renderViewActions();
   }
 }
 
 function exportCostingSheet() {
   const sheet = activeCostingOrDraft();
   downloadBlob(buildCostingWorkbookBlob(sheet), `${safeFile(sheet.title || "Costing Sheet")}.xlsx`);
+}
+
+function exportAllCostingSheets() {
+  downloadBlob(buildCostingSheetsWorkbookBlob(filteredCostingSheets()), "All Costing Sheets.xlsx");
+}
+
+function buildCostingSheetsWorkbookBlob(sheets = []) {
+  const headers = ["Date", "Project", "Customer", "Enquiry No.", "Sales Person", "Total Final Price (AED)", "Profit (AED)", "Margin %", "Total Selling (AED)", "VAT 5% (AED)", "Grand Total (AED)"];
+  const rows = [workbookRowXml(1, headers.map((value, index) => ({ column: index + 1, value, style: 1 })))];
+  sheets.forEach((sheet, index) => {
+    const totals = costingTotals(sheet.rows || []);
+    const dateValue = Date.parse(sheet.createdAt || sheet.updatedAt || "");
+    const date = Number.isFinite(dateValue) ? new Date(dateValue).toLocaleDateString("en-GB") : "";
+    rows.push(workbookRowXml(index + 2, [
+      { column: 1, value: date }, { column: 2, value: sheet.project || sheet.title || "Untitled Costing" },
+      { column: 3, value: sheet.customer || "" }, { column: 4, value: sheet.enquiryNo || "" },
+      { column: 5, value: sheet.salesPerson || "" }, { column: 6, value: totals.increasedFinalPrice, style: 9 },
+      { column: 7, value: totals.profit, style: 9 }, { column: 8, value: totals.margin / 100, style: 10 },
+      { column: 9, value: totals.selling, style: 9 }, { column: 10, value: totals.vat, style: 9 },
+      { column: 11, value: totals.grand, style: 9 }
+    ]));
+  });
+  return costingWorkbookBlob(rows, [15, 38, 30, 20, 19, 22, 19, 12, 20, 17, 20], "All Costing Sheets", Math.max(2, sheets.length + 1));
 }
 
 function exportCostingPrices() {

@@ -33,6 +33,22 @@ const buildCostingPriceListWorkbookBlob = vm.runInNewContext(
     costingWorkbookBlob: (rows, widths, title, lastRow) => ({ rows, widths, title, lastRow })
   }
 );
+const sheetsSource = source.match(/function buildCostingSheetsWorkbookBlob\(sheets = \[\]\) \{[\s\S]*?\n\}\n\nfunction exportCostingPrices/);
+assert.ok(sheetsSource, "all costing sheets workbook builder exists");
+const buildCostingSheetsWorkbookBlob = vm.runInNewContext(
+  `(${sheetsSource[0].replace(/\n\nfunction exportCostingPrices$/, "")})`,
+  {
+    costingTotals: rows => {
+      const increasedFinalPrice = rows.reduce((sum, row) => sum + row.qty * row.increasedFinalPrice, 0);
+      const selling = rows.reduce((sum, row) => sum + row.qty * row.sellingPrice, 0);
+      const profit = selling - increasedFinalPrice;
+      const vat = selling * 0.05;
+      return { increasedFinalPrice, selling, profit, vat, grand: selling + vat, margin: selling ? profit / selling * 100 : 0 };
+    },
+    workbookRowXml: (rowNumber, cells) => ({ rowNumber, cells }),
+    costingWorkbookBlob: (rows, widths, title, lastRow) => ({ rows, widths, title, lastRow })
+  }
+);
 
 function cell(row, column) {
   return row.cells.find(entry => entry.column === column);
@@ -84,4 +100,21 @@ test("Price List Excel exports the stored Final Unit Price and Remarks", () => {
   assert.equal(cell(workbook.rows[1], 8).value, 120);
   assert.equal(cell(workbook.rows[1], 8).formula, undefined);
   assert.equal(cell(workbook.rows[1], 9).value, "Updated supplier quote");
+});
+
+test("All Costing Sheets Excel exports saved sheet details and totals", () => {
+  const workbook = buildCostingSheetsWorkbookBlob([{
+    project: "Villa A", customer: "Customer A", enquiryNo: "ENQ-1", salesPerson: "Amal",
+    createdAt: "2026-11-03T00:00:00Z",
+    rows: [{ qty: 2, increasedFinalPrice: 100, sellingPrice: 125 }]
+  }]);
+  assert.equal(workbook.title, "All Costing Sheets");
+  assert.equal(workbook.widths.length, 11);
+  assert.equal(cell(workbook.rows[1], 2).value, "Villa A");
+  assert.equal(cell(workbook.rows[1], 4).value, "ENQ-1");
+  assert.equal(cell(workbook.rows[1], 5).value, "Amal");
+  assert.equal(cell(workbook.rows[1], 6).value, 200);
+  assert.equal(cell(workbook.rows[1], 7).value, 50);
+  assert.equal(cell(workbook.rows[1], 8).value, 0.2);
+  assert.equal(cell(workbook.rows[1], 11).value, 262.5);
 });
