@@ -13340,7 +13340,7 @@ function costingPriceListHtml() {
   const items = allItems.filter(item => !search || [item.model, item.description, item.origin, item.remarks].some(value => norm(value).includes(search)));
   const locked = costingState?.settings?.priceListLocked === true;
   const selected = items.find(item => item.id === costingPriceHistoryItemId);
-  const history = selected ? `<aside class="costing-history costing-price-history">
+  const history = selected ? `<button class="costing-price-history-backdrop" data-costing-action="close-price-history" aria-label="Close price history"></button><aside class="costing-history costing-price-history" role="dialog" aria-modal="true" aria-label="Price History">
     <button class="costing-history-close" data-costing-action="close-price-history" title="Close price history" aria-label="Close price history">×</button>
     <h3>Price History</h3><p>Price changes recorded for this model.</p>
     <strong class="costing-history-model">${escapeHtml(selected.model)}</strong><span>${escapeHtml(costingDisplayDescription(selected) || "Price List model")}</span>

@@ -1059,8 +1059,8 @@ td[contenteditable="true"]:focus {
   background: #fff;
   font: 500 14px/1 "Inter", system-ui, sans-serif;
 }
-.costing-details input[readonly],
-.costing-price-table input:disabled { background: #f4f7fb; color: #445b7d; cursor: default; }
+.costing-details input[readonly] { background: #f4f7fb; color: #445b7d; cursor: default; }
+.costing-price-table input:disabled { background: transparent; color: #071b3a; opacity: 1; -webkit-text-fill-color: currentColor; cursor: default; }
 .costing-price-locked { display: inline-flex; align-items: center; padding: 8px 10px; border-radius: 6px; background: #fff2db; color: #965b00; font-size: 12px; font-weight: 700; }
 .settings-costing-controls { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin-top: 14px; }
 .settings-costing-lock { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; color: #10264e; font-size: 13px; font-weight: 600; }
@@ -1259,7 +1259,7 @@ td[contenteditable="true"]:focus {
 .costing-price-remarks textarea { box-sizing: border-box; display: block; width: 100%; min-width: 0; min-height: 30px; padding: 6px 7px; border: 1px solid transparent; border-radius: 5px; outline: 0; color: #071b3a; background: transparent; font: 400 12px/1.35 "Inter", system-ui, sans-serif; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; field-sizing: content; resize: none; }
 .costing-price-remarks textarea::placeholder { color: #8290a4; }
 .costing-price-remarks textarea:focus { border-color: #2d72ec; background: #fff; box-shadow: 0 0 0 3px rgba(45, 114, 236, .1); }
-.costing-price-remarks textarea:disabled { color: #445b7d; cursor: default; }
+.costing-price-remarks textarea:disabled { color: #071b3a; background: transparent; opacity: 1; -webkit-text-fill-color: currentColor; cursor: default; }
 .costing-price-menu-button { display: inline-grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 6px; }
 .costing-price-menu-button img { width: 17px; height: 17px; }
 .topbar.quotation-shell #viewActions .costing-import-button { gap: 8px; }
@@ -1273,6 +1273,8 @@ td[contenteditable="true"]:focus {
   .costing-price-page.with-history { grid-template-columns: minmax(0, 1fr); }
   .costing-price-history { position: relative; top: auto; }
 }
+.costing-price-history-backdrop { position: fixed; inset: 0; z-index: 1199; width: 100%; border: 0; background: rgba(7, 27, 58, .3); cursor: default; }
+.costing-price-page .costing-price-history { box-sizing: border-box; position: fixed; inset: 0 0 0 auto; z-index: 1200; width: min(380px, 100vw); height: 100dvh; overflow-y: auto; border-radius: 8px 0 0 8px; box-shadow: -12px 0 30px rgba(7, 27, 58, .16); }
 @media (max-width: 1050px) {
   .costing-price-heading { flex-wrap: wrap; }
   .costing-price-search { flex: 1 1 100%; }
