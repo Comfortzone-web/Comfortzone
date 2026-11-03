@@ -111,6 +111,7 @@ let appSettings = null;
 let settingsDraft = null;
 let inventoryLoadedAt = 0;
 let inventoryLoadPromise = null;
+let inventoryWritePending = false;
 const viewDataRefreshMs = 30000;
 let thermalChatSelection = {
   mode: "regular",
@@ -578,8 +579,8 @@ async function login(event) {
 function warmViewData() {
   if (isPoOnlyUser()) return;
   loadCosting().catch(error => console.warn(error));
+  loadInventory().catch(error => console.warn(error));
   const run = () => {
-    loadInventory().catch(error => console.warn(error));
     loadPurchaseOrders().catch(error => console.warn(error));
   };
   if ("requestIdleCallback" in window) {
@@ -1059,10 +1060,19 @@ async function showInventory(screen = "dashboard") {
     $("#pageTitle").textContent = "Inventory";
     $("#projectMeta").textContent = "Quantity-only AC unit stock tracking.";
   }
-  const needsInitialInventory = !inventoryState;
-  if (needsInitialInventory) await loadInventory().catch(() => {});
+  if (!inventoryState) {
+    renderInventoryLoading();
+    document.querySelectorAll("#viewActions [data-inventory-top-action], #viewActions [data-inventory-top-search]").forEach(control => { control.disabled = true; });
+    loadInventory()
+      .then(() => { if (activeView === "inventory") renderInventory(); })
+      .catch(error => {
+        if (activeView === "inventory") renderInventoryLoadError();
+        toast(error.message || "Unable to load Inventory");
+      });
+    return;
+  }
   renderInventory();
-  if (!needsInitialInventory) refreshInventoryInBackground();
+  refreshInventoryInBackground();
 }
 
 async function showPurchaseOrders(screen = "form") {
@@ -7691,6 +7701,7 @@ async function loadInventory(options = {}) {
   if (inventoryLoadPromise) return inventoryLoadPromise;
   inventoryLoadPromise = api("/api/inventory")
     .then(state => {
+      if (options.canApply && !options.canApply()) return inventoryState;
       inventoryState = state;
       inventoryLoadedAt = Date.now();
       return state;
@@ -7701,11 +7712,17 @@ async function loadInventory(options = {}) {
   return inventoryLoadPromise;
 }
 
+function inventoryHasActiveEditor() {
+  const editingField = document.activeElement?.closest?.("#inventoryView input, #inventoryView textarea, #inventoryView select, #inventoryView [contenteditable]");
+  const editingModal = document.querySelector("#inventoryRoot .modal-backdrop, #inventoryRoot .stock-details-popover, #inventoryRoot .reserved-details-popover");
+  return !!(editingField || editingModal || inventoryWritePending);
+}
+
 function refreshInventoryInBackground() {
   if (!inventoryState || Date.now() - inventoryLoadedAt < viewDataRefreshMs) return;
-  loadInventory({ force: true })
+  loadInventory({ force: true, canApply: () => !inventoryHasActiveEditor() })
     .then(() => {
-      if (activeView === "inventory") renderInventory();
+      if (activeView === "inventory" && !inventoryHasActiveEditor()) renderInventory();
       if (activeView === "salesDesk" && salesDeskScreen === "quotation" && salesQuotationMode === "create") renderSalesDesk();
     })
     .catch(error => console.warn(error));
@@ -8831,6 +8848,16 @@ function renderInventory() {
   bindInventoryEvents();
 }
 
+function renderInventoryLoading() {
+  $("#inventoryRoot").innerHTML = `<section class="inventory-card"><p class="inventory-loading-state" role="status">Loading Inventory...</p></section>`;
+}
+
+function renderInventoryLoadError() {
+  const root = $("#inventoryRoot");
+  root.innerHTML = `<section class="inventory-card"><div class="inventory-loading-state inventory-load-error" role="alert"><span>Inventory data could not be loaded.</span><button class="ghost-button" data-retry-inventory>Retry</button></div></section>`;
+  root.querySelector("[data-retry-inventory]")?.addEventListener("click", () => showInventory(inventoryScreen));
+}
+
 function inventoryDashboardHtml() {
   const d = inventoryState.dashboard;
   const totalReservedQty = (d.stock || []).reduce((sum, item) => sum + Number(item.reservedQty || 0), 0);
@@ -9525,6 +9552,27 @@ function bindInventoryEvents() {
   bindDeliveryResizer();
 }
 
+async function runInventoryWrite(button, work, busyLabel = "Saving...") {
+  if (inventoryWritePending) return;
+  inventoryWritePending = true;
+  const originalHtml = button?.innerHTML;
+  if (button) {
+    button.disabled = true;
+    button.textContent = busyLabel;
+  }
+  try {
+    await work();
+  } catch (error) {
+    toast(error.message || "Inventory change could not be saved.");
+  } finally {
+    inventoryWritePending = false;
+    if (button?.isConnected) {
+      button.disabled = false;
+      button.innerHTML = originalHtml;
+    }
+  }
+}
+
 function rowMenu(items) {
   return `<div class="row-menu"><button class="menu-button inventory-menu-button" data-row-menu>...</button><div class="row-menu-list hidden">${items.map(item => `<button class="${item.danger ? "danger" : ""}" data-menu-action="${item.action}" data-menu-id="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>`;
 }
@@ -9567,8 +9615,8 @@ function handleInventoryClick(event) {
     dn.lines.push({ id: String(Date.now()), modelNo: "", description: "", detectedQty: 0, finalQty: 0, status: "Check Needed" });
     return renderInventory();
   }
-  if (target.id === "saveSupplierDnBtn") return saveActiveSupplierDn();
-  if (target.id === "confirmSupplierDnBtn") return confirmActiveSupplierDn();
+  if (target.id === "saveSupplierDnBtn") return runInventoryWrite(target, saveActiveSupplierDn);
+  if (target.id === "confirmSupplierDnBtn") return runInventoryWrite(target, confirmActiveSupplierDn, "Confirming...");
   if (target.id === "cancelSupplierDnBtn") return cancelActiveSupplierDn();
   if (target.id === "newDeliveryBtn") {
     return openDeliveryModal();
@@ -9588,14 +9636,14 @@ function handleInventoryClick(event) {
     deliveryDraft.lines.splice(Number(target.dataset.removeDeliveryLine), 1);
     return renderInventory();
   }
-  if (target.id === "saveDraftBtn") return saveDelivery("Draft");
-  if (target.id === "issueDeliveryBtn") return saveDelivery("Delivered");
+  if (target.id === "saveDraftBtn") return runInventoryWrite(target, () => saveDelivery("Draft"));
+  if (target.id === "issueDeliveryBtn") return runInventoryWrite(target, () => saveDelivery("Delivered"), "Creating...");
   if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
   if (target.id === "saveStockModelBtn") return openStockModelModal();
-  if (target.id === "saveStockModelBtn2") return saveStockModel();
-  if (target.id === "saveStockReserveBtn") return saveStockReservation();
+  if (target.id === "saveStockModelBtn2") return runInventoryWrite(target, saveStockModel);
+  if (target.id === "saveStockReserveBtn") return runInventoryWrite(target, saveStockReservation);
   if (target.dataset.closeStockReserve !== undefined) return target.closest("[data-stock-reserve-modal]")?.remove();
-  if (target.id === "saveStockReturnBtn") return saveStockReturn();
+  if (target.id === "saveStockReturnBtn") return runInventoryWrite(target, saveStockReturn);
   if (target.id === "deleteStockModelBtn") return deleteStockModel();
   if (target.id === "clearStockModelBtn") return clearStockModelForm();
   if (target.dataset.closeStockModal !== undefined) return closeStockModelModal();
@@ -10527,6 +10575,7 @@ function activeSupplierDn() {
 }
 
 async function uploadSupplierDn() {
+  if (supplierDnUploadLoading) return;
   const input = document.createElement("input");
   input.type = "file";
   input.accept = ".pdf,.png,.jpg,.jpeg";
@@ -10536,6 +10585,8 @@ async function uploadSupplierDn() {
     form.append("file", input.files[0]);
     supplierDnUploadLoading = true;
     refreshSupplierDnTitleSpinner();
+    const uploadButtons = document.querySelectorAll('#viewActions [data-inventory-top-action="upload-dn"]');
+    uploadButtons.forEach(button => { button.disabled = true; });
     try {
       const result = await api("/api/inventory/supplier-dns/upload", { method: "POST", body: form });
       inventoryState = result;
@@ -10547,6 +10598,7 @@ async function uploadSupplierDn() {
     } finally {
       supplierDnUploadLoading = false;
       refreshSupplierDnTitleSpinner();
+      uploadButtons.forEach(button => { if (button.isConnected) button.disabled = false; });
     }
   });
   input.click();
@@ -10755,7 +10807,7 @@ function openCustomerModal(customer = null) {
   modal.querySelectorAll("[data-close-customer-modal]").forEach(button => {
     button.addEventListener("click", () => modal.remove());
   });
-  modal.querySelector("#saveCustomerBtn").addEventListener("click", () => saveCustomerFromModal(modal, customer?.id || ""));
+  modal.querySelector("#saveCustomerBtn").addEventListener("click", event => runInventoryWrite(event.currentTarget, () => saveCustomerFromModal(modal, customer?.id || "")));
 }
 
 async function saveCustomerFromModal(modal, customerId = "") {

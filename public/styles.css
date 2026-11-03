@@ -978,6 +978,9 @@ td[contenteditable="true"]:focus {
   margin: 0 0 12px;
 }
 
+.inventory-loading-state { display: flex; align-items: center; min-height: 56px; color: #52647d; font: 500 13px/1.4 "Inter", system-ui, sans-serif; }
+.inventory-load-error { justify-content: space-between; gap: 16px; }
+
 .empty-module-page {
   min-height: 220px;
 }
