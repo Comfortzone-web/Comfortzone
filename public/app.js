@@ -88,6 +88,7 @@ let salesOrderBookFilters = {
 let salesQuotationDraft = null;
 let salesQuotationRevisionNoLock = "";
 let salesQuotationSaving = false;
+let salesQuotationOpening = false;
 let salesCrmState = null;
 let salesCrmLoadedAt = 0;
 let salesCrmLoadPromise = null;
@@ -104,6 +105,7 @@ let costingPriceHistoryItemId = "";
 let costingHistoryOpen = false;
 let costingProjectSaved = false;
 let costingQuotationCreating = false;
+let costingSheetSaving = false;
 let currentUser = null;
 let appSettings = null;
 let settingsDraft = null;
@@ -562,7 +564,6 @@ async function login(event) {
       warmViewData();
       return;
     }
-    await loadSalesCrm().catch(() => {});
     const url = new URL(location.href);
     const projectId = url.searchParams.get("project");
     if (projectId) await loadProject(projectId);
@@ -576,6 +577,7 @@ async function login(event) {
 
 function warmViewData() {
   if (isPoOnlyUser()) return;
+  loadCosting().catch(error => console.warn(error));
   const run = () => {
     loadInventory().catch(error => console.warn(error));
     loadPurchaseOrders().catch(error => console.warn(error));
@@ -1196,18 +1198,32 @@ async function showSalesDesk(screen = "dashboard") {
     button.classList.toggle("active", button.dataset.salesView === screen);
   });
   syncSalesDeskTopbar();
-  // Costing loads its own compact customer/model data, so do not block it on the full CRM payload.
-  const needsInitialSales = !salesCrmState && screen !== "costing";
-  if (needsInitialSales) await loadSalesCrm().catch(() => {});
   if (screen === "costing" && !costingState) {
     renderCostingLoading();
-    await loadCosting().catch(error => toast(error.message || "Unable to load Costing Sheet"));
+    document.querySelectorAll("#viewActions [data-costing-action]").forEach(button => { button.disabled = true; });
+    loadCosting()
+      .then(() => { if (activeView === "salesDesk" && salesDeskScreen === "costing") renderSalesDesk(); })
+      .catch(error => {
+        if (activeView === "salesDesk" && salesDeskScreen === "costing") renderSalesDeskLoadError("Costing data could not be loaded.", "costing");
+        toast(error.message || "Unable to load Costing Sheet");
+      });
+    return;
+  }
+  if (screen !== "costing" && !salesCrmState) {
+    renderSalesCrmLoading();
+    loadSalesCrm()
+      .then(() => { if (activeView === "salesDesk" && salesDeskScreen === screen) renderSalesDesk(); })
+      .catch(error => {
+        if (activeView === "salesDesk" && salesDeskScreen === screen) renderSalesDeskLoadError("Sales Desk data could not be loaded.", "sales");
+        toast(error.message || "Unable to load Sales Desk");
+      });
+    return;
   }
   if (screen === "quotation" && salesQuotationMode === "create" && !inventoryState) {
     loadInventory().then(() => activeView === "salesDesk" && renderSalesDesk()).catch(() => {});
   }
   renderSalesDesk();
-  if (!needsInitialSales) refreshSalesCrmInBackground();
+  refreshSalesCrmInBackground();
 }
 
 async function showSettings() {
@@ -1569,7 +1585,9 @@ function refreshSalesCrmInBackground() {
   if (!salesCrmState || Date.now() - salesCrmLoadedAt < viewDataRefreshMs) return;
   loadSalesCrm({ force: true })
     .then(() => {
-      if (activeView === "salesDesk") renderSalesDesk();
+      const editingQuotation = salesDeskScreen === "quotation" && salesQuotationMode === "create";
+      const editingField = document.activeElement?.closest?.("#salesDeskView input, #salesDeskView textarea, #salesDeskView select, #salesDeskView [contenteditable]");
+      if (activeView === "salesDesk" && salesDeskScreen !== "costing" && !editingQuotation && !editingField) renderSalesDesk();
     })
     .catch(error => console.warn(error));
 }
@@ -1732,13 +1750,17 @@ function renderSalesDesk() {
 function renderCostingLoading() {
   const root = $("#salesDeskRoot");
   if (!root) return;
-  root.innerHTML = `
-    <div class="sales-page sales-screen-costing">
-      <div class="costing-loading" aria-label="Loading Costing Sheet">
-        <div class="costing-loading-details"><i></i><i></i><i></i><i></i><i></i></div>
-        <div class="costing-loading-table"><b></b><span></span><span></span><span></span><span></span><span></span></div>
-      </div>
-    </div>`;
+  root.innerHTML = `<div class="sales-page sales-screen-costing"><section class="costing-all-page"><div class="costing-all-heading"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""><h2>${costingMode === "prices" ? "Model Price List" : costingMode === "all" ? "All Costing Sheets" : "Costing Sheet"}</h2></div><p class="sales-data-loading" role="status">Loading costing data...</p></section></div>`;
+}
+
+function renderSalesCrmLoading() {
+  $("#salesDeskRoot").innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}"><section class="costing-all-page"><p class="sales-data-loading" role="status">Loading Sales Desk...</p></section></div>`;
+}
+
+function renderSalesDeskLoadError(message, source) {
+  const root = $("#salesDeskRoot");
+  root.innerHTML = `<div class="sales-page"><section class="costing-all-page"><div class="sales-load-error" role="alert"><span>${escapeHtml(message)}</span><button class="sales-secondary" data-sales-retry="${source}">Retry</button></div></section></div>`;
+  root.querySelector("[data-sales-retry]")?.addEventListener("click", () => showSalesDesk(salesDeskScreen));
 }
 
 function syncCostingDeleteRail() {
@@ -3315,8 +3337,20 @@ function openSalesProjectDrawer(itemId = "") {
     if (!modal._salesPersonIds.length) return alert("Tag at least one sales person.");
     if (!payload.name.trim()) return alert("Project name is required.");
     if (!payload.customer.trim()) return alert("Customer is required.");
-    await saveSalesProject(payload);
-    modal.remove();
+    const button = modal.querySelector("[data-save-project-drawer]");
+    if (button.disabled) return;
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = "Saving...";
+    try {
+      await saveSalesProject(payload);
+      modal.remove();
+    } catch (error) {
+      toast(error.message || "Could not save project");
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
   });
   loadInventory({ force: true })
     .then(() => {
@@ -5152,7 +5186,7 @@ async function handleSalesClick(event) {
   }
   const action = target.dataset.salesAction;
   if (action === "create-quotation") {
-    return startSalesQuotationDraft();
+    return startSalesQuotationDraft({}, target);
   }
   if (action === "import-leads") toast("Excel import for enquiry pipeline will be mapped in the next step");
   if (action === "view-lead") {
@@ -5569,11 +5603,24 @@ function quoteDraftFromSource(source = {}) {
   };
 }
 
-async function startSalesQuotationDraft(source = {}) {
+async function startSalesQuotationDraft(source = {}, triggerButton = null) {
+  if (salesQuotationOpening) return;
+  salesQuotationOpening = true;
+  const originalButtonHtml = triggerButton?.innerHTML;
+  if (triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.textContent = "Opening...";
+  }
   try {
     await loadSalesCrm({ force: true });
   } catch (error) {
     return toast(error.message || "Could not load the next quotation number");
+  } finally {
+    salesQuotationOpening = false;
+    if (triggerButton?.isConnected) {
+      triggerButton.disabled = false;
+      triggerButton.innerHTML = originalButtonHtml;
+    }
   }
   salesQuotationDraft = null;
   salesQuotationRevisionNoLock = "";
@@ -5904,7 +5951,10 @@ async function openSalesLeadDrawer(itemId = "") {
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
     if (!payload.customer || !payload.projectDescription || !payload.enquiryNo) return alert("Customer, project description and enquiry number are required.");
     const button = modal.querySelector("#saveSalesLeadBtn");
+    if (button.disabled) return;
+    const label = button.textContent;
     button.disabled = true;
+    button.textContent = "Saving...";
     try {
       salesCrmState = await api("/api/sales-crm/leads", { method: "POST", body: JSON.stringify(payload) });
       const savedLead = (salesData().leads || []).find(lead => lead.id === salesCrmState.savedItemId) ||
@@ -5918,6 +5968,7 @@ async function openSalesLeadDrawer(itemId = "") {
       alert(error.message || "Could not save enquiry");
     } finally {
       button.disabled = false;
+      button.textContent = label;
     }
   });
 }
@@ -13525,20 +13576,34 @@ async function handleCostingClick(action, target) {
   if (action === "clear-all-filter") { costingAllSalesPerson = ""; return renderSalesDesk(); }
   if (action === "open-linked-sheet") {
     const sheetId = target.dataset.costingSheetId;
-    let latestCosting;
+    let sheet = (costingState?.sheets || []).find(item => item.id === sheetId);
+    if (sheet) {
+      costingActiveSheetId = sheet.id;
+      costingHistoryOpen = false;
+      costingMode = "sheet";
+      costingProjectSaved = !!sheet.isSaved;
+      return showSalesDesk("costing");
+    }
+    target.disabled = true;
+    target.textContent = "Opening...";
     try {
-      latestCosting = await loadCosting({ force: true });
+      const latestCosting = await loadCosting({ force: true });
+      sheet = (latestCosting?.sheets || []).find(item => item.id === sheetId);
+      if (!sheet) sheet = await recoverLinkedCostingSheet(sheetId);
+      if (!sheet) return toast("The linked Costing Sheet is no longer available.");
+      costingActiveSheetId = sheet.id;
+      costingHistoryOpen = false;
+      costingMode = "sheet";
+      costingProjectSaved = !!sheet.isSaved;
+      return showSalesDesk("costing");
     } catch (error) {
       return toast(error.message || "Unable to load Costing Sheet");
+    } finally {
+      if (target.isConnected) {
+        target.disabled = false;
+        target.textContent = "Costing Sheet";
+      }
     }
-    let sheet = (latestCosting?.sheets || []).find(item => item.id === sheetId);
-    if (!sheet) sheet = await recoverLinkedCostingSheet(sheetId);
-    if (!sheet) return toast("The linked Costing Sheet is no longer available.");
-    costingActiveSheetId = sheet.id;
-    costingHistoryOpen = false;
-    costingMode = "sheet";
-    costingProjectSaved = !!sheet.isSaved;
-    return showSalesDesk("costing");
   }
   if (action === "show-prices") { costingHistoryOpen = false; costingMode = "prices"; return showSalesDesk("costing"); }
   if (action === "back-to-costing") { costingHistoryOpen = false; costingMode = "sheet"; return showSalesDesk("costing"); }
@@ -13589,9 +13654,22 @@ async function handleCostingClick(action, target) {
   }
   if (action === "close-price-history") { costingPriceHistoryItemId = ""; return renderSalesDesk(); }
   if (action === "save-sheet") {
-    await saveCostingSheet();
-    renderSalesDesk();
-    return toast("Costing saved");
+    if (costingSheetSaving || costingQuotationCreating) return;
+    costingSheetSaving = true;
+    target.disabled = true;
+    target.textContent = "Saving...";
+    const createButton = document.querySelector('[data-costing-action="create-quotation"]');
+    if (createButton) createButton.disabled = true;
+    try {
+      await saveCostingSheet();
+      toast("Costing saved");
+    } catch (error) {
+      toast(error.message || "Could not save Costing Sheet");
+    } finally {
+      costingSheetSaving = false;
+      if (activeView === "salesDesk" && salesDeskScreen === "costing" && costingMode === "sheet") renderSalesDesk();
+    }
+    return;
   }
   if (action === "new-sheet") {
     const sheet = newCostingSheet();
@@ -13672,9 +13750,15 @@ function costingQuotationWithSheet(quote, sheet, lines) {
 }
 
 async function createQuotationFromCosting() {
-  if (costingQuotationCreating) return;
+  if (costingQuotationCreating || costingSheetSaving) return;
   costingQuotationCreating = true;
-  renderViewActions();
+  const createButton = document.querySelector('[data-costing-action="create-quotation"]');
+  const saveButton = document.querySelector('[data-costing-action="save-sheet"]');
+  if (createButton) {
+    createButton.disabled = true;
+    createButton.textContent = costingLinkedQuotation()?.id ? "Modifying..." : "Creating...";
+  }
+  if (saveButton) saveButton.disabled = true;
   try {
     activeCostingOrDraft();
     const sheet = await saveCostingSheet();

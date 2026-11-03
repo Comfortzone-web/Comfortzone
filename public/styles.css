@@ -1081,6 +1081,8 @@ td[contenteditable="true"]:focus {
   border-radius: 8px;
   background: #fff;
 }
+.sales-data-loading { display: flex; align-items: center; min-height: 56px; margin: 12px 0 0; color: #52647d; font: 500 13px/1.4 "Inter", system-ui, sans-serif; }
+.sales-load-error { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 56px; color: #52647d; font: 500 13px/1.4 "Inter", system-ui, sans-serif; }
 
 .costing-loading-details {
   display: grid;
