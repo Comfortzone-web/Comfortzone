@@ -200,7 +200,7 @@
         <div><dt>Contact</dt><dd>${esc(item.contact || "--")}</dd></div>
         <div class="wide"><dt>Assigned Technicians</dt><dd>${esc(item.technicians.map(row => row.name).join(", "))}</dd></div></dl>
         <p class="field-instructions"><strong>Work Instructions</strong>${esc(item.instructions || "No instructions added.")}</p>
-        <div class="field-links"><a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.site)}" target="_blank" rel="noopener">View Location</a>
+        <div class="field-links"><a href="${esc(item.mapLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.site)}`)}" target="_blank" rel="noopener">View Location</a>
         ${item.phone ? `<a href="tel:${esc(item.phone.replace(/[^+0-9]/g, ""))}">Call Customer</a>` : ""}</div></section>
       <section class="field-info"><h2>My Attendance</h2><p>${open ? `Checked in ${date(open.checkInAt)} at ${open.checkInAt.slice(11, 16)}` : myAttendance.length ? `Last check-out ${date(myAttendance.at(-1).checkOutAt)}` : "Not checked in"}</p>
         <button class="field-primary" data-action="${open ? "check-out" : "check-in"}" ${item.status === "Completed" ? "disabled" : ""}>${open ? "Check Out" : "Check In"}</button></section>

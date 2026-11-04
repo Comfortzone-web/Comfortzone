@@ -380,9 +380,18 @@ function createMaintenanceApi(deps) {
     }
     const site = trim(body.site || contract?.site, 200);
     if (!site) fail("Enter a site or location");
+    const mapLink = trim(body.mapLink, 1000);
+    if (mapLink) {
+      let parsed;
+      try { parsed = new URL(mapLink); } catch { fail("Enter a valid Google Maps link"); }
+      if (parsed.protocol !== "https:" || !(parsed.hostname === "maps.app.goo.gl"
+        || parsed.hostname === "share.google"
+        || parsed.hostname === "goo.gl" && parsed.pathname.startsWith("/maps/")
+        || /^(?:www\.|maps\.)?google\.(?:com|ae|co\.uk)$/.test(parsed.hostname))) fail("Enter a valid Google Maps link");
+    }
     return { contractId: contract?.id || "", visitId: visit?.id || "", customerId: contract?.customerId || selectedCustomer?.id
       || (active?.customerName === customerName && active.customerId ? active.customerId : maintenanceCustomerId(customerName)),
-      customerName, site,
+      customerName, site, mapLink,
       contact: trim(body.contact || contract?.contact, 100), phone: trim(body.phone || contract?.phone, 50),
       workType, serviceDate, startTime, endTime, priority: ["Normal", "Urgent"].includes(body.priority) ? body.priority : "Normal",
       technicianIds, instructions: trim(body.instructions, 4000) };
@@ -392,7 +401,7 @@ function createMaintenanceApi(deps) {
     const now = isoNow();
     const base = existing || { id: random(), createdAt: now };
     Object.assign(base, { number: schedule.workOrderNumber, scheduleId: schedule.id, contractId: schedule.contractId, visitId: schedule.visitId,
-      customerId: schedule.customerId, customerName: schedule.customerName, site: schedule.site, contact: schedule.contact,
+      customerId: schedule.customerId, customerName: schedule.customerName, site: schedule.site, mapLink: schedule.mapLink, contact: schedule.contact,
       phone: schedule.phone, workType: schedule.workType, serviceDate: schedule.serviceDate, startTime: schedule.startTime,
       endTime: schedule.endTime, priority: schedule.priority, technicianIds: schedule.technicianIds,
       instructions: schedule.instructions, status: existing?.status || "Scheduled", updatedAt: now });
