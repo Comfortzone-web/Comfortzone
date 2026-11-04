@@ -232,14 +232,14 @@
 .maint-amc .amc-sort { display: flex; align-items: center; gap: 5px; color: #6d83a8; font-size: 10px; white-space: nowrap; }
 .maint-amc .amc-sort select { min-width: 0; height: 33px; max-width: 115px; padding: 0 5px; border: 1px solid #dbe7f5; border-radius: 5px; color: #354e78; background: #fff; font-size: 10px; }
 .maint-amc .amc-contract-list { display: grid; gap: 5px; min-width: 0; }
-.maint-amc .amc-contract-row { position: relative; display: grid; grid-template-columns: 13% 16% 18% 7% 13% 17% 11% 5%; align-items: center; min-width: 0; min-height: 77px; border: 1px solid #e3eaf4; border-left: 3px solid transparent; border-radius: 6px; background: #fff; color: #142a55; }
+.maint-amc .amc-contract-row { position: relative; display: grid; grid-template-columns: 13% 18% 19% 15% 18% 12% 5%; align-items: center; min-width: 0; min-height: 77px; border: 1px solid #e3eaf4; border-left: 3px solid transparent; border-radius: 6px; background: #fff; color: #142a55; }
 .maint-amc .amc-contract-row:hover { background: #f8fbff; }
 .maint-amc .amc-contract-row.selected { background: #eaf4ff; border-color: #b9d9ff; border-left-color: #0868f9; }
 .maint-amc .amc-row-cell { min-width: 0; height: 48px; display: flex; align-items: center; gap: 5px; padding: 0 6px; border-right: 1px solid #e8eef6; font-size: 10px; }
 .maint-amc .amc-row-cell strong { display: block; min-width: 0; color: #10254d; font-size: 10px; font-weight: 680; line-height: 1.25; overflow-wrap: anywhere; }
 .maint-amc .amc-row-cell small { display: block; margin-top: 3px; color: #6982aa; font-size: 9px; line-height: 1.2; overflow-wrap: anywhere; }
 .maint-amc .amc-row-cell .maint-icon { width: 14px; height: 14px; }
-.maint-amc .amc-number, .maint-amc .amc-customer, .maint-amc .amc-visits, .maint-amc .amc-progress { display: block; padding-top: 10px; }
+.maint-amc .amc-number, .maint-amc .amc-customer, .maint-amc .amc-progress { display: block; padding-top: 10px; }
 .maint-amc .amc-number button { border: 0; background: none; padding: 0; color: #10254d; font-size: 10px; font-weight: 760; text-align: left; overflow-wrap: anywhere; }
 .maint-amc .amc-number button:hover { color: #0868f9; text-decoration: underline; }
 .maint-amc .amc-progress { position: relative; padding-right: 30px; }
@@ -611,6 +611,43 @@
 .maint-work-orders .maint-search { width: min(345px, 30vw); }
 .maint-work-orders .maint-date { display: none; }
 .maint-work-orders .wo-body { max-width: none; min-width: 0; padding: 12px 18px 24px; }
+.maint-work-orders .wo-view-toggle { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid #cbdcf4; border-radius: 7px; background: #f3f7fd; }
+.maint-work-orders .wo-view-toggle button { display: inline-flex; align-items: center; gap: 5px; min-height: 33px; padding: 6px 10px; border: 0; border-radius: 5px; background: transparent; color: #25436f; font: inherit; font-size: 12px; cursor: pointer; }
+.maint-work-orders .wo-view-toggle button.active { background: #0868f9; color: #fff; box-shadow: 0 2px 6px #0868f933; }
+.maint-work-orders .wo-view-toggle .maint-icon { width: 15px; height: 15px; }
+.maint-work-orders .wo-view-toggle button.active .maint-icon { filter: brightness(0) invert(1); }
+.maint-work-orders .wo-list-panel { min-width: 0; padding: 12px; border: 1px solid #dce7f5; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px #17375d0a; }
+.maint-work-orders .wo-list-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.maint-work-orders .wo-list-tabs button { padding: 8px 10px; border: 1px solid #dbe7f5; border-radius: 6px; background: #f3f7fc; color: #284676; font-size: 11px; cursor: pointer; }
+.maint-work-orders .wo-list-tabs button.active { border-color: #0868f9; background: #e8f2ff; color: #0868f9; font-weight: 700; }
+.maint-work-orders .wo-list-tabs b { margin-left: 5px; }
+.maint-work-orders .wo-list-filters { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)) auto; align-items: end; gap: 8px; margin-bottom: 12px; }
+.maint-work-orders .wo-list-filters[hidden] { display: none; }
+.maint-work-orders .wo-list-filters label { min-width: 0; color: #536d92; font-size: 11px; }
+.maint-work-orders .wo-list-filters label span { display: block; margin-bottom: 3px; }
+.maint-work-orders .wo-list-filters select { width: 100%; min-width: 0; height: 36px; padding: 5px 7px; border: 1px solid #cbdcf4; border-radius: 5px; background: #fff; color: #1d355c; font: inherit; font-size: 11px; }
+.maint-work-orders .wo-list-filters > button { height: 36px; padding: 0 8px; border: 0; background: none; color: #0868f9; cursor: pointer; white-space: nowrap; }
+.maint-work-orders .wo-list-table-wrap { min-width: 0; }
+.maint-work-orders .wo-list-table { width: 100%; table-layout: fixed; border-collapse: collapse; color: #122b54; font-size: 11px; }
+.maint-work-orders .wo-list-table th, .maint-work-orders .wo-list-table td { min-width: 0; padding: 9px 7px; border: 1px solid #dce7f5; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+.maint-work-orders .wo-list-table th { background: #edf4fc; color: #27446f; font-size: 10px; font-weight: 700; }
+.maint-work-orders .wo-list-table th button { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.maint-work-orders .wo-list-table tbody tr:hover { background: #f5faff; }
+.maint-work-orders .wo-list-table td strong, .maint-work-orders .wo-list-table td small { display: block; }
+.maint-work-orders .wo-list-table td small { margin-top: 3px; color: #6c83a8; font-size: 10px; }
+.maint-work-orders .wo-list-link { padding: 0; border: 0; background: none; color: #0868f9; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.maint-work-orders .wo-list-avatars { display: inline-flex; align-items: center; gap: 2px; }
+.maint-work-orders .wo-list-avatars > * { width: 26px; height: 26px; border-radius: 50%; }
+.maint-work-orders .wo-list-avatars i { display: grid; place-items: center; background: #eaf3ff; color: #0868f9; font-size: 10px; font-style: normal; }
+.maint-work-orders .wo-list-menu-wrap { position: relative; text-align: center; }
+.maint-work-orders .wo-list-menu { position: absolute; z-index: 40; right: 22px; top: 0; width: 200px; padding: 5px; border: 1px solid #dce7f5; border-radius: 7px; background: #fff; box-shadow: 0 9px 24px #112c5330; text-align: left; }
+.maint-work-orders .wo-list-menu button { display: block; width: 100%; padding: 8px; border: 0; border-radius: 4px; background: none; color: #18345e; font-size: 11px; text-align: left; cursor: pointer; }
+.maint-work-orders .wo-list-menu button:hover { background: #edf5ff; }
+.maint-work-orders .wo-list-empty { text-align: center !important; color: #6982aa; }
+.maint-work-orders .wo-list-footer, .maint-work-orders .wo-list-footer > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.maint-work-orders .wo-list-footer { padding-top: 10px; color: #6982aa; font-size: 10px; }
+.maint-work-orders .wo-list-footer button, .maint-work-orders .wo-list-footer select { padding: 5px; border: 1px solid #dce7f5; border-radius: 5px; background: #fff; color: #0868f9; }
+@media(max-width:900px) { .maint-work-orders .wo-list-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }.maint-work-orders .wo-list-table { display: block; }.maint-work-orders .wo-list-table colgroup, .maint-work-orders .wo-list-table thead { display: none; }.maint-work-orders .wo-list-table tbody { display: grid; gap: 8px; }.maint-work-orders .wo-list-table tr { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); border: 1px solid #dce7f5; border-radius: 7px; }.maint-work-orders .wo-list-table td { border: 0; }.maint-work-orders .wo-list-table td::before { content: attr(data-label); display: block; margin-bottom: 3px; color: #7389aa; font-size: 9px; }.maint-work-orders .wo-list-table td:last-child { grid-column: 2; grid-row: 1; justify-self: end; }.maint-work-orders .wo-list-table td:last-child::before { display: none; } }
 .maint-work-orders .wo-kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-bottom: 11px; }
 .maint-work-orders .wo-kpi { --tone: #0874fa; --soft: #e4f2ff; min-width: 0; height: 92px; display: flex; align-items: center; gap: 11px; padding: 11px 12px; border: 1px solid #deebfa; border-radius: 7px; background: #f0f8ff; color: #102044; text-align: left; }
 .maint-work-orders .wo-kpi:hover { border-color: #a7cffa; filter: brightness(.995); }

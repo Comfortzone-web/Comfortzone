@@ -25,7 +25,7 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
       serviceDate: today, startTime: "09:00", endTime: "12:00", workType: "Complaint / Repair", priority: "Urgent",
       technicianIds: ["t2"], leadTechnicianId: "t2" }], attendance: [], notifications: []
   };
-  const listeners = {}, routes = [], scroller = { scrollTop: 0 };
+  const listeners = {}, routes = [], scroller = { scrollTop: 0 }, preferences = new Map();
   const root = { innerHTML: "", closest: () => scroller, querySelector: () => null, contains: () => false,
     addEventListener: (name, callback) => { listeners[name] = callback; } };
   const context = {
@@ -33,7 +33,7 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
       activeElement: null, addEventListener() {} },
     window: { innerWidth: 1920, scrollY: 0, scrollTo() {}, showMaintenance: (...args) => routes.push(args) },
     fetch: async () => ({ ok: true, headers: { get: () => "application/json" }, json: async () => summary }),
-    crypto: webcrypto, Intl, Date, FormData, CSS: { escape: value => value }, setTimeout
+    crypto: webcrypto, Intl, Date, FormData, localStorage: { getItem: key => preferences.get(key), setItem: (key, value) => preferences.set(key, value) }, CSS: { escape: value => value }, setTimeout
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance-billing.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../public/maintenance.js"), "utf8"), context);
@@ -124,4 +124,35 @@ test("Work Orders Kanban uses live jobs and keeps filters, detail actions and ro
   assert.match(root.innerHTML, /Visit Details.*Planned PM Visit.*Assign Individual Technicians/s);
   assert.match(root.innerHTML, /Service Date.*Planned PM Visit.*Start Time.*End Time/s);
   assert.doesNotMatch(root.innerHTML, /Lead Technician|Choose 2-5 technicians/);
+  await click("close-drawer");
+  await click("wo-view", { view: "list" });
+  assert.equal(preferences.get("maintenance-work-order-view"), "list");
+  assert.match(root.innerHTML, /class="wo-list-table"/);
+  assert.match(root.innerHTML, /data-view="kanban"[^>]*>.*Cards<\/button>/);
+  assert.match(root.innerHTML, /class="wo-list-filters" id="woFilterPanel" hidden/);
+  await click("wo-toggle-filters");
+  assert.doesNotMatch(root.innerHTML, /class="wo-list-filters" id="woFilterPanel" hidden/);
+  await click("wo-toggle-filters");
+  assert.match(root.innerHTML, /class="wo-list-filters" id="woFilterPanel" hidden/);
+  assert.equal((root.innerHTML.match(/data-label="WO \/ Service Date"/g) || []).length, 4);
+  assert.match(root.innerHTML, /\+1<\/i>/);
+  await click("status-tab", { status: "Completed" });
+  assert.equal((root.innerHTML.match(/data-label="WO \/ Service Date"/g) || []).length, 1);
+  await click("status-tab", { status: "all" });
+  listeners.change({ target: { value: "Office Two", dataset: { woListFilter: "customer" }, matches: selector => selector === "[data-wo-list-filter], [data-wo-list-range]" } });
+  assert.equal((root.innerHTML.match(/data-label="WO \/ Service Date"/g) || []).length, 1);
+  await click("wo-clear-filters");
+  await click("sort", { key: "customerName" });
+  assert.equal((root.innerHTML.match(/data-label="WO \/ Service Date"/g) || []).length, 4);
+  await click("wo-list-menu", { id: "3" });
+  assert.match(root.innerHTML, /View Service Report/);
+  assert.match(root.innerHTML, /Billing & Payments/);
+  await click("wo-list-billing", { id: "3" });
+  assert.deepEqual(routes.at(-1), ["work-orders", "3"]);
+  await context.window.maintenanceModule.open("work-orders", "3");
+  assert.match(root.innerHTML, /data-action="wd-tab" data-tab="Billing & Payments" class="active"/);
+  await context.window.maintenanceModule.open("work-orders");
+  assert.match(root.innerHTML, /class="wo-list-table"/);
+  await click("wo-view", { view: "kanban" });
+  assert.equal(cardCount(), 4);
 });

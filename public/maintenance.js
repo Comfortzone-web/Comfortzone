@@ -19,10 +19,10 @@
     customerSort: "name", customerSortDirection: 1,
     amcSort: "next-service", amcFiltersOpen: false, amcServiceBefore: "", amcMenuId: "", amcFullDetails: false,
     selectedWorkOrderId: "", workOrderTab: "Overview", workOrderMenuId: "", workOrderMenuLocation: "",
-    workOrderDetailTab: "Overview", workOrderDetailMenu: false,
+    workOrderDetailTab: "Overview", workOrderDetailMenu: false, pendingWorkOrderTab: "",
     workOrderDraft: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" },
     workOrderFilters: { range: "all", from: "", to: "", status: "all", contract: "", customer: "", site: "", technician: "" },
-    workOrderFiltersOpen: false
+    workOrderFiltersOpen: false, workOrderView: (() => { try { return localStorage.getItem("maintenance-work-order-view") === "list" ? "list" : "kanban"; } catch { return "kanban"; } })()
   };
   let lastRenderKey = "", lastRenderedDrawer = "", drawerReturnFocus = null;
   let lastLoadedAt = 0, latestRequest = 0, prefetchPromise = null, backgroundRefresh = null, savePending = false;
@@ -173,6 +173,10 @@
     }
     state.page = page;
     state.recordId = recordId;
+    if (page === "work-orders" && recordId && state.pendingWorkOrderTab) {
+      state.workOrderDetailTab = state.pendingWorkOrderTab;
+      state.pendingWorkOrderTab = "";
+    }
     if (page === "amc" && recordId) state.selectedContractId = recordId;
     if (page === "reports" && recordId) {
       state.selectedReportId = recordId; state.reportTab = "Report Details"; state.status.reports = "all";
@@ -207,6 +211,26 @@
       site: state.data.contracts.filter(agreement => agreement.customerId === item.id
         || !agreement.customerId && agreement.customerName?.toLocaleLowerCase("en-US") === item.name.toLocaleLowerCase("en-US"))
         .map(agreement => agreement.site).filter(Boolean).join(" ") }));
+  }
+  function contractsForCustomer(customerId, customerName = "") {
+    if (!customerId || customerId === "__new__") return [];
+    const name = String(customerName || (state.data.customers || []).find(row => row.id === customerId)?.name || "").trim().toLocaleLowerCase("en-US");
+    return state.data.contracts.filter(item => item.customerId === customerId
+      || !item.customerId && name && String(item.customerName || "").trim().toLocaleLowerCase("en-US") === name);
+  }
+  function updateScheduleContractChoices(form) {
+    if (form?.id !== "maintScheduleForm") return;
+    const select = form.elements.namedItem("contractId");
+    const customerId = form.elements.namedItem("customerId")?.value || "";
+    const customerName = form.querySelector("[data-customer-query]")?.value || "";
+    const matches = contractsForCustomer(customerId, customerName);
+    const selectedId = select.value;
+    select.replaceChildren(new Option("Non-AMC job", ""),
+      ...matches.map(item => new Option(`${item.number} · ${item.site}`, item.id)));
+    if (selectedId && matches.some(item => item.id === selectedId)) select.value = selectedId;
+    else if (selectedId) {
+      form.elements.namedItem("visitId").value = "";
+    }
   }
   function customerPicker(currentId = "", newName = "", disabled = false, fallbackName = "") {
     const customer = (state.data.customers || []).find(item => item.id === currentId)
@@ -261,6 +285,7 @@
       const control = form.elements.namedItem(field);
       if (control) control.value = customer?.[field] || "";
     }
+    updateScheduleContractChoices(form);
     hideCustomerPickerOptions(query);
     if (id === "__new__") newName.focus();
     else query.focus();
@@ -326,9 +351,9 @@
   const stack = (first, second) => `<span class="maint-stack"><strong>${esc(first || "--")}</strong><small>${esc(second || "")}</small></span>`;
   const iconButton = (name, title, action, id = "", disabled = false) => `<button class="maint-icon-button" title="${esc(title)}" aria-label="${esc(title)}" data-action="${action}" ${id ? `data-id="${esc(id)}"` : ""} ${disabled ? "disabled" : ""}>${icon(name)}</button>`;
 
-  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true, filterAction = "", filtersOpen = false, leadingButton = "") {
+  function header(title, subtitle, primaryLabel = "", primaryAction = "", searchPlaceholder = "", showDate = true, filterAction = "", filtersOpen = false, leadingButton = "", afterSearch = "") {
     return `<header class="maint-header"><div><h1>${esc(title)}</h1><p>${esc(subtitle)}</p></div>
-      <div class="maint-header-actions">${leadingButton}${searchPlaceholder ? `<label class="maint-search">${icon("search")}<input data-search="${esc(state.page)}" value="${esc(state.search[state.page] || "")}" placeholder="${esc(searchPlaceholder)}" aria-label="Search ${esc(title)}"></label>` : ""}
+      <div class="maint-header-actions">${leadingButton}${searchPlaceholder ? `<label class="maint-search">${icon("search")}<input data-search="${esc(state.page)}" value="${esc(state.search[state.page] || "")}" placeholder="${esc(searchPlaceholder)}" aria-label="Search ${esc(title)}"></label>` : ""}${afterSearch}
       ${showDate ? `<span class="maint-date">${icon("calendar-days")}${day(today())}</span>` : ""}
       ${filterAction ? `<button class="maint-filter-toggle${filtersOpen ? " active" : ""}" data-action="${filterAction}" aria-expanded="${filtersOpen}" aria-controls="${filterAction === "wo-toggle-filters" ? "woFilterPanel" : "srFilterPanel"}">${icon("filter")}Filter</button>` : ""}
       ${primaryLabel ? `<button class="maint-primary" data-action="${primaryAction}">${icon("plus")}${esc(primaryLabel)}</button>` : ""}</div></header>`;
@@ -646,7 +671,6 @@
         <div class="amc-row-cell amc-number"><button data-action="open-contract" data-id="${esc(item.id)}">${esc(item.number)}</button><small title="${esc(item.site)}">${esc(item.site)}</small></div>
         <div class="amc-row-cell amc-customer"><strong title="${esc(item.customerName)}">${esc(item.customerName)}</strong><small title="${esc(item.site)}">${esc(item.site)}</small></div>
         <div class="amc-row-cell amc-dates">${icon("calendar-days")}<span><strong>${shortDay(item.startDate)}</strong><small>to ${shortDay(item.endDate)}</small></span></div>
-        <div class="amc-row-cell amc-visits"><strong>${esc(item.visitsPerYear)}</strong><small>visits/yr</small></div>
         <div class="amc-row-cell amc-progress"><strong>${complete} / ${total}</strong><span class="amc-progress-line"><i style="width:${percent}%"></i></span><small>${percent}%</small></div>
         <div class="amc-row-cell amc-next">${icon("calendar-days")}<span><strong>${shortDay(nextDate)}</strong><small>${nextDate ? `${Math.max(0, Math.round((new Date(`${nextDate}T12:00:00Z`) - new Date(`${current}T12:00:00Z`)) / 86400000))} days away` : "Not scheduled"}</small></span></div>
         <div class="amc-row-cell amc-status">${badge(contractStatus(item))}</div>
@@ -843,6 +867,41 @@
     }).join("");
     return `<span class="wo-techs"><span class="wo-avatar-stack">${names.slice(0, 2).map(name => dashAvatar(name)).join("")}${names.length > 2 ? `<span class="wo-more-tech">+${names.length - 2}</span>` : ""}</span><span class="wo-tech-names" title="${esc(names.join(", "))}">${labels || "Unassigned"}</span></span>`;
   }
+  function workOrderPayment(item) {
+    const records = (state.data.billing || []).filter(row => item.contractId
+      ? row.contractId === item.contractId : row.workOrderId === item.id);
+    if (!records.length) return "Not Requested";
+    const statuses = records.map(row => {
+      if (row.paymentStatus === "Paid") return "Paid";
+      if (row.invoice && row.paymentStatus === "Overdue") return "Overdue";
+      if (row.invoice && row.paymentStatus === "Partially Paid") return "Partially Paid";
+      if (row.invoice) return "Unpaid";
+      return row.invoiceStatus === "Pending Accountant Action" ? "Invoice Pending" : row.invoiceStatus || "Not Requested";
+    });
+    return statuses.every(value => value === "Paid") ? "Paid" : statuses.find(value => value === "Overdue")
+      || statuses.find(value => value === "Partially Paid") || statuses.find(value => value === "Unpaid")
+      || statuses.find(value => value === "Invoice Pending") || statuses.find(value => value === "Prepared") || "Not Requested";
+  }
+  function workOrderList() {
+    const all = state.data.workOrders;
+    const visible = workOrderVisible().filter(item => state.status["work-orders"] === "all" || item.status === state.status["work-orders"]);
+    const sortKey = state.sort.page === "work-orders" ? state.sort.key : "serviceDate";
+    const direction = state.sort.page === "work-orders" ? state.sort.direction : -1;
+    visible.sort((a, b) => String(a[sortKey] || "").localeCompare(String(b[sortKey] || "")) * direction);
+    const pages = Math.max(1, Math.ceil(visible.length / state.pageSize));
+    state.pageNumber["work-orders"] = Math.min(Math.max(1, state.pageNumber["work-orders"]), pages);
+    const start = (state.pageNumber["work-orders"] - 1) * state.pageSize;
+    const options = (key, label, values) => `<label><span>${label}</span><select data-wo-list-filter="${key}"><option value="${key === "status" ? "all" : ""}">All ${label}</option>${values.map(value => `<option value="${esc(value[0])}" ${selected(state.workOrderFilters[key], value[0])}>${esc(value[1])}</option>`).join("")}</select></label>`;
+    const rows = visible.slice(start, start + state.pageSize).map(item => {
+      const names = (item.technicianIds || []).map(id => tech(id)?.name).filter(Boolean);
+      const priority = item.priority === "Urgent" ? "High" : item.priority === "Normal" ? "Medium" : item.priority || "Medium";
+      const payment = workOrderPayment(item);
+      const reportRow = state.data.reports.find(row => row.workOrderId === item.id);
+      const menu = state.workOrderMenuId === item.id && state.workOrderMenuLocation === "list";
+      return `<tr><td data-label="WO / Service Date"><button class="wo-list-link" data-action="open-job" data-id="${esc(item.id)}">${esc(item.number)}</button><small>${esc(day(item.serviceDate))}</small></td><td data-label="Customer / Site"><strong>${esc(item.customerName || "--")}</strong><small>${esc(item.site || "--")}</small></td><td data-label="AMC / Job Type"><strong>${esc(contract(item.contractId)?.number || "Non-AMC")}</strong><small>${esc(item.workType || "--")}</small></td><td data-label="Technicians"><span class="wo-list-avatars" title="${esc(names.join(", ") || "Unassigned")}">${names.length ? names.slice(0, 2).map(dashAvatar).join("") + (names.length > 2 ? `<i>+${names.length - 2}</i>` : "") : icon("user-round")}</span></td><td data-label="Priority"><span class="wo-priority ${esc(priority.toLowerCase())}">${esc(priority)}</span></td><td data-label="Status"><span class="wo-status ${esc(item.status.toLowerCase().replaceAll(" ", "-"))}">${esc(item.status)}</span></td><td data-label="Payment">${badge(payment)}</td><td data-label="Action"><div class="wo-list-menu-wrap">${iconButton("ellipsis", `Actions for ${item.number}`, "wo-list-menu", item.id)}${menu ? `<div class="wo-list-menu"><button data-action="open-job" data-id="${esc(item.id)}">View Work Order Details</button>${item.status !== "Completed" ? `<button data-action="edit-job" data-id="${esc(item.id)}">Edit Work Order</button><button data-action="edit-job" data-id="${esc(item.id)}">Assign / Change Technicians</button><button data-action="edit-job" data-id="${esc(item.id)}">Reschedule</button>` : ""}${reportRow ? `<button data-action="view-job-report" data-id="${esc(item.id)}">View Service Report</button>` : ""}<button data-action="wo-list-billing" data-id="${esc(item.id)}">Billing & Payments</button><button data-action="wd-duplicate" data-id="${esc(item.id)}">Duplicate Work Order</button></div>` : ""}</div></td></tr>`;
+    }).join("");
+    return `<section class="wo-list-panel"><div class="wo-list-tabs">${[["all", "All Work Orders"], ...workOrderStages.map(stage => [stage.name, stage.name])].map(([value, label]) => `<button class="${state.status["work-orders"] === value ? "active" : ""}" data-action="status-tab" data-status="${esc(value)}">${esc(label)} <b>${value === "all" ? all.length : all.filter(item => item.status === value).length}</b></button>`).join("")}</div><div class="wo-list-filters" id="woFilterPanel" ${state.workOrderFiltersOpen ? "" : "hidden"}><label><span>Date Range</span><select data-wo-list-range>${[["all", "All Dates"], ["this-month", "This Month"], ["last-month", "Last Month"], ["next-30", "Next 30 Days"]].map(([value, label]) => `<option value="${value}" ${selected(state.workOrderFilters.range, value)}>${label}</option>`).join("")}</select></label>${options("status", "Status", workOrderStages.map(stage => [stage.name, stage.name]))}${options("customer", "Customers", [...new Set(all.map(item => item.customerName).filter(Boolean))].sort().map(name => [name, name]))}${options("technician", "Technicians", state.data.technicians.map(item => [item.id, item.name]))}<button data-action="wo-clear-filters">Clear Filters</button></div><div class="wo-list-table-wrap"><table class="wo-list-table"><colgroup><col style="width:15%"><col style="width:17%"><col style="width:17%"><col style="width:10%"><col style="width:9%"><col style="width:14%"><col style="width:12%"><col style="width:6%"></colgroup><thead><tr><th><button data-action="sort" data-key="serviceDate">WO / Service Date ↕</button></th><th><button data-action="sort" data-key="customerName">Customer / Site ↕</button></th><th>AMC / Job Type</th><th>Technicians</th><th>Priority</th><th>Status</th><th>Payment</th><th>Action</th></tr></thead><tbody>${rows || `<tr><td colspan="8" class="wo-list-empty">No work orders match these filters.</td></tr>`}</tbody></table></div><footer class="wo-list-footer"><span>Showing ${visible.length ? start + 1 : 0} to ${Math.min(start + state.pageSize, visible.length)} of ${visible.length} work orders</span><div><label>Rows per page <select data-page-size>${[10, 20, 50].map(size => `<option ${selected(state.pageSize, size)}>${size}</option>`).join("")}</select></label><button data-action="wo-list-prev" ${state.pageNumber["work-orders"] === 1 ? "disabled" : ""} aria-label="Previous page">‹</button><span>${state.pageNumber["work-orders"]} / ${pages}</span><button data-action="wo-list-next" ${state.pageNumber["work-orders"] === pages ? "disabled" : ""} aria-label="Next page">›</button></div></footer></section>`;
+  }
   function workOrderCard(item) {
     const linked = contract(item.contractId);
     const priority = item.priority === "Urgent" ? "High" : item.priority === "Normal" ? "Medium" : item.priority || "Medium";
@@ -889,6 +948,11 @@
   }
   function workOrders() {
     if (state.recordId) return workOrderDetail(job(state.recordId));
+    if (state.workOrderView === "list") {
+      const all = state.data.workOrders;
+      const toggle = `<div class="wo-view-toggle" role="group" aria-label="Work order view"><button data-action="wo-view" data-view="kanban">${icon("layout-dashboard")} Cards</button><button class="active" data-action="wo-view" data-view="list">${icon("list")} List</button></div>`;
+      return `<div class="maint-work-orders">${header("Work Orders", "Manage and track maintenance work orders across your HVAC operations.", "New Work Order", "new-work-order", "Search work orders, customer, site, AMC...", false, "wo-toggle-filters", state.workOrderFiltersOpen, "", toggle)}<div class="maint-body wo-body"><div class="wo-kpi-row">${workOrderKpi("Total Work Orders", all.length, "file-text", "total", "")}${workOrderKpi("Scheduled", all.filter(item => item.status === "Scheduled").length, "calendar-days", "scheduled", "Scheduled")}${workOrderKpi("On Site", all.filter(item => item.status === "On Site").length, "play", "onsite", "On Site")}${workOrderKpi("Report Submitted", all.filter(item => item.status === "Report Submitted").length, "file-text", "submitted", "Report Submitted")}${workOrderKpi("Completed", all.filter(item => item.status === "Completed").length, "circle-check", "completed", "Completed")}</div>${workOrderList()}</div></div>`;
+    }
     const all = state.data.workOrders, visible = workOrderVisible();
     if (state.selectedWorkOrderId === "" && window.innerWidth > 1650) state.selectedWorkOrderId = visible[0]?.id || "";
     else if (state.selectedWorkOrderId && !visible.some(item => item.id === state.selectedWorkOrderId)) state.selectedWorkOrderId = window.innerWidth > 1650 ? visible[0]?.id || "" : null;
@@ -897,7 +961,7 @@
       const rows = visible.filter(item => item.status === stage.name);
       return `<section class="wo-column ${stage.tone}"><header><span class="wo-column-icon">${icon(stage.icon)}</span><span><h2>${esc(stage.name)}</h2><small>${esc(stage.description)}</small></span><b>${rows.length}</b></header><div class="wo-card-list">${rows.length ? rows.map(workOrderCard).join("") : `<p class="wo-column-empty">No ${esc(stage.name.toLowerCase())} work orders match.</p>`}</div></section>`;
     }).join("");
-    return `<div class="maint-work-orders">${header("Work Orders", "Manage and track maintenance work orders across your HVAC operations.", "New Work Order", "new-work-order", "Search work orders, customer, site, AMC...", true, "wo-toggle-filters", state.workOrderFiltersOpen)}
+    return `<div class="maint-work-orders">${header("Work Orders", "Manage and track maintenance work orders across your HVAC operations.", "New Work Order", "new-work-order", "Search work orders, customer, site, AMC...", true, "wo-toggle-filters", state.workOrderFiltersOpen, "", `<div class="wo-view-toggle" role="group" aria-label="Work order view"><button class="active" data-action="wo-view" data-view="kanban">${icon("layout-dashboard")} Cards</button><button data-action="wo-view" data-view="list">${icon("list")} List</button></div>`)}
       <div class="maint-body wo-body"><div class="wo-kpi-row">${workOrderKpi("Total Work Orders", all.length, "file-text", "total", "")}${workOrderKpi("Scheduled", all.filter(item => item.status === "Scheduled").length, "calendar-days", "scheduled", "Scheduled")}${workOrderKpi("On Site", all.filter(item => item.status === "On Site").length, "play", "onsite", "On Site")}${workOrderKpi("Report Submitted", all.filter(item => item.status === "Report Submitted").length, "file-text", "submitted", "Report Submitted")}${workOrderKpi("Completed", all.filter(item => item.status === "Completed").length, "circle-check", "completed", "Completed")}</div>
       ${workOrderFilterBar()}<div class="wo-layout ${selectedJob ? "has-detail" : ""}"><div class="wo-board">${board}</div>${selectedJob ? `<div class="wo-detail-backdrop" data-action="wo-close"></div>${workOrderPanel(selectedJob)}` : ""}</div></div></div>`;
   }
@@ -1310,12 +1374,14 @@
   function scheduleDrawer() {
     const d = state.scheduleDraft || {};
     const chosenContract = contract(d.contractId);
+    const customerId = d.customerId || chosenContract?.customerId
+      || (state.data.customers || []).find(item => item.name.toLocaleLowerCase("en-US") === String(d.customerName || chosenContract?.customerName || "").toLocaleLowerCase("en-US"))?.id;
     const visits = state.data.visits.filter(item => item.contractId === d.contractId && (item.status !== "Completed" || item.id === d.visitId));
     const selectable = state.data.technicians.filter(item => item.active);
     const body = `<form id="maintScheduleForm" class="maint-form"><div class="maint-form-section"><h3>Customer / AMC</h3><div class="maint-form-grid">
-      ${customerPicker(d.customerId || chosenContract?.customerId, d.newCustomerName, !!chosenContract, d.customerName || chosenContract?.customerName)}
+      ${customerPicker(customerId, d.newCustomerName, !!chosenContract, d.customerName || chosenContract?.customerName)}
       ${formField("Work Order Number", "workOrderNumber", d.workOrderNumber || "", "text", true)}
-      <label class="maint-field"><span>AMC Contract</span><select name="contractId" data-schedule-change="contract"><option value="">Non-AMC job</option>${state.data.contracts.map(item => `<option value="${item.id}" ${selected(d.contractId, item.id)}>${esc(item.number)} · ${esc(item.site)}</option>`).join("")}</select></label>
+      <label class="maint-field"><span>AMC Contract</span><select name="contractId" data-schedule-change="contract"><option value="">Non-AMC job</option>${contractsForCustomer(customerId, d.customerName || chosenContract?.customerName).map(item => `<option value="${item.id}" ${selected(d.contractId, item.id)}>${esc(item.number)} · ${esc(item.site)}</option>`).join("")}</select></label>
       ${formField("Site / Location", "site", d.site || chosenContract?.site || "", "text", true)}
       ${formField("Contact Person", "contact", d.contact || chosenContract?.contact || "")}${formField("Phone", "phone", d.phone || chosenContract?.phone || "", "tel")}
       <label class="maint-field" data-new-customer-email ${d.customerId === "__new__" && !chosenContract ? "" : "hidden"}><span>Customer Email</span><input name="newCustomerEmail" type="email" value="${esc(d.newCustomerEmail || "")}" placeholder="Optional"></label></div></div>
@@ -1808,12 +1874,16 @@
       state.workOrderDraft.status = ({ "filter-scheduled": "Scheduled", "filter-on-site": "On Site", "filter-report-submitted": "Report Submitted", "filter-completed": "Completed" })[action]; state.workOrderFilters = { ...state.workOrderDraft }; return render();
     }
     if (action === "wo-toggle-filters") { state.workOrderFiltersOpen = !state.workOrderFiltersOpen; return render(); }
+    if (action === "wo-view") { state.workOrderView = button.dataset.view; state.workOrderFiltersOpen = false; state.workOrderMenuId = ""; try { localStorage.setItem("maintenance-work-order-view", state.workOrderView); } catch {} return render(); }
+    if (action === "wo-list-menu") { state.workOrderMenuId = state.workOrderMenuId === id ? "" : id; state.workOrderMenuLocation = "list"; return render(); }
+    if (action === "wo-list-billing") { state.pendingWorkOrderTab = "Billing & Payments"; return navigate("work-orders", id); }
+    if (action === "wo-list-prev" || action === "wo-list-next") { state.pageNumber["work-orders"] += action === "wo-list-next" ? 1 : -1; return render(); }
     if (action === "wo-kpi") { state.workOrderDraft.status = button.dataset.status; state.workOrderFilters = { ...state.workOrderDraft }; return render(); }
     if (action === "wo-apply-filters") {
       if (state.workOrderDraft.range === "custom" && state.workOrderDraft.from && state.workOrderDraft.to && state.workOrderDraft.from > state.workOrderDraft.to) return notice("The start date must be before the end date.");
       state.workOrderFilters = { ...state.workOrderDraft }; state.workOrderMenuId = ""; return render();
     }
-    if (action === "wo-clear-filters") { state.workOrderDraft = workOrderFilterDefaults(); state.workOrderFilters = workOrderFilterDefaults(); state.search["work-orders"] = ""; state.workOrderMenuId = ""; return render(); }
+    if (action === "wo-clear-filters") { state.workOrderDraft = workOrderFilterDefaults(); state.workOrderFilters = workOrderFilterDefaults(); state.status["work-orders"] = "all"; state.search["work-orders"] = ""; state.workOrderMenuId = ""; return render(); }
     if (action === "wo-select") { state.selectedWorkOrderId = id; state.workOrderTab = "Overview"; state.workOrderMenuId = ""; return render(); }
     if (action === "wo-close") { state.selectedWorkOrderId = null; state.workOrderMenuId = ""; return render(); }
     if (action === "wo-tab") { state.workOrderTab = button.dataset.tab; return render(); }
@@ -1986,6 +2056,7 @@
     if (billingUi.handleInput(input)) return;
     if (input.matches("[data-customer-query]")) {
       input.closest(".maint-customer-picker").querySelector('[name="customerId"]').value = "";
+      updateScheduleContractChoices(input.closest("form"));
       input.dataset.customerTyped = "true";
       const form = input.closest("form");
       const newField = form.querySelector("[data-new-customer-field]");
@@ -2176,6 +2247,7 @@
       return;
     }
     if (input.matches("[data-page-size]")) { state.pageSize = Number(input.value); state.pageNumber[state.page] = 1; return render(); }
+    if (input.matches("[data-wo-list-filter], [data-wo-list-range]")) { const key = input.dataset.woListFilter || "range"; state.workOrderDraft[key] = input.value; state.workOrderFilters = { ...state.workOrderDraft }; state.pageNumber["work-orders"] = 1; return render(); }
     if (input.matches("[data-filter-status]")) { state.status[state.page] = input.value; state.pageNumber[state.page] = 1; return render(); }
     if (input.matches("[data-filter]")) { state.filters[input.dataset.filter] = input.value; state.pageNumber[state.page] = 1; return render(); }
     if (input.closest("#maintScheduleForm")) {
