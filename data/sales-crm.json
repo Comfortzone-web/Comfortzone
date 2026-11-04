@@ -1,55 +1,15 @@
 {
   "settings": {
-    "nextQuotationNo": "QCZ-26-1005",
+    "nextQuotationNo": "QCZ-26-1007",
     "nextEnquiryNo": "EN26-1007",
     "lastCreatedEnquiryNo": "",
     "nextProjectNo": "1012"
   },
   "leads": [
     {
-      "id": "55e12f87-5538-43ad-905c-6c9fa94d9488",
-      "enquiryNo": "EN26-1006",
-      "avatar": "AA",
-      "salesPerson": "Admin User",
-      "sNo": "3",
-      "customer": "AFS Air Conditioning LLC",
-      "contractor": "AFS Air Conditioning LLC",
-      "phone": "",
-      "contactName": "",
-      "contactNumber": "",
-      "requirement": "dddddddddd",
-      "projectDescription": "dddddddddd",
-      "projectType": "VRV + AHU",
-      "productType": "VRV + AHU",
-      "scope": "VRV + AHU",
-      "location": "",
-      "plotNo": "dsfg",
-      "client": "fdhg",
-      "mainContractor": "sdg",
-      "consultant": "",
-      "acContractor": "",
-      "source": "WhatsApp",
-      "status": "New Enquiry",
-      "quoteNo": "",
-      "quotedDate": "",
-      "receivedDate": "29/07/2026",
-      "preparedBy": "",
-      "estimatedValue": 0,
-      "daikinPurchaseValue": 0,
-      "finalizingMonth": "",
-      "competitors": "",
-      "followUp": "",
-      "nextFollowUpDate": "",
-      "followUpType": "",
-      "followUpNote": "",
-      "followUps": [],
-      "priority": "Planned",
-      "lastUpdated": "29/07/2026",
-      "updatedBy": "Admin User"
-    },
-    {
       "id": "e4eaae52-5c32-4254-affc-27f3bffb82cd",
-      "enquiryNo": "EN26-1004",
+      "ownerId": "",
+      "enquiryNo": "EN26-1005",
       "avatar": "PN",
       "salesPerson": "Admin User",
       "sNo": "3",
@@ -58,8 +18,8 @@
       "phone": "+971 55 901 2234",
       "contactName": "",
       "contactNumber": "+971 55 901 2234",
-      "requirement": "Apartment ducted AC service",
-      "projectDescription": "Apartment ducted AC service",
+      "requirement": "Apartment ducted AC service, Appartment and Office Staff Accomadation and Room Allotment",
+      "projectDescription": "Apartment ducted AC service, Appartment and Office Staff Accomadation and Room Allotment",
       "projectType": "Apartment",
       "productType": "CHW",
       "scope": "Apartment",
@@ -79,80 +39,15 @@
       "daikinPurchaseValue": 0,
       "finalizingMonth": "",
       "competitors": "",
-      "followUp": "25/06/2026",
-      "nextFollowUpDate": "25/06/2026",
+      "followUp": "",
+      "nextFollowUpDate": "",
       "followUpType": "",
       "followUpNote": "",
-      "followUps": [
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        },
-        {
-          "date": "25/06/2026",
-          "type": "Call",
-          "note": "Follow-up planned",
-          "updatedBy": "Admin User"
-        }
-      ],
+      "followUps": [],
       "priority": "Planned",
-      "lastUpdated": "29/07/2026",
+      "createdAt": "",
+      "updatedAt": "2026-10-22T11:22:41.452Z",
+      "lastUpdated": "22/10/2026",
       "updatedBy": "Admin User"
     },
     {
@@ -4120,11 +4015,12 @@
     },
     {
       "id": "C-CAA1EB12",
-      "icon": "AS",
+      "icon": "A&",
       "name": "A & S CONTRACTING L.L.C",
       "type": "Commercial",
       "contact": "",
       "role": "",
+      "salesPerson": "",
       "phone": "",
       "email": "",
       "address": "",
@@ -4529,21 +4425,21 @@
       "scope": "",
       "boq": [
         {
-          "model": "EKEXV200",
-          "description": "Expansion valve VRV-FAHU - BELGIUM",
+          "model": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "qty": 10,
+          "deliveredQty": 0,
+          "reserve": true,
+          "pendingQty": 10,
+          "stock": "15"
+        },
+        {
+          "model": "FXMQ125PBV1",
+          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
           "qty": 1,
           "deliveredQty": 0,
           "reserve": false,
           "pendingQty": 1,
-          "stock": ""
-        },
-        {
-          "model": "FWW1000TFNLEH-A0AE",
-          "description": "DAIKIN CHW FCU - DISTRICT COOLING - TF - LEFT",
-          "qty": 6,
-          "deliveredQty": 3,
-          "reserve": false,
-          "pendingQty": 3,
           "stock": ""
         }
       ],
@@ -4553,132 +4449,158 @@
       "deliveryNoteReference": "",
       "remarks": "",
       "value": "5250"
-    },
-    {
-      "id": "sales-project-1784546675133-b2417561655fb",
-      "projectNo": "1007",
-      "projectId": "1007",
-      "name": "Retail Mall Duc",
-      "customer": "AFS Air Conditioning LLC",
-      "location": "",
-      "category": "Commercial",
-      "type": "Commercial",
-      "productType": "Other",
-      "requirement": "Other",
-      "engineer": "sales person",
-      "status": "Delivery Pending",
-      "date": "20/07/2026",
-      "createdDate": "20/07/2026",
-      "targetDate": "",
-      "scope": "",
-      "boq": [
-        {
-          "model": "BAG",
-          "description": "SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
-          "qty": 3,
-          "deliveredQty": 0,
-          "reserve": false,
-          "pendingQty": 3,
-          "stock": "4"
-        }
-      ],
-      "directDeliveryUploads": [],
-      "reserveStock": false,
-      "expectedDeliveryDate": "",
-      "deliveryNoteReference": "",
-      "remarks": "",
-      "value": "8232"
-    },
-    {
-      "id": "cdfb5dbb-e2ea-4b09-94da-017b6a93252c",
-      "projectNo": "1003",
-      "projectId": "1003",
-      "name": "Villa AC Replacement - Jumeirah",
-      "customer": "ABC Contracting",
-      "location": "Jumeirah 1, Dubai",
-      "category": "Trading",
-      "type": "Trading",
-      "productType": "Supply & Installation",
-      "requirement": "Supply & Installation",
-      "engineer": "Sarah Johnson",
-      "status": "Delivery Pending",
-      "date": "12/10/2026",
-      "createdDate": "12/10/2026",
-      "targetDate": "",
-      "scope": "",
-      "boq": [
-        {
-          "model": "BAG",
-          "description": "SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
-          "qty": 3,
-          "deliveredQty": 2,
-          "reserve": false,
-          "pendingQty": 1,
-          "stock": "2"
-        },
-        {
-          "model": "FXMQ140PBV1",
-          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "qty": 10,
-          "deliveredQty": 10,
-          "reserve": false,
-          "pendingQty": 0,
-          "stock": ""
-        },
-        {
-          "model": "FXMQ80PBV1",
-          "description": "VRV INDOOR UNIT- Ducted (medium static) - INDIA",
-          "qty": 5,
-          "deliveredQty": 5,
-          "reserve": false,
-          "pendingQty": 0,
-          "stock": ""
-        }
-      ],
-      "directDeliveryUploads": [],
-      "reserveStock": false,
-      "expectedDeliveryDate": "",
-      "deliveryNoteReference": "",
-      "remarks": "",
-      "value": "AED 128,500"
-    },
-    {
-      "id": "239ff066-404d-4e81-a896-e4cf6e31c799",
-      "projectNo": "1004",
-      "projectId": "1004",
-      "name": "Retail Mall Ducting Service",
-      "customer": "Majid Al Futtaim",
-      "location": "Mirdif, Dubai",
-      "category": "Commercial",
-      "type": "Commercial",
-      "productType": "Repair / Service",
-      "requirement": "Repair / Service",
-      "engineer": "Michael Chen",
-      "status": "Delivery Pending",
-      "date": "14/10/2026",
-      "createdDate": "14/10/2026",
-      "targetDate": "",
-      "scope": "",
-      "boq": [
-        {
-          "model": "BAG",
-          "description": "SKY/PACKAGE ACCESSORY - ADAPTOR - MALAYSIA",
-          "qty": 1,
-          "deliveredQty": 0,
-          "reserve": false,
-          "pendingQty": 1,
-          "stock": "2"
-        }
-      ],
-      "directDeliveryUploads": [],
-      "reserveStock": false,
-      "expectedDeliveryDate": "",
-      "deliveryNoteReference": "",
-      "remarks": "",
-      "value": "AED 42,600"
     }
   ],
   "quotations": [
+    {
+      "id": "1ec9a3de-40a0-426e-aab5-9c315e77b46c",
+      "ownerId": "",
+      "no": "QCZ-26-1006",
+      "baseQuotationNo": "QCZ-26-1006",
+      "revisionNo": 0,
+      "revision": "Fresh Quote",
+      "date": "04/11/2026",
+      "validity": "7 Days",
+      "salesperson": "Admin User",
+      "customer": "AL SHATER AIRCONDITIONING ELECTRICAL & SANITARY INSTALLATION REPAIRING L.L.C",
+      "project": "",
+      "location": "",
+      "paymentTerms": "30 Days Credit",
+      "deliveryTime": "To be discussed",
+      "warranty": "ENQ-25-250",
+      "quoteType": "VRV",
+      "notes": "Account Name: COMFORT ZONE A/C DEVICES TR LLC\nBANK: RAKBANK\nACCOUNT NUMBER: 0243009026001\nIBAN: AE560400000243009026001\nTYPE: CURRENT\nBRANCH: RAKBANK KING FAISAL ROAD BRANCH",
+      "terms": "Warranty:\nUnits offered are covered under a standard warranty of 12 months from the date of purchase for the whole units and a total of 60 months on compressor against manufacturing defects. The warranty covers the replacement of defective parts and does not include labor charges. Defects caused due to improper installation will void the warranty.\n\nCustom Duties & Taxes:\nOnly included if specifically mentioned in the proposal. If included, quoted prices are based on the prevailing rate for Custom duty and Taxes. However, if any variation in custom duty and / or other Taxes are imposed by the Federal Government, such variations will be borne by the purchaser.\n\nInland Freight:\n1. In land Freight is included if units are delivered in one lot.\n2. Offloading & Rigging at site is not included.\n\nCancellation:\n25% of the material value will become payable in the event of cancellation, prior to the start of manufacturing. After manufacturing has started cancellation will be determined based on costs incurred by us.\n\nWarehouse Fee:\nA warehouse fee of 2% will be charged per month for all non-collected and or / non-delivered goods. This charge will become applicable (3) days from the agreed delivery date.\n\nExclusions:\nInstallation of AC units, unloading of units at site & supply of items other than mentioned.",
+      "items": [
+        {
+          "id": "1234e4fe-4ac2-411d-ac91-096827b5014f",
+          "description": "FXFSQ100ARV1 - VRV INDOOR UNIT-Cassette - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 0
+        },
+        {
+          "id": "41e1edf4-a937-4e00-bb4c-14b7d7a94a68",
+          "description": "FXAQ25ARVM - VRV INDOOR UNIT-Wall - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 0
+        },
+        {
+          "id": "588d0807-3105-4444-8905-c611336c08fc",
+          "description": "FXMQ40PBV1 - VRV INDOOR UNIT- Ducted (medium static) - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 0
+        },
+        {
+          "id": "e8568131-cf6f-4255-a13e-c082d1a8e5e4",
+          "description": "EKEXV200 - Expansion valve VRV-FAHU - BELGIUM",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 0
+        },
+        {
+          "id": "51530794-454e-4ead-8f5a-5ced18f8d526",
+          "description": "EKEXV50 - Expansion valve VRV-FAHU - BELGIUM",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 0
+        }
+      ],
+      "combineRefnets": false,
+      "refnetOriginalItems": [],
+      "manualSubtotal": "500000.00",
+      "discount": 0,
+      "sourceLeadId": "",
+      "sourceCostingSheetId": "",
+      "status": "Sent",
+      "createdAt": "2026-11-04T09:21:08.031Z",
+      "updatedAt": "2026-11-04T09:21:08.031Z",
+      "amount": 525000,
+      "quotationNo": "QCZ-26-1006",
+      "pdfUpload": {
+        "id": "dc6f7949-7018-457f-84c3-a259aa96205e",
+        "originalName": "QCZ-26-1006-AL-SHATER-AIRCONDITIONING-ELECTRICAL-_-SANITARY-INSTALLATION-REPAIRING-L.L.C-Breakup.pdf",
+        "storedName": "5aeb357f-1649-438a-9552-fa8aa63af850-QCZ-26-1006-AL-SHATER-AIRCONDITIONING-ELECTRICAL-_-SANITARY-INSTALLATION-REPAIRING-L.L.C-Breakup.pdf",
+        "mimeType": "application/pdf",
+        "size": 157178,
+        "createdAt": "2026-11-04T11:34:15.426Z",
+        "category": "Sales Quotation PDF"
+      },
+      "lastPdfGeneratedAt": "2026-11-04T11:34:15.426Z"
+    },
+    {
+      "id": "474a605f-c91b-471e-962b-d28147a2a201",
+      "ownerId": "",
+      "no": "QCZ-26-1005",
+      "baseQuotationNo": "QCZ-26-1005",
+      "revisionNo": 0,
+      "revision": "Fresh Quote",
+      "date": "03/11/2026",
+      "validity": "7 Days",
+      "salesperson": "Admin User",
+      "customer": "Aerotive Building Contracting LLC",
+      "project": "",
+      "location": "",
+      "paymentTerms": "30 Days Credit",
+      "deliveryTime": "To be discussed",
+      "warranty": "",
+      "quoteType": "VRV",
+      "notes": "All Units are Reserved",
+      "terms": "Warranty:\nUnits offered are covered under a standard warranty of 12 months from the date of purchase for the whole units and a total of 60 months on compressor against manufacturing defects. The warranty covers the replacement of defective parts and does not include labor charges. Defects caused due to improper installation will void the warranty.\n\nCustom Duties & Taxes:\nOnly included if specifically mentioned in the proposal. If included, quoted prices are based on the prevailing rate for Custom duty and Taxes. However, if any variation in custom duty and / or other Taxes are imposed by the Federal Government, such variations will be borne by the purchaser.\n\nInland Freight:\n1. In land Freight is included if units are delivered in one lot.\n2. Offloading & Rigging at site is not included.\n\nCancellation:\n25% of the material value will become payable in the event of cancellation, prior to the start of manufacturing. After manufacturing has started cancellation will be determined based on costs incurred by us.\n\nWarehouse Fee:\nA warehouse fee of 2% will be charged per month for all non-collected and or / non-delivered goods. This charge will become applicable (3) days from the agreed delivery date.\n\nExclusions:\nInstallation of AC units, unloading of units at site & supply of items other than mentioned.",
+      "items": [
+        {
+          "id": "6b5f8248-3d1d-4777-945c-6a987456fab1",
+          "description": "RXYMQ4AVMK - VRV OUTDOOR UNIT - MINI - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 9261.999999999998
+        },
+        {
+          "id": "8a6b29f3-b7d1-4c40-a7e8-9f3d4a5aed3e",
+          "description": "RXQ16ARYFK - VRV OUTDOOR UNIT - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 25007.6
+        },
+        {
+          "id": "5b381e01-849d-40e9-99e2-63dcd6f43e0b",
+          "description": "FXAQ20A - VRV INDOOR UNIT-Wall - THAILAND",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 3312.7999999999997
+        },
+        {
+          "id": "aa081f4e-97dc-47ee-91ce-4d33619ff621",
+          "description": "RXYMQ4AVMK - VRV OUTDOOR UNIT - MINI - INDIA",
+          "qty": 1,
+          "unit": "Nos",
+          "unitPrice": 9261.999999999998
+        }
+      ],
+      "combineRefnets": false,
+      "refnetOriginalItems": [],
+      "manualSubtotal": "",
+      "discount": 0,
+      "sourceLeadId": "",
+      "sourceCostingSheetId": "529d6917-a085-4cd0-94c8-d1c5c4c413c7",
+      "status": "Sent",
+      "createdAt": "2026-11-03T07:43:28.625Z",
+      "updatedAt": "2026-11-04T06:59:28.612Z",
+      "amount": 49186.62,
+      "quotationNo": "QCZ-26-1005",
+      "pdfUpload": {
+        "id": "a958ba0d-efaf-4576-a484-8599b746a4a2",
+        "originalName": "QCZ-26-1005-Aerotive-Building-Contracting-LLC.pdf",
+        "storedName": "4d9e833f-c87c-44cc-a00e-a90311d200a6-QCZ-26-1005-Aerotive-Building-Contracting-LLC.pdf",
+        "mimeType": "application/pdf",
+        "size": 253993,
+        "createdAt": "2026-11-04T09:18:53.300Z",
+        "category": "Sales Quotation PDF"
+      },
+      "lastPdfGeneratedAt": "2026-11-04T09:18:53.300Z"
+    },
     {
       "id": "d081a4c0-0eee-48b7-862a-6d2e1a7c48f2",
       "no": "QCZ-26-1004",

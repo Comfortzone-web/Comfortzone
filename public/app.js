@@ -1290,10 +1290,8 @@ function renderSettings() {
         ${settingsCompanyCard("company", "Company Details")}
         ${settingsCompanyCard("company2", "Company 2 Details")}
       </div>
-      <div class="settings-grid">
-        ${settingsAttachmentsCard()}
-        ${settingsUsersCard()}
-      </div>
+      ${settingsUsersCard()}
+      ${settingsAttachmentsCard()}
       ${settingsCostingCard()}
     </div>
   `;
@@ -1366,7 +1364,7 @@ function settingsAttachmentsCard() {
 function settingsUsersCard() {
   const users = settingsDraft?.users || [];
   return `
-    <section class="inventory-card settings-card">
+    <section class="inventory-card settings-card settings-users-card">
       <div class="inventory-topbar">
         <div><h2>Login Access</h2><p class="inventory-muted">Only active users can login with their email and password.</p></div>
         <div class="settings-user-actions">
@@ -1375,12 +1373,15 @@ function settingsUsersCard() {
         </div>
       </div>
       <table class="inventory-table settings-users-table">
-        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Status</th><th>Action</th></tr></thead>
+        <colgroup><col class="settings-user-name"><col class="settings-user-role"><col class="settings-user-email"><col class="settings-user-contact"><col class="settings-user-position"><col class="settings-user-status"><col class="settings-user-action"></colgroup>
+        <thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Contact</th><th>Position</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>${users.map(user => `
           <tr>
             <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="name" value="${escapeHtml(user.name || "")}"></td>
             <td><select data-settings-user="${escapeHtml(user.id)}" data-user-field="role">${loginRoles.map(role => `<option ${user.role === role ? "selected" : ""}>${role}</option>`).join("")}</select></td>
-            <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="email" value="${escapeHtml(user.email || "")}"></td>
+            <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="email" type="email" value="${escapeHtml(user.email || "")}"></td>
+            <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="contact" type="tel" value="${escapeHtml(user.contact || "")}" placeholder="Mobile number"></td>
+            <td><input data-settings-user="${escapeHtml(user.id)}" data-user-field="position" value="${escapeHtml(user.position || "")}" placeholder="Company position"></td>
             <td><select data-settings-user="${escapeHtml(user.id)}" data-user-field="active"><option value="true" ${user.active !== false ? "selected" : ""}>Active</option><option value="false" ${user.active === false ? "selected" : ""}>Disabled</option></select></td>
             <td>${rowMenu([
               { label: "Set Password", action: "settings-password-user", id: user.id },
@@ -1395,6 +1396,8 @@ function settingsUsersCard() {
           <label>Name<input id="settingsNewUserName"></label>
           <label>Role<select id="settingsNewUserRole">${loginRoles.map(role => `<option ${role === "Staff" ? "selected" : ""}>${role}</option>`).join("")}</select></label>
           <label>Email<input id="settingsNewUserEmail" type="email"></label>
+          <label>Contact<input id="settingsNewUserContact" type="tel" placeholder="Mobile number"></label>
+          <label>Position<input id="settingsNewUserPosition" placeholder="Company position"></label>
           <label>Password<input id="settingsNewUserPassword" type="password"></label>
         </div>
         <div class="inventory-actions"><button class="ghost-button" data-cancel-settings-user>Cancel</button><button class="primary-button" data-save-new-settings-user>Save User</button></div>
@@ -1514,7 +1517,7 @@ async function saveSettingsUser(userId, password = "") {
 async function saveSettingsUsers(button) {
   const changedUsers = settingsDraft.users.filter(user => {
     const saved = appSettings.users.find(item => item.id === user.id);
-    return saved && ["name", "role", "email", "active"].some(field => user[field] !== saved[field]);
+    return saved && ["name", "role", "email", "contact", "position", "active"].some(field => (user[field] ?? "") !== (saved[field] ?? ""));
   });
   if (!changedUsers.length) return toast("No changes to save");
   button.disabled = true;
@@ -1540,6 +1543,8 @@ async function saveNewSettingsUser() {
     name: $("#settingsNewUserName").value.trim(),
     role: $("#settingsNewUserRole").value,
     email: $("#settingsNewUserEmail").value.trim(),
+    contact: $("#settingsNewUserContact").value.trim(),
+    position: $("#settingsNewUserPosition").value.trim(),
     password: $("#settingsNewUserPassword").value
   };
   if (!payload.name || !payload.email || !payload.password) return alert("Name, email, and password are required.");
@@ -1619,7 +1624,7 @@ function salesDeskTopbarConfig() {
       title: "Create New Quotation",
       subtitle: "Prepare a quotation inside Sales Desk.",
       search: "",
-      actions: `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><button class="sales-secondary quote-download-pdf" data-sales-action="download-created-quote-pdf" ${canDownloadPdf ? "" : "disabled title=\"Create the quotation to download its PDF\""}>Download PDF</button><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary quote-create-button" data-sales-action="send-quote">Create Quotation</button>`
+      actions: `<button class="sales-secondary" data-sales-action="quotation-list">Quotation List</button><div class="row-menu quote-pdf-menu"><button class="sales-secondary quote-download-pdf" data-row-menu aria-label="Download quotation PDF" aria-haspopup="menu" ${canDownloadPdf ? "" : "disabled title=\"Create the quotation to download its PDF\""}><img src="/assets/maintenance-icons/download.svg" alt="">Download PDF<img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button><div class="row-menu-list hidden" role="menu"><button data-sales-action="download-created-quote-pdf" data-pdf-variant="bulk" role="menuitem"><strong>Bulk Pricing Quotation</strong><small>Default · without unit price</small></button><button data-sales-action="download-created-quote-pdf" data-pdf-variant="breakup" role="menuitem"><strong>Breakup Quotation</strong><small>With unit price</small></button></div></div><button class="sales-primary" data-sales-action="save-quote">Save Draft</button><button class="sales-primary quote-create-button" data-sales-action="send-quote">Create Quotation</button>`
     };
   }
   const configs = {
@@ -3826,8 +3831,8 @@ function salesQuotationListHtml() {
             <td>${salesBadge(quote.status)}</td>
             <td>${escapeHtml(quote.salesperson || quote.salesPerson || quote.preparedBy || "")}</td>
             <td>${rowMenu([
+              { label: "View", action: "view-quote", id: quote.id },
               { label: "Edit", action: "edit-quote", id: quote.id },
-              { label: "Preview", action: "preview-quote", id: quote.id },
               { label: "PDF", action: "pdf-quote", id: quote.id },
               { label: "Revision", action: "revision-quote", id: quote.id },
               { label: "Create Project", action: "create-project-from-quote", id: quote.id },
@@ -4901,8 +4906,8 @@ function salesFollowUpTableHtml(rows) {
           <td>${escapeHtml(item.date)}${item.due ? `<br><span>${escapeHtml(item.due)}</span>` : ""}</td>
           <td>${item.source === "quotation" ? salesQuotationFollowStatusSelect(item) : salesManualFollowStatusSelect(item)}</td>
           <td>${item.source === "quotation" ? rowMenu([
+            { label: "View", action: "view-quote", id: item.quoteId || item.quotation },
             { label: "Edit Quotation", action: "edit-quote", id: item.quoteId || item.quotation },
-            { label: "Preview", action: "preview-quote", id: item.quoteId || item.quotation },
             { label: "PDF", action: "pdf-quote", id: item.quoteId || item.quotation }
           ]) : rowMenu([
             { label: "Edit", action: "edit-follow-up", id: item.id },
@@ -5231,9 +5236,10 @@ async function handleSalesClick(event) {
   if (action === "save-quote") return saveSalesQuotation("Draft", target);
   if (action === "send-quote") return saveSalesQuotation("Sent", target);
   if (action === "download-created-quote-pdf" && salesQuotationDraft?.id && String(salesQuotationDraft.status || "").toLowerCase() !== "draft") {
-    return downloadSalesQuotationPdf(salesQuotationDraft.id);
+    document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
+    return downloadSalesQuotationPdf(salesQuotationDraft.id, target.dataset.pdfVariant);
   }
-  if (action === "preview-quote") previewSalesQuotation(target.dataset.salesId);
+  if (action === "view-quote") openSalesQuotationViewModal(target.dataset.salesId);
   if (action === "pdf-quote") downloadSalesQuotationPdf(target.dataset.salesId);
   if (action === "copy-quote" || action === "revision-quote") return createSalesQuotationRevision(target.dataset.salesId);
   if (action === "create-project-from-quote") createProjectFromQuotation(target.dataset.salesId);
@@ -5283,7 +5289,7 @@ async function handleSalesClick(event) {
 
 async function handleSalesMenuAction(action, itemId, meta = {}) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
-  const quote = ["preview-quote", "pdf-quote", "copy-quote", "revision-quote", "create-project-from-quote", "create-order-book-from-quote", "edit-quote", "delete-quote"].includes(action) ? findSalesQuotation(itemId) : null;
+  const quote = ["view-quote", "pdf-quote", "copy-quote", "revision-quote", "create-project-from-quote", "create-order-book-from-quote", "edit-quote", "delete-quote"].includes(action) ? findSalesQuotation(itemId) : null;
   const quoteId = quote?.id || itemId;
   if (action === "lead-to-customer") return createCustomerFromLead(itemId);
   if (action === "lead-create-project") return createProjectFromLead(itemId);
@@ -5319,7 +5325,7 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "edit-project") return openSalesProjectDrawer(itemId);
   if (action === "project-lost") return markSalesProjectLost(itemId);
   if (action === "delete-project") return deleteSalesItem("projects", itemId);
-  if (action === "preview-quote") return previewSalesQuotation(quoteId);
+  if (action === "view-quote") return openSalesQuotationViewModal(quoteId);
   if (action === "pdf-quote") return downloadSalesQuotationPdf(quoteId);
   if (action === "copy-quote" || action === "revision-quote") return createSalesQuotationRevision(quoteId);
   if (action === "create-project-from-quote") return createProjectFromQuotation(quoteId);
@@ -6257,22 +6263,49 @@ function salesFormConfig(collection) {
   return configs[collection];
 }
 
-function previewSalesQuotation(quoteId) {
+function openSalesQuotationViewModal(quoteId) {
   const quote = findSalesQuotation(quoteId);
-  if (!quote) return;
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(salesQuotationDocumentHtml(quote));
-  win.document.close();
+  if (!quote) return toast("Quotation not found");
+  document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
+  document.querySelector("#salesDeskRoot .quote-view-backdrop")?.remove();
+  const detail = (label, value) => `<div><dt>${label}</dt><dd>${escapeHtml(value || "-")}</dd></div>`;
+  const items = Array.isArray(quote.items) ? quote.items : [];
+  const subtotalFromItems = items.reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
+  const manualSubtotal = String(quote.manualSubtotal || "").replace(/,/g, "").trim();
+  const subtotal = manualSubtotal ? Number(manualSubtotal) || 0 : subtotalFromItems;
+  const discount = Number(quote.discount || 0);
+  const afterDiscount = Math.max(0, subtotal - discount);
+  const vat = afterDiscount * 0.05;
+  const rows = items.map((item, index) => `<tr><td>${index + 1}</td><td>${escapeHtml(item.description || "-")}</td><td>${escapeHtml(item.qty ?? 0)}</td><td>${escapeHtml(item.unit || "Nos")}</td><td>${salesMoney(item.unitPrice)}</td><td>${salesMoney(Number(item.qty || 0) * Number(item.unitPrice || 0))}</td></tr>`).join("");
+  const modal = document.createElement("div");
+  modal.className = "pm-modal-backdrop pm-lpo-backdrop quote-view-backdrop";
+  modal.innerHTML = `<section class="pm-modal pm-lpo-modal quote-view-modal" role="dialog" aria-modal="true" aria-labelledby="quoteViewModalTitle">
+    <div class="pm-modal-head"><div><h2 id="quoteViewModalTitle">${escapeHtml(quote.no || quote.quotationNo || "Quotation")}</h2><p>${escapeHtml(formatInventoryDate(quote.date || quote.quotationDate) || "-")} · ${escapeHtml(quote.customer || "-")}</p></div><div class="pm-lpo-modal-head-actions">${salesBadge(quote.status || "Draft")}<button type="button" class="pm-close" data-quote-view-close aria-label="Close quotation details">×</button></div></div>
+    <div class="pm-lpo-modal-body"><dl class="pm-lpo-details">${detail("Customer", quote.customer)}${detail("Project", quote.project)}${detail("Sales Person", quote.salesperson || quote.salesPerson || quote.preparedBy)}${detail("Enquiry No.", quote.enquiryNo || quote.warranty)}${detail("Validity", quote.validity)}${detail("Payment Terms", quote.paymentTerms)}${detail("Availability", quote.deliveryTime)}${detail("Subject", quote.subject || "Supply of Daikin AC Units")}${quote.revision ? detail("Revision", quotationRevisionLabel(quote)) : ""}</dl>
+      <section class="pm-lpo-section"><h3>Items</h3><div class="pm-table-wrap"><table class="pm-table pm-lpo-items quote-view-items"><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Amount</th></tr></thead><tbody>${rows || `<tr><td colspan="6" class="pm-table-empty">No items.</td></tr>`}</tbody></table></div></section>
+      <div class="pm-lpo-bottom"><div class="pm-lpo-extras">${quote.notes ? `<section class="pm-lpo-section"><h3>Notes</h3><p>${escapeHtml(quote.notes)}</p></section>` : ""}${quote.terms ? `<section class="pm-lpo-section"><h3>Terms &amp; Conditions</h3><p>${escapeHtml(quote.terms)}</p></section>` : ""}</div><dl class="pm-lpo-totals">${detail("Subtotal", salesMoney(subtotal))}${discount ? detail("Discount", salesMoney(discount)) : ""}${detail("VAT 5%", salesMoney(vat))}<div class="pm-lpo-grand"><dt>Grand Total</dt><dd>${salesMoney(afterDiscount + vat)}</dd></div></dl></div>
+    </div><div class="pm-modal-actions"><button type="button" class="pm-secondary" data-quote-view-close>Close</button></div>
+  </section>`;
+  const close = () => {
+    modal.remove();
+    document.removeEventListener("keydown", onKeyDown);
+  };
+  const onKeyDown = event => { if (event.key === "Escape") close(); };
+  modal.addEventListener("click", event => {
+    if (event.target === modal || event.target.closest("[data-quote-view-close]")) close();
+  });
+  document.addEventListener("keydown", onKeyDown);
+  document.querySelector("#salesDeskRoot").append(modal);
+  modal.querySelector("[data-quote-view-close]")?.focus();
 }
 
-async function downloadSalesQuotationPdf(quoteId) {
+async function downloadSalesQuotationPdf(quoteId, variant = "bulk") {
   const quote = findSalesQuotation(quoteId);
   if (!quote) return;
   const response = await fetch("/api/sales-crm/quotations/pdf", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ quoteId: quote.id })
+    body: JSON.stringify({ quoteId: quote.id, variant })
   });
   if (!response.ok) return toast("Could not create quotation PDF");
   const blob = await response.blob();

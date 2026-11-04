@@ -368,6 +368,66 @@ button, input, select, textarea {
   cursor: not-allowed;
 }
 
+.topbar.quotation-shell #viewActions .quote-download-pdf {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.topbar.quotation-shell #viewActions .quote-download-pdf img { width: 16px; height: 16px; }
+.topbar.quotation-shell #viewActions .quote-download-pdf img:last-child { width: 14px; height: 14px; margin-left: 2px; }
+.quote-pdf-menu .row-menu-list { min-width: 238px; }
+.topbar.quotation-shell #viewActions .quote-pdf-menu .row-menu-list button {
+  display: grid;
+  gap: 3px;
+  min-height: 52px;
+  padding: 9px 13px;
+  font: 500 13px/1.25 "Inter", system-ui, sans-serif;
+}
+.quote-pdf-menu .row-menu-list button + button { border-top: 1px solid #e8eef7; }
+.quote-pdf-menu .row-menu-list button strong { font-weight: 600; }
+.quote-pdf-menu .row-menu-list button small { color: #617492; font-size: 11px; }
+
+.quote-view-modal .pm-modal-head > div:first-child { min-width: 0; }
+.quote-view-modal .pm-modal-head h2,
+.quote-view-modal .pm-modal-head p { overflow-wrap: anywhere; }
+.quote-view-modal .pm-lpo-details dd { font-size: 13px; }
+.quote-view-items { width: 100%; min-width: 0; table-layout: fixed; }
+.quote-view-items th,
+.quote-view-items td { min-width: 0; overflow-wrap: anywhere; }
+.quote-view-items th:nth-child(2),
+.quote-view-items td:nth-child(2) { width: 42%; text-align: left; white-space: normal; }
+.quote-view-items th:nth-child(3),
+.quote-view-items td:nth-child(3),
+.quote-view-items th:nth-child(4),
+.quote-view-items td:nth-child(4) { width: 8%; text-align: center; }
+.quote-view-items th:nth-child(5),
+.quote-view-items td:nth-child(5),
+.quote-view-items th:nth-child(6),
+.quote-view-items td:nth-child(6) { width: 18%; text-align: right; }
+.quote-view-items tbody tr:nth-child(even) { background: #f8faff; }
+.quote-view-modal .pm-lpo-totals dd { white-space: normal; text-align: right; }
+
+@media (max-width: 700px) {
+  .quote-view-backdrop { padding: 10px; }
+  .quote-view-modal { max-height: calc(100dvh - 20px); }
+  .quote-view-modal .pm-lpo-items { display: block; width: 100%; border: 0; }
+  .quote-view-modal .pm-lpo-items thead { display: none; }
+  .quote-view-modal .pm-lpo-items tbody { display: grid; gap: 8px; }
+  .quote-view-modal .pm-lpo-items tbody tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid #d8e2f3; border-radius: 8px; overflow: hidden; }
+  .quote-view-modal .pm-lpo-items tbody td { width: auto; min-width: 0; padding: 7px 10px; border: 0; border-bottom: 1px solid #edf2f9; white-space: normal; text-align: left; }
+  .quote-view-modal .pm-lpo-items tbody td::before { display: block; margin-bottom: 3px; color: #65708a; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+  .quote-view-modal .pm-lpo-items tbody td:first-child { grid-column: 1 / -1; background: #f2f7ff; }
+  .quote-view-modal .pm-lpo-items tbody td:first-child::before { content: "Item"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(2) { grid-column: 1 / -1; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(2)::before { content: "Description"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(3)::before { content: "Qty"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(4)::before { content: "Unit"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(5)::before { content: "Unit Price"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-child(6)::before { content: "Amount"; }
+  .quote-view-modal .pm-lpo-items tbody td:nth-last-child(-n+2) { border-bottom: 0; }
+}
+
 .topbar.quotation-shell #viewActions .costing-quotation-action {
   display: grid;
   justify-items: center;
@@ -4267,6 +4327,22 @@ td[contenteditable="true"]:focus {
   justify-content: flex-end;
   gap: 8px;
 }
+
+.settings-users-table {
+  table-layout: fixed;
+}
+
+.settings-users-table .settings-user-name { width: 15%; }
+.settings-users-table .settings-user-role { width: 9%; }
+.settings-users-table .settings-user-email { width: 23%; }
+.settings-users-table .settings-user-contact { width: 14%; }
+.settings-users-table .settings-user-position { width: 19%; }
+.settings-users-table .settings-user-status { width: 12%; }
+.settings-users-table .settings-user-action { width: 8%; }
+
+.settings-users-table td { min-width: 0; }
+.settings-users-table input,
+.settings-users-table select { min-width: 0; width: 100%; }
 
 .settings-logo-row {
   display: flex;
@@ -9153,7 +9229,9 @@ body.login-active .mobile-app-bar { display: none; }
   .settings-users-table td:nth-child(1)::before { content: "Name"; }
   .settings-users-table td:nth-child(2)::before { content: "Role"; }
   .settings-users-table td:nth-child(3)::before { content: "Email"; }
-  .settings-users-table td:nth-child(4)::before { content: "Status"; }
+  .settings-users-table td:nth-child(4)::before { content: "Contact"; }
+  .settings-users-table td:nth-child(5)::before { content: "Position"; }
+  .settings-users-table td:nth-child(6)::before { content: "Status"; }
 }
 
 @media (max-width: 600px) {

@@ -23,6 +23,7 @@ test("Login Access saves role changes together and applies them to active sessio
   fs.copyFileSync(path.join(__dirname, "..", "project-progress.js"), path.join(temp, "project-progress.js"));
   fs.copyFileSync(path.join(__dirname, "..", "maintenance-api.js"), path.join(temp, "maintenance-api.js"));
   fs.copyFileSync(path.join(__dirname, "..", "maintenance-store.js"), path.join(temp, "maintenance-store.js"));
+  fs.copyFileSync(path.join(__dirname, "..", "maintenance-billing.js"), path.join(temp, "maintenance-billing.js"));
   const server = spawn(process.execPath, ["server.js"], {
     cwd: temp, env: { ...process.env, SUPABASE_URL: "", SUPABASE_KEY: "" }, stdio: ["ignore", "pipe", "pipe"]
   });
@@ -48,21 +49,28 @@ test("Login Access saves role changes together and applies them to active sessio
     const created = [];
     for (const name of ["Alice", "Bob"]) {
       const response = await request(admin, "/api/settings/users", json({
-        name, email: `${name.toLowerCase()}@example.test`, role: "Staff", password: "test-password"
+        name, email: `${name.toLowerCase()}@example.test`, role: "Staff", password: "test-password",
+        contact: name === "Alice" ? "0501234567" : "", position: name === "Alice" ? "Sales Engineer" : ""
       }));
       assert.equal(response.status, 200, logs);
       created.push((await response.json()).settings.users.find(item => item.name === name));
     }
+    assert.equal(created[0].contact, "0501234567");
+    assert.equal(created[0].position, "Sales Engineer");
     const alice = await login("alice@example.test", "test-password");
     const updates = [
-      { ...created[0], role: "MTS" },
-      { ...created[1], role: "Admin", name: "Bob Admin" }
+      { ...created[0], role: "MTS", contact: "0507654321", position: "Sales Manager" },
+      { ...created[1], role: "Admin", name: "Bob Admin", contact: "0552223333", position: "Operations" }
     ];
     const saved = await request(admin, "/api/settings/users/batch", json({ users: updates }, "PUT"));
     assert.equal(saved.status, 200, logs);
     const savedUsers = (await saved.json()).settings.users;
     assert.equal(savedUsers.find(item => item.id === created[0].id).role, "MTS");
+    assert.equal(savedUsers.find(item => item.id === created[0].id).contact, "0507654321");
+    assert.equal(savedUsers.find(item => item.id === created[0].id).position, "Sales Manager");
     assert.equal(savedUsers.find(item => item.id === created[1].id).name, "Bob Admin");
+    assert.equal(savedUsers.find(item => item.id === created[1].id).contact, "0552223333");
+    assert.equal(savedUsers.find(item => item.id === created[1].id).position, "Operations");
     assert.equal((await (await request(admin, "/api/settings")).json()).settings.users.find(item => item.id === created[1].id).role, "Admin");
     assert.equal((await (await request(alice, "/api/auth/me")).json()).user.role, "MTS");
     assert.equal((await request(alice, "/api/settings/users/batch", json({ users: updates }, "PUT"))).status, 403);

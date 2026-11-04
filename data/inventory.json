@@ -1,6 +1,6 @@
 {
   "settings": {
-    "nextDeliveryNo": "DN-2072"
+    "nextDeliveryNo": "DN-2075"
   },
   "models": [
     {
@@ -1679,47 +1679,169 @@
       "email": "",
       "address": "",
       "defaultDeliveryLocation": "Dubai, U.A.E"
+    },
+    {
+      "id": "C-CAA1EB12",
+      "customerName": "A & S CONTRACTING L.L.C",
+      "contactPerson": "",
+      "phone": "",
+      "email": "",
+      "address": "",
+      "defaultDeliveryLocation": "Dubai, U.A.E"
     }
   ],
   "supplierDns": [
     {
-      "id": "d98d2962-47de-40a2-99ff-90004b2104af",
-      "uploadedDate": "2026-09-28",
-      "supplierDnNo": "Manual 2809202600",
+      "id": "45bd46d7-b773-4b95-8f58-f5fb37e0627a",
+      "uploadedDate": "2026-10-22",
+      "supplierDnNo": "Adjustment 2210202601",
       "projectName": "Manual Stock Entry",
       "status": "Confirmed",
       "isManualAdjustment": true,
       "lines": [
         {
-          "id": "abd00d46-2661-4ff1-a843-217f22800df3",
-          "modelNo": "RR36AVKU",
-          "description": "DUCTED -  R410 - 3 TR - MALAYSIA",
-          "detectedQty": 4,
-          "finalQty": 4,
+          "id": "212ba3fa-8c0b-453e-a3e3-1a29d28d0ac1",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 20,
+          "finalQty": 20,
           "status": "Ready"
         }
       ]
     },
     {
-      "id": "f7f7e52e-f0fe-487a-a1fc-a68357f82035",
-      "uploadedDate": "2026-09-28",
-      "supplierDnNo": "Stock 2809202600",
+      "id": "e22cdd8b-79ed-4fc0-8326-03c46cc0da99",
+      "uploadedDate": "2026-10-22",
+      "supplierDnNo": "Adjustment 2210202600",
       "projectName": "Manual Stock Entry",
       "status": "Confirmed",
       "isManualAdjustment": true,
       "lines": [
         {
-          "id": "7c88ba95-cb66-46d9-b97b-0323ec2247ad",
-          "modelNo": "FAN MOTOR",
-          "description": "KKK",
-          "detectedQty": 1,
-          "finalQty": 1,
+          "id": "5fe2775f-4b14-448d-96fd-267cad434e01",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "detectedQty": 10,
+          "finalQty": 10,
           "status": "Ready"
         }
       ]
     }
   ],
-  "deliveryNotes": [],
+  "deliveryNotes": [
+    {
+      "id": "2773429e-4383-4728-83e9-9671bcf07799",
+      "dnNo": "DN-2074",
+      "date": "2026-10-22",
+      "customerId": "",
+      "customerName": "Ahmed",
+      "contactPerson": "",
+      "phone": "",
+      "deliveryLocation": "",
+      "projectName": "Warehouse VRV Replacement",
+      "status": "Delivered",
+      "lines": [
+        {
+          "id": "1792675470362.4685",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 20,
+          "qtyGoingOut": 5
+        }
+      ]
+    },
+    {
+      "id": "0fa0282d-80d4-48b7-8b37-99bf4990abd8",
+      "dnNo": "DN-2073",
+      "date": "2026-10-22",
+      "customerId": "",
+      "customerName": "Aerocool System Air Solutions LLC",
+      "contactPerson": "",
+      "phone": "",
+      "deliveryLocation": "",
+      "projectName": "",
+      "status": "Draft",
+      "lines": [
+        {
+          "id": "1792653495481.2842",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 10,
+          "qtyGoingOut": 3
+        }
+      ]
+    },
+    {
+      "id": "e9cd0129-d933-442e-abe7-5df3488103b4",
+      "dnNo": "DN-2072",
+      "date": "2026-09-29",
+      "customerId": "",
+      "customerName": "Abdulla & Sons",
+      "contactPerson": "Mr. Ashik and Mr. Anandhu",
+      "phone": "+971 052 685 0135",
+      "deliveryLocation": " Jumeirah, Dubai",
+      "projectName": "Villa AC Replacement - Jumeirah",
+      "status": "Draft",
+      "lines": [
+        {
+          "id": "1790672513382.047",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790672560846.5127",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790672566445.7917",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 4,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790679002130.1357",
+          "modelNo": "BHFP22P1006",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 1,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790679007122.8066",
+          "modelNo": "BHFP22P1516",
+          "description": "REFNETS - ODU - INDIA",
+          "availableQty": 1,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790679015018.8572",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790679020842.445",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        },
+        {
+          "id": "1790679024234.339",
+          "modelNo": "BHFQ22P1007",
+          "description": "REFNETS - ODU - BELGIUM",
+          "availableQty": 2,
+          "qtyGoingOut": 1
+        }
+      ]
+    }
+  ],
   "uploads": [
     {
       "id": "3dde0d33-297f-4795-8dd1-e08b645b52b4",
@@ -1824,6 +1946,38 @@
       "mimeType": "application/pdf",
       "size": 549679,
       "createdAt": "2026-07-24T06:17:32.452Z"
+    },
+    {
+      "id": "0fd2b722-a31c-4a19-8852-4b4b78b01d96",
+      "originalName": "Delivery note daikin.pdf",
+      "storedName": "0fd2b722-a31c-4a19-8852-4b4b78b01d96-Delivery note daikin.pdf",
+      "mimeType": "application/pdf",
+      "size": 549679,
+      "createdAt": "2026-09-30T07:50:52.265Z"
+    },
+    {
+      "id": "b6444471-9265-460d-abda-35259b6a239b",
+      "originalName": "Delivery note daikin.pdf",
+      "storedName": "b6444471-9265-460d-abda-35259b6a239b-Delivery note daikin.pdf",
+      "mimeType": "application/pdf",
+      "size": 549679,
+      "createdAt": "2026-09-30T07:52:54.725Z"
+    },
+    {
+      "id": "f7ae3f60-3919-4ded-b257-a7e8f5e38e32",
+      "originalName": "Delivery notee.pdf",
+      "storedName": "f7ae3f60-3919-4ded-b257-a7e8f5e38e32-Delivery notee.pdf",
+      "mimeType": "application/pdf",
+      "size": 84724,
+      "createdAt": "2026-09-30T07:58:21.668Z"
+    },
+    {
+      "id": "b16dd4a4-5815-4ed8-a635-59619dad58bc",
+      "originalName": "Delivery note daikin.pdf",
+      "storedName": "b16dd4a4-5815-4ed8-a635-59619dad58bc-Delivery note daikin.pdf",
+      "mimeType": "application/pdf",
+      "size": 239393,
+      "createdAt": "2026-10-03T08:46:40.417Z"
     }
   ]
 }

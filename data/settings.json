@@ -24,7 +24,9 @@
       "role": "Admin",
       "email": "admin@comfortzone.local",
       "passwordHash": "637670de0159b7fe338dc8e181c820b3:4e47969c2131c521c34a1f4387b9b53b105885233131adb140924983d97d7b73",
-      "active": true
+      "active": true,
+      "contact": "+971 55 404 5050",
+      "position": "Accountant"
     },
     {
       "id": "2f7391f8-09b3-4d2d-b6cd-9722eba60d17",

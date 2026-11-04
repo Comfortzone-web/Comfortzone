@@ -3412,6 +3412,8 @@ async function handleApi(req, res) {
     nextUser.name = cleanCell(body.name || "");
     nextUser.role = cleanCell(body.role || "Staff");
     nextUser.email = email;
+    nextUser.contact = cleanCell(body.contact || "");
+    nextUser.position = cleanCell(body.position || "");
     nextUser.active = body.active !== false;
     if (body.password) nextUser.passwordHash = passwordHash(body.password);
     if (existing) {
@@ -3437,7 +3439,12 @@ async function handleApi(req, res) {
       const role = cleanCell(entry.role || "");
       if (!name || !email) return send(res, 400, { error: "Name and email are required" });
       if (!["Admin", "Staff", "MTS"].includes(role)) return send(res, 400, { error: "Invalid role" });
-      updates.set(entry.id, { ...existing, name, email, role, active: entry.active !== false });
+      updates.set(entry.id, {
+        ...existing, name, email, role,
+        contact: cleanCell(entry.contact || ""),
+        position: cleanCell(entry.position || ""),
+        active: entry.active !== false
+      });
     }
     const nextUsers = settings.users.map(entry => updates.get(entry.id) || entry);
     const emails = nextUsers.map(entry => cleanCell(entry.email).toLowerCase());
@@ -3678,8 +3685,11 @@ async function handleApi(req, res) {
     if (!sourceQuote) return notFound(res);
     const quote = normalizeSalesItem("quotations", sourceQuote, store);
     const customer = (store.customers || []).find(item => cleanCell(item.name).toLowerCase() === cleanCell(quote.customer).toLowerCase()) || {};
-    const pdf = await salesQuotationPdfBuffer({ quote, customer });
-    const filename = salesQuotationPdfFilename(quote);
+    const settings = req.authSettings || await readSettings();
+    const preparedBy = (settings.users || []).find(entry => entry.id === user.id) || {};
+    const variant = body.variant === "breakup" ? "breakup" : "bulk";
+    const pdf = await salesQuotationPdfBuffer({ quote, customer, preparedBy, variant });
+    const filename = salesQuotationPdfFilename(quote).replace(/\.pdf$/i, variant === "breakup" ? "-Breakup.pdf" : "-Bulk-Pricing.pdf");
     const upload = {
       id: id(),
       originalName: filename,
@@ -8584,7 +8594,14 @@ function purchaseOrderPdfFilename(order) {
 }
 
 async function salesQuotationPdfBuffer(payload) {
-  if (PDFDocument) return salesQuotationPdfKitBuffer(payload);
+  if (PDFDocument) {
+    return require("./sales-quotation-pdf").renderSalesQuotationPdf(payload, {
+      PDFDocument,
+      headerPath: path.join(PUBLIC, "assets", "quotation-header.jpg"),
+      footerPath: path.join(PUBLIC, "assets", "quotation-footer.jpg"),
+      fontPath: path.join(PUBLIC, "assets", "fonts", "Inter-Regular.ttf")
+    });
+  }
   const input = {
     ...(payload || {}),
     letterheadPath: path.join(PUBLIC, "assets", "quotation-letterhead.jpg")
