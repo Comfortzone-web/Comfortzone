@@ -20,7 +20,7 @@ test("deleting a verified direct delivery reverses only its BOQ quantities", { t
   const base = `http://127.0.0.1:${port}`;
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   fs.writeFileSync(path.join(temp, "server.js"), source.replace("const PORTS = [5175, 5176, 5177, 8085];", `const PORTS = [${port}];`));
-  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js"]) {
+  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js"]) {
     fs.copyFileSync(path.join(__dirname, "..", file), path.join(temp, file));
   }
   const server = spawn(process.execPath, ["server.js"], {
@@ -63,6 +63,24 @@ test("deleting a verified direct delivery reverses only its BOQ quantities", { t
     assert.deepEqual(afterFirst.directDeliveryUploads.map(item => item.id), ["upload-2"]);
     const repeated = await deleteUpload("upload-1");
     assert.deepEqual(repeated.boq.map(row => row.deliveredQty), [5, 0]);
+    const editedResponse = await request(`/api/sales-crm/projects/${project.id}/direct-delivery/uploads/upload-2`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: "04/11/2026", deliveryNoteNo: "DN-440", lines: [
+        { modelNo: "M-1", quantity: 2 }, { modelNo: "M-2", quantity: 1 }
+      ] })
+    });
+    if (editedResponse.status !== 200) assert.fail(`${editedResponse.status} ${await editedResponse.text()} ${logs}`);
+    const edited = (await editedResponse.json()).projects.find(item => item.id === project.id);
+    assert.deepEqual(edited.boq.map(row => row.deliveredQty), [4, 1]);
+    assert.equal(edited.directDeliveryUploads[0].date, "04/11/2026");
+    assert.equal(edited.directDeliveryUploads[0].deliveryNoteNo, "DN-440");
+    assert.deepEqual(edited.directDeliveryUploads[0].lines.map(line => line.status), ["Matched", "Matched"]);
+    const renamedBoq = await request("/api/sales-crm/projects", json({ ...edited, boq: edited.boq.map(row => row.model === "M-2" ? { ...row, model: "M-3" } : row) }));
+    assert.equal(renamedBoq.status, 200, logs);
+    const renamed = (await renamedBoq.json()).projects.find(item => item.id === project.id);
+    assert.deepEqual(renamed.directDeliveryUploads[0].lines.map(line => line.status), ["Matched", "Not in BOQ"]);
+    const restoredBoq = await request("/api/sales-crm/projects", json({ ...renamed, boq: renamed.boq.map(row => row.model === "M-3" ? { ...row, model: "M-2" } : row) }));
+    assert.equal(restoredBoq.status, 200, logs);
     const afterSecond = await deleteUpload("upload-2");
     assert.deepEqual(afterSecond.boq.map(row => [row.deliveredQty, row.pendingQty]), [[2, 8], [0, 5]]);
     assert.equal(afterSecond.directDeliveryUploads.length, 0);

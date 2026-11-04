@@ -3083,7 +3083,7 @@ function salesProjectDirectDeliverySection(project = {}) {
   const uploads = Array.isArray(project.directDeliveryUploads) ? project.directDeliveryUploads : [];
   return `
     <section class="sales-project-form-section sales-project-direct-delivery">
-      <h3><span>4</span> Direct Delivery Details <i class="po-upload-spinner sales-project-direct-spinner hidden" data-project-direct-spinner aria-label="Uploading delivery note"></i></h3>
+      <h3 class="sales-project-direct-heading"><span>4</span> Direct Delivery Details <i class="po-upload-spinner sales-project-direct-spinner hidden" data-project-direct-spinner aria-label="Uploading delivery note"></i><input type="date" data-project-direct-date aria-label="Delivery note date" value="${nativeDateValue(todaySalesDateInput())}" hidden></h3>
       <p class="sales-project-direct-copy">Upload delivery note to detect delivered models and quantities.</p>
       <label class="sales-project-direct-upload" data-project-direct-upload-zone>
         <input type="file" data-project-direct-file accept=".pdf,.png,.jpg,.jpeg">
@@ -3112,6 +3112,7 @@ function salesProjectDirectDeliverySection(project = {}) {
             ${salesProjectDirectUploadsHtml(uploads, project.id)}
           </tbody>
         </table>
+        <div class="sales-project-direct-editor" data-project-direct-editor hidden></div>
       </div>
     </section>
   `;
@@ -3139,6 +3140,7 @@ function salesProjectDirectUploadsHtml(uploads = [], projectId = "") {
         <td class="sales-project-direct-menu-cell">
           <button type="button" class="sales-project-direct-menu-button" data-project-direct-menu="${escapeHtml(uploadId)}">...</button>
           <div class="sales-project-direct-menu" data-project-direct-menu-panel="${escapeHtml(uploadId)}">
+            ${norm(currentUser?.role) === "ADMIN" ? `<button type="button" data-edit-project-direct-upload="${escapeHtml(uploadId)}">Edit</button>` : ""}
             <button type="button" data-download-project-direct="${escapeHtml(uploadId)}">Download File</button>
             <button type="button" class="danger" data-delete-project-direct-upload="${escapeHtml(uploadId)}">Delete</button>
           </div>
@@ -3269,13 +3271,14 @@ function openSalesProjectDrawer(itemId = "") {
     }
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
-    if (row) salesProjectUpdateBoqRow(row, false, project);
+    if (row) { salesProjectUpdateBoqRow(row, false, project); salesProjectRefreshDirectDetectedStatuses(modal); if (!modal.querySelector("[data-project-direct-editor]")?.hidden) refreshSalesProjectDirectEditor(modal); }
+    if (event.target.closest("[data-project-direct-edit-line]")) refreshSalesProjectDirectEditor(modal);
   });
   modal.addEventListener("change", event => {
     if (event.target.dataset.projectDirectFile !== undefined) return uploadSalesProjectDirectDelivery(modal, project, event.target.files?.[0]);
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
-    if (row) salesProjectUpdateBoqRow(row, true, project);
+    if (row) { salesProjectUpdateBoqRow(row, true, project); salesProjectRefreshDirectDetectedStatuses(modal); if (!modal.querySelector("[data-project-direct-editor]")?.hidden) refreshSalesProjectDirectEditor(modal); }
     if (event.target.closest("[data-project-direct-detected-row]")) salesProjectRefreshDirectDetectedStatuses(modal);
   });
   personSearch?.addEventListener("focus", renderSalesPersonOptions);
@@ -3344,6 +3347,12 @@ function openSalesProjectDrawer(itemId = "") {
     }
     const downloadUpload = event.target.closest("[data-download-project-direct]");
     if (downloadUpload) downloadSalesProjectDirectUpload(project.id, downloadUpload.dataset.downloadProjectDirect);
+    const editUpload = event.target.closest("[data-edit-project-direct-upload]");
+    if (editUpload && norm(currentUser?.role) === "ADMIN") openSalesProjectDirectEditor(modal, editUpload.dataset.editProjectDirectUpload);
+    if (event.target.closest("[data-cancel-project-direct-edit]")) modal.querySelector("[data-project-direct-editor]").hidden = true;
+    if (event.target.closest("[data-add-project-direct-line]")) { modal.querySelector("[data-project-direct-edit-lines]").insertAdjacentHTML("beforeend", salesProjectDirectEditLineHtml()); refreshSalesProjectDirectEditor(modal); }
+    if (event.target.closest("[data-remove-project-direct-line]")) { event.target.closest("[data-project-direct-edit-line]")?.remove(); refreshSalesProjectDirectEditor(modal); }
+    if (event.target.closest("[data-save-project-direct-edit]")) saveSalesProjectDirectEdit(modal, project);
     const deleteUpload = event.target.closest("[data-delete-project-direct-upload]");
     if (deleteUpload) deleteSalesProjectDirectUpload(modal, project, deleteUpload.dataset.deleteProjectDirectUpload);
   });
@@ -3423,6 +3432,8 @@ async function uploadSalesProjectDirectDelivery(modal, project, file) {
   try {
     const result = await api("/api/sales-crm/projects/direct-delivery/upload", { method: "POST", body: form });
     modal._directDeliveryPendingUpload = result.upload;
+    const detectedDate = modal.querySelector("[data-project-direct-date]");
+    if (detectedDate) detectedDate.value = nativeDateValue(result.upload?.date || todaySalesDateInput());
     salesProjectRenderDirectUploadZone(modal, result.upload);
     const rows = (result.detected?.lines || result.upload?.lines || []).map(line => ({
       modelNo: salesProjectModelNo(line.modelNo || line.model || ""),
@@ -3459,6 +3470,8 @@ function salesProjectRenderDirectUploadZone(modal, upload = null) {
   if (title) title.textContent = upload?.originalName || "Upload Delivery Note";
   if (detail) detail.textContent = upload ? `${prettyBytes(upload.size || 0)} uploaded. Review detected items, then verify.` : "Drag & drop PDF, JPG, or PNG here, or click to upload.";
   zone.classList.toggle("has-file", !!upload);
+  const date = modal.querySelector("[data-project-direct-date]");
+  if (date) date.hidden = !upload;
 }
 
 function salesProjectCollectDirectRows(modal) {
@@ -3487,9 +3500,70 @@ function salesProjectRefreshDirectDetectedStatuses(modal) {
   salesProjectRenderDirectDetected(modal);
 }
 
+function salesProjectDirectEditLineHtml(line = {}) {
+  return `<tr data-project-direct-edit-line><td><input data-edit-direct-model data-suggestion-list="salesProjectModelList" value="${escapeHtml(line.modelNo || "")}"></td><td><input data-edit-direct-qty type="number" min="0" step="1" value="${escapeHtml(line.quantity ?? "")}"></td><td><span data-edit-direct-status class="sales-project-direct-status">Needs Review</span></td><td><button type="button" class="sales-project-direct-remove" data-remove-project-direct-line>Remove</button></td></tr>`;
+}
+
+function refreshSalesProjectDirectEditor(modal) {
+  const boqModels = new Set(collectSalesProjectBoqRows(modal).map(row => norm(row.model)).filter(Boolean));
+  modal.querySelectorAll("[data-project-direct-edit-line]").forEach(row => {
+    const model = salesProjectModelNo(row.querySelector("[data-edit-direct-model]")?.value || "");
+    const qty = Number(row.querySelector("[data-edit-direct-qty]")?.value || 0);
+    const status = !model || !qty ? "Needs Review" : boqModels.has(norm(model)) ? "Matched" : "Not in BOQ";
+    const badge = row.querySelector("[data-edit-direct-status]");
+    badge.textContent = status;
+    badge.className = `sales-project-direct-status ${salesProjectDirectStatusClass(status)}`;
+  });
+}
+
+function openSalesProjectDirectEditor(modal, uploadId) {
+  const upload = (modal._directDeliveryUploads || []).find(item => (item.uploadId || item.id) === uploadId);
+  if (!upload) return;
+  const editor = modal.querySelector("[data-project-direct-editor]");
+  editor.dataset.editUploadId = uploadId;
+  editor.innerHTML = `<div class="sales-project-direct-editor-head"><h4>Edit Delivery Note</h4><button type="button" class="ghost-button" data-cancel-project-direct-edit>Cancel</button></div>
+    <div class="sales-project-direct-editor-fields"><label>Detected Date<input type="date" data-edit-direct-date value="${nativeDateValue(upload.date || upload.uploadedAt)}"></label><label>Delivery Note No.<input data-edit-direct-no value="${escapeHtml(upload.deliveryNoteNo || "")}"></label></div>
+    <table class="sales-project-direct-table"><thead><tr><th>Detected Model</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead><tbody data-project-direct-edit-lines>${(upload.lines || []).map(salesProjectDirectEditLineHtml).join("")}</tbody></table>
+    <div class="sales-project-direct-actions"><button type="button" class="ghost-button" data-add-project-direct-line>Add Row</button><button type="button" class="sales-primary" data-save-project-direct-edit>Save Changes</button></div>`;
+  editor.hidden = false;
+  refreshSalesProjectDirectEditor(modal);
+  editor.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+async function saveSalesProjectDirectEdit(modal, project) {
+  if (norm(currentUser?.role) !== "ADMIN") return;
+  const editor = modal.querySelector("[data-project-direct-editor]");
+  const uploadId = editor?.dataset.editUploadId;
+  const date = editor.querySelector("[data-edit-direct-date]")?.value;
+  const deliveryNoteNo = editor.querySelector("[data-edit-direct-no]")?.value.trim();
+  const lines = [...editor.querySelectorAll("[data-project-direct-edit-line]")].map(row => ({
+    modelNo: salesProjectModelNo(row.querySelector("[data-edit-direct-model]")?.value || ""),
+    quantity: Number(row.querySelector("[data-edit-direct-qty]")?.value || 0)
+  })).filter(line => line.modelNo || line.quantity);
+  if (!date || !deliveryNoteNo || !lines.length || lines.some(line => !line.modelNo || !Number.isInteger(line.quantity) || line.quantity <= 0)) return toast("Enter a date, delivery note number, and valid model quantities.");
+  const button = editor.querySelector("[data-save-project-direct-edit]");
+  button.disabled = true;
+  try {
+    salesCrmState = await api(`/api/sales-crm/projects/${encodeURIComponent(project.id)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`, { method: "PATCH", body: JSON.stringify({ date: formatSalesDateInput(date), deliveryNoteNo, lines }) });
+    const saved = (salesData().projects || []).find(item => item.id === project.id);
+    modal._directDeliveryUploads = structuredClone(saved?.directDeliveryUploads || []);
+    salesProjectRenderDirectUploads(modal, project);
+    editor.hidden = true;
+    (saved?.boq || []).forEach((row, index) => {
+      const target = modal.querySelectorAll("[data-project-boq-row]")[index];
+      const delivered = target?.querySelector('[data-project-boq-field="deliveredQty"]');
+      if (delivered) { delivered.dataset.recordedDeliveredQty = String(row.deliveredQty || 0); salesProjectUpdateBoqRow(target, false, saved); }
+    });
+    toast("Delivery note updated");
+  } catch (error) { toast(error.message || "Could not update delivery note"); }
+  finally { button.disabled = false; }
+}
+
 function clearSalesProjectDirectDelivery(modal) {
   modal._directDeliveryDetected = [];
   modal._directDeliveryPendingUpload = null;
+  const detectedDate = modal.querySelector("[data-project-direct-date]");
+  if (detectedDate) detectedDate.value = nativeDateValue(todaySalesDateInput());
   salesProjectRenderDirectDetected(modal);
   salesProjectRenderDirectUploadZone(modal, null);
 }
@@ -3522,7 +3596,7 @@ async function verifySalesProjectDirectDelivery(modal, project) {
   };
   const savedUpload = {
     ...upload,
-    date: formatSalesDateInput(upload.date || todaySalesDateInput()),
+    date: formatSalesDateInput(modal.querySelector("[data-project-direct-date]")?.value || upload.date || todaySalesDateInput()),
     deliveryNoteNo: upload.deliveryNoteNo || upload.originalName || "",
     totalQuantity: detectedRows.reduce((sum, row) => sum + (Number(row.quantity || 0) || 0), 0),
     lines: detectedRows
@@ -3551,14 +3625,8 @@ async function deleteSalesProjectDirectUpload(modal, project, uploadId) {
   if (!upload) return;
   const savedProject = (salesData().projects || []).find(item => item.id === project.id);
   const savedUpload = (savedProject?.directDeliveryUploads || []).some(item => item.uploadId === uploadId || item.id === uploadId);
-  if (savedUpload) {
-    try {
-      salesCrmState = await api(`/api/sales-crm/projects/${encodeURIComponent(project.id)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
-    } catch (error) {
-      toast(error.message || "Could not delete uploaded file");
-      return;
-    }
-  }
+  const previousUploads = modal._directDeliveryUploads;
+  const previousBoq = [...modal.querySelectorAll("[data-project-boq-row]")].map(row => row.querySelector('[data-project-boq-field="deliveredQty"]')?.dataset.recordedDeliveredQty || "0");
   const quantitiesByModel = new Map();
   for (const line of upload.lines || []) {
     const model = norm(line.modelNo || line.model);
@@ -3577,6 +3645,20 @@ async function deleteSalesProjectDirectUpload(modal, project, uploadId) {
   }
   modal._directDeliveryUploads = (modal._directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
   salesProjectRenderDirectUploads(modal, project);
+  if (savedUpload) {
+    try {
+      salesCrmState = await api(`/api/sales-crm/projects/${encodeURIComponent(project.id)}/direct-delivery/uploads/${encodeURIComponent(uploadId)}`, { method: "DELETE" });
+    } catch (error) {
+      modal._directDeliveryUploads = previousUploads;
+      salesProjectRenderDirectUploads(modal, project);
+      [...modal.querySelectorAll("[data-project-boq-row]")].forEach((row, index) => {
+        const input = row.querySelector('[data-project-boq-field="deliveredQty"]');
+        if (input) { input.dataset.recordedDeliveredQty = previousBoq[index]; salesProjectUpdateBoqRow(row, false, project); }
+      });
+      toast(error.message || "Could not delete uploaded file");
+      return;
+    }
+  }
   if (savedUpload && activeView === "salesDesk") renderSalesDesk();
   toast("Uploaded delivery note deleted");
 }
@@ -5778,11 +5860,17 @@ function editSalesQuotation(quoteId) {
 
 async function deleteSalesItem(collection, itemId) {
   if (!itemId || !confirm("Delete this CRM record?")) return;
+  const optimisticProject = collection === "projects";
+  const previousIndex = optimisticProject ? (salesData().projects || []).findIndex(item => item.id === itemId) : -1;
+  const previousItem = previousIndex >= 0 ? salesData().projects.splice(previousIndex, 1)[0] : null;
+  if (previousItem && activeView === "salesDesk") renderSalesDesk();
   try {
     salesCrmState = await api(`/api/sales-crm/${collection}/${encodeURIComponent(itemId)}`, { method: "DELETE" });
-    renderSalesDesk();
+    if (activeView === "salesDesk") renderSalesDesk();
     toast("CRM record deleted");
   } catch (error) {
+    if (previousItem) salesData().projects.splice(previousIndex, 0, previousItem);
+    if (previousItem && activeView === "salesDesk") renderSalesDesk();
     alert(error.message || "Could not delete this CRM record.");
   }
 }

@@ -3797,6 +3797,46 @@ async function handleApi(req, res) {
     return sendStoredUpload(res, upload, `sales-project-deliveries/${projectId}`);
   }
 
+  if (req.method === "PATCH" && url.pathname.match(/^\/api\/sales-crm\/projects\/[^/]+\/direct-delivery\/uploads\/[^/]+$/)) {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const parts = url.pathname.split("/");
+    const projectId = decodeURIComponent(parts[4]);
+    const uploadId = decodeURIComponent(parts[7]);
+    const store = await readSalesCrm();
+    const project = (store.projects || []).find(item => item.id === projectId);
+    if (!project) return notFound(res);
+    const upload = (project.directDeliveryUploads || []).find(item => item.uploadId === uploadId || item.id === uploadId);
+    if (!upload) return notFound(res);
+    const body = await readJson(req);
+    const date = cleanCell(body.date || "");
+    const deliveryNoteNo = cleanCell(body.deliveryNoteNo || "");
+    const lines = Array.isArray(body.lines) ? body.lines.map(line => ({ modelNo: cleanCell(line.modelNo || ""), quantity: Number(line.quantity) })) : [];
+    if (!date || !/^\d{2}\/\d{2}\/\d{4}$/.test(date) || !deliveryNoteNo || !lines.length || lines.some(line => !line.modelNo || !Number.isInteger(line.quantity) || line.quantity <= 0)) {
+      return send(res, 400, { error: "Enter a valid date, delivery note number, and model quantities" });
+    }
+    const delta = new Map();
+    for (const line of upload.lines || []) {
+      const key = inventoryNorm(line.modelNo || line.model);
+      delta.set(key, (delta.get(key) || 0) - Math.max(0, Number(line.quantity || 0)));
+    }
+    for (const line of lines) {
+      const key = inventoryNorm(line.modelNo);
+      delta.set(key, (delta.get(key) || 0) + line.quantity);
+    }
+    for (const row of project.boq || []) {
+      const key = inventoryNorm(row.model || row.modelNo);
+      row.deliveredQty = Math.max(0, Number(row.deliveredQty || 0) + (delta.get(key) || 0));
+      row.pendingQty = Number(row.qty || 0) - row.deliveredQty;
+    }
+    upload.date = date;
+    upload.deliveryNoteNo = deliveryNoteNo;
+    upload.lines = lines.map(line => ({ ...line, status: (project.boq || []).some(row => inventoryNorm(row.model || row.modelNo) === inventoryNorm(line.modelNo)) ? "Matched" : "Not in BOQ" }));
+    upload.totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
+    project.status = salesProjectAutoStatusServer(project);
+    await writeSalesCrm(store);
+    return send(res, 200, await salesCrmView(store, user));
+  }
+
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/projects\/[^/]+\/direct-delivery\/uploads\/[^/]+$/)) {
     const parts = url.pathname.split("/");
     const projectId = decodeURIComponent(parts[4]);
@@ -3866,6 +3906,10 @@ async function handleApi(req, res) {
       item.ownerIds = assignedIds;
       item.salesPerson = assignees[0].name;
       item.salesPersons = assignees.map(entry => entry.name);
+      const boqModels = new Set((item.boq || []).map(row => inventoryNorm(row.model || row.modelNo)).filter(Boolean));
+      for (const upload of item.directDeliveryUploads || []) {
+        upload.lines = (upload.lines || []).map(line => ({ ...line, status: boqModels.has(inventoryNorm(line.modelNo)) ? "Matched" : "Not in BOQ" }));
+      }
     }
     if (collection === "customers" && existingIndex < 0 && !item.salesPerson) {
       item.salesPerson = cleanCell(user.name || "");

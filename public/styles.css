@@ -8190,6 +8190,17 @@ td[contenteditable="true"]:focus {
   margin: -4px 0 12px;
 }
 
+.sales-project-direct-heading input { width: 170px; height: 36px; margin-left: auto; padding: 5px 9px; border: 1px solid #c6d6ec; border-radius: 6px; color: #10264a; font: 12px Inter, sans-serif; background: #fff; }
+.sales-project-direct-heading input[hidden] { display: none; }
+.sales-project-direct-editor { margin-top: 14px; padding: 14px; border: 1px solid #c6d6ec; border-radius: 8px; background: #f8fbff; }
+.sales-project-direct-editor[hidden] { display: none; }
+.sales-project-direct-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sales-project-direct-editor-head h4 { margin: 0; }
+.sales-project-direct-editor-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.sales-project-direct-editor-fields label { display: grid; gap: 5px; color: #52647d; font-size: 12px; font-weight: 600; }
+.sales-project-direct-editor-fields input { width: 100%; min-width: 0; height: 38px; padding: 6px 9px; border: 1px solid #c6d6ec; border-radius: 6px; color: #10264a; background: #fff; font: inherit; }
+@media (max-width: 600px) { .sales-project-direct-heading { flex-wrap: wrap; } .sales-project-direct-heading input { width: 100%; margin-left: 0; } .sales-project-direct-editor-fields { grid-template-columns: 1fr; } }
+
 .sales-project-direct-upload {
   align-items: center;
   background: #fff;
