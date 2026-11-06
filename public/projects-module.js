@@ -228,7 +228,6 @@
       <div class="pm-kpis">
         ${kpiCard("Total Projects", kpis.totalProjects || 0, "Active projects", "blue", "▣")}
         ${kpiCard("Average Progress", `${kpis.averageProgress || 0}%`, "Overall completion", "green", "✓")}
-        ${kpiCard("Needs Attention", kpis.needsAttention || 0, "Projects", "orange", "!")}
         ${kpiCard("Pending Follow-ups", kpis.pendingFollowUps || 0, "Tasks", "purple", "≡")}
         ${kpiCard("Payment Pending", money(kpis.paymentPending || 0), `Across ${kpis.paymentProjects || 0} projects`, "red", "▤")}
         ${kpiCard("Ready for Handover", kpis.readyForHandover || 0, "Projects", "teal", "⚑")}
