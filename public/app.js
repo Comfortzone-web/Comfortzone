@@ -759,7 +759,7 @@ async function loadProject(id) {
   dxSaveStatus = "All changes saved"; dxSearch = "";
   projectPersisted = true;
   projectTouched = false;
-  if (workflowMode(state) === "dx") configureDxWorkflow(state, { resetTables: false });
+  if (workflowMode(state) === "dx") { dxBoqPreparedId = ''; configureDxWorkflow(state, { resetTables: false }); }
   ensureWorkflowPreparedByDefault();
   applyCompactLayout(false);
   showCanvas();
@@ -1734,6 +1734,7 @@ function renderSalesDesk() {
     followUps: salesFollowUpsHtml
   }[salesDeskScreen];
   root.innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}">${html ? html() : salesDashboardHtml()}</div>`;
+  if (salesDeskScreen === 'quotation' && salesQuotationMode === 'create') mountQuotationSelectionLink(root);
   if (salesDeskScreen === "costing") requestAnimationFrame(syncCostingDeleteRail);
 }
 
@@ -3994,12 +3995,54 @@ function salesCreateQuotationHtml() {
           <div><span>Discount</span><input data-sales-quote-field="discount" inputmode="decimal" pattern="[0-9]*[.]?[0-9]*" value="${Number(salesQuotationDraft.discount || 0)}"></div>
           <div><span>VAT (5%)</span><strong data-sales-summary="vat">${salesMoney(vat)}</strong></div>
           <div class="sales-total"><span>Grand Total</span><strong data-sales-summary="total">${salesMoney(total)}</strong></div>
-          ${salesQuotationDraft.sourceCostingSheetId ? `<button class="sales-costing-sheet-link" data-costing-action="open-linked-sheet" data-costing-sheet-id="${escapeHtml(salesQuotationDraft.sourceCostingSheetId)}">Costing Sheet</button>` : ""}
         </aside>
+        ${salesQuotationDraft.sourceCostingSheetId ? `<button type="button" class="sales-selection-sheet-link sales-costing-origin-link" data-costing-action="open-linked-sheet" data-costing-sheet-id="${escapeHtml(salesQuotationDraft.sourceCostingSheetId)}"><span class="sales-selection-sheet-icon" aria-hidden="true"><img src="/assets/dx-icons/file-text.svg" alt=""></span><span class="sales-selection-sheet-copy"><strong>Costing Sheet</strong><span class="sales-selection-sheet-number" data-costing-origin-title>Loading…</span></span></button>` : ''}
+        ${salesQuotationDraft.sourceDxWorkflowId ? `<button type="button" class="sales-selection-sheet-link" data-selection-sheet-link aria-label="Open linked DX Selection Sheet"><span class="sales-selection-sheet-icon" aria-hidden="true"><img src="/assets/dx-icons/file-text.svg" alt=""></span><span class="sales-selection-sheet-copy"><strong>DX Selection Sheet</strong><span class="sales-selection-sheet-number" data-selection-sheet-number>Loading…</span></span></button>` : ''}
       </div>
     </div>
     </div>
   `;
+}
+
+const quotationSelectionRecords = new WeakMap();
+function mountQuotationSelectionLink(root) {
+  const costingTitle = root.querySelector('[data-costing-origin-title]');
+  if (costingTitle && salesQuotationDraft?.sourceCostingSheetId) {
+    const sheetId = salesQuotationDraft.sourceCostingSheetId;
+    loadCosting().then(store => {
+      if (!costingTitle.isConnected) return;
+      const sheet = (store.sheets || []).find(item => item.id === sheetId);
+      costingTitle.textContent = sheet?.title || sheet?.project || 'Open Costing Sheet';
+    }).catch(() => { if (costingTitle.isConnected) costingTitle.textContent = 'Open Costing Sheet'; });
+  }
+  const card = root.querySelector('[data-selection-sheet-link]');
+  const quote = salesQuotationDraft;
+  if (!card || !quote?.sourceDxWorkflowId) return;
+  if (!quotationSelectionRecords.has(quote)) {
+    quotationSelectionRecords.set(quote, api(`/api/projects/${encodeURIComponent(quote.sourceDxWorkflowId)}`));
+  }
+  const record = quotationSelectionRecords.get(quote);
+  record.then(project => {
+    if (!card.isConnected || salesQuotationDraft !== quote) return;
+    if (project.workflowMode !== 'dx') { card.hidden = true; return; }
+    quote.dxSelectionNumber = project.selectionNumber || '';
+    card.querySelector('[data-selection-sheet-number]').textContent = project.selectionNumber || 'Open Selection Sheet';
+  }).catch(() => {
+    if (!card.isConnected) return;
+    card.querySelector('[data-selection-sheet-number]').textContent = 'Sheet unavailable';
+    card.disabled = true;
+  });
+  card.addEventListener('click', async () => {
+    if (!canAccessModule('workflow')) return showLockedModuleToast();
+    card.disabled = true;
+    try {
+      const project = await record;
+      if (project.workflowMode !== 'dx') return;
+      await loadProject(project.id);
+      if (state?.id === project.id && isDxWorkflow()) await dxAction('boq');
+    } catch (error) { toast(error.message || 'Could not open Selection Sheet.'); }
+    finally { if (card.isConnected) card.disabled = false; }
+  });
 }
 
 function salesQuoteModelOptions() {
@@ -5672,6 +5715,7 @@ function quoteDraftFromSource(source = {}) {
     revision: source.revision || "Fresh Quote",
     sourceLeadId: source.sourceLeadId || "",
     sourceCostingSheetId: source.sourceCostingSheetId || "",
+    ...(source.sourceDxWorkflowId ? { sourceDxWorkflowId: source.sourceDxWorkflowId, dxSelectionNumber: source.dxSelectionNumber || '', consultant: source.consultant || '', contractor: source.contractor || '', dxPricing: source.dxPricing || {} } : {}),
     status: "Draft"
   };
 }
@@ -13747,6 +13791,7 @@ async function handleCostingClick(action, target) {
   if (action === "clear-all-filter") { costingAllSalesPerson = ""; return renderSalesDesk(); }
   if (action === "open-linked-sheet") {
     const sheetId = target.dataset.costingSheetId;
+    const originalContent = target.innerHTML;
     let sheet = (costingState?.sheets || []).find(item => item.id === sheetId);
     if (sheet) {
       costingActiveSheetId = sheet.id;
@@ -13772,7 +13817,7 @@ async function handleCostingClick(action, target) {
     } finally {
       if (target.isConnected) {
         target.disabled = false;
-        target.textContent = "Costing Sheet";
+        target.innerHTML = originalContent;
       }
     }
   }

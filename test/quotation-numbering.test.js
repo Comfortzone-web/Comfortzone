@@ -23,6 +23,7 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
   fs.copyFileSync(path.join(__dirname, "..", "project-progress.js"), path.join(temp, "project-progress.js"));
   fs.copyFileSync(path.join(__dirname, "..", "maintenance-api.js"), path.join(temp, "maintenance-api.js"));
   fs.copyFileSync(path.join(__dirname, "..", "maintenance-store.js"), path.join(temp, "maintenance-store.js"));
+  fs.copyFileSync(path.join(__dirname, "..", "maintenance-billing.js"), path.join(temp, "maintenance-billing.js"));
   const server = spawn(process.execPath, ["server.js"], {
     cwd: temp, env: { ...process.env, SUPABASE_URL: "", SUPABASE_KEY: "" }, stdio: ["ignore", "pipe", "pipe"]
   });

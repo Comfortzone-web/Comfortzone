@@ -92,3 +92,19 @@ test("quotation PDF accepts another authenticated preparer and missing profile f
   assert.notDeepEqual(first, second);
   saveSample("other-user", second);
 });
+
+test("DX quotation PDF uses selling prices without exposing internal cost, margin or source records", async () => {
+  const printed = [];
+  class CapturePdf extends PDFDocument {
+    text(value, ...args) { printed.push(String(value)); return super.text(value, ...args); }
+  }
+  await renderSalesQuotationPdf({ variant: 'breakup', quote: {
+    ...baseQuote, quoteType: 'DX', sourceDxWorkflowId: 'PRIVATE-WORKFLOW',
+    dxPricing: { percentage: 20, totalCost: 2000 },
+    items: [{ description: 'PUBLIC DX MODEL', qty: 2, unit: 'Nos', unitPrice: 1250,
+      unitCost: 1000, dxBoqItemId: 'PRIVATE-LINE', priceItemIds: ['PRIVATE-PRICE'], sourceRefs: [{ ref: 'PRIVATE-REF' }] }]
+  } }, { ...assets, PDFDocument: CapturePdf });
+  const text = printed.join('\n');
+  assert.match(text, /PUBLIC DX MODEL/); assert.match(text, /1,250\.00/);
+  assert.doesNotMatch(text, /PRIVATE-|1,000\.00|Unit Cost|Profit Margin|20%/);
+});

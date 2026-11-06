@@ -19,7 +19,7 @@ function dxButton(action, label, icon, primary = false) {
 function dxSetStatus(value) {
   dxSaveStatus = value;
   if (!isDxWorkflow()) return;
-  document.querySelectorAll('[data-dx-save-status]').forEach(el => { el.textContent = value; el.dataset.dxSaveState = value; el.hidden = value === 'All changes saved'; });
+  document.querySelectorAll('[data-dx-save-status]').forEach(el => { el.textContent = value; el.dataset.dxSaveState = value; el.hidden = value === 'All changes saved' && dxData().step !== 3; });
 }
 function dxChanged(review = false) {
   ++dxRevision;
@@ -37,7 +37,8 @@ async function dxSave(options = {}) {
   clearTimeout(dxTimer);
   const project = state;
   const data=dxData();
-  if(options.manual || String(project.details.project || '').trim() || dxHasSpecifiedValues())data.autosaveEnabled=true;
+  if (data.boq) data.boq = DXBoq.calculate(DXBoq.syncQuantities(data.boq, project.tables.vrvSchedule.rows));
+  if(options.manual || String(project.details.project || '').trim() || dxHasSpecifiedValues() || data.boq?.rows?.some(row=>row.model))data.autosaveEnabled=true;
   if(!data.autosaveEnabled && !options.storage) {dxSetStatus('Draft — enter Project Name or Specified values');return;}
   project.visible = !!data.autosaveEnabled;
   project.title = project.details.project || project.details.customer || 'DX Workflow';
@@ -84,7 +85,7 @@ function dxEnsureManualRows() {
 function dxCard(title, body, actions = '', className = '') { return `<section class="dx-card ${className}"><div class="dx-card-heading"><h2>${title}</h2><div class="dx-actions">${actions}</div></div>${body}</section>`; }
 function renderDxWorkspace() {
   const data = dxData();
-  const step = data.step === 2 ? 2 : 1;
+  const step = [2,3].includes(data.step) ? data.step : 1;
   const pageScroll = canvas.closest('.canvas-wrap');
   const oldTableScroll = canvas.querySelector('.dx-table-scroll');
   const sameTable = dxRenderedProjectId === state.id && !!oldTableScroll?.querySelector(step === 2 ? '.dx-selection-table' : '.dx-thermal-table');
@@ -95,17 +96,17 @@ function renderDxWorkspace() {
   canvas.style.cssText = '';
   canvas.classList.add('dx-workspace');
   setWorkflowTitle('DX Workflow');
-  $('#projectMeta').textContent = step === 1 ? 'Thermal Sheet & Extraction' : 'DX Schedule – Model Selection & Review';
+  $('#projectMeta').textContent = ['Thermal Sheet & Extraction','DX Schedule – Model Selection & Review','BOQ & Quotation'][step-1];
   document.querySelector('.top-actions:not(#viewActions)')?.classList.add('hidden');
   const headerActions = $('#viewActions');
   headerActions.classList.remove('hidden');
-  headerActions.innerHTML = `${dxButton('new','New Workflow','plus')}${step === 2 ? dxScheduleMenu() : dxThermalTableMenu()}`;
+  headerActions.innerHTML = `${dxButton('new','New Workflow','plus')}${step === 3 ? dxBoqMenu() : step === 2 ? dxScheduleMenu() : dxThermalTableMenu()}`;
   headerActions.querySelectorAll('[data-dx-action]').forEach(dxBindAction);
   const fields = [['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
   canvas.innerHTML = `<div class="dx-project-header dx-card">${fields.map(([key,label,icon]) => `<label>${dxIcon(icon)}<span>${label}<input ${key === 'selectionNumber' ? 'data-dx-number data-dx-selection' : `data-dx-detail="${key}" data-detail-key="${key}"`} ${key === 'customer' ? 'list="workflowCustomerList"' : key === 'project' ? 'list="workflowProjectList"' : ''} value="${escapeHtml(key === 'selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div>
-    <nav class="dx-steps" aria-label="Workflow progress"><button data-dx-action="back" class="${step === 1 ? 'active' : ''} ${data.reviewed ? 'complete' : ''}" ${dxBusy ? 'disabled' : ''}><span>${data.reviewed ? '✓' : '1'}</span>Step 01 — Thermal Sheet & Extraction</button><button data-dx-action="continue" class="${step === 2 ? 'active' : ''}" ${dxBusy ? 'disabled' : ''}><span>2</span>Step 02 — DX Schedule</button></nav>
-    ${step === 1 ? dxStepOne() : dxStepTwo()}
-    <footer class="dx-footer"><span data-dx-save-status data-dx-save-state="${escapeHtml(dxSaveStatus)}" ${dxSaveStatus === 'All changes saved' ? 'hidden' : ''}>${escapeHtml(dxSaveStatus)}</span><div class="dx-actions">${step === 1 ? dxButton('continue','Continue to DX Schedule','arrow-right',true) : dxButton('back','Back to Thermal Sheet','arrow-left')}</div></footer>`;
+    <nav class="dx-steps" aria-label="Workflow progress">${[['back','Thermal Sheet & Extraction'],['continue','DX Schedule'],['boq','BOQ & Quotation']].map(([action,label],index)=>{const number=index+1,complete=number<step || (number<=(data.completedThrough || 0) && number!==step);return `<button data-dx-action="${action}" class="${step===number?'active':''} ${complete?'complete':''}" ${step===number?'aria-current="step"':''} ${dxBusy?'disabled':''}><span>${complete?'✓':number}</span>Step 0${number} — ${label}</button>`;}).join('')}</nav>
+    ${step === 1 ? dxStepOne() : step === 2 ? dxStepTwo() : dxStepThree()}
+    <footer class="dx-footer"><span data-dx-save-status data-dx-save-state="${escapeHtml(dxSaveStatus)}" ${dxSaveStatus === 'All changes saved' && step !== 3 ? 'hidden' : ''}>${escapeHtml(dxSaveStatus)}</span><div class="dx-actions">${step === 1 ? dxButton('continue','Continue to DX Schedule','arrow-right',true) : step === 2 ? dxButton('back','Back to Thermal Sheet','arrow-left')+dxButton('boq','Continue to BOQ & Quotation','arrow-right',true) : dxButton('back-schedule','Back to DX Schedule','arrow-left')+(data.boq?.quotationId ? dxButton('modify-quotation','Modify Quotation','refresh-cw') : '')+dxButton('quotation',data.boq?.quotationId ? 'Open Quotation' : 'Create Quotation','file-text',true)}</div></footer>`;
   canvas.appendChild(workflowDatalist('workflowCustomerList', workflowCustomerNames()));
   canvas.appendChild(workflowDatalist('workflowProjectList', workflowProjectsForCustomer(state.details.customer)));
   canvas.querySelectorAll('[data-dx-action]').forEach(dxBindAction);
@@ -139,8 +140,11 @@ function renderDxWorkspace() {
     dxSearch = event.target.value;
     canvas.querySelectorAll('[data-dx-thermal-row]').forEach(row => { row.hidden = !state.tables.thermal.rows[Number(row.dataset.dxThermalRow)] || !dxExportColumns.some(col => String(state.tables.thermal.rows[Number(row.dataset.dxThermalRow)][col] ?? '').toLowerCase().includes(dxSearch.toLowerCase())); });
   });
-  const tableNode = state.nodes.find(node => node.id === (step === 1 ? 'thermal-table' : 'vrv-schedule'));
-  dxMountTable(step === 1 ? 'thermal' : 'vrvSchedule', tableNode);
+  if (step === 3) dxMountBoq();
+  else {
+    const tableNode = state.nodes.find(node => node.id === (step === 1 ? 'thermal-table' : 'vrv-schedule'));
+    dxMountTable(step === 1 ? 'thermal' : 'vrvSchedule', tableNode);
+  }
   canvas.querySelector('[data-dx-schedule-search]')?.addEventListener('input', event => {
     dxScheduleSearch = event.target.value;
     dxFilterScheduleRows();
@@ -266,7 +270,24 @@ function dxConfirmRegenerate() {
 function dxBindAction(button) { button.addEventListener('click', () => { button.closest('details.dx-table-menu')?.removeAttribute('open'); dxAction(button.dataset.dxAction).catch(error => toast(error.message || 'DX action failed')); }); }
 async function dxAction(action) {
   const data = dxData();
-  if (dxBusy) return;
+  if (dxBusy || dxQuotationOpening) return;
+  if (action === 'quotation') return dxCreateQuotation();
+  if (action === 'modify-quotation') return dxCreateQuotation(true);
+  if (action === 'boq') {
+    const project=state, previousStep=data.step;
+    dxEnsureManualRows();
+    if (!state.tables.vrvSchedule.rows.length) buildDxSchedule();
+    dxBusy=true; renderDxWorkspace();
+    try {
+      await dxLoadBoq();
+      if (state !== project) return;
+      data.step=3; data.completedThrough=Math.max(data.completedThrough || 0,2);
+      await dxSave();
+    } catch(error) { data.step=previousStep; throw error; }
+    finally { dxBusy=false; if (state===project && activeView==='canvas') renderDxWorkspace(); }
+    return;
+  }
+  if (action === 'back-schedule') { data.step=2; await dxSave(); renderDxWorkspace(); return; }
   if (action === 'new') { await dxSave(); dxSaveStatus = 'Draft'; dxSearch = ''; dxScheduleSearch = ''; return createProject({workflowMode:'dx',fresh:true}); }
   if (action === 'save') return dxSave({manual:true});
   if (action === 'upload') { const input = document.createElement('input'); input.type='file'; input.multiple=true; input.accept='.pdf,.png,.jpg,.jpeg'; input.onchange=()=>dxUpload([...input.files]); input.click(); return; }

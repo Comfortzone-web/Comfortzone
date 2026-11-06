@@ -6,6 +6,15 @@ const zlib = require("zlib");
 const { spawnSync } = require("child_process");
 const { calculateProjectProgress } = require("./project-progress");
 const { createMaintenanceApi } = require("./maintenance-api");
+const dxQuotationLocks = new Map();
+async function lockDxQuotation(workflowId) {
+  const previous = dxQuotationLocks.get(workflowId) || Promise.resolve();
+  let release;
+  const current = new Promise(resolve => { release = resolve; });
+  dxQuotationLocks.set(workflowId, current);
+  await previous;
+  return () => { release(); if (dxQuotationLocks.get(workflowId) === current) dxQuotationLocks.delete(workflowId); };
+}
 let createClient = null;
 try {
   ({ createClient } = require("@supabase/supabase-js"));
@@ -2596,6 +2605,12 @@ function normalizeSalesItem(collection, input, store) {
       discount: Number(base.discount || 0),
       sourceLeadId: cleanCell(base.sourceLeadId || ""),
       sourceCostingSheetId: cleanCell(base.sourceCostingSheetId || ""),
+      ...(base.sourceDxWorkflowId ? {
+        sourceDxWorkflowId: cleanCell(base.sourceDxWorkflowId),
+        dxSelectionNumber: cleanCell(base.dxSelectionNumber || ""),
+        consultant: cleanCell(base.consultant || ""), contractor: cleanCell(base.contractor || ""),
+        dxPricing: base.dxPricing && typeof base.dxPricing === "object" ? base.dxPricing : {}
+      } : {}),
       status: cleanCell(base.status || "Draft"),
       createdAt: cleanCell(base.createdAt || ""),
       updatedAt: cleanCell(base.updatedAt || "")
@@ -2662,7 +2677,13 @@ function normalizeSalesQuoteItem(item) {
     description: cleanCell(item.description || ""),
     qty: Number(item.qty || 0),
     unit: cleanCell(item.unit || "Nos"),
-    unitPrice: Number(item.unitPrice || 0)
+    unitPrice: Number(item.unitPrice || 0),
+    ...(item.dxBoqItemId ? {
+      dxBoqItemId: cleanCell(item.dxBoqItemId), model: cleanCell(item.model || ""),
+      unitCost: Number(item.unitCost || 0),
+      priceItemIds: Array.isArray(item.priceItemIds) ? item.priceItemIds.map(cleanCell) : [],
+      sourceRefs: Array.isArray(item.sourceRefs) ? item.sourceRefs : []
+    } : {})
   };
 }
 
@@ -3955,10 +3976,51 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
-    const store = await readSalesCrm();
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
-    const rawItem = body.item || body;
+    if (body.fromDxBoq && (collection !== "quotations" || !/^[a-zA-Z0-9-]+$/.test(body.sourceDxWorkflowId || ''))) return send(res, 400, { error: 'Invalid source DX Workflow.' });
+    const releaseDx = body.fromDxBoq ? await lockDxQuotation(body.sourceDxWorkflowId) : () => {};
+    try {
+    const store = await readSalesCrm();
+    let rawItem = body.item || body;
+    if (body.fromDxBoq) {
+      const DXBoq = require("./public/dx-boq");
+      const quoteId = `dx-${body.sourceDxWorkflowId}`;
+      const existing = store.quotations.find(quote => quote.id === quoteId);
+      if (existing) {
+        if (isStaff(user) && !staffOwns(existing, user)) return sendForbidden(res);
+        if (!body.modifyDxBoq) return send(res, 200, { ...(await salesCrmView(store, user)), savedItemId: existing.id });
+      }
+      if (body.modifyDxBoq && !existing) return send(res, 404, { error: 'Linked quotation not found. Create a quotation first.' });
+      const project = await readProject(body.sourceDxWorkflowId);
+      if (!project || project.workflowMode !== 'dx' || !project.dx?.boq) return send(res, 400, { error: 'Save the DX BOQ before creating a quotation.' });
+      const boq = DXBoq.sync(project.dx.boq, project.tables?.vrvSchedule?.rows || [], (await readCostingSheets()).priceItems);
+      const errors = DXBoq.validate(boq);
+      if (boq.rows.length !== project.dx.boq.rows.length) errors.push('DX Schedule changed. Open Step 03 and review its BOQ.');
+      if (!cleanCell(project.details.project)) errors.unshift('Enter Project Name.');
+      const inventory = await readInventory();
+      const customer = mergedSalesCustomers(store.customers || [], inventory.customers || []).find(item => inventoryNorm(item.name) === inventoryNorm(project.details.customer));
+      if (!customer) errors.unshift('Select an existing Sales Desk customer in Client.');
+      if (errors.length) return send(res, 422, { error: errors.join('\n') });
+      const priced = DXBoq.calculate(boq);
+      rawItem = {
+        id: quoteId, status: 'Draft', customer: customer.name, project: project.details.project,
+        location: project.details.location || '', salesperson: user.name,
+        sourceDxWorkflowId: project.id, dxSelectionNumber: project.selectionNumber,
+        consultant: project.details.consultant || '', contractor: project.details.contractor || '',
+        quoteType: 'DX', paymentTerms: '30 Days Credit', deliveryTime: 'To be discussed', validity: '7 Days',
+        terms: cleanMultilineCell(body.terms || ''), notes: cleanMultilineCell(body.notes || ''),
+        dxPricing: { definition: 'gross-margin', percentage: priced.margin, totalCost: priced.totals.cost, totalSelling: priced.totals.selling },
+        items: priced.rows.map(row => ({ description: row.description ? `${row.model} - ${row.description}` : row.model,
+          model: row.model, qty: row.qty, unit: 'Nos', unitPrice: row.sellingPrice, unitCost: row.unitPrice,
+          dxBoqItemId: row.id, priceItemIds: row.priceItemIds || [], sourceRefs: row.sourceRefs || [] }))
+      };
+      if (existing) rawItem = {
+        ...existing, customer: rawItem.customer, project: rawItem.project, location: rawItem.location,
+        consultant: rawItem.consultant, contractor: rawItem.contractor, dxSelectionNumber: rawItem.dxSelectionNumber,
+        dxPricing: rawItem.dxPricing, items: rawItem.items, manualSubtotal: ''
+      };
+    }
     const requestedQuotationNo = collection === "quotations"
       ? cleanCell(body.requestedQuotationNo || rawItem.requestedQuotationNo || rawItem.quotationNo || rawItem.no)
       : "";
@@ -4070,6 +4132,7 @@ async function handleApi(req, res) {
     await writeSalesCrm(store);
     if (collection === "customers") await syncSalesCustomerToInventory(item);
     return send(res, 200, { ...(await salesCrmView(store, user)), savedItemId: item.id });
+    } finally { releaseDx(); }
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)\/[^/]+$/)) {
