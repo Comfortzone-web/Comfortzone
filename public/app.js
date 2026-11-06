@@ -137,34 +137,7 @@ const dxScheduleColumns = [
 ];
 // Mirrors the Daikin-PROPOSED lookup table in the DX Selection Sheet template.
 // Keeping it in the browser lets the blue Proposed block fill immediately after extraction.
-const dxProposalCatalog = [
-  ["DUCTED", "FDMRN20AVKU - RR20AVKU", 1.5, "Non-Inverter", "R-410A", "24/16", 46, 4.24, 4.11, 255, "MEDIUM", 1.77, 1.8, 3.49, 40, "220-240/1/50", 261, 1200, 448, 753, 855, 328, 26, 47],
-  ["DUCTED", "FDMRN25AVKU - RR25AVKU", 2, "Non-Inverter", "R-410A", "24/16", 46, 5.48, 5.05, 303, "MEDIUM", 2.29, 2.35, 3.44, 40, "220-240/1/50", 378, 1115, 541, 753, 855, 328, 44, 51],
-  ["DUCTED", "FDMRN30AVKU - RR30AVKU", 2.5, "Non-Inverter", "R-410A", "24/16", 46, 6.93, 6.3, 374, "MEDIUM", 2.87, 3.05, 3.49, 40, "220-240/1/50", 378, 1115, 541, 852, 1030, 400, 44, 75],
-  ["DUCTED", "FDMRN36AVKU - RR36AVKU", 3, "Non-Inverter", "R-410A", "24/16", 46, 8.42, 8.18, 650, "MEDIUM", 3.39, 3.55, 3.56, 50, "220-240/1/50", 378, 1369, 541, 852, 1030, 400, 50, 92],
-  ["DUCTED", "FDMRN50AVKU - RR50AYKU", 4, "Non-Inverter", "R-410A", "24/16", 46, 11.46, 9.96, 686, "MEDIUM", 4.7, 4.95, 3.41, 50, "380-415/3/50", 378, 1569, 541, 852, 1030, 400, 56, 87],
-  ["DUCTED", "FDMRN60AVKU - RR60AYKU", 5, "Non-Inverter", "R-410A", "24/16", 46, 13.5, 12.28, 826, "MEDIUM", 5.34, 5.62, 3.52, 50, "380-415/3/50", 430, 1432, 784, 1067, 930, 880, 71, 120],
-  ["DUCTED", "FDMF18AVMK9 - RZF18AVMK9", 1.5, "Inverter", "R-32", "24/17", 46, 4.27, 3.93, 325, "MEDIUM", 1.55, 1.6, 3.85, 30, "220-240/1/50", 300, 1000, 700, 595, 845, 300, 35, 40],
-  ["DUCTED", "FDMF24AVMK9 - RZF24AVMK9", 2, "Inverter", "R-32", "24/17", 46, 6.4, 4.8, 450, "MEDIUM", 2.42, 2.5, 4.16, 30, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 60],
-  ["DUCTED", "FDMF30AVMK9 - RZF30AVMK9", 2.5, "Inverter", "R-32", "24/17", 46, 7.69, 6.82, 567, "MEDIUM", 3.1, 3.2, 3.6331673014942867, 30, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 61],
-  ["DUCTED", "FDMF36AVMK - RZF36AVMK", 3, "Inverter", "R-32", "24/17", 46, 7.72, 6.6, 567, "MEDIUM", 3.1, 3.2, 3.55, 50, "220-240/1/50", 300, 1400, 700, 990, 940, 320, 45, 61],
-  ["DUCTED", "FDMF48AVMK - RZF48AYMK", 4, "Inverter", "R-32", "24/17", 46, 10.74, 10.44, 683, "MEDIUM", 4.64, 4.8, 3.51, 50, "380-415/3/50", 400, 1500, 800, 870, 1100, 520, 59, 95],
-  ["DUCTED", "FDMF54AVMK - RZF54AYMK", 4.5, "Inverter", "R-32", "24/17", 46, 12.08, 11.75, 683, "MEDIUM", 5.02, 5.4, 3.51, 50, "380-415/3/50", 400, 1500, 800, 870, 1100, 520, 59, 95],
-  ["WALL MOUNTED", "FTKM18PVM - RKM18PVM", 1.5, "Inverter", "R-32", "25/18", 46, 4.61, 4.16, 342, "HIGH", 1.57, 2.12, 3.91, "-", "220-240/1/50", 340, 1050, 259, 695, 930, 350, 15, 46],
-  ["WALL MOUNTED", "FTKM24PVM - RKM24PVM", 2, "Inverter", "R-32", "25/18", 46, 6.15, 5, 367, "HIGH", 2.19, 2.82, 3.72, "-", "220-240/1/50", 340, 1050, 259, 695, 930, 350, 15, 49],
-  ["WALL MOUNTED", "FTKM28PVM - RKM28PVM", 2.4, "Inverter", "R-32", "25/18", 46, 7.18, 5.71, 420, "HIGH", 2.68, 3.2, 3.55, "-", "220-240/1/50", 340, 1200, 259, 695, 930, 350, 18, 49],
-  ["WALL MOUNTED", "FTKF12TVMVZK - RKFG12TVMVZK", 1, "Inverter", "R-32", "25/18", 46, 3.44, 2.95, 238, "HIGH", 1.04, 1.34, 4.35, "-", "220-240/1/50", 298, 885, 229, 595, 845, 300, 11, 34],
-  ["WALL MOUNTED", "FTKF18TVMUZK - RKFG18TVMUZK", 1.5, "Inverter", "R-32", "25/18", 46, 4.31, 3.83, 246, "HIGH", 1.77, 1.79, 3.59, "-", "220-240/1/50", 298, 885, 229, 595, 845, 300, 11, 37],
-  ["WALL MOUNTED", "FTKF24TVMTZK - RKFG24TVMTZK", 2, "Inverter", "R-32", "25/18", 46, 6.03, 4.31, 283, "HIGH", 2.28, 2.161, 3.51, "-", "220-240/1/50", 310, 1100, 239, 695, 930, 350, 12, 47],
-  ["PACKAGED UNIT", "UATQ80CGXY1U", 6.4, "Non-Inverter", "R-410A", "24/16", 46, 17.8, 16.86, 1156, "MEDIUM", 7.48, 7.55, 3.45, 105, "380-415/3/50", "-", "-", "-", 1350, 1280, 1520, "-", 387],
-  ["PACKAGED UNIT", "UATQ160CGXY1U", 13.3, "Non-Inverter", "R-410A", "24/16", 46, 37.2, 37.2, 3304, "MEDIUM", 15.6, 15.8, 3.42, 105, "380-415/3/50", "-", "-", "-", 1690, 1988, 2079, "-", 810],
-  ["PACKAGED UNIT", "UATQ180CGXY1U", 15, "Non-Inverter", "R-410A", "24/16", 46, 41.58, 41.58, 3304, "MEDIUM", 18.32, 18.5, 3.29, 150, "380-415/3/50", "-", "-", "-", 1690, 1965, 1905, "-", 840],
-  ["PACKAGED UNIT", "UATQ210CGXY1U", 17.5, "Non-Inverter", "R-410A", "24/16", 46, 49.19, 49.19, 3587, "MEDIUM", 21.67, 21.88, 3.31, 200, "380-415/3/50", "-", "-", "-", 1650, 2410, 2030, "-", 930],
-  ["PACKAGED UNIT", "UATQ240CGXY1U", 20, "Non-Inverter", "R-410A", "24/16", 46, 54.98, 52.4, 3776, "MEDIUM", 24.06, 24.3, 3.32, 200, "380-415/3/50", "-", "-", "-", 1650, 2410, 2030, "-", 940],
-  ["PACKAGED UNIT", "UATQ300CGXY1U", 25, "Non-Inverter", "R-410A", "24/16", 46, 66.04, 63.84, 4248, "MEDIUM", 29.95, 30.25, 3.27, 250, "380-415/3/50", "-", "-", "-", 1950, 2410, 2030, "-", 1090]
-].map(([family, model, nominalTR, proposedType, refrigerant, indoorTemperature, outdoorTemperature, TC, SC, airflow, speed, actualPowerInput, esmaPowerInput, cop, esp, powerSupply, indoorH, indoorW, indoorD, outdoorH, outdoorW, outdoorD, indoorWeight, outdoorWeight]) => ({
-  family, model, nominalTR, proposedType, refrigerant, indoorTemperature, outdoorTemperature, TC, SC, airflow, speed, actualPowerInput, esmaPowerInput, cop, esp, powerSupply, indoorH, indoorW, indoorD, outdoorH, outdoorW, outdoorD, indoorWeight, outdoorWeight
-}));
+const dxProposalCatalog = dxWorkbookCatalog;
 const dxRemovedNodeIds = new Set(["vrv-upload", "costing-table", "boq-table", "quotation"]);
 const dxWorkflowPositions = {
   details: [0, 0],
@@ -758,7 +731,7 @@ async function createProject(options = {}) {
   }
   canvas.innerHTML = `<div class="workflow-loading-card">Loading workflow...</div>`;
   try {
-    workflowDraftPromise = workflowDraftPromise || api("/api/projects?draft=1", { method: "POST", body: "{}" })
+    workflowDraftPromise = workflowDraftPromise || api("/api/projects?draft=1", { method: "POST", body: JSON.stringify({workflowMode:requestedMode}) })
       .finally(() => {
         workflowDraftPromise = null;
       });
@@ -770,7 +743,7 @@ async function createProject(options = {}) {
   }
   projectPersisted = false;
   projectTouched = false;
-  if (requestedMode === "dx") configureDxWorkflow(state, { resetTables: true });
+  if (requestedMode === "dx") { configureDxWorkflow(state, { resetTables: true }); if(!state.selectionNumber) state.selectionNumber=(await api("/api/projects/selection-number-preview")).selectionNumber; state.dx = { autosaveEnabled:false, step: 1, reviewed: false, selectedUploadIds: [], match: { total: true, sensible: false, airflow: false, totalVariation: 0, sensibleVariation: 0, airflowVariation: 0 } }; dxSaveStatus="Draft — enter Project Name or Specified values"; }
   else state.workflowMode = "vrv";
   ensureWorkflowPreparedByDefault();
   if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
@@ -783,6 +756,7 @@ async function createProject(options = {}) {
 async function loadProject(id) {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   state = await api(`/api/projects/${id}`);
+  dxSaveStatus = "All changes saved"; dxSearch = "";
   projectPersisted = true;
   projectTouched = false;
   if (workflowMode(state) === "dx") configureDxWorkflow(state, { resetTables: false });
@@ -852,6 +826,7 @@ function configureDxWorkflow(project = state, options = {}) {
 }
 
 async function saveProject(options = {}) {
+  if (isDxWorkflow()) return dxSave({manual:!!options.manual});
   if (!state) return;
   const opts = options && typeof options === "object" ? options : {};
   if (!opts.auto) projectTouched = true;
@@ -7936,11 +7911,13 @@ function scheduleWorkflowRender(options = {}) {
     workflowRenderRequest = 0;
     if (activeView !== "canvas" || !state) return;
     render();
-    if (shouldFit) requestAnimationFrame(zoomToFit);
+    if (shouldFit && !isDxWorkflow()) requestAnimationFrame(zoomToFit);
   });
 }
 
 function render() {
+  canvas.classList.toggle("dx-workspace", isDxWorkflow());
+  if (isDxWorkflow()) return renderDxWorkspace();
   captureWorkflowNodeSizes();
   captureWorkflowTableScrollState();
   if (state.tables?.costing?.rows?.length) {
@@ -8160,6 +8137,7 @@ function setZoom(next) {
 }
 
 function applyCanvasZoom() {
+  if (isDxWorkflow()) return;
   canvas.style.transformOrigin = "0 0";
   canvas.style.transform = `scale(${canvasZoom})`;
   canvas.style.marginRight = `${Math.max(0, canvas.offsetWidth * (canvasZoom - 1))}px`;
@@ -11999,6 +11977,7 @@ async function uploadWorkflowFileInChunks(projectId, nodeId, file) {
 }
 
 async function workflowUploadFileForNode(nodeId, file) {
+  if (nodeId === "thermal-upload" && isDxWorkflow()) return file;
   if (nodeId === "thermal-upload" && /^image\//i.test(file.type || "")) {
     return optimizeThermalScreenshotUpload(file);
   }
@@ -12227,16 +12206,17 @@ function buildWorkflowScheduleFromThermal() {
 
 function buildDxSchedule() {
   state.tables.vrvSchedule.columns = workflowScheduleColumns();
-  const rows = normalizeDxThermalRows(state.tables.thermal?.rows || []);
+  const rows = state.tables.thermal?.rows || [];
   state.tables.vrvSchedule.rows = rows.map(row => {
     const output = Object.fromEntries(state.tables.vrvSchedule.columns.map(column => [column, ""]));
     output.Ref = row["Unit Ref"] || "";
     output.Type = row.Type || "";
     output.Location = row.Location || "";
-    output.TKw = row.TKw || "";
-    output.SKw = row.SKw || "";
-    output["L/S"] = row["L/S"] || "";
-    applyDxProposal(output);
+    output.TKw = row.TKw ?? "";
+    output.SKw = row.SKw ?? "";
+    output["L/S"] = row["L/S"] ?? "";
+    output.__reviewCells = Object.fromEntries(Object.entries(row.__reviewCells || {}).filter(([column])=>column !== "Type").map(([column,review])=>[column === "Unit Ref" ? "Ref" : column, {...review}]));
+    if (String(output.Type).trim() && [output.TKw,output.SKw,output["L/S"]].some(value=>value !== "" && value != null)) applyDxProposal(output);
     return output;
   });
 }
@@ -12249,32 +12229,42 @@ function dxNumber(value) {
 function dxProposalFamily(type = "") {
   const value = norm(type);
   if (value.includes("PACKAGE") || value.includes("UATQ")) return "PACKAGED UNIT";
-  if (value.includes("WALL") || value.includes("SPLIT")) return "WALL MOUNTED";
+  if (value.includes("WALL") || value.includes("SPLIT") || value.includes("DECORATIVE")) return "WALL MOUNTED";
   return "DUCTED";
 }
 
+function dxExcelFamily(type) {
+  const value=String(type || '').trim().toUpperCase();
+  if (/^DUCTED[ -]?(INV|INVERTER)$/.test(value)) return [12,18];
+  if (value === 'DUCTED') return [5,11];
+  if (['DECORATIVE','WALL MOUNTED','SPLIT'].includes(value)) return [19,23];
+  if (['PACKAGED','PACKAGED UNIT'].includes(value)) return [24,30];
+  return null;
+}
+function dxExcelLookupIndex(rows, metric, requirement, variation) {
+  // VLOOKUP(..., TRUE): binary approximate lookup, including duplicate thresholds.
+  const target=dxNumber(requirement),factor=1-Number(variation || 0)/100;
+  if (!Number.isFinite(target) || factor<=0) return null;
+  let low=0,high=rows.length-1,found=-1;
+  while(low<=high) {
+    const mid=Math.floor((low+high)/2);
+    if(rows[mid][metric]/factor<=target) { found=mid;low=mid+1; }
+    else high=mid-1;
+  }
+  return found<0?null:rows[found].index;
+}
 function chooseDxProposal(row) {
-  const family = dxProposalFamily(row.Type);
-  const requiredTotal = dxNumber(row.TKw);
-  const requiredSensible = dxNumber(row.SKw);
-  const requiredAirflow = dxNumber(row["L/S"]);
-  if (!requiredTotal && !requiredSensible && !requiredAirflow) return null;
-  const options = dxProposalCatalog.filter(item => item.family === family);
-  const ranked = options.map(item => {
-    const capacityRatio = Math.max(
-      item.TC ? requiredTotal / Number(item.TC) : 0,
-      item.SC ? requiredSensible / Number(item.SC) : 0,
-      item.airflow ? requiredAirflow / Number(item.airflow) : 0
-    );
-    return { item, qty: Math.max(1, Math.ceil(capacityRatio || 1)) };
-  });
-  const compact = ranked.filter(option => option.qty <= 2);
-  const candidates = compact.length ? compact : ranked;
-  candidates.sort((left, right) => {
-    const capacityOrder = Number(left.item.TC) - Number(right.item.TC);
-    return capacityOrder || left.qty - right.qty || Number(left.item.nominalTR) - Number(right.item.nominalTR);
-  });
-  return candidates[0] || null;
+  if (row.TKw === '' || row.TKw == null) return null;
+  const range=dxExcelFamily(row.Type);
+  if (!range) return null;
+  const rows=dxWorkbookSelectionRows.filter(item=>item.row>=range[0] && item.row<=range[1]);
+  const matching=state?.dx?.match || {};
+  const indices=[dxExcelLookupIndex(rows,'total',row.TKw,matching.totalVariation)];
+  if(matching.sensible)indices.push(dxExcelLookupIndex(rows,'sensible',row.SKw,matching.sensibleVariation));
+  if(matching.airflow)indices.push(dxExcelLookupIndex(rows,'airflow',row['L/S'],matching.airflowVariation));
+  if(indices.some(index=>index===null))return null;
+  const selected=dxWorkbookSelectionRows.find(item=>item.index===Math.max(...indices));
+  return selected?{item:dxProposalCatalog.find(item=>item.model===selected.model),model:selected.model,qty:1,index:selected.index}:null;
 }
 
 function applyDxProposal(row) {
@@ -12291,6 +12281,7 @@ function applyDxProposal(row) {
     return;
   }
   const { item, qty } = proposal;
+  if (!item) { proposalColumns.forEach(column=>{row[column]="";});row["Model ( Indoor / Outdoor )"]=proposal.model;row.Qty=qty;return; }
   Object.assign(row, {
     "Model ( Indoor / Outdoor )": item.model,
     Qty: qty,
@@ -12361,6 +12352,8 @@ function normalizeDxThermalRows(rows = []) {
         if (target) reviewCells[target] = review;
       });
       if (Object.keys(reviewCells).length) next.__reviewCells = reviewCells;
+      if (row.__source) next.__source = structuredClone(row.__source);
+      if (row.__selectionWarning) next.__selectionWarning = row.__selectionWarning;
       return next;
     })
     .filter(row => {
@@ -12809,6 +12802,8 @@ async function downloadTable(key) {
         filename: workflowTableDownloadFilename(key),
         projectName: state.details?.project || state.details?.projectName || "",
         customerName: state.details?.customer || state.details?.customerName || "",
+        consultant: state.details?.consultant || "", contractor: state.details?.contractor || "",
+        match: state.dx?.match,
         rows: table.rows
       })
     });
@@ -12823,6 +12818,7 @@ async function downloadTable(key) {
     title: key === "vrvSchedule" ? workflowScheduleTitle() : key,
     columns: table.columns,
     rows: table.rows,
+    wrapText: isDxWorkflow() && key === "thermal",
     summaryRows: summaryRows.map(([label, value]) => ({ label, value }))
   });
   downloadBlob(blob, workflowTableDownloadFilename(key));
@@ -13143,14 +13139,16 @@ function buildTableWorkbookBlob(payload = {}) {
   }
 
   rows.forEach((row, index) => {
-    sheetRows.push(workbookRowXml(index + 2, columns.map((column, columnIndex) => {
+    const rowXml = workbookRowXml(index + 2, columns.map((column, columnIndex) => {
       const value = workbookNumberOrText(row?.[column]);
       return {
         column: columnIndex + 1,
         value,
-        style: typeof value === "number" ? 2 : 0
+        style: typeof value === "number" ? 2 : payload.wrapText ? 3 : 0
       };
-    })));
+    }));
+    const lines = Math.max(1,...columns.map(column=>String(row?.[column] ?? "").split(/\r?\n/).length));
+    sheetRows.push(payload.wrapText ? rowXml.replace("<row ", `<row ht="${Math.max(20,lines*15)}" customHeight="1" `) : rowXml);
   });
 
   const summaryStart = rows.length + 2;
@@ -13175,7 +13173,7 @@ function buildTableWorkbookBlob(payload = {}) {
     "_rels/.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
     "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${workbookEscapeXml(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
     "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs></styleSheet>`,
+    "xl/styles.xml": `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${payload.wrapText ? 4 : 3}"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>${payload.wrapText ? '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf>' : ""}</cellXfs></styleSheet>`,
     "xl/worksheets/sheet1.xml": sheetXml
   };
 

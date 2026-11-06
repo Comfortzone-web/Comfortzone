@@ -924,18 +924,99 @@ function projectPath(projectId) {
   return path.join(PROJECTS, `${projectId}.json`);
 }
 
+// Unique reservations survive workflow deletion and server restarts. Never use upsert here.
+function createDxNumbering({ directory, read, compareAndSwap, seed = async()=>[], year = ()=>Number(new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'Asia/Dubai'}).format(new Date())) }) {
+  const snapshots=path.join(directory,'registry-v2'),lock=path.join(directory,'registry-v2.lock');
+  const localRead=()=>{
+    if(!fs.existsSync(snapshots))return null;
+    const revisions=fs.readdirSync(snapshots).filter(name=>/^\d+\.commit$/.test(name)).map(name=>Number(name.split('.')[0]));
+    if(!revisions.length)return null;
+    return JSON.parse(fs.readFileSync(path.join(snapshots,Math.max(...revisions)+'.json'),'utf8'));
+  };
+  const get=read?()=>read('registry-v2'):async()=>localRead();
+  const cas=compareAndSwap || (async(expected,next)=>{
+    fs.mkdirSync(directory,{recursive:true});
+    try{fs.mkdirSync(lock);}catch(error){if(error.code==='EEXIST')return false;throw error;}
+    try{
+      if((localRead()?.revision ?? null)!==expected)return false;
+      fs.mkdirSync(snapshots,{recursive:true});
+      fs.writeFileSync(path.join(snapshots,next.revision+'.json'),JSON.stringify(next));
+      fs.writeFileSync(path.join(snapshots,next.revision+'.commit'),'');return true;
+    }finally{fs.rmdirSync(lock);}
+  });
+  const format=(y,n)=>`DX-${y}-${String(n).padStart(3,'0')}`;
+  const initial=async()=>{
+    const state={revision:0,byProject:{},owners:{},lastByYear:{}};
+    const projects=(await seed()).filter(project=>project.workflowMode==='dx' && project.visible!==false).sort((a,b)=>String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+    for(const project of projects){
+      const matched=String(project.selectionNumber || '').match(/^DX-(?:(\d{4})-)?(\d+)$/i);
+      if(!matched)continue;
+      const y=matched[1] || String(project.createdAt || '').slice(0,4) || year();let n=Number(matched[2]);if(!n)continue;
+      while(state.owners[format(y,n)] && state.owners[format(y,n)]!==project.id)n++;
+      const number=format(y,n);state.byProject[project.id]=number;state.owners[number]=project.id;state.lastByYear[y]=n;
+    }
+    return state;
+  };
+  const load=async()=>{
+    const stored=await get();if(stored)return stored;
+    const state=await initial();if(await cas(null,state))return state;return get();
+  };
+  const reserve=async(projectId,requested)=>{
+    if(!/^[a-zA-Z0-9-]+$/.test(projectId))throw new Error('Invalid workflow ID');
+    for(let attempt=0;attempt<100;attempt++){
+      const state=await load();if(!state)continue;
+      const previous=state.byProject[projectId];
+      if(previous && (!requested || requested===previous))return previous;
+      let y=year(),n,number;
+      if(requested){
+        const match=String(requested).trim().toUpperCase().match(/^DX-(\d{4})-(\d{3,})$/);
+        if(!match || Number(match[2])<1){const error=new Error('Use selection number DX-YYYY-001 (or a higher positive suffix).');error.status=400;throw error;}
+        y=Number(match[1]);n=Number(match[2]);number=format(y,n);
+        if(state.owners[number] && state.owners[number]!==projectId){const error=new Error('This selection number is already in use. Enter a different number.');error.status=409;throw error;}
+      }else{
+        n=Number(state.lastByYear[y] || 0)+1;while(state.owners[format(y,n)])n++;number=format(y,n);
+      }
+      const next=JSON.parse(JSON.stringify(state));next.revision++;next.byProject[projectId]=number;next.owners[number]=projectId;next.lastByYear[y]=n;
+      if(await cas(state.revision,next))return number;
+    }
+    throw new Error('Selection numbering is busy. Retry saving.');
+  };
+  reserve.preview=async()=>{const state=await load();const y=year();let n=Number(state.lastByYear[y] || 0)+1;while(state.owners[format(y,n)])n++;return format(y,n);};
+  return reserve;
+}
+
+const reserveDxNumber = createDxNumbering({
+  directory:path.join(DATA,'dx-numbering'),
+  seed:async()=>listProjects('',true),
+  ...(USE_SUPABASE?{
+    read:key=>readSupabaseValue(`dx-numbering:${key}`),
+    compareAndSwap:async(expected,value)=>{
+      if(expected===null){const {error}=await supabase.from(SUPABASE_TABLE).insert({key:'dx-numbering:registry-v2',value,updated_at:new Date().toISOString()});if(error && error.code!=='23505')throw new Error(error.message);return !error;}
+      const {data,error}=await supabase.from(SUPABASE_TABLE).update({value,updated_at:new Date().toISOString()}).eq('key','dx-numbering:registry-v2').eq('value->>revision',String(expected)).select('key');
+      if(error)throw new Error(error.message);return !!data?.length;
+    }
+  }:{})
+});
+
 async function readProject(projectId) {
   if (USE_SUPABASE) {
     const value = await readSupabaseValue(`project:${projectId}`);
+    if (value?.workflowMode === "dx" && value.visible !== false) value.selectionNumber = await reserveDxNumber(projectId);
     return value ? hydrateProject(value) : null;
   }
   const file = projectPath(projectId);
   if (!fs.existsSync(file)) return null;
-  return hydrateProject(JSON.parse(fs.readFileSync(file, "utf8")));
+  const project = JSON.parse(fs.readFileSync(file, "utf8"));
+  if (project.workflowMode === "dx" && project.visible !== false) project.selectionNumber = await reserveDxNumber(projectId);
+  return hydrateProject(project);
 }
 
 async function writeProject(project) {
   project.updatedAt = new Date().toISOString();
+  if (project.workflowMode === "dx" && project.visible !== false) {
+    project.selectionNumber = await reserveDxNumber(project.id,project.dx?.selectionNumberEdited ? project.selectionNumber : undefined);
+    if(project.dx)project.dx.selectionNumberEdited=false;
+  }
   if (USE_SUPABASE) {
     await writeSupabaseValue(`project:${project.id}`, project);
     return;
@@ -3520,8 +3601,14 @@ async function handleApi(req, res) {
     return send(res, 200, await listProjects(url.searchParams.get("q") || ""));
   }
 
+  if (req.method === "GET" && url.pathname === "/api/projects/selection-number-preview") {
+    return send(res,200,{selectionNumber:await reserveDxNumber.preview()});
+  }
+
   if (req.method === "POST" && url.pathname === "/api/projects") {
     const project = await createDefaultProject(user);
+    const options=await readJson(req);
+    if(options.workflowMode === "dx") {project.workflowMode="dx";project.selectionNumber=await reserveDxNumber.preview();}
     if (url.searchParams.get("draft") === "1") {
       return send(res, 200, project);
     }
@@ -4601,7 +4688,7 @@ async function handleApi(req, res) {
       const next = await readJson(req);
       next.id = projectId;
       next.createdAt = project?.createdAt || next.createdAt || new Date().toISOString();
-      await writeProject(next);
+      try { await writeProject(next); } catch(error) { return send(res,error.status || 500,{error:error.message}); }
       return send(res, 200, next);
     }
 
@@ -4662,7 +4749,7 @@ async function handleApi(req, res) {
         project.uploads.push(upload);
         const node = project.nodes.find(item => item.id === upload.nodeId);
         if (node) node.data.uploadId = upload.id;
-        if (upload.nodeId === "thermal-upload" || upload.nodeId === "vrv-upload") project.visible = true;
+        if (upload.nodeId === "thermal-upload" || upload.nodeId === "vrv-upload") project.visible = project.workflowMode === "dx" ? !!project.dx?.autosaveEnabled : true;
         await writeProject(project);
         for (let index = 0; index < totalChunks; index += 1) {
           await deleteUpload(`projects/${projectId}/.chunks/${chunkUploadId}`, `${index}.part`);
@@ -4697,7 +4784,7 @@ async function handleApi(req, res) {
         project.uploads.push(upload);
         const node = project.nodes.find(n => n.id === nodeId);
         if (node) node.data.uploadId = uploadId;
-        if (nodeId === "thermal-upload" || nodeId === "vrv-upload") project.visible = true;
+        if (nodeId === "thermal-upload" || nodeId === "vrv-upload") project.visible = project.workflowMode === "dx" ? !!project.dx?.autosaveEnabled : true;
         await writeProject(project);
         return send(res, 201, upload);
       } catch (error) {
@@ -4790,6 +4877,18 @@ async function handleApi(req, res) {
       "Content-Disposition": `attachment; filename="${(payload.filename || "vrvSchedule.xlsx").replace(/"/g, "")}"`
     });
     return res.end(workbook);
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/export/dx-schedule-pdf") {
+    const payload = await readJson(req);
+    const pdf=await require("./dx-schedule-pdf").renderDxSchedulePdf(payload,{
+      PDFDocument:require("pdfkit"),columns:dxScheduleColumns(),
+      companyLogo:path.join(PUBLIC,"assets","dx-export-comfort-zone.png"),
+      dealerLogo:path.join(PUBLIC,"assets","dx-export-daikin.png")
+    });
+    res.writeHead(200, { "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="DX Schedule.pdf"' });
+    res.end(pdf);
+    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/export/dx-schedule") {
@@ -4975,7 +5074,197 @@ async function extractThermalWithOpenAI(project, options) {
   };
 }
 
+/* The grid path is DX-only. It crops real pixels; it never synthesizes OCR values. */
+function dxPngChunk(type, data) {
+  const body=Buffer.concat([Buffer.from(type),data]);let crc=0xffffffff;
+  for(const byte of body) { crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0); }
+  const size=Buffer.alloc(4),check=Buffer.alloc(4);size.writeUInt32BE(data.length);check.writeUInt32BE((crc^0xffffffff)>>>0);
+  return Buffer.concat([size,body,check]);
+}
+function dxEncodePng(width,height,rgb) {
+  const header=Buffer.alloc(13);header.writeUInt32BE(width,0);header.writeUInt32BE(height,4);header[8]=8;header[9]=2;
+  const raw=Buffer.alloc((width*3+1)*height);
+  for(let y=0;y<height;y++)rgb.copy(raw,y*(width*3+1)+1,y*width*3,(y+1)*width*3);
+  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),dxPngChunk('IHDR',header),dxPngChunk('IDAT',zlib.deflateSync(raw)),dxPngChunk('IEND',Buffer.alloc(0))]);
+}
+function dxGridClusters(values) {
+  const groups=[];for(const value of values) {const group=groups[groups.length-1];if(!group || value>group[group.length-1]+1)groups.push([value]);else group.push(value);}
+  return groups.map(group=>Math.round(group.reduce((sum,v)=>sum+v,0)/group.length));
+}
+function dxGridLabel(rgb,width,height,text,x,y) {
+  // Small fixed bitmap labels sit outside source cells. All OCR text remains original pixels.
+  const font={0:['01110','10001','10011','10101','11001','10001','01110'],1:['00100','01100','00100','00100','00100','00100','01110'],2:['01110','10001','00001','00010','00100','01000','11111'],3:['11110','00001','00001','01110','00001','00001','11110'],4:['00010','00110','01010','10010','11111','00010','00010'],5:['11111','10000','10000','11110','00001','00001','11110'],6:['01110','10000','10000','11110','10001','10001','01110'],7:['11111','00001','00010','00100','01000','01000','01000'],8:['01110','10001','10001','01110','10001','10001','01110'],9:['01110','10001','10001','01111','00001','00001','01110'],A:['01110','10001','10001','11111','10001','10001','10001'],C:['01111','10000','10000','10000','10000','10000','01111'],E:['11111','10000','10000','11110','10000','10000','11111'],F:['11111','10000','10000','11110','10000','10000','10000'],I:['111','010','010','010','010','010','111'],K:['10001','10010','10100','11000','10100','10010','10001'],L:['10000','10000','10000','10000','10000','10000','11111'],N:['10001','11001','10101','10011','10001','10001','10001'],O:['01110','10001','10001','10001','10001','10001','01110'],P:['11110','10001','10001','11110','10000','10000','10000'],R:['11110','10001','10001','11110','10100','10010','10001'],S:['01111','10000','10000','01110','00001','00001','11110'],T:['11111','00100','00100','00100','00100','00100','00100'],U:['10001','10001','10001','10001','10001','10001','01110'],W:['10001','10001','10001','10101','10101','10101','01010'],Y:['10001','10001','01010','00100','00100','00100','00100'],'/':['00001','00010','00100','00100','01000','10000','00000']};
+  for(const char of String(text).toUpperCase()) {
+    const glyph=font[char];if(glyph)for(let gy=0;gy<7;gy++)for(let gx=0;gx<glyph[gy].length;gx++)if(glyph[gy][gx]==='1' && x+gx<width && y+gy<height){const i=((y+gy)*width+x+gx)*3;rgb[i]=25;rgb[i+1]=46;rgb[i+2]=76;}
+    x+=glyph?glyph[0].length+2:5;
+  }
+}
+async function dxGridImage(bytes, request) {
+  const PNG=require(require.resolve('png-js',{paths:[path.dirname(require.resolve('pdfkit'))]}));
+  const png=new PNG(bytes),width=png.width,height=png.height;
+  if(width*height>20000000)throw new Error('Thermal screenshot exceeds 20 million pixels; split it into readable pages.');
+  const pixels=await new Promise(resolve=>png.decode(resolve));
+  const darkX=Array(width).fill(0),darkY=Array(height).fill(0);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){const i=(y*width+x)*4;const a=pixels[i+3]/255;const gray=(pixels[i]*.299+pixels[i+1]*.587+pixels[i+2]*.114)*a+255*(1-a);if(gray<175){darkX[x]++;darkY[y]++;}}
+  const xs=dxGridClusters(darkX.flatMap((count,x)=>count/height>.85?[x]:[]));const ys=dxGridClusters(darkY.flatMap((count,y)=>count/width>.65?[y]:[]));
+  if(xs.length && xs[0]>width*.03)xs.unshift(0);
+  if(xs.length && xs[xs.length-1]<width-Math.max(8,width*.01))xs.push(width-1);
+  if(!ys.length || ys[0]>3)ys.unshift(0);
+  if(ys[ys.length-1]<height-3)ys.push(height-1);
+  if(request.mode==='inspect')return {width,height,xLines:xs,yLines:ys,columnCount:Math.max(0,xs.length-1)};
+  const columns=request.columns;if(xs.length<7 || columns.some(i=>i<0 || i>=xs.length-1))throw new Error('Cannot lock the requested columns to table grid');
+  const heights=ys.slice(1).map((bottom,i)=>bottom-ys[i]).filter(value=>value>8).sort((a,b)=>a-b),median=heights[Math.floor(heights.length/2)] || 20;
+  const bands=ys.slice(1).map((bottom,i)=>[ys[i],bottom]).filter(([a,b])=>a>=(request.headerBottom || 0)-3 && b-a>=Math.max(9,median*.45));
+  const regions=[];
+  for(let offset=0;offset<bands.length;offset+=8){
+    const group=bands.slice(offset,offset+8),top=group[0][0],bottom=group[group.length-1][1],gutter=48,head=27;
+    const widths=columns.map(i=>xs[i+1]-xs[i]),w=gutter+widths.reduce((sum,v)=>sum+v,0)+columns.length*3,h=bottom-top+head+2;
+    const rgb=Buffer.alloc(w*h*3,255);let x=gutter;
+    dxGridLabel(rgb,w,h,'ROW',3,9);
+    for(let j=0;j<columns.length;j++){
+      const sx=xs[columns[j]],span=widths[j];
+      for(let y=0;y<head;y++)for(let px=x;px<x+span;px++){const t=(y*w+px)*3;rgb[t]=228;rgb[t+1]=237;rgb[t+2]=250;}
+      for(let y=top;y<=bottom;y++)for(let px=0;px<=span;px++){const s=(y*width+sx+px)*4,t=((y-top+head)*w+x+px)*3;const a=pixels[s+3]/255;for(let c=0;c<3;c++)rgb[t+c]=Math.round(pixels[s+c]*a+255*(1-a));}
+      dxGridLabel(rgb,w,h,['UNIT REF','TYPE','LOCATION','TKW','SKW','L/S'][j],x+4,9);x+=span+3;
+    }
+    group.forEach(([a,b],i)=>dxGridLabel(rgb,w,h,String(offset+i+1),6,Math.round(head+(a+b)/2-top-4)));
+    const scaled=Buffer.alloc(w*2*h*2*3);
+    for(let y=0;y<h*2;y++)for(let px=0;px<w*2;px++){const s=(Math.floor(y/2)*w+Math.floor(px/2))*3,t=(y*w*2+px)*3;rgb.copy(scaled,t,s,s+3);}
+    regions.push({firstRow:offset+1,rowCount:group.length,image:dxEncodePng(w*2,h*2,scaled).toString('base64')});
+  }
+  return {regions,rowCount:bands.length};
+}
+
+function dxGridLayoutSchema() {
+  return { type: 'object', additionalProperties: false, properties: {
+    orderedUploadIds: { type:'array', items:{type:'string'} },
+    columns: {type:'array',items:{type:'integer'}},
+    pages:{type:'array',items:{type:'object',additionalProperties:false,properties:{uploadId:{type:'string'},hasHeader:{type:'boolean'},headerBottom:{type:'integer'}},required:['uploadId','hasHeader','headerBottom']}},
+    unclearFields:{type:'array',items:{type:'string'}}
+  },required:['orderedUploadIds','columns','pages','unclearFields'] };
+}
+function dxGridRowsSchema() {
+  return {type:'object',additionalProperties:false,properties:{rows:{type:'array',items:{type:'object',additionalProperties:false,properties:{sourceRow:{type:'integer'},values:{type:'array',items:{type:'string'}},uncertainColumns:{type:'array',items:{type:'string',enum:dxExportColumns()}}},required:['sourceRow','values','uncertainColumns']}},unclearFields:{type:'array',items:{type:'string'}}},required:['rows','unclearFields']};
+}
+function dxOrderedUploads(uploads) {
+  return [...uploads].sort((a,b) => String(a.originalName || '').localeCompare(String(b.originalName || ''),undefined,{numeric:true,sensitivity:'base'}) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id).localeCompare(String(b.id)));
+}
+function dxGridReadPrompt(region, verification = false) {
+  return `Read this cropped thermal table ${verification ? 'independently again from its pixels. This is a verification pass; do not infer values from prior readings' : 'directly from its pixels'}.
+The only columns shown are Row (a source-row label), Unit Ref, Type, Location, TKw, SKw, L/S. The image was geometrically cropped from the actual source table, with unrelated columns removed.
+Return exactly ${region.rowCount} numbered source rows, numbered ${region.firstRow} through ${region.firstRow+region.rowCount-1}, once each, in order. Each values array contains exactly six strings in Unit Ref, Type, Location, TKw, SKw, L/S order. Never include the source-row label in values.
+Type is literal equipment Type, e.g. FCU. Do not substitute the System (e.g. Chilled Water), invent DX equipment families, or normalize text.
+Read the ENTIRE Location cell between its top and bottom horizontal borders. A tall/merged cell can contain TWO lines, such as an LR line followed by a Storage line: include BOTH, separated by a newline, as ONE equipment row. Do not keep only the last line and do not split that equipment row into two.
+Keep all floor/unit prefixes, braces, hyphens, parentheses, spelling, and digits exactly as printed. Repeated Unit Ref values are separate rows, not duplicate equipment; identify them by the numbered source row AND location. Do not merge, sort or deduplicate rows.
+TKw, SKw, L/S are the three visible numeric columns, cropped ONLY from Calculated AC Load -> Total, Sensible, Flow Rate. Transcribe each value on the same numbered source row. Preserve zeros/decimal text; never calculate or substitute nearby values.
+If a cell is genuinely unreadable, return its best visible read or an empty string and mark that exact column in uncertainColumns. If a numbered strip is a total/heading/non-data row, return six empty values for it. Check every character and decimal in every cell before returning. JSON only.`;
+}
+function dxGridRowsByNumber(result, region) {
+  const rows = new Map();
+  for (const row of result.rows || []) {
+    if (!Number.isInteger(row.sourceRow) || row.sourceRow < region.firstRow || row.sourceRow >= region.firstRow + region.rowCount || rows.has(row.sourceRow) || row.values?.length !== 6) throw new Error('AI returned inconsistent source-row alignment');
+    rows.set(row.sourceRow,row);
+  }
+  if(rows.size!==region.rowCount) throw new Error('AI omitted source rows; extraction stopped rather than exporting a shifted table');
+  return rows;
+}
+function dxReconcileGridReadings(readings, region) {
+  const maps = readings.map(result=>dxGridRowsByNumber(result,region));
+  const rows=[];
+  for (let sourceRow=region.firstRow;sourceRow<region.firstRow+region.rowCount;sourceRow++) {
+    const values=[],flags={};
+    dxExportColumns().forEach((column,index)=>{
+      const candidates=maps.map(map=>map.get(sourceRow));
+      const reads=candidates.map(row=>safeExtract(row?.values?.[index]));
+      const normalized=value=>index>=3 && isThermalNumber(value)?String(thermalNumericValue(value)):value.replace(/\r\n/g,'\n').trim();
+      let chosen=reads.find(value=>value!=='') || '';
+      const agreed=reads.find(value=>value!=='' && reads.filter(other=>other!=='' && normalized(other)===normalized(value)).length>=2);
+      if (agreed!==undefined) chosen=agreed;
+      const confident=candidates.filter(row=>row && !row.uncertainColumns?.includes(column) && normalized(safeExtract(row.values[index]))===normalized(chosen)).length;
+      if ((chosen!=='' || reads.some(Boolean)) && (agreed===undefined || confident<2)) flags[column]={first:reads[0] || '',second:reads[1] || '',reason:'Independent source-row readings did not confidently agree'};
+      if(index>=3 && chosen!=='' && (!isThermalNumber(chosen) || thermalNumericValue(chosen)<0)) flags[column]={first:reads[0] || '',second:reads[1] || '',reason:'Load value is not a valid nonnegative number'};
+      values.push(chosen);
+    });
+    rows.push({sourceRow,values,flags});
+  }
+  return rows;
+}
+async function dxReadGridRegion(region) {
+  const read=verification=>callOpenAIJson(verification?'dx_thermal_grid_verification':'dx_thermal_grid_rows',dxGridRowsSchema(),[{type:'input_text',text:dxGridReadPrompt(region,verification)},{type:'input_image',image_url:`data:image/png;base64,${region.image}`,detail:'high'}]);
+  const readings=await Promise.all([read(false),read(true)]);
+  let reconciled=dxReconcileGridReadings(readings,region);
+  if (reconciled.some(row=>Object.keys(row.flags).length)) { readings.push(await read(true));reconciled=dxReconcileGridReadings(readings,region); }
+  return {reconciled,readings};
+}
+async function extractDxGridThermal(project, uploads, prepared) {
+  const ordered=dxOrderedUploads(uploads);
+  const layoutContent=[{type:'input_text',text:`Identify ONLY the table layout and screenshot continuation order, not the data values. Images below are each labelled with uploadId, original filename, original pixel dimensions and detected vertical grid lines. Return all uploadIds exactly once in logical table/page order. Use visible headers/page numbers/continuation content first; filenames and capture timestamps break ties. Do not sort individual equipment rows or sort floors alphabetically.
+Find the screenshot containing column headers and lock its complete column layout. Return six zero-based ORIGINAL column indices for Unit Ref, Type, Location, Total kW, Sensible kW, Flow Rate L/s, in that exact order. System and Type are DIFFERENT columns: Type is the child header Type, NOT System. The Calculated AC Load group is the three far-right columns, AFTER the possibly empty Demand Control Volume column. Occupant Density is not a load column.
+For each upload, indicate whether its own image shows headers and headerBottom as the original pixel y coordinate immediately beneath ALL header rows (0 when no headers). Validate continuation grid columns match the header-bearing screenshot. If the layout/order is ambiguous, explain it in unclearFields. JSON only.`}];
+  for (const upload of ordered) {
+    const item=prepared.get(upload.id);
+    layoutContent.push({type:'input_text',text:JSON.stringify({uploadId:upload.id,filename:upload.originalName,...item.geometry})},{type:'input_image',image_url:`data:${upload.mimeType || 'image/png'};base64,${item.bytes.toString('base64')}`,detail:'high'});
+  }
+  const savedLayout=project.dx?.extractionLayout;
+  const contextHeader=savedLayout?.headerUploadId && !prepared.has(savedLayout.headerUploadId) ? project.uploads.find(upload=>upload.id===savedLayout.headerUploadId) : null;
+  if(contextHeader) {
+    const bytes=await readUpload(`projects/${project.id}`,contextHeader.storedName);
+    if(!bytes) throw new Error('The saved header source is unavailable. Select a screenshot containing the table header.');
+    layoutContent.push({type:'input_text',text:`CONTEXT ONLY: the following earlier screenshot supplies the column headers. It is NOT selected for extraction. Do not include ${contextHeader.id} in orderedUploadIds or pages. Extract only the previously labelled selected uploadIds.`},{type:'input_image',image_url:`data:${contextHeader.mimeType};base64,${bytes.toString('base64')}`,detail:'high'});
+  }
+  const readLayout=verification=>callOpenAIJson(verification?'dx_thermal_grid_layout_verification':'dx_thermal_grid_layout',dxGridLayoutSchema(),verification?[...layoutContent,{type:'input_text',text:'Independently verify the header column indices and screenshot order. In particular distinguish System from Type, and Occupant Density/DCV from Calculated AC Load. Do not return data rows.'}]:layoutContent);
+  const layouts=await Promise.all([readLayout(false),readLayout(true)]);
+  const signature=layout=>JSON.stringify([layout.orderedUploadIds,layout.columns,(layout.pages || []).map(page=>[page.uploadId,page.hasHeader,page.hasHeader && prepared.has(page.uploadId)?prepared.get(page.uploadId).geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,0):0]).sort((a,b)=>a[0].localeCompare(b[0]))]);
+  if(signature(layouts[0])!==signature(layouts[1]))layouts.push(await readLayout(true));
+  const layout=layouts.find(candidate=>layouts.filter(other=>signature(candidate)===signature(other)).length>=2);
+  if(!layout)throw new Error('Independent readings could not agree on the header columns or screenshot order. Include a clear full-width header screenshot.');
+  if (!layout.pages?.some(page=>page.hasHeader) && !contextHeader) throw new Error('No readable thermal table header was found. Include the screenshot showing System/Type and Calculated AC Load headers.');
+  const ids=layout.orderedUploadIds;
+  if (ids.length!==ordered.length || new Set(ids).size!==ordered.length || ids.some(id=>!prepared.has(id))) throw new Error('Could not establish a reliable screenshot continuation order');
+  if (layout.columns?.length!==6 || new Set(layout.columns).size!==6 || layout.columns[4]!==layout.columns[3]+1 || layout.columns[5]!==layout.columns[4]+1) throw new Error('Could not uniquely lock the six thermal columns');
+  const header=layout.pages.find(page=>page.hasHeader);const count=header?prepared.get(header.uploadId)?.geometry.columnCount:savedLayout?.columnCount;
+  const rows=[],sources=[],review={},warnings=[...(layout.unclearFields || [])];
+  for (const uploadId of ids) {
+    const item=prepared.get(uploadId),page=layout.pages.find(page=>page.uploadId===uploadId);
+    if (!page || item.geometry.columnCount!==count || layout.columns.some(index=>index<0 || index>=count)) throw new Error('Continuation screenshot columns do not match the header. Upload an uncropped full-width table screenshot.');
+    const headerBottom=page.hasHeader?item.geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,item.geometry.yLines[0]):0;
+    const crops=await dxGridImage(item.bytes,{columns:layout.columns,headerBottom});
+    for (let batch=0;batch<crops.regions.length;batch+=2) {
+      const results=await Promise.all(crops.regions.slice(batch,batch+2).map(dxReadGridRegion));
+      for (const {reconciled,readings} of results) {
+      for (const result of reconciled) {
+        if (!safeExtract(result.values[0] || result.values[2])) continue;
+        // Keep the established rule: a real blank load cell is not a valid thermal data row.
+        if (result.values.slice(3).some(value=>value==='')) { warnings.push(`${item.upload.originalName}, source row ${result.sourceRow}: a required load value could not be read; row omitted, review the source.`);continue; }
+        const index=rows.length; rows.push(result.values);sources.push({uploadId,filename:item.upload.originalName,sourceRow:result.sourceRow});
+        for (const [column,flag] of Object.entries(result.flags)) review[`${index}:${column}`]={...flag,row:index,column};
+      }
+      for (const reading of readings) warnings.push(...(reading.unclearFields || []));
+      }
+    }
+  }
+  applyDxThermalColumnSanityReview(rows,review);
+  return {status:Object.keys(review).length || warnings.length?'needs_verification':'ok',rows:[],customColumns:dxExportColumns(),customRows:rows,customReviewCells:review,reviewCells:{},rowSources:sources,sourceUploadIds:ids,gridLayout:{columns:layout.columns,columnCount:count,headerUploadId:header?.uploadId || contextHeader?.id},unclearFields:[...new Set(warnings)],message:`Extracted ${rows.length} rows from ${ids.length} screenshots in verified source order.`};
+}
+async function tryDxGridExtraction(project, uploads) {
+  if (!uploads.length || uploads.some(upload=>!/^image\/png$/i.test(upload.mimeType || ''))) return null;
+  const prepared=new Map();
+  for (const upload of uploads) {
+    const bytes=await readUpload(`projects/${project.id}`,upload.storedName);
+    if (!bytes) throw new Error(`Source file not found: ${upload.originalName}`);
+    let geometry;
+    try { geometry=await dxGridImage(bytes,{mode:'inspect'}); }
+    catch(error) { throw new Error(`Thermal grid preparation is unavailable: ${error.message}. Upload the original PNG again.`); }
+    if (geometry.columnCount<6 || geometry.yLines.length<3) return null;
+    prepared.set(upload.id,{upload,bytes,geometry});
+  }
+  return extractDxGridThermal(project,uploads,prepared);
+}
+
 async function extractDxThermalWithOpenAI(project, options, uploads) {
+  const gridded = await tryDxGridExtraction(project, uploads);
+  if (gridded) return gridded;
+  uploads = dxOrderedUploads(uploads);
   const customColumns = dxExportColumns();
   const customRows = [];
   const customReviewCells = {};
@@ -5469,7 +5758,7 @@ function normalizeDxCustomThermalResult(customColumns, customRows, regularRows =
     const next = hasMappedColumns
       ? sourceIndexes.map((index, targetIndex) => {
         if (index >= 0) return safeExtract(row[index]);
-        return targetIndex < row.length ? safeExtract(row[targetIndex]) : "";
+        return ""; // A missing named column is not permission to substitute a positional neighbour.
       })
       : columns.map((_, index) => safeExtract(row[index]));
     return next;
@@ -5587,7 +5876,10 @@ function findDxVerificationRowIndex(firstRow, verifiedRows, preferredIndex, used
 
 function dxVerificationIdentityMatches(firstUnit, firstLocation, secondRow) {
   const secondUnit = thermalIdentityText(secondRow?.[0]);
-  if (firstUnit) return !!secondUnit && firstUnit === secondUnit;
+  if (firstUnit && firstUnit !== secondUnit) return false;
+  const location = thermalLocationText(secondRow?.[2]);
+  if (firstLocation) return !!location && firstLocation === location;
+  if (firstUnit) return false;
   const secondLocation = thermalLocationText(secondRow?.[2]);
   return !!firstLocation && !!secondLocation && firstLocation === secondLocation;
 }
@@ -5877,7 +6169,7 @@ function thermalPrompt(options) {
 DX Workflow mapping:
 - Return customColumns exactly as: Unit Ref, Type, Location, TKw, SKw, L/S.
 - Unit Ref = Units Reference / No. or Ref.
-- Type = AC System and Type child column named Type.
+- Type = AC System and Type child column named Type (e.g. FCU). Never read System (e.g. Chilled Water) as Type and never infer a DX family from the unit reference.
 - Location = Location.
 - TKw = Calculated AC Load Total kW.
 - SKw = Calculated AC Load Sensible kW.
@@ -5980,8 +6272,8 @@ Extract the visible DX thermal schedule rows into this fixed table:
 
 Column mapping:
 - Unit Ref = Units Reference / No., Units Reference No., Unit Reference, Ref, or first unit/reference column.
-- Type = AC System and Type child column named Type.
-- Location = Location column.
+- Type = AC System and Type child column named Type (e.g. FCU). Never read System (e.g. Chilled Water) as Type and never infer a DX family from the unit reference.
+- Location = the ENTIRE Location cell. Include ALL wrapped lines, separated by a newline, including an LR line followed by Storage inside the same tall/merged equipment row. Preserve all floor prefixes, braces and parentheses; do not keep only the last line.
 - TKw = Calculated AC Load -> Total kW. If the child header says only "Total" under Calculated AC Load, use that column.
 - SKw = Calculated AC Load -> Sensible kW. If the child header says only "Sensible" under Calculated AC Load, use that column.
 - L/S = Calculated AC Load -> Flow Rate L/s. If the child header says only "Flow Rate" under Calculated AC Load, use that column.
@@ -6000,7 +6292,7 @@ Header/column rule:
 - Do not read values from Area m2, Number of Typical Floors, No. of People, Outdoor Air L/s, Occupant Density, or DCV.
 - Do not shift left into Occupant Density. Do not shift left into Area, People, or Outdoor Air.
 - Keep each value on the exact same horizontal row as its Unit Ref/Location.
-- If Unit Ref is visible, use it as the row anchor. Return one JSON object per Unit Ref row.
+- Unit Ref is NOT unique: FCU-01 can occur in dozens of different rows. Anchor each row with its physical page position AND full Location AND Unit Ref. Never merge different locations sharing a reference.
 - Section/floor labels such as GROUND FLOOR, PODIUM, 1ST FLOOR, 2ND FLOOR, WAREHOUSE, SERVICE BLOCK are section labels only, not data rows.
 - If multiple screenshots are uploaded, treat them as ordered continuations of the same table. Use the header/schema from the screenshot where the header is visible, then apply that same locked column order to continued screenshots even when the header is not visible.
 - For continued screenshots without the header, preserve the previous table grid: Unit Ref remains the leftmost row anchor and the Calculated AC Load values remain the adjacent three-column block Total, Sensible, Flow Rate.
@@ -6052,7 +6344,7 @@ You are doing a second independent verification pass for a DX thermal load scree
 Important:
 - Read directly from the uploaded file again.
 - Do not use row position alone. If Unit Ref is visible, match only that same Unit Ref row.
-- Use Location only when Unit Ref is not visible.
+- Always use the full Location along with Unit Ref; never use a repeated reference alone.
 - If you cannot confidently find the exact same row, return empty values for that row.
 - Do not read nearby rows.
 - Do not calculate, infer, auto-correct, or guess.
@@ -6101,7 +6393,7 @@ Inspect only these cells:
 ${lines || "- No cells"}
 
 Rules:
-- Use Unit Ref as the row anchor. Find the exact same Unit Ref row first.
+- Find the exact same physical row using BOTH Unit Ref AND full Location. Repeated Unit Ref alone is never a safe anchor.
 - If the exact Unit Ref row cannot be found, return empty values for that row.
 - Do not use row position alone.
 - Do not read nearby rows.
@@ -9631,6 +9923,14 @@ function generateVrvScheduleWorkbook(payload = {}) {
   return zipEntries(entries);
 }
 
+function dxExcelType(value) {
+  const type = String(value).toUpperCase();
+  if (type.includes("INV") && type.includes("DUCT")) return "DUCTED-INV";
+  if (/WALL|SPLIT|DECORATIVE/.test(type)) return "DECORATIVE";
+  if (/PACKAGE|UATQ/.test(type)) return "PACKAGED";
+  return value;
+}
+
 function generateDxSelectionWorkbook(payload = {}) {
   if (!fs.existsSync(DX_SELECTION_TEMPLATE)) {
     throw new Error("DX Selection Sheet template file is missing.");
@@ -9641,11 +9941,13 @@ function generateDxSelectionWorkbook(payload = {}) {
   forceWorkbookRecalculation(entries);
   const sheetPath = findWorkbookSheetPath(entries, "Selection Sheet") || "xl/worksheets/sheet1.xml";
   if (!entries[sheetPath]) throw new Error("Selection Sheet worksheet was not found in the DX template.");
-  entries[sheetPath].data = Buffer.from(fillDxSelectionSheetXml(entries[sheetPath].data.toString("utf8"), payload), "utf8");
+  const sheetXml = entries[sheetPath].data.toString("utf8");
+  const regularStyles = xlsxDxRegularBodyStyles(entries, sheetXml);
+  entries[sheetPath].data = Buffer.from(fillDxSelectionSheetXml(sheetXml, payload, regularStyles), "utf8");
   return zipEntries(entries);
 }
 
-function fillDxSelectionSheetXml(xml, payload = {}) {
+function fillDxSelectionSheetXml(xml, payload = {}, regularStyles = {}) {
   const templateRowNumber = xlsxDxTemplateRowNumber(xml);
   const templateLastRow = xlsxDxLastDataRow(xml, templateRowNumber);
   const templateTotalRow = templateLastRow + 1;
@@ -9658,15 +9960,21 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
   const templateRow = originalRows[templateRowNumber];
   if (!templateRow) throw new Error("DX Selection Sheet data row template was not found.");
   const templateTotalRowXml = originalRows[templateTotalRow] || "";
+  const proposedKeys = dxScheduleColumns().slice(6);
   let next = xml;
 
   [
     ["C4", payload.projectName || payload.project || ""],
-    ["C5", payload.customerName || payload.customer || ""]
+    ["C5", payload.customerName || payload.customer || ""],
+    ["B6", "Consultant:"], ["C6", payload.consultant || ""], ["C7", payload.contractor || ""],
+    ["F9", !!payload.match?.sensible], ["G9", !!payload.match?.airflow],
+    ["E10", Number(payload.match?.totalVariation || 0) / 100],
+    ["F10", Number(payload.match?.sensibleVariation || 0) / 100],
+    ["G10", Number(payload.match?.airflowVariation || 0) / 100]
   ].forEach(([ref, value]) => {
     const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
     if (!rowNumber) return;
-    const rowXml = originalRows[rowNumber] || `<row r="${rowNumber}"></row>`;
+    const rowXml = (xlsxRowsByNumber(next)[rowNumber] || `<row r="${rowNumber}"></row>`).replace(/\/>$/, "></row>");
     next = replaceXlsxRow(next, rowNumber, xlsxUpsertCell(rowXml, ref, value, xlsxCellStyle(rowXml, ref)));
   });
 
@@ -9683,24 +9991,33 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
     };
     const styledRow = xlsxEnsureStyledCells(currentRow, rowNumber, DX_SELECTION_TABLE_COLUMNS, baseStyles);
     const styles = xlsxRowStyleMap(styledRow);
-    let updatedRow = styledRow;
+    let updatedRow = xlsxRestoreDxRowFormulas(styledRow, templateRow, rowNumber, templateRowNumber);
     const modelValue = firstFilled(sourceRow, ["Model ( Indoor / Outdoor )", "Model"]);
     const qtyValue = firstFilled(sourceRow, ["Qty"]);
     const values = {
       B: firstFilled(sourceRow, ["Ref", "Unit Ref"]),
-      C: firstFilled(sourceRow, ["Type"]),
+      C: dxExcelType(firstFilled(sourceRow, ["Type"])),
       D: firstFilled(sourceRow, ["Location"]),
       E: firstFilled(sourceRow, ["TKw"]),
       F: firstFilled(sourceRow, ["SKw"]),
       G: firstFilled(sourceRow, ["L/S"])
     };
-    if (hasSourceRow && modelValue !== "") values.AN = modelValue;
-    if (hasSourceRow && qtyValue !== "") values.AO = qtyValue;
-    for (const [column, value] of Object.entries(values)) {
-      updatedRow = xlsxUpsertCell(updatedRow, `${column}${rowNumber}`, value, styles[column]);
+    if (hasSourceRow && sourceRow.__manualProposal) {
+      values.AN = modelValue;
+      values.AO = qtyValue;
     }
-    if (modelValue !== "") updatedRow = xlsxSetFormulaCachedValue(updatedRow, `H${rowNumber}`, modelValue, styles.H);
-    if (qtyValue !== "") updatedRow = xlsxSetFormulaCachedValue(updatedRow, `I${rowNumber}`, qtyValue, styles.I);
+    for (const [column, value] of Object.entries(values)) {
+      const style = /^[B-G]$/.test(column) ? (regularStyles[styles[column]] ?? styles[column]) : styles[column];
+      updatedRow = xlsxUpsertCell(updatedRow, `${column}${rowNumber}`, value, style);
+    }
+    if (modelValue !== "" && !sourceRow.__manualProposal) updatedRow = xlsxSetFormulaCachedValue(updatedRow, `AN${rowNumber}`, modelValue, styles.AN);
+    if (qtyValue !== "" && !sourceRow.__manualProposal) updatedRow = xlsxSetFormulaCachedValue(updatedRow, `AO${rowNumber}`, qtyValue, styles.AO);
+    // Cache every saved Proposed value, including blanks and zeroes, for Excel
+    // and viewers that display the workbook before recalculating its formulas.
+    xlsxColumnRange("H", "AE").forEach((column, index) => {
+      const value = sourceRow[proposedKeys[index]] ?? (index === 0 ? modelValue : index === 1 ? qtyValue : "");
+      updatedRow = xlsxSetFormulaCachedValue(updatedRow, `${column}${rowNumber}`, value, styles[column]);
+    });
     next = replaceXlsxRow(next, rowNumber, updatedRow);
   }
 
@@ -9715,7 +10032,8 @@ function fillDxSelectionSheetXml(xml, payload = {}) {
       templateTotalRow,
       templateRowNumber,
       lastDataRow,
-      xlsxRowStyleMap(totalStyleSource)
+      xlsxRowStyleMap(totalStyleSource),
+      inputRows
     );
     next = replaceXlsxRow(next, totalRowNumber, totalRowXml);
   }
@@ -9748,24 +10066,55 @@ function xlsxDxLastDataRow(xml, templateRowNumber) {
   return lastRow;
 }
 
-function xlsxExpandDxSelectionSharedFormulas(xml) {
-  const formulasByColumn = {
-    H: rowNumber => `AN${rowNumber}`,
-    I: rowNumber => `AO${rowNumber}`,
-    AM: rowNumber => `MAX(AJ${rowNumber}:AL${rowNumber})`,
-    AO: rowNumber => `IF(OR(AN${rowNumber}="",AN${rowNumber}=0),"",1)`
-  };
-  return xml.replace(/<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g, cellXml => {
-    const refMatch = cellXml.match(/\br="([A-Z]+)(\d+)"/);
-    if (!refMatch) return cellXml;
-    const [, column, rowText] = refMatch;
-    const formula = formulasByColumn[column]?.(Number(rowText));
-    if (!formula || !/<f\b[^>]*\bt="shared"/i.test(cellXml)) return cellXml;
-    if (/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/i.test(cellXml)) {
-      return cellXml.replace(/<f\b[^>]*(?:\/>|>[\s\S]*?<\/f>)/i, `<f>${escapeXml(formula)}</f>`);
+function xlsxTranslateDxFormula(formula, rowDelta, columnDelta = 0) {
+  // Relative references move with the cell; absolute references and text do not.
+  return formula.split(/("(?:[^"]|"")*")/g).map((part, index) => index % 2 ? part : part.replace(
+    /(?<![A-Z0-9_.])(\$?)([A-Z]{1,3})(\$?)(\d+)(?![A-Z0-9_])/g,
+    (_ref, absCol, col, absRow, row) => {
+      const column = xlsxColumnIndex(col) + (absCol ? 0 : columnDelta);
+      return absCol + xlsxColumnName(column) + absRow + (Number(row) + (absRow ? 0 : rowDelta));
     }
-    return cellXml.replace(/(<c\b[^>]*>)/i, `$1<f>${escapeXml(formula)}</f>`);
+  )).join('');
+}
+
+function xlsxExpandDxSelectionSharedFormulas(xml) {
+  const masters = new Map();
+  const cellPattern = /<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g;
+  for (const cell of xml.match(cellPattern) || []) {
+    const address = cell.match(/\br="([A-Z]+)(\d+)"/);
+    const formula = cell.match(/<f\b([^>]*)>([\s\S]*?)<\/f>/);
+    const si = formula?.[1].match(/\bsi="(\d+)"/);
+    if (address && si && formula[2]) {
+      masters.set(si[1], { column: address[1], row: Number(address[2]), formula: formula[2] });
+    }
+  }
+  return xml.replace(cellPattern, cell => {
+    const address = cell.match(/\br="([A-Z]+)(\d+)"/);
+    const shared = cell.match(/<f\b(?=[^>]*\bt="shared")([^>]*)(?:\/>|>[\s\S]*?<\/f>)/);
+    if (!address || !shared) return cell;
+    const si = shared[1].match(/\bsi="(\d+)"/);
+    const master = si && masters.get(si[1]);
+    if (!master) throw new Error('Missing shared formula master in DX template');
+    const formula = xlsxTranslateDxFormula(master.formula, Number(address[2]) - master.row,
+      xlsxColumnIndex(address[1]) - xlsxColumnIndex(master.column));
+    return cell.replace(shared[0], `<f>${formula}</f>`);
   });
+}
+
+function xlsxRestoreDxRowFormulas(rowXml, templateRow, rowNumber, templateRowNumber) {
+  // Some original template rows contain styled blanks instead of Proposed formulas.
+  for (const cell of templateRow.match(/<c\b[^>]*\/>|<c\b[^>]*>[\s\S]*?<\/c>/g) || []) {
+    const address = cell.match(/\br="([A-Z]+)\d+"/);
+    const formula = cell.match(/<f\b[^>]*>([\s\S]*?)<\/f>/);
+    if (!address || !formula) continue;
+    const ref = address[1] + rowNumber;
+    const current = xlsxCellXml(rowXml, ref);
+    const style = xlsxCellStyle(rowXml, ref) || xlsxCellStyle(templateRow, address[1] + templateRowNumber);
+    const translated = xlsxTranslateDxFormula(formula[1], rowNumber - templateRowNumber);
+    const replacement = `<c r="${ref}"${style !== '' ? ` s="${style}"` : ''}><f>${translated}</f><v/></c>`;
+    rowXml = current ? rowXml.replace(xlsxCellRegex(ref), replacement) : rowXml.replace('</row>', replacement + '</row>');
+  }
+  return rowXml;
 }
 
 function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
@@ -9775,11 +10124,58 @@ function cloneDxSelectionRow(templateRow, rowNumber, templateRowNumber = 17) {
     .replace(new RegExp(`(\\$?[A-Z]{1,3}\\$?)${escapeRegExp(source)}\\b`, "g"), `$1${rowNumber}`);
 }
 
-function xlsxUpdateDxTotalRow(rowXml, rowNumber, sourceRowNumber, firstDataRow, lastDataRow, fallbackStyles = {}) {
+function xlsxUpdateDxTotalRow(rowXml, rowNumber, sourceRowNumber, firstDataRow, lastDataRow, fallbackStyles = {}, rows = []) {
   let next = cloneDxSelectionRow(rowXml, rowNumber, sourceRowNumber);
   next = xlsxEnsureStyledCells(next, rowNumber, DX_SELECTION_TABLE_COLUMNS, fallbackStyles);
-  next = next.replace(new RegExp(`SUM\\(I${firstDataRow}:I${sourceRowNumber - 1}\\)`, "gi"), `SUM(I${firstDataRow}:I${lastDataRow})`);
+  // Every total range must stop before the relocated total row. Keeping the
+  // template endpoint can include the total itself or omit newly added rows.
+  const rangeEnd = new RegExp(`(\\$?[A-Z]{1,3}\\$?${firstDataRow}:\\$?[A-Z]{1,3}\\$?)${sourceRowNumber - 1}\\b`, "g");
+  next = next.replace(/<f\b[^>]*>[\s\S]*?<\/f>/g, formula => formula.replace(rangeEnd, (_match, prefix) => prefix + lastDataRow));
+  for (const [column, key] of [["I", "Qty"], ["O", "TC"], ["P", "SC"], ["Q", "AFR L/S"], ["T", "ESMA Power Input"]]) {
+    const ref = `${column}${rowNumber}`;
+    if (!/<f\b/.test(xlsxCellXml(next, ref))) continue;
+    const total = rows.reduce((sum, row) => sum + (Number(row[key]) || 0) * (column === "I" ? 1 : (Number(row.Qty) || 0)), 0);
+    next = xlsxSetFormulaCachedValue(next, ref, total, xlsxCellStyle(next, ref));
+  }
   return next;
+}
+
+function xlsxDxRegularBodyStyles(entries, sheetXml) {
+  const stylesEntry = entries["xl/styles.xml"];
+  if (!stylesEntry) return {};
+  const xml = stylesEntry.data.toString("utf8");
+  const fontsBlock = xml.match(/<fonts\b([^>]*)>([\s\S]*?)<\/fonts>/);
+  const stylesBlock = xml.match(/<cellXfs\b([^>]*)>([\s\S]*?)<\/cellXfs>/);
+  if (!fontsBlock || !stylesBlock) return {};
+  const fonts = fontsBlock[2].match(/<font\b[^>]*\/>|<font\b[^>]*>[\s\S]*?<\/font>/g) || [];
+  const styles = stylesBlock[2].match(/<xf\b[^>]*\/>|<xf\b[^>]*>[\s\S]*?<\/xf>/g) || [];
+  const firstRow = xlsxDxTemplateRowNumber(sheetXml);
+  const lastRow = xlsxDxLastDataRow(sheetXml, firstRow);
+  const regular = {};
+  for (const [number, row] of Object.entries(xlsxRowsByNumber(sheetXml))) {
+    if (Number(number) < firstRow || Number(number) > lastRow) continue;
+    for (const column of xlsxColumnRange("B", "G")) {
+      const styleId = xlsxCellStyle(row, column + number);
+      if (regular[styleId] !== undefined) continue;
+      const style = styles[Number(styleId)];
+      const fontId = style?.match(/\bfontId="(\d+)"/)?.[1];
+      const font = fonts[Number(fontId)];
+      if (!font || !/<b\b(?![^>]*\bval="(?:0|false)")/.test(font)) continue;
+      const normalFont = font.replace(/<b\b[^>]*(?:\/>|>[\s\S]*?<\/b>)/g, "");
+      let normalFontId = fonts.indexOf(normalFont);
+      if (normalFontId < 0) normalFontId = fonts.push(normalFont) - 1;
+      const normalStyle = style.replace(/\bfontId="\d+"/, `fontId="${normalFontId}"`);
+      let normalStyleId = styles.indexOf(normalStyle);
+      if (normalStyleId < 0) normalStyleId = styles.push(normalStyle) - 1;
+      regular[styleId] = String(normalStyleId);
+    }
+  }
+  if (Object.keys(regular).length) {
+    const replaceBlock = (tag, block, items) => `<${tag}${block[1].replace(/\bcount="\d+"/, `count="${items.length}"`)}>${items.join("")}</${tag}>`;
+    stylesEntry.data = Buffer.from(xml.replace(fontsBlock[0], replaceBlock("fonts", fontsBlock, fonts))
+      .replace(stylesBlock[0], replaceBlock("cellXfs", stylesBlock, styles)), "utf8");
+  }
+  return regular;
 }
 
 function xlsxUpdateDimension(xml, ref) {
@@ -10062,14 +10458,19 @@ function xlsxUpsertCell(rowXml, ref, value, styleId = "") {
 function xlsxSetFormulaCachedValue(rowXml, ref, value, styleId = "") {
   const col = ref.match(/^[A-Z]+/)?.[0] || "";
   const rowNumber = Number(ref.match(/\d+$/)?.[0] || 0);
-  const cellRegex = xlsxCellRegex(ref);
-  if (!cellRegex.test(rowXml)) return xlsxUpsertCell(rowXml, ref, value, styleId);
-  return rowXml.replace(cellRegex, cellXml => {
-    if (!/<f\b/i.test(cellXml)) return xlsxCell(col, rowNumber, value, styleId);
-    const cachedValue = value === undefined || value === null || value === "" ? "" : escapeXml(value);
-    if (/<v\b[^>]*\/>/i.test(cellXml)) return cellXml.replace(/<v\b[^>]*\/>/i, cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`);
-    if (/<v\b[^>]*>[\s\S]*?<\/v>/i.test(cellXml)) return cellXml.replace(/<v\b[^>]*>[\s\S]*?<\/v>/i, cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`);
-    return cellXml.replace(/<\/f>/i, `</f>${cachedValue === "" ? "<v/>" : `<v>${cachedValue}</v>`}`);
+  const pattern = xlsxCellRegex(ref);
+  if (!pattern.test(rowXml)) return xlsxUpsertCell(rowXml, ref, value, styleId);
+  return rowXml.replace(pattern, cell => {
+    if (!/<f\b/i.test(cell)) return xlsxCell(col, rowNumber, value, styleId);
+    const empty = value == null || value === '';
+    const numeric = typeof value === 'number' || (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value.trim()));
+    const cached = empty ? '' : numeric ? String(Number(value)) : escapeXml(value);
+    cell = cell.replace(/^<c\b([^>]*)>/, (_match, attrs) =>
+      `<c${attrs.replace(/\st="[^"]*"/g, '')}${!empty && !numeric ? ' t="str"' : ''}>`);
+    const v = empty ? '<v/>' : `<v>${cached}</v>`;
+    const cachedPattern = /<v\b[^>]*(?:\/>|>[\s\S]*?<\/v>)/i;
+    if (cachedPattern.test(cell)) return cell.replace(cachedPattern, v);
+    return cell.replace('</f>', '</f>' + v);
   });
 }
 
@@ -10077,6 +10478,7 @@ function xlsxCell(col, rowNumber, value, styleId = "") {
   const ref = `${col}${rowNumber}`;
   const style = styleId !== "" && styleId !== undefined ? ` s="${styleId}"` : "";
   if (value === undefined || value === null || value === "") return `<c r="${ref}"${style}/>`;
+  if (typeof value === "boolean") return `<c r="${ref}" t="b"${style}><v>${value ? 1 : 0}</v></c>`;
   const normalized = typeof value === "string" ? value.replace(/,/g, "").trim() : value;
   if (typeof normalized === "number" || (/^-?\d+(\.\d+)?$/.test(String(normalized)) && String(value).trim() !== "")) {
     return `<c r="${ref}"${style}><v>${Number(normalized)}</v></c>`;

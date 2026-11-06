@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/styles.css?v=20260727-area-ypiece-fix">
   <link rel="stylesheet" href="/projects.css?v=20261031-variation-kpi-type">
   <link rel="stylesheet" href="/maintenance.css?v=20261104-work-order-map-mobile">
+  <link rel="stylesheet" href="/dx-workflow.css?v=20261106-schedule-search-scroll">
 </head>
 <body class="auth-pending">
   <div class="mobile-app-bar">
@@ -176,7 +177,9 @@
   <script src="/projects-module.js?v=20261031-variation-kpi-type"></script>
   <script src="/maintenance-billing.js?v=20261031-immediate-actions"></script>
   <script src="/maintenance.js?v=20261104-work-order-map-mobile"></script>
-  <script src="/app.js?v=20261026-billing"></script>
+  <script src="/dx-selection-data.js?v=20261105-selection-drafts"></script>
+  <script src="/dx-workflow.js?v=20261106-proposed-totals"></script>
+  <script src="/app.js?v=20261105-autosave-specified"></script>
   <script>
     if ("serviceWorker" in navigator && window.isSecureContext) {
       window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {}));

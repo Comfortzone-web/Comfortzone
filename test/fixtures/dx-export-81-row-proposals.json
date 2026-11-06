@@ -1,0 +1,569 @@
+[
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 13.5,
+    "SC": 12.28,
+    "AFR L/S": 826.0,
+    "ESMA Power Input": 5.62
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 6.93,
+    "SC": 6.3,
+    "AFR L/S": 374.0,
+    "ESMA Power Input": 3.05
+  },
+  {
+    "Qty": 1.0,
+    "TC": 6.93,
+    "SC": 6.3,
+    "AFR L/S": 374.0,
+    "ESMA Power Input": 3.05
+  },
+  {
+    "Qty": 1.0,
+    "TC": 6.93,
+    "SC": 6.3,
+    "AFR L/S": 374.0,
+    "ESMA Power Input": 3.05
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 13.5,
+    "SC": 12.28,
+    "AFR L/S": 826.0,
+    "ESMA Power Input": 5.62
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 11.46,
+    "SC": 9.96,
+    "AFR L/S": 686.0,
+    "ESMA Power Input": 4.95
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 6.93,
+    "SC": 6.3,
+    "AFR L/S": 374.0,
+    "ESMA Power Input": 3.05
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 8.42,
+    "SC": 8.18,
+    "AFR L/S": 650.0,
+    "ESMA Power Input": 3.55
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 5.48,
+    "SC": 5.05,
+    "AFR L/S": 303.0,
+    "ESMA Power Input": 2.35
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 13.5,
+    "SC": 12.28,
+    "AFR L/S": 826.0,
+    "ESMA Power Input": 5.62
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  },
+  {
+    "Qty": 1.0,
+    "TC": 4.24,
+    "SC": 4.11,
+    "AFR L/S": 255.0,
+    "ESMA Power Input": 1.8
+  }
+]
