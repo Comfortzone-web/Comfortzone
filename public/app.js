@@ -8,6 +8,7 @@ const collapsedSidebarGroups = new Set();
 let drag = null;
 let canvasZoom = 0.72;
 let workflowDraftPromise = null;
+let workflowOpenSequence = 0;
 let workflowRenderRequest = 0;
 let preserveTableSizes = false;
 const workflowTableScrollState = {};
@@ -715,6 +716,7 @@ async function api(path, options = {}) {
 
 async function createProject(options = {}) {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
+  const openSequence = ++workflowOpenSequence;
   const requestedMode = options.workflowMode === "dx" ? "dx" : options.workflowMode === "vrv" ? "vrv" : "";
   let fresh = !!options.fresh;
   if (requestedMode && state && workflowMode(state) !== requestedMode) fresh = true;
@@ -723,6 +725,7 @@ async function createProject(options = {}) {
     scheduleWorkflowRender({ fit: activeView === "canvas" && !canvas.innerHTML.trim() });
     return;
   }
+  if (requestedMode === 'dx') { dxOpenFreshWorkflow(); return; }
   if (fresh) {
     state = null;
     workflowDraftPromise = null;
@@ -735,8 +738,11 @@ async function createProject(options = {}) {
       .finally(() => {
         workflowDraftPromise = null;
       });
-    state = await workflowDraftPromise;
+    const draft = await workflowDraftPromise;
+    if (openSequence !== workflowOpenSequence) return;
+    state = draft;
   } catch (error) {
+    if (openSequence !== workflowOpenSequence) return;
     canvas.innerHTML = `<div class="workflow-loading-card">Unable to load workflow.</div>`;
     toast(error.message || "Unable to load workflow");
     return;
@@ -755,7 +761,10 @@ async function createProject(options = {}) {
 
 async function loadProject(id) {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
-  state = await api(`/api/projects/${id}`);
+  const openSequence = ++workflowOpenSequence;
+  const project = await api(`/api/projects/${id}`);
+  if (openSequence !== workflowOpenSequence) return;
+  state = project;
   dxSaveStatus = "All changes saved"; dxSearch = "";
   projectPersisted = true;
   projectTouched = false;

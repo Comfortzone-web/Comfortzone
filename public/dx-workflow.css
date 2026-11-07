@@ -94,6 +94,9 @@ body:has(#canvasView:not(.hidden) .dx-workspace) #viewActions {
   vertical-align: middle;
   filter: invert(31%) sepia(100%) saturate(4321%) hue-rotate(214deg) brightness(101%);
 }
+.dx-thermal-spinner { display:inline-block; flex:0 0 auto; width:15px; height:15px; margin-left:6px; border:2px solid #cbdfff; border-top-color:#0860fa; border-radius:50%; animation:dx-thermal-spin .7s linear infinite; vertical-align:middle; }
+@keyframes dx-thermal-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .dx-thermal-spinner { animation-duration:1.8s; } }
 .dx-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .dx-button {
   display: inline-flex;

@@ -7,6 +7,40 @@ let dxSearch = '';
 let dxScheduleSearch = '';
 let dxTimer;
 let dxRenderedProjectId = '';
+let dxThermalActivity = '';
+function dxOpenFreshWorkflow() {
+  const now = new Date().toISOString();
+  const project = {
+    id: costingId(), workflowMode:'dx', title:'DX Workflow', visible:false, createdAt:now, updatedAt:now,
+    details:{customer:'',contactPerson:'',telNo:'',email:'',project:'',date:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),location:'',model:'Daikin',validity:'Valid for 7 days',enquiryNo:'',preparedBy:currentUser?.name || ''},
+    quotation:{quotationNo:'',generatedDocId:'',generatedPdfId:''},
+    nodes:[{id:'details',type:'details',data:{}},{id:'thermal-upload',type:'upload',data:{}},{id:'thermal-table',type:'thermalTable',data:{}},{id:'vrv-schedule',type:'vrvSchedule',data:{}}],
+    uploads:[], tables:{thermal:{columns:[...dxExportColumns],rows:[]},vrvSchedule:{columns:[...dxScheduleColumns],rows:[]},costing:{columns:[],rows:[],summary:{}},boq:{columns:[],rows:[],summary:{}}},
+    lookup:{indoorData:[],outdoorData:[]},priceList:{items:[]},
+    dx:{autosaveEnabled:false,step:1,reviewed:false,selectedUploadIds:[],match:{total:true,sensible:false,airflow:false,totalVariation:0,sensibleVariation:0,airflowVariation:0}}
+  };
+  state=project; projectPersisted=false; projectTouched=false;
+  dxSaveStatus='Draft — enter Project Name or Specified values'; dxSearch=''; dxScheduleSearch='';
+  configureDxWorkflow(project,{resetTables:true});
+  history.replaceState(null,'',location.pathname); showCanvas('dx'); renderDxWorkspace();
+  // Only hydrate server-owned metadata. Never replace edits, rows or the local ID.
+  api('/api/projects?draft=1',{method:'POST',body:JSON.stringify({workflowMode:'dx'})}).then(draft=>{
+    project.lookup=draft.lookup; project.priceList=draft.priceList;
+    if (!project.selectionNumber && !project.dx.selectionNumberEdited) project.selectionNumber=draft.selectionNumber;
+    if (state===project && activeView==='canvas') {
+      const input=canvas.querySelector('[data-dx-number]');
+      if(input && document.activeElement!==input) input.value=project.selectionNumber || '';
+    }
+  }).catch(error=>{if(state===project)toast(error.message || 'Could not load workflow details.');});
+  loadSalesCrm().then(()=>{
+    if(state!==project || activeView!=='canvas')return;
+    canvas.querySelector('#workflowCustomerList')?.replaceWith(workflowDatalist('workflowCustomerList',workflowCustomerNames()));
+    updateWorkflowProjectList(canvas);
+  }).catch(()=>{});
+}
+function dxSaveInBackground() {
+  dxSave().catch(error=>toast(error.message || 'Changes could not be saved.'));
+}
 function dxData() {
   state.dx ||= { step: 1, reviewed: false, selectedUploadIds: thermalUploadIds(), match: { total: true, sensible: true, airflow: true, totalVariation: 0, sensibleVariation: 0, airflowVariation: 0 } };
   state.dx.autosaveEnabled ??= projectPersisted && state.visible !== false;
@@ -175,7 +209,7 @@ function dxStepOne() {
   const data = dxData();
   const files = thermalUploadIds().map(findUpload).filter(Boolean).sort((a,b)=>String(a.originalName).localeCompare(String(b.originalName),undefined,{numeric:true,sensitivity:'base'}));
   const selected = files.filter(file => data.selectedUploadIds.includes(file.id)).length;
-  return `<div class="dx-extraction-grid"><div class="dx-left">${dxCard(`${dxIcon('upload')}Thermal Sheet Upload`, `
+  return `<div class="dx-extraction-grid"><div class="dx-left">${dxCard(`${dxIcon('upload')}Thermal Sheet Upload${dxThermalActivity ? `<span class="dx-thermal-spinner" role="status" aria-label="${escapeHtml(dxThermalActivity)}" title="${escapeHtml(dxThermalActivity)}"></span>` : ''}`, `
     <button class="dx-drop" data-dx-action="upload" ${dxBusy ? 'disabled' : ''}>${dxIcon('cloud-upload')}<strong>Drag & drop files here, or click to upload</strong><span>Upload PDF, PNG, JPG</span></button>
     <div class="dx-file-tools"><button data-dx-action="select-all">☑ Select All</button><button data-dx-action="clear">Clear Selection</button><span>${selected} files selected for extraction</span></div>
     <div class="dx-files">${files.map(file => `<div class="dx-file ${data.selectedUploadIds.includes(file.id) ? 'selected' : ''}"><input aria-label="Select ${escapeHtml(file.originalName)}" type="checkbox" data-dx-file="${escapeHtml(file.id)}" ${data.selectedUploadIds.includes(file.id) ? 'checked' : ''} ${dxBusy ? 'disabled' : ''}>${dxIcon(file.mimeType?.includes('pdf') ? 'file-text' : 'image')}<button class="dx-filename" data-dx-preview="${escapeHtml(file.id)}">${escapeHtml(file.originalName)}</button><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small><button data-dx-remove="${escapeHtml(file.id)}" aria-label="Remove file" ${dxBusy ? 'disabled' : ''}>×</button></div>`).join('') || '<div class="dx-empty">No thermal sheets uploaded yet.</div>'}</div>
@@ -274,21 +308,20 @@ async function dxAction(action) {
   if (action === 'quotation') return dxCreateQuotation();
   if (action === 'modify-quotation') return dxCreateQuotation(true);
   if (action === 'boq') {
-    const project=state, previousStep=data.step;
     dxEnsureManualRows();
     if (!state.tables.vrvSchedule.rows.length) buildDxSchedule();
-    dxBusy=true; renderDxWorkspace();
-    try {
-      await dxLoadBoq();
-      if (state !== project) return;
-      data.step=3; data.completedThrough=Math.max(data.completedThrough || 0,2);
-      await dxSave();
-    } catch(error) { data.step=previousStep; throw error; }
-    finally { dxBusy=false; if (state===project && activeView==='canvas') renderDxWorkspace(); }
+    dxBoqPreparedId='';
+    data.step=3; data.completedThrough=Math.max(data.completedThrough || 0,2);
+    renderDxWorkspace(); dxSaveInBackground();
     return;
   }
-  if (action === 'back-schedule') { data.step=2; await dxSave(); renderDxWorkspace(); return; }
-  if (action === 'new') { await dxSave(); dxSaveStatus = 'Draft'; dxSearch = ''; dxScheduleSearch = ''; return createProject({workflowMode:'dx',fresh:true}); }
+  if (action === 'back-schedule') { data.step=2; renderDxWorkspace(); dxSaveInBackground(); return; }
+  if (action === 'new') {
+    dxBusy=true; renderDxWorkspace();
+    try { await dxSave(); }
+    finally { dxBusy=false; renderDxWorkspace(); }
+    return createProject({workflowMode:'dx',fresh:true});
+  }
   if (action === 'save') return dxSave({manual:true});
   if (action === 'upload') { const input = document.createElement('input'); input.type='file'; input.multiple=true; input.accept='.pdf,.png,.jpg,.jpeg'; input.onchange=()=>dxUpload([...input.files]); input.click(); return; }
   if (action === 'select-all' || action === 'clear') { data.selectedUploadIds = action === 'clear' ? [] : thermalUploadIds(); dxChanged(); renderDxWorkspace(); return; }
@@ -311,16 +344,14 @@ async function dxAction(action) {
     previous.forEach((row,index)=>{state.tables.vrvSchedule.rows[index]=row;});
     dxData().manualEntry=true; dxChanged(); renderDxWorkspace(); return;
   }
-  if (action === 'back') { data.step=1; await dxSave(); renderDxWorkspace(); return; }
+  if (action === 'back') { data.step=1; renderDxWorkspace(); dxSaveInBackground(); return; }
   if (action === 'continue') {
     dxEnsureManualRows();
     if (!state.tables.vrvSchedule.rows.length) buildDxSchedule();
-    const previousStep=data.step;
     data.step=2;
-    try { await dxSave(); } catch (error) { data.step=previousStep; throw error; }
-    renderDxWorkspace(); return;
+    renderDxWorkspace(); dxSaveInBackground(); return;
   }
-  if (action === 'regenerate') { if (!dxConfirmRegenerate()) return; buildDxSchedule(); await dxSave(); renderDxWorkspace(); return; }
+  if (action === 'regenerate') { if (!dxConfirmRegenerate()) return; buildDxSchedule(); renderDxWorkspace(); dxSaveInBackground(); return; }
   if (action === 'thermal-excel' || action === 'schedule-excel') { await dxSave(); return downloadTable(action === 'thermal-excel' ? 'thermal' : 'vrvSchedule'); }
   if (action === 'pdf') {
     await dxSave();
@@ -330,6 +361,7 @@ async function dxAction(action) {
 }
 async function dxUpload(files) {
   if (!files.length || dxBusy) return;
+  dxThermalActivity='Uploading thermal sheets';
   dxBusy=true; renderDxWorkspace();
   try {
     await dxSave({storage:true});
@@ -345,7 +377,7 @@ async function dxUpload(files) {
       await dxSave({storage:true});
     }
   } catch(error) { toast(error.message || 'Upload failed'); }
-  finally { dxBusy=false; renderDxWorkspace(); }
+  finally { dxBusy=false; dxThermalActivity=''; renderDxWorkspace(); }
 }
 function dxMergeRows(existing,incoming) {
   const result=structuredClone(existing);
@@ -369,6 +401,7 @@ async function dxExtract(append) {
   const ids=data.selectedUploadIds.filter(id=>thermalUploadIds().includes(id));
   if (!ids.length) return toast('Select at least one uploaded file.');
   if (state.tables.thermal.rows.length && !append && !confirm('Replace extracted rows and corrections? The DX Schedule and manual proposal edits will also be replaced.')) return;
+  dxThermalActivity='Reading and extracting thermal sheets';
   dxBusy=true; renderDxWorkspace();
   try {
     await dxSave({storage:true});
@@ -394,7 +427,7 @@ async function dxExtract(append) {
     await dxSave({storage:true});
     if(extracted.unclearFields?.length) toast(extracted.unclearFields.join('; '));
   } catch(error) { data.extractionError=error.message || 'Extraction failed'; toast(data.extractionError); await dxSave({storage:true}).catch(()=>{}); }
-  finally { dxBusy=false; renderDxWorkspace(); }
+  finally { dxBusy=false; dxThermalActivity=''; renderDxWorkspace(); }
 }
 function dxPreview(ids) {
   const files=ids.map(findUpload).filter(Boolean);
