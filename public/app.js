@@ -1790,7 +1790,6 @@ function salesDashboardHtml() {
   const leadStats = salesLeadStats(leads);
   const quotationStats = salesDashboardQuotationStats(quotations);
   const projectStats = salesDashboardProjectStats(projects);
-  const inventoryStats = salesDashboardInventoryStats();
   const todayItems = salesDashboardTodayItems({ leads, quotations, projects, orders });
   const quotePendingPct = salesDashboardPercent(leadStats.quotePending, Math.max(leads.length, 1));
   const fullyPaidOrders = orders.filter(order => norm(order.paymentStatus) === "FULLYPAID").length;
@@ -1798,32 +1797,32 @@ function salesDashboardHtml() {
   const installationPending = projects.filter(project => norm(project.status).includes("INSTALLATION")).length;
   const completedProjects = projects.filter(project => ["COMPLETED", "CLOSED", "JOBINHAND"].includes(norm(project.status))).length;
   return `
-    ${salesPageHeader("Dashboard", "Overview of leads, quotations, orders, inventory and sales activity.", `<button class="sales-secondary" data-sales-export="leads">Export CSV</button><button class="sales-primary" data-sales-action="new-lead">+ New Enquiry</button>`)}
+    ${salesPageHeader("Dashboard", "Overview of leads, quotations, orders and sales activity.", `<button class="sales-secondary" data-sales-export="leads">Export CSV</button><button class="sales-primary" data-sales-action="new-lead">+ New Enquiry</button>`)}
     <div class="sales-dashboard-kpis">
       ${salesDashboardKpi("Open Enquiries", leadStats.open, "Active enquiries", "blue")}
       ${salesDashboardKpi("Quotation Pending", leadStats.quotePending, "Quotes not prepared", "orange")}
       ${salesDashboardKpi("Total Orders", orderStats.totalOrders, "Confirmed orders", "blue")}
       ${salesDashboardKpi("Payment Received", salesCompactMoney(orderStats.received), "Including VAT", "green")}
       ${salesDashboardKpi("Active Projects", projectStats.active, "In progress", "purple")}
-      ${salesDashboardKpi("Total Stock Units", inventoryStats.totalStockUnits, "All AC Units in Stock", "red")}
+      ${salesDashboardKpi("Order Value", salesCompactMoney(orderStats.orderValue), "Including VAT", "red")}
     </div>
     <div class="sales-dashboard-layout">
       <div class="sales-dashboard-main">
         <div class="sales-dashboard-card-grid">
-          ${salesDashboardListCard("Leads & Enquiries", [
-            ["New Enquiries", leadStats.open],
-            ["Follow-up Due", leadStats.followDue],
-            ["Tender Jobs", leads.filter(lead => lead.status === "Tender").length],
-            ["Pipeline Value", salesCompactMoney(leadStats.pipelineValue)]
-          ], "View All Enquiries", "leads")}
-          ${salesDashboardQuotationCard(quotationStats)}
           ${salesDashboardListCard("Active Projects", [
             ["Ongoing", projectStats.ongoing],
             ["Site Visit Done", projectStats.siteVisit],
             ["Negotiation", projectStats.negotiation],
             ["Quotation Sent", projectStats.quotationSent]
           ], "View All Projects", "projects")}
-          ${salesDashboardInventoryCard(inventoryStats)}
+          ${salesDashboardQuotationCard(quotationStats)}
+          ${salesDashboardListCard("Leads & Enquiries", [
+            ["New Enquiries", leadStats.open],
+            ["Follow-up Due", leadStats.followDue],
+            ["Tender Jobs", leads.filter(lead => lead.status === "Tender").length],
+            ["Pipeline Value", salesCompactMoney(leadStats.pipelineValue)]
+          ], "View All Enquiries", "leads")}
+          ${salesDashboardOrderBookCard(orderStats)}
         </div>
       </div>
       <aside class="sales-dashboard-today sales-card">
@@ -1886,17 +1885,18 @@ function salesDashboardQuotationCard(stats) {
   `;
 }
 
-function salesDashboardInventoryCard(stats) {
+function salesDashboardOrderBookCard(stats) {
   return `
     <section class="sales-card sales-dashboard-module">
-      <div class="sales-card-title"><h3>Inventory</h3><button data-go-inventory="dashboard">›</button></div>
-      <div class="sales-dashboard-mini-grid inventory-mini">
-        <div><span>Total Models</span><strong>${stats.totalModels}</strong></div>
-        <div><span>Total Stock Units</span><strong>${stats.totalStockUnits}</strong></div>
-        <div><span>Recent Stock In</span><strong class="success-text">${stats.recentIn}</strong></div>
-        <div><span>Recent Stock Out</span><strong class="danger-text">${stats.recentOut}</strong></div>
+      <div class="sales-card-title"><h3>Order Book</h3><button data-sales-goto="orderBook" aria-label="View Order Book">›</button></div>
+      <div class="sales-dashboard-mini-grid">
+        <div><span>Total Orders</span><strong>${stats.totalOrders}</strong></div>
+        <div><span>Order Value</span><strong>${escapeHtml(salesCompactMoney(stats.orderValue))}</strong></div>
+        <div><span>Payment Received</span><strong class="success-text">${escapeHtml(salesCompactMoney(stats.received))}</strong></div>
+        <div><span>Balance to Receive</span><strong class="danger-text">${escapeHtml(salesCompactMoney(stats.balance))}</strong></div>
       </div>
-      <button class="sales-card-link" data-go-inventory="dashboard">Open Inventory</button>
+      <button class="sales-card-link" data-sales-goto="orderBook">View All Orders</button>
+      <button class="sales-card-link" type="button" disabled title="Order Book Summary page to be defined">Order Book Summary</button>
     </section>
   `;
 }
@@ -4082,6 +4082,7 @@ function toggleSuggestionList(input) {
 }
 
 function salesOrderBookHtml() {
+  if (["material", "delivery", "installation", "closed"].includes(salesOrderBookTab)) salesOrderBookTab = "all";
   const orders = salesOrderBookRows();
   const searched = salesOrderBookSearch(orders);
   const filtered = salesOrderBookAdvancedFilter(searched);
@@ -4115,18 +4116,14 @@ function salesOrderBookHtml() {
         <section class="order-book-table-card">
           <div class="pipeline-tabs">
             ${salesOrderBookTabButton("all", "All Orders")}
-            ${salesOrderBookTabButton("material", "Material Pending")}
-            ${salesOrderBookTabButton("delivery", "Delivery Pending")}
-            ${salesOrderBookTabButton("installation", "Installation Pending")}
             ${salesOrderBookTabButton("partial", "Partially Done")}
             ${salesOrderBookTabButton("completed", "Completed")}
             ${salesOrderBookTabButton("invoice", "Invoice Pending")}
             ${salesOrderBookTabButton("payment", "Payment Pending")}
-            ${salesOrderBookTabButton("closed", "Closed")}
           </div>
           <div class="pipeline-table-wrap">
             <table class="sales-table order-book-table">
-              <thead><tr><th>Order No</th><th>Customer</th><th>Job Description</th><th>Order Value</th><th>Received</th><th>Balance</th><th>Order Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Order No</th><th>Customer</th><th>Job Description</th><th>Order Value</th><th>Received</th><th>Balance</th><th>Order Status</th><th><span class="order-book-actions-label">Actions</span></th></tr></thead>
               <tbody>${rows.map(order => salesOrderBookRow(order)).join("") || `<tr><td colspan="8" class="pipeline-empty">No orders found.</td></tr>`}</tbody>
             </table>
           </div>
@@ -4208,26 +4205,27 @@ function normalizeOrderBookOrder(order = {}, index = 0) {
   const balance = orderValue - received;
   const paymentStatus = orderBookPaymentStatus(received, balance, invoiceAmount);
   const invoiceStatus = orderBookInvoiceStatus(invoices, invoiceAmount, orderValue);
-  const status = orderBookStatusFromPayment(orderValue, received);
+  const status = order.sourceValueMissing ? "Payment Pending" : orderBookStatusFromPayment(orderValue, received);
   const equipmentValue = salesNumber(order.equipmentValue);
   const equipmentCost = salesNumber(order.equipmentCost);
-  const equipmentProfit = salesNumber(order.equipmentProfit || (equipmentValue && equipmentCost ? equipmentValue - equipmentCost : 0));
+  const equipmentProfit = equipmentValue - equipmentCost;
   const grossMargin = salesNumber(order.grossMargin || (equipmentValue ? (equipmentProfit / equipmentValue) * 100 : 0));
   return {
     ...order,
     id: order.id || `order-${index + 1}`,
     orderNo: order.orderNo || `CZ${String(new Date().getFullYear()).slice(-2)}-${String(1000 + index + 1)}`,
-    date: formatSalesDateInput(order.date || todaySalesDateInput()),
+    date: order.sourceDateMissing ? "" : formatSalesDateInput(order.date || todaySalesDateInput()),
     customer: order.customer || "",
     jobDescription: order.jobDescription || order.project || "",
     location: order.location || "",
     contactPerson: order.contactPerson || "",
     contactNumber: order.contactNumber || "",
-    division: order.division || "Project/Inst",
-    brand: order.brand || "Daikin",
+    division: order.importedFromOrderBook ? order.division || "" : order.division || "Project/Inst",
+    typeOfUnit: order.typeOfUnit || "",
+    brand: order.importedFromOrderBook ? order.brand || "" : order.brand || "Daikin",
     salesPerson: order.salesPerson || "",
     status,
-    deliveryStatus: order.deliveryStatus || "Pending Delivery",
+    deliveryStatus: !order.sourceValueMissing && Math.abs(balance) <= 0.01 ? "Delivered" : order.deliveryStatus || "Pending Delivery",
     remarks: order.remarks || "",
     valueWithoutVat,
     vatAmount,
@@ -4235,6 +4233,7 @@ function normalizeOrderBookOrder(order = {}, index = 0) {
     installationValue: salesNumber(order.installationValue),
     equipmentValue,
     equipmentCost,
+    otherCosts: salesNumber(order.otherCosts),
     equipmentProfit,
     grossMargin,
     paymentReceived: received,
@@ -4260,13 +4259,14 @@ function orderBookPaymentStatus(received, balance, invoiceAmount = 0) {
 function orderBookStatusFromPayment(orderValue, paymentReceived) {
   const value = salesNumber(orderValue);
   const received = salesNumber(paymentReceived);
+  if (Math.abs(value - received) <= 0.01) return "Completed";
   if (received <= 0) return "Payment Pending";
   if (value > 0 && received >= value - 0.01) return "Completed";
   return "Partially Paid";
 }
 
 function orderBookInvoiceStatus(invoices, invoiceAmount, orderValue) {
-  if (!invoices.length && !invoiceAmount) return "Not Attached";
+  if (!invoices.some(invoice => invoice.fileData)) return "Not Attached";
   if (invoiceAmount > 0 && invoiceAmount < orderValue) return "Partial";
   return "Attached";
 }
@@ -4335,9 +4335,6 @@ function orderMatchesOrderBookDateRange(order) {
 }
 
 function salesOrderBookTabFilter(rows) {
-  if (salesOrderBookTab === "material") return rows.filter(order => norm(order.status).includes("MATERIAL"));
-  if (salesOrderBookTab === "delivery") return rows.filter(order => norm(order.status).includes("DELIVERY") || norm(order.status).includes("DELIVERED"));
-  if (salesOrderBookTab === "installation") return rows.filter(order => norm(order.status).includes("INSTALLATION"));
   if (salesOrderBookTab === "partial") return rows.filter(order => norm(order.status).includes("PARTIALLY"));
   if (salesOrderBookTab === "completed") return rows.filter(order => norm(order.status).includes("COMPLETED"));
   if (salesOrderBookTab === "invoice") return rows.filter(order => order.invoiceStatus !== "Attached" || norm(order.status).includes("INVOICE"));
@@ -4357,13 +4354,13 @@ function salesOrderBookRow(order) {
       <td class="${order.balance > 0 ? "money-danger" : "money-positive"}">${salesMoneyPlain(Math.max(0, order.balance))}</td>
       <td>${salesOrderBookBadge(order.status, "status")}</td>
       <td>
-        <div class="pipeline-row-actions">
-          <button data-sales-action="view-order-book" data-sales-id="${escapeHtml(order.id)}">View</button>
-          <button data-sales-action="edit-order-book" data-sales-id="${escapeHtml(order.id)}">Edit</button>
+        <div class="order-book-row-menu">
           ${rowMenu([
+            { label: "View", action: "view-order-book", id: order.id },
+            { label: "Edit", action: "edit-order-book", id: order.id },
             { label: "Upload Invoice", action: "order-book-invoice", id: order.id },
             { label: "Delete", action: "delete-order-book", id: order.id, danger: true }
-          ])}
+          ], true)}
         </div>
       </td>
     </tr>
@@ -4403,9 +4400,11 @@ function salesOrderBookDetailPanel(order) {
         ["Customer", order.customer],
         ["Job Description", order.jobDescription],
         ["Division", order.division],
+        ["Type of Unit", order.typeOfUnit],
         ["Brand", order.brand],
         ["Sales Person", order.salesPerson],
         ["Order Status", order.status],
+        ["Delivery Status", order.deliveryStatus],
         ["Remarks", order.remarks]
       ])}
       ${salesDetailSection("Commercial Summary", [
@@ -4415,16 +4414,18 @@ function salesOrderBookDetailPanel(order) {
         ["Installation without VAT", salesMoney(order.installationValue)],
         ["Equipment without VAT", salesMoney(order.equipmentValue)],
         ["Equipment Cost", salesMoney(order.equipmentCost)],
+        ["Other Costs without VAT", salesMoney(order.otherCosts)],
         ["Equipment Profit", salesMoney(order.equipmentProfit)],
         ["Gross Margin", `${order.grossMargin.toFixed(2)}%`]
       ])}
       ${salesDetailSection("Payment Summary", [
         ["Order Value Inc. VAT", salesMoney(order.orderValue)],
-        ["Invoice Amount", salesMoney(order.invoiceAmount)],
+        [order.importedFromOrderBook ? "Payment Entries Total" : "Invoice Amount", salesMoney(order.invoiceAmount)],
         ["Payment Received", salesMoney(order.paymentReceived)],
         ["Balance to Receive", salesMoney(Math.max(0, order.balance))],
         ["Payment Status", order.paymentStatus]
       ])}
+      ${order.importReview ? salesDetailSection("Import Review", [["Check source", order.importReview]]) : ""}
       <section class="pipeline-detail-section">
         <h4>Purchase Order Attachment</h4>
         <dl>
@@ -4439,9 +4440,9 @@ function salesOrderBookDetailPanel(order) {
         </div>
       </section>
       <section class="pipeline-detail-section">
-        <h4>Invoice Attachments</h4>
+        <h4>Payment Records</h4>
         <div class="order-book-mini-table">
-          ${(order.invoices || []).map((invoice, index) => `<div><button class="pipeline-link" data-menu-action="download-order-book-invoice" data-menu-id="${escapeHtml(order.id)}" data-invoice-index="${index}">${escapeHtml(invoice.invoiceNo || invoice.fileName || "Invoice")}</button><span>${escapeHtml(invoice.invoiceDate || "")}</span><span>${invoice.totalAmount ? salesMoney(invoice.totalAmount) : "-"}</span></div>`).join("") || `<p class="pipeline-muted">No invoices attached yet.</p>`}
+          ${(order.invoices || []).map((invoice, index) => `<div>${invoice.fileData ? `<button class="pipeline-link" data-menu-action="download-order-book-invoice" data-menu-id="${escapeHtml(order.id)}" data-invoice-index="${index}">${escapeHtml(invoice.invoiceNo || invoice.fileName || "Invoice")}</button>` : `<span>${escapeHtml(invoice.invoiceNo || "Payment")}</span>`}<span>${escapeHtml(invoice.invoiceDate || "")}</span><span>${invoice.totalAmount ? salesMoney(invoice.totalAmount) : "-"}</span><span>${escapeHtml(invoice.remarks || "")}</span></div>`).join("") || `<p class="pipeline-muted">No payments recorded yet.</p>`}
         </div>
       </section>
       <section class="pipeline-detail-section">
@@ -4467,6 +4468,7 @@ function blankOrderBookOrder() {
     contactNumber: "",
     salesPerson: currentUser?.name || "",
     division: "Project/Inst",
+    typeOfUnit: "",
     brand: "Daikin",
     status: "Order Confirmed",
     remarks: "",
@@ -4476,6 +4478,7 @@ function blankOrderBookOrder() {
     installationValue: 0,
     equipmentValue: 0,
     equipmentCost: 0,
+    otherCosts: 0,
     paymentReceived: 0,
     invoices: [],
     payments: [],
@@ -4513,8 +4516,9 @@ function openOrderBookForm(orderId = "") {
           orderBookField("contactNumber", "Contact Number", item.contactNumber),
           orderBookField("salesPerson", "Sales Person", item.salesPerson),
           orderBookField("division", "Division", item.division, "select", ["Project/Inst", "Maint/Replace", "Trading"]),
+          orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit),
           orderBookField("brand", "Brand", item.brand),
-          `<label>Upload PO<button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small></label>`,
+          `<div class="order-book-po-upload"><span>Upload PO</span><button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><div class="order-book-po-file"><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small><button type="button" class="order-book-po-remove" id="removeOrderBookPoBtn" title="Remove uploaded PO" aria-label="Remove uploaded PO" ${item.po?.fileName ? "" : "hidden"}>×</button></div></div>`,
           `<textarea id="orderBookUploadedPoJson" hidden>${escapeHtml(item.po ? JSON.stringify(item.po) : "")}</textarea>`
         ])}
         ${orderBookFormSection("Commercial Details", [
@@ -4523,7 +4527,8 @@ function openOrderBookForm(orderId = "") {
           orderBookField("orderValue", "Value including VAT", item.orderValue, "money"),
           orderBookField("installationValue", "Installation without VAT", item.installationValue, "money"),
           orderBookField("equipmentValue", "Equipment without VAT", item.equipmentValue, "money"),
-          orderBookField("equipmentCost", "Equipment Cost", item.equipmentCost, "money")
+          orderBookField("equipmentCost", "Equipment Cost", item.equipmentCost, "money"),
+          orderBookField("otherCosts", "Other Costs without VAT", item.otherCosts, "money")
         ])}
         ${orderBookFormSection("Payment & Job Status", [
           orderBookField("paymentReceived", "Payment Received Inc. VAT", item.paymentReceived, "money"),
@@ -4542,8 +4547,25 @@ function openOrderBookForm(orderId = "") {
   document.body.appendChild(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#scanOrderBookPoBtn")?.addEventListener("click", () => scanOrderBookPoIntoForm(modal));
+  modal.querySelector("#removeOrderBookPoBtn")?.addEventListener("click", () => {
+    const hidden = modal.querySelector("#orderBookUploadedPoJson");
+    if (hidden) {
+      hidden.value = "";
+      hidden.dataset.removed = "true";
+    }
+    modal.dataset.poScanToken = "";
+    modal.querySelector("#orderBookPoScanStatus").textContent = "Upload PO to auto-fill order details";
+    modal.querySelector("#removeOrderBookPoBtn").hidden = true;
+  });
   modal.querySelector("#scanOrderBookInvoiceBtn")?.addEventListener("click", () => scanOrderBookInvoiceIntoForm(modal));
   modal.addEventListener("input", event => {
+    if (event.target.matches('[data-order-book-field="valueWithoutVat"]')) {
+      const value = salesNumber(event.target.value);
+      const vat = Math.round(value * 0.05 * 100) / 100;
+      modal.querySelector('[data-order-book-field="vatAmount"]').value = vat.toFixed(2);
+      modal.querySelector('[data-order-book-field="orderValue"]').value = (value + vat).toFixed(2);
+      updateOrderBookStatusFromPayment(modal);
+    }
     if (event.target.matches("[data-order-invoice-field]")) updateOrderBookPaymentReceivedFromInvoices(modal);
     if (event.target.matches('[data-order-book-field="orderValue"], [data-order-book-field="paymentReceived"], [data-order-invoice-field="totalAmount"]')) updateOrderBookStatusFromPayment(modal);
   });
@@ -4557,7 +4579,9 @@ function openOrderBookForm(orderId = "") {
   modal.querySelector("#saveOrderBookBtn").addEventListener("click", async () => {
     const payload = collectOrderBookPayload(modal, item);
     if (!payload.orderNo || !payload.customer) return alert("Order No and customer are required.");
-    const savedCustomer = requireSavedSalesCustomer(payload.customer, "Order customer");
+    const savedCustomer = existing && existing.importedFromOrderBook && norm(payload.customer) === norm(existing.customer)
+      ? { name: existing.customer }
+      : requireSavedSalesCustomer(payload.customer, "Order customer");
     if (!savedCustomer) return;
     payload.customer = savedCustomer.name;
     salesCrmState = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(payload) });
@@ -4651,7 +4675,7 @@ function collectOrderBookPayload(modal, base) {
   modal.querySelectorAll("[data-order-book-field]").forEach(input => {
     const key = input.dataset.orderBookField;
     const value = input.value.trim();
-    payload[key] = ["valueWithoutVat", "vatAmount", "orderValue", "installationValue", "equipmentValue", "equipmentCost", "paymentReceived"].includes(key)
+    payload[key] = ["valueWithoutVat", "vatAmount", "orderValue", "installationValue", "equipmentValue", "equipmentCost", "otherCosts", "paymentReceived"].includes(key)
       ? salesNumber(value)
       : key === "date" ? formatSalesDateInput(value) : value;
   });
@@ -4661,8 +4685,18 @@ function collectOrderBookPayload(modal, base) {
   if (payload.invoices.length) payload.paymentReceived = invoicePaymentTotal;
   if (!payload.vatAmount && payload.valueWithoutVat) payload.vatAmount = payload.valueWithoutVat * 0.05;
   if (!payload.orderValue && payload.valueWithoutVat) payload.orderValue = payload.valueWithoutVat + payload.vatAmount;
+  if (payload.valueWithoutVat || payload.orderValue) payload.sourceValueMissing = false;
+  if (payload.date) payload.sourceDateMissing = false;
+  if (payload.importReview) {
+    payload.importReview = payload.importReview.split("; ").filter(note =>
+      !(!payload.sourceValueMissing && note.startsWith("Value without VAT is blank")) &&
+      !(!payload.sourceDateMissing && note.startsWith("Order date is blank"))
+    ).join("; ");
+  }
   payload.status = orderBookStatusFromPayment(payload.orderValue, payload.paymentReceived);
+  if (!payload.sourceValueMissing && Math.abs(payload.orderValue - payload.paymentReceived) <= 0.01) payload.deliveryStatus = "Delivered";
   const uploadedPoJson = modal.querySelector("#orderBookUploadedPoJson")?.value || "";
+  if (modal.querySelector("#orderBookUploadedPoJson")?.dataset.removed === "true") payload.po = {};
   if (uploadedPoJson) {
     try {
       payload.po = { ...(payload.po || {}), ...JSON.parse(uploadedPoJson) };
@@ -4708,7 +4742,10 @@ async function scanOrderBookPoIntoForm(modal) {
   input.onchange = async () => {
     const file = input.files?.[0];
     if (!file) return;
+    const scanToken = `${Date.now()}-${Math.random()}`;
+    modal.dataset.poScanToken = scanToken;
     const status = modal.querySelector("#orderBookPoScanStatus");
+    const previousStatus = status?.textContent || "";
     if (status) status.textContent = "Scanning PO...";
     try {
       const form = new FormData();
@@ -4717,17 +4754,18 @@ async function scanOrderBookPoIntoForm(modal) {
         api("/api/sales-crm/order-book/extract-po", { method: "POST", body: form }),
         fileToStoredAttachment(file)
       ]);
+      if (!modal.isConnected || modal.dataset.poScanToken !== scanToken) return;
       const extracted = result.order || {};
       const matchedCustomer = findSalesCustomerByName(extracted.customer);
-      fillOrderBookField(modal, "customer", matchedCustomer ? matchedCustomer.name : "");
-      fillOrderBookField(modal, "jobDescription", extracted.jobDescription);
-      fillOrderBookField(modal, "location", extracted.location);
-      fillOrderBookField(modal, "contactPerson", extracted.contactPerson);
-      fillOrderBookField(modal, "contactNumber", extracted.contactNumber);
-      fillOrderBookField(modal, "division", extracted.division);
-      fillOrderBookField(modal, "valueWithoutVat", extracted.valueWithoutVat);
-      fillOrderBookField(modal, "vatAmount", extracted.vatAmount);
-      fillOrderBookField(modal, "orderValue", extracted.orderValue);
+      fillOrderBookField(modal, "customer", matchedCustomer ? matchedCustomer.name : "", true);
+      fillOrderBookField(modal, "jobDescription", extracted.jobDescription, true);
+      fillOrderBookField(modal, "location", extracted.location, true);
+      fillOrderBookField(modal, "contactPerson", extracted.contactPerson, true);
+      fillOrderBookField(modal, "contactNumber", extracted.contactNumber, true);
+      fillOrderBookField(modal, "division", extracted.division, true);
+      fillOrderBookField(modal, "valueWithoutVat", extracted.valueWithoutVat, true);
+      fillOrderBookField(modal, "vatAmount", extracted.vatAmount, true);
+      fillOrderBookField(modal, "orderValue", extracted.orderValue, true);
       updateOrderBookStatusFromPayment(modal);
       const poPayload = {
         ...storedFile,
@@ -4736,11 +4774,16 @@ async function scanOrderBookPoIntoForm(modal) {
         poValue: salesNumber(extracted.orderValue || 0)
       };
       const hidden = modal.querySelector("#orderBookUploadedPoJson");
-      if (hidden) hidden.value = JSON.stringify(poPayload);
-      if (status) status.textContent = result.message || `${file.name} scanned. Review before saving.`;
+      if (hidden) {
+        hidden.value = JSON.stringify(poPayload);
+        hidden.dataset.removed = "false";
+      }
+      if (status) status.textContent = file.name;
+      modal.querySelector("#removeOrderBookPoBtn").hidden = false;
       toast(result.message || "PO scanned. Review and save the order.");
     } catch (error) {
-      if (status) status.textContent = "Could not scan PO. Fill details manually.";
+      if (modal.dataset.poScanToken !== scanToken) return;
+      if (status) status.textContent = previousStatus || "Could not scan PO. Fill details manually.";
       toast(error.message || "Could not scan PO");
     }
   };
@@ -4796,10 +4839,11 @@ async function scanOrderBookInvoiceIntoForm(modal) {
   input.click();
 }
 
-function fillOrderBookField(modal, key, value) {
+function fillOrderBookField(modal, key, value, onlyEmpty = false) {
   if (value === undefined || value === null || value === "") return;
   const field = modal.querySelector(`[data-order-book-field="${CSS.escape(key)}"]`);
   if (!field) return;
+  if (onlyEmpty && String(field.value).trim() !== "") return;
   field.value = field.type === "date" ? nativeDateValue(value)
     : ["valueWithoutVat", "vatAmount", "orderValue", "paymentReceived"].includes(key) ? salesNumber(value) || "" : value;
 }
@@ -9716,8 +9760,8 @@ async function runInventoryWrite(button, work, busyLabel = "Saving...") {
   }
 }
 
-function rowMenu(items) {
-  return `<div class="row-menu"><button class="menu-button inventory-menu-button" data-row-menu>...</button><div class="row-menu-list hidden">${items.map(item => `<button class="${item.danger ? "danger" : ""}" data-menu-action="${item.action}" data-menu-id="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>`;
+function rowMenu(items, vertical = false) {
+  return `<div class="row-menu"><button class="menu-button inventory-menu-button${vertical ? " order-book-action-button" : ""}" data-row-menu ${vertical ? 'title="Order actions" aria-label="Order actions"' : ""}>${vertical ? '<img src="/assets/dx-icons/ellipsis-vertical.svg" alt="">' : "..."}</button><div class="row-menu-list hidden">${items.map(item => `<button class="${item.danger ? "danger" : ""}" data-menu-action="${item.action}" data-menu-id="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`).join("")}</div></div>`;
 }
 
 function handleInventoryClick(event) {

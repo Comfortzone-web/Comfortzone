@@ -2632,17 +2632,22 @@ function normalizeSalesItem(collection, input, store) {
     return {
       id: base.id,
       orderNo: cleanCell(base.orderNo || `CZ${String(new Date().getFullYear()).slice(-2)}-${String(Date.now()).slice(-4)}`),
-      date: cleanCell(base.date || todayDisplayDate()),
+      date: base.sourceDateMissing ? "" : cleanCell(base.date || todayDisplayDate()),
       customer: cleanCell(base.customer || ""),
       jobDescription: cleanCell(base.jobDescription || base.project || ""),
       location: cleanCell(base.location || ""),
       contactPerson: cleanCell(base.contactPerson || ""),
       contactNumber: cleanCell(base.contactNumber || ""),
       salesPerson: cleanCell(base.salesPerson || ""),
-      division: cleanCell(base.division || "Project/Inst"),
-      brand: cleanCell(base.brand || "Daikin"),
-      status: orderBookStatusFromPayment(orderValue, paymentReceived),
-      deliveryStatus: cleanCell(base.deliveryStatus || "Pending Delivery"),
+      division: base.importedFromOrderBook ? cleanCell(base.division || "") : cleanCell(base.division || "Project/Inst"),
+      typeOfUnit: cleanCell(base.typeOfUnit || ""),
+      brand: base.importedFromOrderBook ? cleanCell(base.brand || "") : cleanCell(base.brand || "Daikin"),
+      importedFromOrderBook: base.importedFromOrderBook === true,
+      status: base.sourceValueMissing ? "Payment Pending" : orderBookStatusFromPayment(orderValue, paymentReceived),
+      deliveryStatus: !base.sourceValueMissing && Math.abs(orderValue - paymentReceived) <= 0.01 ? "Delivered" : cleanCell(base.deliveryStatus || "Pending Delivery"),
+      sourceValueMissing: base.sourceValueMissing === true,
+      sourceDateMissing: base.sourceDateMissing === true,
+      importReview: cleanCell(base.importReview || ""),
       remarks: cleanMultilineCell(base.remarks || ""),
       valueWithoutVat,
       vatAmount,
@@ -2650,6 +2655,7 @@ function normalizeSalesItem(collection, input, store) {
       installationValue: Number(String(base.installationValue ?? 0).replace(/[^\d.-]/g, "")) || 0,
       equipmentValue: Number(String(base.equipmentValue ?? 0).replace(/[^\d.-]/g, "")) || 0,
       equipmentCost: Number(String(base.equipmentCost ?? 0).replace(/[^\d.-]/g, "")) || 0,
+      otherCosts: Number(String(base.otherCosts ?? 0).replace(/[^\d.-]/g, "")) || 0,
       equipmentProfit: Number(String(base.equipmentProfit ?? 0).replace(/[^\d.-]/g, "")) || 0,
       grossMargin: Number(String(base.grossMargin ?? 0).replace(/[^\d.-]/g, "")) || 0,
       paymentReceived,
@@ -2666,6 +2672,7 @@ function normalizeSalesItem(collection, input, store) {
 function orderBookStatusFromPayment(orderValue, paymentReceived) {
   const value = Number(String(orderValue ?? 0).replace(/[^\d.-]/g, "")) || 0;
   const received = Number(String(paymentReceived ?? 0).replace(/[^\d.-]/g, "")) || 0;
+  if (Math.abs(value - received) <= 0.01) return "Completed";
   if (received <= 0) return "Payment Pending";
   if (value > 0 && received >= value - 0.01) return "Completed";
   return "Partially Paid";
