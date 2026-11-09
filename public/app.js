@@ -1700,7 +1700,7 @@ function salesDeskTopbarConfig() {
       title: "Order Book",
       subtitle: "Track confirmed HVAC orders, job progress, invoices, payments and balance collection.",
       search: "Search by order no, customer, job...",
-      actions: `<button class="sales-secondary" data-sales-order-book-filter-toggle>Filters</button><button class="sales-primary" data-sales-action="new-order-book">New Order</button>`
+      actions: `<button class="sales-secondary" data-sales-order-book-filter-toggle>Filters</button>${isCurrentAdmin() ? `<button class="sales-secondary" data-order-book-import>Import Orders</button>` : ""}<button class="sales-primary" data-sales-action="new-order-book">New Order</button>`
     }
   };
   return configs[salesDeskScreen] || null;
