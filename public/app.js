@@ -4298,6 +4298,7 @@ function salesOrderBookHtml() {
         <div class="order-book-actions">
           <div class="pipeline-search"><input data-sales-search value="${escapeHtml(salesSearchQuery)}" placeholder="Search by order no, customer, job..."><span>Search</span></div>
           <button class="sales-secondary" data-sales-order-book-filter-toggle>Filters</button>
+          ${isCurrentAdmin() ? `<button class="sales-secondary" data-order-book-import>Import Orders</button><input type="file" accept=".json,application/json" data-order-book-import-file hidden>` : ""}
           <button class="sales-primary" data-sales-action="new-order-book">New Order</button>
         </div>
       </div>
@@ -5497,6 +5498,7 @@ async function handleSalesClick(event) {
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
+  if (target.dataset.orderBookImport !== undefined) return $("#salesDeskRoot [data-order-book-import-file]")?.click();
   if (target.dataset.orderSummaryExport !== undefined) return exportOrderBookSummary();
   if (target.dataset.orderSummaryReset !== undefined) {
     orderSummaryYear = String(new Date().getFullYear());
@@ -5863,7 +5865,29 @@ function handleSalesInput(event) {
   updateSalesQuotationDraft(event, false);
 }
 
+async function importOrderBookFile(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const button = $("#salesDeskRoot [data-order-book-import]");
+  if (button) { button.disabled = true; button.textContent = "Importing..."; }
+  try {
+    const parsed = JSON.parse(await file.text());
+    const orders = Array.isArray(parsed) ? parsed : parsed.orderBook;
+    if (!Array.isArray(orders)) throw new Error("Select a JSON file containing Order Book records.");
+    const result = await api("/api/sales-crm/orderBook/import", { method: "POST", body: JSON.stringify({ orders }) });
+    await loadSalesCrm({ force: true });
+    renderSalesDesk();
+    toast(`${result.imported} orders imported; ${result.skipped} already existed. ${result.total} total.`);
+  } catch (error) {
+    toast(error.message || "Order import failed.");
+  } finally {
+    input.value = "";
+    if (button?.isConnected) { button.disabled = false; button.textContent = "Import Orders"; }
+  }
+}
+
 function handleSalesChange(event) {
+  if (event.target.dataset.orderBookImportFile !== undefined) return importOrderBookFile(event.target);
   if (event.target.dataset.orderSummaryFilter) {
     const field = event.target.dataset.orderSummaryFilter;
     if (field === "year") orderSummaryYear = event.target.value;

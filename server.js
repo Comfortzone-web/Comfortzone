@@ -4031,6 +4031,35 @@ async function handleApi(req, res) {
     return send(res, 200, await salesCrmView(store, user));
   }
 
+  if (req.method === "POST" && url.pathname === "/api/sales-crm/orderBook/import") {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const body = await readJson(req);
+    const orders = Array.isArray(body.orders) ? body.orders : body.orderBook;
+    if (!Array.isArray(orders) || orders.length > 500 || orders.some(order => !order || typeof order !== "object" || !cleanCell(order.orderNo))) {
+      return send(res, 400, { error: "Select an Order Book backup with up to 500 numbered orders." });
+    }
+    const settings = await readSettings();
+    const assignees = orders.map(order => {
+      if (cleanCell(order.salesPerson).toLowerCase() === "others") return null;
+      return settings.users.find(entry => entry.active !== false && cleanCell(entry.name).toLowerCase() === cleanCell(order.salesPerson).toLowerCase());
+    });
+    const missing = [...new Set(orders.filter((order, index) => cleanCell(order.salesPerson).toLowerCase() !== "others" && !assignees[index]).map(order => cleanCell(order.salesPerson)))];
+    if (missing.length) return send(res, 422, { error: `Create or activate these Login Access users first: ${missing.join(", ")}` });
+    const store = await readSalesCrm();
+    const existing = new Set(store.orderBook.map(order => cleanCell(order.orderNo).toLowerCase()));
+    let imported = 0;
+    for (const [index, order] of orders.entries()) {
+      const number = cleanCell(order.orderNo).toLowerCase();
+      if (existing.has(number)) continue;
+      const assignee = assignees[index];
+      store.orderBook.push({ ...order, salesPersonId: assignee?.id || "", ownerId: assignee?.id || "" });
+      existing.add(number);
+      imported++;
+    }
+    if (imported) await writeSalesCrm(store);
+    return send(res, 200, { imported, skipped: orders.length - imported, total: store.orderBook.length });
+  }
+
   if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
