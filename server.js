@@ -292,7 +292,8 @@ function defaultSettings() {
         active: true
       }
     ],
-    attachments: []
+    attachments: [],
+    salesTargets: []
   };
 }
 
@@ -308,7 +309,8 @@ function normalizeSettings(parsed = {}) {
         ? { ...user, role: "MTS" }
         : user
     ),
-    attachments: Array.isArray(parsed.attachments) ? parsed.attachments : []
+    attachments: Array.isArray(parsed.attachments) ? parsed.attachments : [],
+    salesTargets: Array.isArray(parsed.salesTargets) ? parsed.salesTargets : []
   };
   if (!settings.users.some(user => String(user.role).toLowerCase() === "admin")) settings.users.unshift(fallback.users[0]);
   return settings;
@@ -779,6 +781,7 @@ function publicSettings(settings, user) {
     company: settings.company,
     company2: settings.company2,
     attachments: settings.attachments,
+    salesTargets: settings.salesTargets || [],
     users: isStaff(user) ? [] : (settings.users || []).map(({ passwordHash: _passwordHash, ...entry }) => entry)
   };
 }
@@ -891,6 +894,15 @@ function staffNextQuotationNo(user, quotations = []) {
 
 function staffOwns(item, user) {
   return item?.ownerId === user.id;
+}
+
+function staffOwnsOrder(item, user) {
+  const salespersonId = cleanCell(item?.salesPersonId || "");
+  if (salespersonId) return salespersonId === user.id;
+  const owner = cleanCell(item?.ownerId || "");
+  if (owner) return owner === user.id;
+  const assigned = cleanCell(item?.salesPerson || "").toLowerCase();
+  return !!assigned && [user.name, user.email].some(value => cleanCell(value || "").toLowerCase() === assigned);
 }
 
 function salesProjectOwnerIds(project) {
@@ -1569,6 +1581,20 @@ function normalizeSalesCrm(parsed = {}) {
 
 async function readSalesCrm() {
   const store = await readStore("sales-crm", SALES_CRM_FILE, defaultSalesCrm, normalizeSalesCrm);
+  const legacyOrders = store.orderBook.filter(order => !order.salesPersonId && cleanCell(order.salesPerson).toLowerCase() !== "others");
+  if (legacyOrders.length) {
+    const users = (await readSettings()).users || [];
+    const legacyNames = { abhishek: "Abhishek", amal: "Amal Saimon", "amal saimon": "Amal Saimon", yoonus: "Yoonus", alaa: "Alaa Alani", "alaa alani": "Alaa Alani" };
+    for (const order of legacyOrders) {
+      const name = legacyNames[cleanCell(order.salesPerson).toLowerCase()];
+      const matches = users.filter(entry => entry.name.toLowerCase() === name?.toLowerCase());
+      const assignee = matches.length === 1 ? matches[0] : null;
+      order.salesPerson = assignee?.name || "Others";
+      order.salesPersonId = assignee?.id || "";
+      order.ownerId = assignee?.id || "";
+    }
+    await writeSalesCrm(store);
+  }
   const legacyProjects = store.projects.filter(project => !salesProjectOwnerIds(project).length);
   if (legacyProjects.length) {
     const settings = await readSettings();
@@ -1661,17 +1687,21 @@ function mergedSalesCustomers(salesCustomers = [], inventoryCustomers = []) {
 
 async function salesCrmView(store, user) {
   const inventory = await readInventory();
+  const appSettings = await readSettings();
   const staff = isStaff(user);
   return {
     ...store,
     settings: staff ? {
       ...store.settings,
       nextEnquiryNo: staffNextEnquiryNo(user, store.leads),
-      nextQuotationNo: staffNextQuotationNo(user, store.quotations)
-    } : store.settings,
+      nextQuotationNo: staffNextQuotationNo(user, store.quotations),
+      salesTargets: (appSettings.salesTargets || []).filter(entry => entry.userId === user.id),
+      salesPeople: [{ id: user.id, name: user.name, email: user.email }]
+    } : { ...store.settings, salesTargets: appSettings.salesTargets || [], salesPeople: appSettings.users.map(({ id, name, email, role, active }) => ({ id, name, email, role, active })) },
     leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
     projects: staff ? store.projects.filter(item => salesProjectAssignedTo(item, user)) : store.projects,
+    orderBook: staff ? store.orderBook.filter(item => staffOwnsOrder(item, user)) : store.orderBook,
     customers: mergedSalesCustomers(store.customers || [], inventory.customers || [])
   };
 }
@@ -2639,6 +2669,8 @@ function normalizeSalesItem(collection, input, store) {
       contactPerson: cleanCell(base.contactPerson || ""),
       contactNumber: cleanCell(base.contactNumber || ""),
       salesPerson: cleanCell(base.salesPerson || ""),
+      salesPersonId: cleanCell(base.salesPersonId || ""),
+      ownerId: cleanCell(base.ownerId || ""),
       division: base.importedFromOrderBook ? cleanCell(base.division || "") : cleanCell(base.division || "Project/Inst"),
       typeOfUnit: cleanCell(base.typeOfUnit || ""),
       brand: base.importedFromOrderBook ? cleanCell(base.brand || "") : cleanCell(base.brand || "Daikin"),
@@ -3489,6 +3521,23 @@ async function handleApi(req, res) {
     return send(res, 200, { user, settings: publicSettings(req.authSettings, user) });
   }
 
+  if (req.method === "PUT" && url.pathname === "/api/settings/sales-targets") {
+    if (!isAdmin(user)) return sendForbidden(res);
+    const body = await readJson(req);
+    const month = cleanCell(body.effectiveMonth || "");
+    const userId = cleanCell(body.userId || "");
+    const amount = Number(body.amount);
+    const dubaiParts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Dubai", year: "numeric", month: "2-digit" }).formatToParts(new Date());
+    const currentMonth = `${dubaiParts.find(part => part.type === "year").value}-${dubaiParts.find(part => part.type === "month").value}`;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || month < currentMonth || !userId || !Number.isFinite(amount) || amount < 0) return send(res, 400, { error: "Select this month or a future month, a salesperson, and a valid target" });
+    const settings = await readSettings();
+    if (!settings.users.some(entry => entry.id === userId && entry.active !== false)) return send(res, 400, { error: "Salesperson not found" });
+    settings.salesTargets = (settings.salesTargets || []).filter(entry => !(entry.userId === userId && entry.effectiveMonth === month));
+    settings.salesTargets.push({ userId, effectiveMonth: month, amount });
+    await writeSettings(settings);
+    return send(res, 200, { salesTargets: settings.salesTargets });
+  }
+
   if (req.method === "PUT" && url.pathname === "/api/settings/company") {
     if (!isAdmin(user)) return sendForbidden(res);
     const body = await readJson(req);
@@ -3990,6 +4039,14 @@ async function handleApi(req, res) {
     try {
     const store = await readSalesCrm();
     let rawItem = body.item || body;
+    if (collection === "orderBook") {
+      const previous = store.orderBook.find(entry => entry.id === rawItem.id);
+      if (isStaff(user) && previous && !staffOwnsOrder(previous, user)) return sendForbidden(res);
+      const selectedId = isStaff(user) ? user.id : cleanCell(rawItem.salesPersonId || "");
+      const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId && entry.active !== false);
+      if (!assignee && !(isAdmin(user) && selectedId === "others")) return send(res, 400, { error: "Select a Sales Person or Others." });
+      rawItem = { ...rawItem, salesPerson: assignee?.name || "Others", salesPersonId: assignee?.id || "", ownerId: assignee?.id || "" };
+    }
     if (body.fromDxBoq) {
       const DXBoq = require("./public/dx-boq");
       const quoteId = `dx-${body.sourceDxWorkflowId}`;
@@ -4149,6 +4206,7 @@ async function handleApi(req, res) {
     const itemId = decodeURIComponent(parts[4]);
     const deletedItem = (store[collection] || []).find(item => item.id === itemId);
     if (collection === "projects" && isStaff(user) && !salesProjectAssignedTo(deletedItem, user)) return sendForbidden(res);
+    if (collection === "orderBook" && isStaff(user) && !staffOwnsOrder(deletedItem, user)) return sendForbidden(res);
     if (isStaff(user) && ["leads", "quotations"].includes(collection)
       && !staffOwns(deletedItem, user)) return sendForbidden(res);
     if (collection === "customers") {

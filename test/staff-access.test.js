@@ -60,6 +60,21 @@ test("Staff owns sales records and cannot access purchase orders", { timeout: 30
     const bob = await addStaff("Bob", "bob@example.test");
     assert.deepEqual((await read(alice, "/api/settings")).settings.users, []);
 
+    const aliceOrder = await save(alice, "/api/sales-crm/orderBook", { orderNo: "ALICE-001", customer: "Alice Client", salesPersonId: "others" });
+    const bobOrder = await save(bob, "/api/sales-crm/orderBook", { orderNo: "BOB-001", customer: "Bob Client", salesPersonId: "others" });
+    const aliceOrderId = aliceOrder.orderBook[0].id;
+    const bobOrderId = bobOrder.orderBook[0].id;
+    assert.equal(aliceOrder.orderBook[0].salesPerson, "Alice");
+    assert.deepEqual((await read(alice, "/api/sales-crm")).orderBook.map(item => item.id), [aliceOrderId]);
+    assert.deepEqual((await read(bob, "/api/sales-crm")).orderBook.map(item => item.id), [bobOrderId]);
+    assert.equal((await read(admin, "/api/sales-crm")).orderBook.length, 2);
+    assert.equal((await request(alice, "/api/sales-crm/orderBook", json({ id: bobOrderId, orderNo: "BOB-001", customer: "Changed" }))).status, 403);
+    assert.equal((await request(alice, `/api/sales-crm/orderBook/${bobOrderId}`, { method: "DELETE" })).status, 403);
+    const reassigned = await save(admin, "/api/sales-crm/orderBook", { id: aliceOrderId, orderNo: "ALICE-001", customer: "Alice Client", salesPersonId: bobOrder.orderBook[0].salesPersonId });
+    assert.equal(reassigned.orderBook.find(item => item.id === aliceOrderId).salesPerson, "Bob");
+    assert.equal((await read(alice, "/api/sales-crm")).orderBook.length, 0);
+    assert.equal((await read(bob, "/api/sales-crm")).orderBook.length, 2);
+
     const customer = await save(alice, "/api/sales-crm/customers", { name: "Alice Client", contact: "Site Contact", role: "Engineer" });
     const savedCustomer = customer.customers.find(item => item.name === "Alice Client");
     assert.equal(savedCustomer.salesPerson, "Alice");

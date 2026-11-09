@@ -74,6 +74,14 @@ let salesFollowUpMode = "list";
 let salesFollowUpFilter = "";
 let salesFollowUpFilterOpen = false;
 let salesOrderBookTab = "all";
+let orderSummaryYear = "";
+let orderSummaryMonth = "";
+let orderSummaryPerson = "";
+let orderSummaryDivision = "";
+let orderSummaryStatus = "";
+let orderSummaryPage = 1;
+let orderSummarySearch = "";
+let orderSummarySort = "newest";
 let salesOrderBookDetailId = "";
 let salesOrderBookFiltersOpen = false;
 let salesOrderBookFilters = {
@@ -1272,11 +1280,11 @@ function renderSettings() {
     <div class="settings-page">
       <div class="settings-grid">
         ${settingsCompanyCard("company", "Company Details")}
-        ${settingsCompanyCard("company2", "Company 2 Details")}
+        ${settingsAttachmentsCard()}
       </div>
       ${settingsUsersCard()}
-      ${settingsAttachmentsCard()}
       ${settingsCostingCard()}
+      ${settingsSalesTargetsCard()}
     </div>
   `;
 }
@@ -1289,6 +1297,29 @@ function settingsCostingCard() {
       <label class="settings-costing-lock"><input type="checkbox" data-costing-lock ${settings.priceListLocked ? "checked" : ""}><span>Lock Price List</span></label>
     </div>
   </section>`;
+}
+
+function settingsSalesTargetsCard() {
+  const users = (settingsDraft?.users || []).filter(user => user.active !== false && ["ADMIN", "STAFF"].includes(norm(user.role)));
+  const month = new Date().toISOString().slice(0, 7);
+  return `<section class="inventory-card settings-card sales-target-settings">
+    <div class="inventory-topbar"><div><h2>Sales Targets</h2><p class="inventory-muted">Monthly targets take effect from the selected month. Earlier months keep their existing target.</p></div></div>
+    <div class="sales-target-controls"><label>Sales Person<select id="salesTargetPerson">${users.map(user => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || user.email)}</option>`).join("")}</select></label><label>Effective Month<input id="salesTargetMonth" type="month" min="${month}" value="${month}"></label><label>Monthly Target (AED)<input id="salesTargetAmount" type="number" min="0" step="0.01" value="300000"></label><button class="primary-button" type="button" data-save-sales-target>Save Target</button></div>
+    <p class="inventory-muted" id="salesTargetCurrent">Default: AED 300,000 per person per month.</p>
+  </section>`;
+}
+
+async function saveSalesTarget() {
+  const userId = $("#salesTargetPerson")?.value;
+  const effectiveMonth = $("#salesTargetMonth")?.value;
+  const amount = Number($("#salesTargetAmount")?.value);
+  try {
+    const result = await api("/api/settings/sales-targets", { method: "PUT", body: JSON.stringify({ userId, effectiveMonth, amount }) });
+    appSettings.salesTargets = result.salesTargets;
+    settingsDraft.salesTargets = result.salesTargets;
+    if (salesCrmState) salesCrmState.settings.salesTargets = result.salesTargets;
+    toast("Sales target saved");
+  } catch (error) { toast(error.message || "Unable to save sales target"); }
 }
 
 function isCurrentAdmin() {
@@ -1402,6 +1433,7 @@ async function handleSettingsClick(event) {
     return;
   }
   if (target.dataset.saveCompany) return saveSettingsCompany(target.dataset.saveCompany);
+  if (target.dataset.saveSalesTarget !== undefined) return saveSalesTarget();
   if (target.dataset.saveSettingsUsers !== undefined) return saveSettingsUsers(target);
   if (target.dataset.addSettingsUser !== undefined) {
     $("#settingsNewUser")?.classList.remove("hidden");
@@ -1442,6 +1474,12 @@ function handleSettingsInput(event) {
 
 function handleSettingsChange(event) {
   handleSettingsInput(event);
+  if (["salesTargetPerson", "salesTargetMonth"].includes(event.target.id)) {
+    const changes = (settingsDraft?.salesTargets || []).filter(entry => entry.userId === $("#salesTargetPerson")?.value && entry.effectiveMonth <= $("#salesTargetMonth")?.value).sort((a, b) => b.effectiveMonth.localeCompare(a.effectiveMonth));
+    $("#salesTargetAmount").value = changes.length ? changes[0].amount : 300000;
+    $("#salesTargetCurrent").textContent = changes.length ? `Current target: ${salesMoney(changes[0].amount)} from ${changes[0].effectiveMonth}.` : "Default: AED 300,000 per person per month.";
+    return;
+  }
   if (event.target.dataset.costingLock !== undefined) return saveCostingSettings(event.target.checked);
   if (event.target.dataset.settingsUploadLogo) uploadSettingsFile(event.target.files?.[0], "Logo", event.target.dataset.settingsUploadLogo);
   if (event.target.dataset.settingsUploadFile !== undefined) uploadSettingsFile(event.target.files?.[0], "Attachment", "");
@@ -1618,6 +1656,12 @@ function salesDeskTopbarConfig() {
       search: "",
       actions: ""
     },
+    orderSummary: {
+      title: "Order Book Summary",
+      subtitle: "Sales performance and collections from the Order Book.",
+      search: "",
+      actions: `<button class="sales-secondary" data-sales-action="summary-back">Back to Dashboard</button><button class="sales-secondary" data-order-summary-export>Export Excel</button>`
+    },
     leads: {
       title: "Leads & Enquiry Pipeline",
       subtitle: "Track HVAC enquiries, quotations, follow-ups and project opportunities.",
@@ -1734,6 +1778,7 @@ function renderSalesDesk() {
   const root = $("#salesDeskRoot");
   const html = {
     dashboard: salesDashboardHtml,
+    orderSummary: orderBookPremiumSummaryHtml,
     leads: salesLeadsHtml,
     customers: salesCustomersHtml,
     costing: costingSheetHtml,
@@ -1905,9 +1950,153 @@ function salesDashboardOrderBookCard(stats) {
         <div><span>Balance to Receive</span><strong class="danger-text">${escapeHtml(salesCompactMoney(stats.balance))}</strong></div>
       </div>
       <button class="sales-card-link" data-sales-goto="orderBook">View All Orders</button>
-      <button class="sales-card-link" type="button" disabled title="Order Book Summary page to be defined">Order Book Summary</button>
+      <button class="sales-card-link" type="button" data-sales-goto="orderSummary">Order Book Summary</button>
     </section>
   `;
+}
+
+function orderSummaryTarget(person, month, people, changes) {
+  const user = people.find(entry => [entry.name, entry.email].some(value => norm(value) === norm(person)));
+  const applicable = (changes || []).filter(entry => entry.userId === user?.id && entry.effectiveMonth <= month).sort((a, b) => b.effectiveMonth.localeCompare(a.effectiveMonth));
+  return applicable.length ? Number(applicable[0].amount) : 300000;
+}
+
+function orderBookSummaryHtml() {
+  const all = salesOrderBookRows();
+  const people = salesData().settings?.salesPeople || [];
+  const changes = salesData().settings?.salesTargets || [];
+  const year = orderSummaryYear || String(new Date().getFullYear());
+  const years = [...new Set([year, ...all.map(order => nativeDateValue(order.date).slice(0, 4)).filter(Boolean)])].sort().reverse();
+  const names = [...new Set(all.map(order => order.salesPerson).filter(Boolean))].sort();
+  const divisions = [...new Set(all.map(order => order.division).filter(Boolean))].sort();
+  const rows = all.filter(order => nativeDateValue(order.date).startsWith(year) && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson) && (!orderSummaryDivision || order.division === orderSummaryDivision));
+  const live = rows.filter(order => !["CANCELLED", "CLOSED"].includes(norm(order.status)));
+  const value = live.reduce((sum, order) => sum + order.valueWithoutVat, 0);
+  const received = live.reduce((sum, order) => sum + order.paymentReceived, 0);
+  const balance = live.reduce((sum, order) => sum + Math.max(0, order.balance), 0);
+  const profit = live.reduce((sum, order) => sum + order.equipmentProfit, 0);
+  const monthly = Array.from({ length: 12 }, (_, index) => ({ month: `${year}-${String(index + 1).padStart(2, "0")}`, label: new Date(Number(year), index, 1).toLocaleString("en-US", { month: "short" }), value: 0 }));
+  live.forEach(order => { const key = nativeDateValue(order.date).slice(0, 7); const cell = monthly.find(item => item.month === key); if (cell) cell.value += order.valueWithoutVat; });
+  const maxMonth = Math.max(1, ...monthly.map(item => item.value));
+  const byPerson = names.filter(name => !orderSummaryPerson || name === orderSummaryPerson).map(name => {
+    const own = live.filter(order => order.salesPerson === name);
+    const activeMonths = [...new Set(own.map(order => nativeDateValue(order.date).slice(0, 7)).filter(Boolean))];
+    const actual = own.reduce((sum, order) => sum + order.valueWithoutVat, 0);
+    const target = activeMonths.reduce((sum, month) => sum + orderSummaryTarget(name, month, people, changes), 0);
+    return { name, actual, target, months: activeMonths.length };
+  }).filter(item => item.months).sort((a, b) => b.actual - a.actual);
+  const byCustomer = [...new Set(live.map(order => order.customer).filter(Boolean))].map(name => ({ name, orders: live.filter(order => order.customer === name), value: live.filter(order => order.customer === name).reduce((sum, order) => sum + order.valueWithoutVat, 0) })).sort((a, b) => b.value - a.value).slice(0, 5);
+  const byDivision = divisions.map(name => ({ name, value: live.filter(order => order.division === name).reduce((sum, order) => sum + order.valueWithoutVat, 0) })).filter(item => item.value);
+  const byBrand = [...new Set(live.map(order => order.brand).filter(Boolean))].map(name => ({ name, value: live.filter(order => order.brand === name).reduce((sum, order) => sum + order.valueWithoutVat, 0) })).sort((a, b) => b.value - a.value).slice(0, 6);
+  const statusCounts = [...new Set(rows.map(order => order.status))].map(name => ({ name, count: rows.filter(order => order.status === name).length }));
+  const select = (field, items, placeholder, selected) => `<select data-order-summary-filter="${field}"><option value="">${placeholder}</option>${items.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select>`;
+  return `<div class="order-summary-page">
+    <div class="order-summary-toolbar"><div><h2>Order Book Summary</h2><p>Live sales and collection performance</p></div><div class="order-summary-filters">${select("year", years, "All years", year)}${isCurrentAdmin() ? select("person", names, "All sales people", orderSummaryPerson) : ""}${select("division", divisions, "All divisions", orderSummaryDivision)}</div></div>
+    <div class="order-summary-kpis">
+      ${[["Order Value", salesCompactMoney(value), "Excluding VAT"], ["Gross Profit", salesCompactMoney(profit), "Equipment profit"], ["Balance Receivable", salesCompactMoney(balance), "Outstanding"], ["Orders", rows.length, `${rows.length - live.length} cancelled or closed`], ["Average Order", salesCompactMoney(live.length ? value / live.length : 0), "Excluding VAT"]].map(([label, amount, note]) => `<div><span>${label}</span><strong>${amount}</strong><small>${note}</small></div>`).join("")}
+    </div>
+    <div class="order-summary-grid"><section class="order-summary-panel order-summary-wide"><h3>Order Value by Month</h3><p>Booked value excluding VAT</p><div class="order-summary-bars">${monthly.map(item => `<div><span>${item.label}</span><div><i style="width:${Math.max(0, item.value / maxMonth * 100)}%"></i></div><b>${escapeHtml(salesCompactMoney(item.value))}</b></div>`).join("")}</div></section>
+    <section class="order-summary-panel"><h3>Collection Rate</h3><p>Payments received against order value</p><div class="order-summary-rate">${value ? Math.min(100, Math.round(received / (value * 1.05) * 100)) : 0}%</div><div class="order-summary-meter"><i style="width:${value ? Math.min(100, received / (value * 1.05) * 100) : 0}%"></i></div><div class="order-summary-split"><span>Received ${escapeHtml(salesCompactMoney(received))}</span><span>Outstanding ${escapeHtml(salesCompactMoney(balance))}</span></div></section>
+    <section class="order-summary-panel"><h3>Salesperson Performance</h3><p>Targets apply from the month set in Settings</p><div class="order-summary-table-wrap"><table><thead><tr><th>Sales Person</th><th>Active Months</th><th>Actual</th><th>Target</th><th>Achievement</th></tr></thead><tbody>${byPerson.map(item => `<tr><td>${escapeHtml(item.name)}</td><td>${item.months}</td><td>${escapeHtml(salesMoney(item.actual))}</td><td>${escapeHtml(salesMoney(item.target))}</td><td><strong class="${item.actual >= item.target ? "success-text" : "danger-text"}">${item.target ? Math.round(item.actual / item.target * 100) : 0}%</strong></td></tr>`).join("") || `<tr><td colspan="5">No orders in this period.</td></tr>`}</tbody></table></div></section>
+    <section class="order-summary-panel"><h3>Order Status</h3><div class="order-summary-breakdown">${statusCounts.map(item => `<div><span>${escapeHtml(item.name)}</span><strong>${item.count}</strong></div>`).join("") || "No orders"}</div><h3>Division Split</h3><div class="order-summary-breakdown">${byDivision.map(item => `<div><span>${escapeHtml(item.name)}</span><strong>${escapeHtml(salesCompactMoney(item.value))}</strong></div>`).join("") || "No data"}</div></section>
+    <section class="order-summary-panel"><h3>Top Customers</h3><div class="order-summary-breakdown">${byCustomer.map(item => `<div><span>${escapeHtml(item.name)} <small>(${item.orders.length})</small></span><strong>${escapeHtml(salesCompactMoney(item.value))}</strong></div>`).join("") || "No orders"}</div><h3>Brand Split</h3><div class="order-summary-breakdown">${byBrand.map(item => `<div><span>${escapeHtml(item.name)}</span><strong>${escapeHtml(salesCompactMoney(item.value))}</strong></div>`).join("") || "No data"}</div></section>
+    <section class="order-summary-panel order-summary-full"><h3>Sales Report by Month</h3><p>Order value excluding VAT; cancelled and closed orders excluded</p><div class="order-summary-table-wrap"><table><thead><tr><th>Sales Person</th>${monthly.map(item => `<th>${item.label}</th>`).join("")}<th>Total</th></tr></thead><tbody>${byPerson.map(person => `<tr><td>${escapeHtml(person.name)}</td>${monthly.map(item => { const actual = live.filter(order => order.salesPerson === person.name && nativeDateValue(order.date).startsWith(item.month)).reduce((sum, order) => sum + order.valueWithoutVat, 0); const target = orderSummaryTarget(person.name, item.month, people, changes); return `<td class="${actual ? actual >= target ? "order-summary-met" : "order-summary-below" : ""}" title="Target ${escapeHtml(salesMoney(target))}">${actual ? escapeHtml(salesCompactMoney(actual)) : "-"}</td>`; }).join("")}<td><strong>${escapeHtml(salesCompactMoney(person.actual))}</strong></td></tr>`).join("") || `<tr><td colspan="14">No orders in this period.</td></tr>`}</tbody></table></div></section>
+    <section class="order-summary-panel order-summary-full"><h3>Orders</h3><p>${rows.length} orders in this view</p><input class="order-summary-search" data-order-summary-search placeholder="Search customer, job or order no..." aria-label="Search summary orders"><div class="order-summary-table-wrap"><table><thead><tr><th>Order No.</th><th>Date</th><th>Customer</th><th>Job</th><th>Sales Person</th><th>Division</th><th>Value</th><th>Balance</th><th>Status</th></tr></thead><tbody>${rows.map(order => `<tr data-order-summary-row="${escapeHtml([order.orderNo, order.customer, order.jobDescription, order.salesPerson].join(" ").toLowerCase())}"><td>${escapeHtml(order.orderNo)}</td><td>${escapeHtml(order.date || "-")}</td><td>${escapeHtml(order.customer)}</td><td>${escapeHtml(order.jobDescription)}</td><td>${escapeHtml(order.salesPerson || "-")}</td><td>${escapeHtml(order.division || "-")}</td><td>${escapeHtml(salesMoney(order.valueWithoutVat))}</td><td>${escapeHtml(salesMoney(order.balance))}</td><td>${escapeHtml(order.status)}</td></tr>`).join("") || `<tr><td colspan="9">No orders in this period.</td></tr>`}</tbody></table></div></section></div>
+  </div>`;
+}
+
+function orderBookPremiumSummaryHtml() {
+  const all = salesOrderBookRows();
+  const people = salesData().settings?.salesPeople || [];
+  const changes = salesData().settings?.salesTargets || [];
+  const year = orderSummaryYear || String(new Date().getFullYear());
+  const month = orderSummaryMonth;
+  const period = month ? `${year}-${month}` : year;
+  const monthName = month ? new Date(Number(year), Number(month) - 1, 1).toLocaleString("en-US", { month: "long" }) : "";
+  const years = [...new Set([year, ...all.map(order => nativeDateValue(order.date).slice(0, 4)).filter(Boolean)])].sort().reverse();
+  const names = [...new Set(all.map(order => order.salesPerson).filter(Boolean))].sort();
+  const divisions = [...new Set(all.map(order => order.division).filter(Boolean))].sort();
+  const statuses = [...new Set(all.map(order => order.status).filter(Boolean))].sort();
+  const rows = all.filter(order => nativeDateValue(order.date).startsWith(period)
+    && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson)
+    && (!orderSummaryDivision || order.division === orderSummaryDivision)
+    && (!orderSummaryStatus || order.status === orderSummaryStatus));
+  const live = rows.filter(order => !["CANCELLED", "CLOSED"].includes(norm(order.status)));
+  const total = (list, key) => list.reduce((sum, order) => sum + (Number(order[key]) || 0), 0);
+  const value = total(live, "valueWithoutVat");
+  const profit = total(live, "equipmentProfit");
+  const received = total(live, "paymentReceived");
+  const balance = live.reduce((sum, order) => sum + Math.max(0, Number(order.balance) || 0), 0);
+  const days = month ? new Date(Number(year), Number(month), 0).getDate() : 12;
+  const series = Array.from({ length: days }, (_, index) => ({
+    label: month ? String(index + 1) : new Date(Number(year), index, 1).toLocaleString("en-US", { month: "short" }),
+    key: month ? `${period}-${String(index + 1).padStart(2, "0")}` : `${year}-${String(index + 1).padStart(2, "0")}`,
+    value: 0
+  }));
+  live.forEach(order => {
+    const date = nativeDateValue(order.date);
+    const point = series.find(entry => date.startsWith(entry.key));
+    if (point) point.value += Number(order.valueWithoutVat) || 0;
+  });
+  const max = Math.max(1, ...series.map(entry => entry.value));
+  const points = series.map((entry, index) => `${20 + index * 760 / Math.max(1, series.length - 1)},${160 - entry.value / max * 140}`).join(" ");
+  const chart = month ? `<div class="order-premium-chart"><div class="order-premium-chart-grid"></div><svg viewBox="0 0 800 180" preserveAspectRatio="none" role="img" aria-label="Daily order value chart"><polyline points="${points}" fill="none" stroke="#3579f6" stroke-width="2.5" vector-effect="non-scaling-stroke"/>${series.filter(entry => entry.value).map(entry => { const index = series.indexOf(entry); return `<circle cx="${20 + index * 760 / Math.max(1, series.length - 1)}" cy="${160 - entry.value / max * 140}" r="3.5" fill="#3579f6"><title>${entry.label}: ${escapeHtml(salesMoney(entry.value))}</title></circle>`; }).join("")}</svg><div class="order-premium-chart-labels"><span>1</span><span>${Math.ceil(days / 4)}</span><span>${Math.ceil(days / 2)}</span><span>${Math.ceil(days * 3 / 4)}</span><span>${days}</span></div></div>`
+    : `<div class="order-summary-bars">${series.map(entry => `<div><span>${entry.label}</span><div><i style="width:${entry.value / max * 100}%"></i></div><b>${escapeHtml(salesCompactMoney(entry.value))}</b></div>`).join("")}</div>`;
+  const byPerson = names.filter(name => !orderSummaryPerson || name === orderSummaryPerson).map(name => {
+    const own = live.filter(order => order.salesPerson === name);
+    const activeMonths = [...new Set(own.map(order => nativeDateValue(order.date).slice(0, 7)).filter(Boolean))];
+    const actual = total(own, "valueWithoutVat");
+    const target = activeMonths.reduce((sum, key) => sum + orderSummaryTarget(name, key, people, changes), 0);
+    return { name, own, actual, target, months: activeMonths.length, profit: total(own, "equipmentProfit"), balance: own.reduce((sum, order) => sum + Math.max(0, Number(order.balance) || 0), 0) };
+  }).filter(entry => entry.months).sort((a, b) => b.actual - a.actual);
+  const byCustomer = [...new Set(live.map(order => order.customer).filter(Boolean))].map(name => ({ name, orders: live.filter(order => order.customer === name) })).map(entry => ({ ...entry, value: total(entry.orders, "valueWithoutVat") })).sort((a, b) => b.value - a.value).slice(0, 5);
+  const byDivision = divisions.map(name => ({ name, value: total(live.filter(order => order.division === name), "valueWithoutVat") })).filter(entry => entry.value);
+  const statusCounts = statuses.map(name => ({ name, count: rows.filter(order => order.status === name).length })).filter(entry => entry.count);
+  const select = (field, options, label, selected) => `<label><span>${label}</span><select data-order-summary-filter="${field}">${options.map(([key, text]) => `<option value="${escapeHtml(key)}" ${key === selected ? "selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
+  const ratio = value ? Math.max(0, Math.min(100, received / (value * 1.05) * 100)) : 0;
+  const searched = rows.filter(order => [order.orderNo, order.customer, order.jobDescription, order.salesPerson].join(" ").toLowerCase().includes(orderSummarySearch.toLowerCase()));
+  const sorted = [...searched].sort((a, b) => (nativeDateValue(a.date).localeCompare(nativeDateValue(b.date)) || String(a.orderNo).localeCompare(String(b.orderNo))) * (orderSummarySort === "oldest" ? 1 : -1));
+  const pages = Math.max(1, Math.ceil(sorted.length / 12));
+  orderSummaryPage = Math.min(Math.max(1, orderSummaryPage), pages);
+  const shown = sorted.slice((orderSummaryPage - 1) * 12, orderSummaryPage * 12);
+  const panel = (title, caption, badge, body, extra = "") => `<section class="order-premium-panel ${extra}"><div class="order-premium-panel-head"><div><h3>${title}</h3><p>${caption}</p></div>${badge ? `<span>${badge}</span>` : ""}</div>${body}</section>`;
+  return `<div class="order-premium-page">
+    <div class="order-premium-toolbar"><div><div class="order-premium-eyebrow">Sales Intelligence</div><h2>Performance Overview <small>${month ? "MONTH VIEW" : "YEAR VIEW"}</small></h2><p>${month ? `${monthName} ${year}` : year} · All reports filtered to selected ${month ? "month" : "year"} · Excluding VAT</p></div><div class="order-premium-filters">
+      ${select("year", years.map(item => [item, item]), "Year", year)}
+      ${select("month", [["", "All Months"], ...Array.from({ length: 12 }, (_, i) => [String(i + 1).padStart(2, "0"), new Date(2000, i, 1).toLocaleString("en-US", { month: "long" })])], "Month", month)}
+      ${isCurrentAdmin() ? select("person", [["", "All sales people"], ...names.map(name => [name, name])], "Sales Person", orderSummaryPerson) : ""}
+      ${select("division", [["", "All divisions"], ...divisions.map(name => [name, name])], "Division", orderSummaryDivision)}
+      ${select("status", [["", "All statuses"], ...statuses.map(name => [name, name])], "Status", orderSummaryStatus)}
+      <button type="button" data-order-summary-reset>Clear</button></div></div>
+    <div class="order-premium-kpis">${[
+      ["Order Value", salesCompactMoney(value), "Booked value · Excl. VAT", "blue"],
+      ["Gross Profit", salesCompactMoney(profit), "Equipment profit", "green"],
+      ["Balance Receivable", salesCompactMoney(balance), "Uncollected · Excl. VAT", "amber"],
+      ["Total Orders", rows.length, `${rows.length - live.length} cancelled or closed`, "purple"],
+      ["Average Order", salesCompactMoney(live.length ? value / live.length : 0), "Average booked value", "coral"]
+    ].map(([label, amount, note, tone]) => `<div class="order-premium-kpi ${tone}"><span>${label}</span><strong>${escapeHtml(String(amount))}</strong><small>${note}</small></div>`).join("")}</div>
+    <div class="order-premium-grid">
+      ${panel(month ? "Daily Order Value" : "Order Value by Month", `Booked sales for ${month ? `${monthName} ${year}` : year}`, month ? `${monthName.toUpperCase()} ${year}` : year, chart, "order-premium-wide")}
+      ${panel("Collection Rate", "Payments received against booked value", "CASH FLOW", `<div class="order-premium-donut" style="--rate:${ratio}%"><div><strong>${ratio.toFixed(1)}%</strong><small>collected</small></div></div><div class="order-premium-cash"><div><span>Received</span><b>${escapeHtml(salesCompactMoney(received))}</b></div><div><span>Outstanding</span><b>${escapeHtml(salesCompactMoney(balance))}</b></div></div>`)}
+      ${panel("Salesperson Performance", `Sales against configured targets for ${month ? `${monthName} ${year}` : year}`, "TARGET TRACKING", `<div class="order-premium-performance">${byPerson.map(entry => { const percent = entry.target ? Math.round(entry.actual / entry.target * 100) : 0; return `<div><b>${escapeHtml(entry.name)}<small>Target ${escapeHtml(salesCompactMoney(entry.target))} · ${entry.months} active ${entry.months === 1 ? "month" : "months"}</small></b><span class="order-premium-track"><i style="width:${Math.min(percent, 100)}%" class="${percent >= 100 ? "met" : ""}"></i></span><strong>${escapeHtml(salesCompactMoney(entry.actual))}</strong><em class="${percent >= 100 ? "met" : ""}">${percent}%</em></div>`; }).join("") || `<p>No orders in this period.</p>`}</div>`)}
+      ${panel("Order Status", "Payment status across selected orders", `${rows.length} ORDERS`, `<div class="order-premium-metrics">${statusCounts.map((entry, index) => `<div><div><span>${escapeHtml(entry.name)}</span><b>${entry.count} <small>${rows.length ? Math.round(entry.count / rows.length * 100) : 0}%</small></b></div><i><b style="width:${rows.length ? entry.count / rows.length * 100 : 0}%;background:${["#139c80", "#e6a244", "#7861d9", "#df6670"][index % 4]}"></b></i></div>`).join("") || `<p>No orders in this period.</p>`}</div>`)}
+      ${panel("Top Customers", "Highest order values for the selected period", "TOP 5", `<div class="order-premium-customers">${byCustomer.map((entry, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><b>${escapeHtml(entry.name)} <small>(${entry.orders.length})</small></b><strong>${escapeHtml(salesCompactMoney(entry.value))}</strong></div>`).join("") || `<p>No orders in this period.</p>`}</div>`)}
+      ${panel("Division Split", "Order value by business division", "DIVISION MIX", `<div class="order-premium-metrics">${byDivision.map(entry => `<div><div><span>${escapeHtml(entry.name)}</span><b>${escapeHtml(salesCompactMoney(entry.value))}</b></div><i><b style="width:${value ? entry.value / value * 100 : 0}%"></b></i></div>`).join("") || `<p>No orders in this period.</p>`}</div>`)}
+      ${panel(month ? "Sales Report by Salesperson" : "Sales Report by Month", month ? `Individual sales performance in ${monthName} ${year} · Excluding VAT` : `Individual sales performance in ${year} · Excluding VAT`, month ? "MONTHLY DETAIL" : "ANNUAL DETAIL", `<div class="order-premium-table-wrap ${month ? "" : "order-premium-annual"}"><table><thead><tr><th>Sales Person</th>${month ? `<th>Actual Sales</th><th>Monthly Target</th><th>Achievement</th><th>Total Orders</th>` : `${series.map(entry => `<th>${entry.label}</th>`).join("")}<th>Total</th>`}</tr></thead><tbody>${byPerson.map(entry => `<tr><td><b>${escapeHtml(entry.name)}</b></td>${month ? `<td>${escapeHtml(salesCompactMoney(entry.actual))}</td><td>${escapeHtml(salesCompactMoney(entry.target))}</td><td><span class="order-premium-achievement ${entry.actual >= entry.target ? "met" : ""}">${entry.target ? Math.round(entry.actual / entry.target * 100) : 0}%</span></td><td>${entry.own.length}</td>` : `${series.map(point => { const actual = total(entry.own.filter(order => nativeDateValue(order.date).startsWith(point.key)), "valueWithoutVat"); const target = orderSummaryTarget(entry.name, point.key, people, changes); return actual > 0 ? `<td class="order-premium-month-${actual >= target ? "met" : "below"}" title="Target ${escapeHtml(salesMoney(target))}">${escapeHtml(salesCompactMoney(actual))}</td>` : `<td class="order-premium-month-empty">—</td>`; }).join("")}<td><b>${escapeHtml(salesCompactMoney(entry.actual))}</b></td>`}</tr>`).join("") || `<tr><td colspan="${month ? 5 : 14}">No orders in this period.</td></tr>`}</tbody></table></div>`, "order-premium-full")}
+      ${panel("Order Register", `${rows.length} matching orders · Select an order to view details`, "", `<div class="order-premium-register-tools"><input data-order-summary-search value="${escapeHtml(orderSummarySearch)}" placeholder="Search order, customer or project..." aria-label="Search summary orders"><select data-order-summary-sort aria-label="Sort orders"><option value="newest" ${orderSummarySort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${orderSummarySort === "oldest" ? "selected" : ""}>Oldest first</option></select></div><div class="order-premium-table-wrap"><table><thead><tr><th>Order No. / Date</th><th>Customer / Job</th><th>Sales Person</th><th>Division</th><th>Value (AED)</th><th>Received (AED)</th><th>Balance (AED)</th><th>Status</th></tr></thead><tbody>${shown.map(order => `<tr><td><button type="button" class="order-premium-order-link" data-order-summary-open="${escapeHtml(order.id)}">${escapeHtml(order.orderNo)}</button><small>${escapeHtml(order.date || "-")}</small></td><td><b>${escapeHtml(order.customer || "-")}</b><small>${escapeHtml(order.jobDescription || "-")}</small></td><td>${escapeHtml(order.salesPerson || "-")}</td><td>${escapeHtml(order.division || "-")}</td><td>${escapeHtml(salesMoney(order.orderValue))}</td><td>${escapeHtml(salesMoney(order.paymentReceived))}</td><td>${escapeHtml(salesMoney(order.balance))}</td><td><span class="order-premium-status ${norm(order.status).includes("PARTIALLY PAID") ? "partially-paid" : norm(order.status).includes("PENDING") ? "pending" : norm(order.status).includes("CANCEL") ? "cancelled" : norm(order.status).includes("HOLD") ? "hold" : ""}">${escapeHtml(order.status || "-")}</span></td></tr>`).join("") || `<tr><td colspan="8">No orders in this period.</td></tr>`}</tbody></table></div><div class="order-premium-pages"><span>Showing ${shown.length ? (orderSummaryPage - 1) * 12 + 1 : 0}–${Math.min(orderSummaryPage * 12, sorted.length)} of ${sorted.length} orders</span><div><button type="button" data-order-summary-page="previous" ${orderSummaryPage === 1 ? "disabled" : ""}>Previous</button><span>${orderSummaryPage} / ${pages}</span><button type="button" data-order-summary-page="next" ${orderSummaryPage === pages ? "disabled" : ""}>Next</button></div></div>`, "order-premium-full")}
+    </div></div>`;
+}
+
+function exportOrderBookSummary() {
+  const period = orderSummaryMonth ? `${orderSummaryYear || new Date().getFullYear()}-${orderSummaryMonth}` : orderSummaryYear || String(new Date().getFullYear());
+  const rows = salesOrderBookRows().filter(order => nativeDateValue(order.date).startsWith(period)
+    && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson)
+    && (!orderSummaryDivision || order.division === orderSummaryDivision)
+    && (!orderSummaryStatus || order.status === orderSummaryStatus));
+  if (!rows.length) return toast("No orders in this period to export");
+  const columns = ["Order No.", "Date", "Customer", "Job Description", "Sales Person", "Division", "Value without VAT (AED)", "Payment Received (AED)", "Balance (AED)", "Status"];
+  const records = rows.map(order => Object.fromEntries(columns.map((column, index) => [column, [order.orderNo, order.date, order.customer, order.jobDescription, order.salesPerson, order.division, Number(order.valueWithoutVat) || 0, Number(order.paymentReceived) || 0, Number(order.balance) || 0, order.status][index]])));
+  downloadBlob(buildTableWorkbookBlob({ title: "Order Book Summary", columns, rows: records, wrapText: true }), `Order Book Summary ${period}.xlsx`);
 }
 
 function salesDashboardProgress(label, percent, caption, tone = "orange") {
@@ -4476,6 +4665,7 @@ function blankOrderBookOrder() {
     contactPerson: "",
     contactNumber: "",
     salesPerson: currentUser?.name || "",
+    salesPersonId: currentUser?.id || "",
     division: "Project/Inst",
     typeOfUnit: "",
     brand: "Daikin",
@@ -4523,7 +4713,7 @@ function openOrderBookForm(orderId = "") {
           orderBookField("location", "Location", item.location),
           orderBookField("contactPerson", "Contact Person", item.contactPerson),
           orderBookField("contactNumber", "Contact Number", item.contactNumber),
-          orderBookField("salesPerson", "Sales Person", item.salesPerson),
+          orderBookSalesPersonField(item),
           orderBookField("division", "Division", item.division, "select", ["Project/Inst", "Maint/Replace", "Trading"]),
           orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit),
           orderBookField("brand", "Brand", item.brand),
@@ -4554,6 +4744,7 @@ function openOrderBookForm(orderId = "") {
     </aside>
   `;
   document.body.appendChild(modal);
+  setupOrderBookSalesPersonPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#scanOrderBookPoBtn")?.addEventListener("click", () => scanOrderBookPoIntoForm(modal));
   modal.querySelector("#removeOrderBookPoBtn")?.addEventListener("click", () => {
@@ -4588,6 +4779,7 @@ function openOrderBookForm(orderId = "") {
   modal.querySelector("#saveOrderBookBtn").addEventListener("click", async () => {
     const payload = collectOrderBookPayload(modal, item);
     if (!payload.orderNo || !payload.customer) return alert("Order No and customer are required.");
+    if (!payload.salesPersonId) return alert("Select a Sales Person or Others.");
     const savedCustomer = existing && existing.importedFromOrderBook && norm(payload.customer) === norm(existing.customer)
       ? { name: existing.customer }
       : requireSavedSalesCustomer(payload.customer, "Order customer");
@@ -4677,6 +4869,79 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
   if (type === "dateText") return `<label>${escapeHtml(label)}<input type="date" ${attrs} value="${nativeDateValue(value)}"></label>`;
   if (type === "money") return `<label>${escapeHtml(label)}<input ${attrs} inputmode="decimal" value="${escapeHtml(value ? String(value) : "")}"></label>`;
   return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}"></label>`;
+}
+
+function orderBookSalesPersonField(item) {
+  const people = orderBookSalesPeople();
+  const admin = norm(currentUser?.role) === "ADMIN";
+  const selected = orderBookSalesPersonId(item, people);
+  const name = people.find(person => person.id === selected)?.name || (selected === "others" ? "Others" : item.salesPerson || currentUser?.name || "");
+  return `<div class="order-book-sales-person"><span>Sales Person <b>*</b></span>
+    <span class="order-book-person-control" data-order-book-person-picker><span class="order-book-person-tag" data-order-book-sales-tag>${escapeHtml(name)}${admin ? `<button type="button" data-order-book-person-remove aria-label="Remove ${escapeHtml(name)}">×</button>` : ""}</span>
+    ${admin ? `<input type="text" data-order-book-person-search role="combobox" aria-label="Search login names" aria-autocomplete="list" aria-expanded="false" autocomplete="off"><span class="order-book-person-options" data-order-book-person-options role="listbox" hidden></span>` : ""}
+    <input type="hidden" data-order-book-field="salesPersonId" value="${escapeHtml(admin ? selected : currentUser?.id || "")}"></span>
+  </div>`;
+}
+
+function orderBookSalesPeople() {
+  const users = appSettings?.users?.length ? appSettings.users : salesData().settings?.salesPeople || [];
+  return users.filter(person => person.id && person.name && person.active !== false);
+}
+
+function orderBookSalesPersonId(item, people) {
+  if (!item.id) return currentUser?.id || "";
+  if (item.salesPersonId) return item.salesPersonId;
+  const legacyNames = { ABHISHEK: "ABHISHEK", AMAL: "AMALSAIMON", AMALSAIMON: "AMALSAIMON", YOONUS: "YOONUS", ALAA: "ALAAALANI", ALAAALANI: "ALAAALANI" };
+  const name = legacyNames[norm(item.salesPerson)] || "";
+  return people.find(person => norm(person.name) === name)?.id || "others";
+}
+
+function setupOrderBookSalesPersonPicker(modal) {
+  const search = modal.querySelector("[data-order-book-person-search]");
+  if (!search) return;
+  const people = orderBookSalesPeople();
+  const hidden = modal.querySelector('[data-order-book-field="salesPersonId"]');
+  const tag = modal.querySelector("[data-order-book-sales-tag]");
+  const options = modal.querySelector("[data-order-book-person-options]");
+  const choose = id => {
+    hidden.value = id;
+    const name = people.find(person => person.id === id)?.name || "Others";
+    tag.innerHTML = `${escapeHtml(name)}<button type="button" data-order-book-person-remove aria-label="Remove ${escapeHtml(name)}">×</button>`;
+    tag.hidden = false;
+    search.value = "";
+    options.hidden = true;
+    search.blur();
+  };
+  const renderOptions = () => {
+    const matches = [...people, { id: "others", name: "Others" }].filter(person => person.name.toLowerCase().includes(search.value.trim().toLowerCase()));
+    const open = document.activeElement === search;
+    options.hidden = !open;
+    search.setAttribute("aria-expanded", String(open));
+    options.innerHTML = open ? matches.map(person => `<button type="button" role="option" data-order-book-person-option="${escapeHtml(person.id)}">${escapeHtml(person.name)}</button>`).join("") || `<span>No matching login names</span>` : "";
+  };
+  search.addEventListener("focus", renderOptions);
+  search.addEventListener("input", renderOptions);
+  search.addEventListener("keydown", event => {
+    if (event.key === "Escape") { options.hidden = true; search.blur(); }
+    if (event.key === "Enter") {
+      const first = options.querySelector("[data-order-book-person-option]");
+      if (first) { event.preventDefault(); choose(first.dataset.orderBookPersonOption); }
+    }
+  });
+  search.addEventListener("blur", () => setTimeout(() => { options.hidden = true; search.setAttribute("aria-expanded", "false"); }, 100));
+  modal.querySelector("[data-order-book-person-picker]").addEventListener("click", event => {
+    const choice = event.target.closest("[data-order-book-person-option]");
+    if (choice) {
+      choose(choice.dataset.orderBookPersonOption);
+    } else if (event.target.closest("[data-order-book-person-remove]")) {
+      event.preventDefault();
+      event.stopPropagation();
+      hidden.value = "";
+      tag.textContent = "";
+      tag.hidden = true;
+      search.focus();
+    } else if (event.target !== search) search.focus();
+  });
 }
 
 function collectOrderBookPayload(modal, base) {
@@ -5232,6 +5497,26 @@ async function handleSalesClick(event) {
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
+  if (target.dataset.orderSummaryExport !== undefined) return exportOrderBookSummary();
+  if (target.dataset.orderSummaryReset !== undefined) {
+    orderSummaryYear = String(new Date().getFullYear());
+    orderSummaryMonth = "";
+    orderSummaryPerson = "";
+    orderSummaryDivision = "";
+    orderSummaryStatus = "";
+    orderSummarySearch = "";
+    orderSummaryPage = 1;
+    return renderSalesDesk();
+  }
+  if (target.dataset.orderSummaryPage) {
+    orderSummaryPage += target.dataset.orderSummaryPage === "next" ? 1 : -1;
+    return renderSalesDesk();
+  }
+  if (target.dataset.orderSummaryOpen) {
+    salesOrderBookDetailId = target.dataset.orderSummaryOpen;
+    return showSalesDesk("orderBook");
+  }
+  if (target.dataset.salesAction === "summary-back") return showSalesDesk("dashboard");
   if (target.dataset.costingAction) return handleCostingClick(target.dataset.costingAction, target);
   if (target.dataset.rowMenu !== undefined) {
     toggleSalesFloatingMenu(target);
@@ -5501,6 +5786,16 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.orderSummarySearch !== undefined) {
+    const cursor = event.target.selectionStart || 0;
+    orderSummarySearch = event.target.value;
+    orderSummaryPage = 1;
+    renderSalesDesk();
+    const input = document.querySelector("[data-order-summary-search]");
+    input?.focus();
+    input?.setSelectionRange(cursor, cursor);
+    return;
+  }
   if (event.target.dataset.costingAllSearch !== undefined) {
     const cursor = event.target.selectionStart || 0;
     costingAllSearchQuery = event.target.value;
@@ -5569,6 +5864,23 @@ function handleSalesInput(event) {
 }
 
 function handleSalesChange(event) {
+  if (event.target.dataset.orderSummaryFilter) {
+    const field = event.target.dataset.orderSummaryFilter;
+    if (field === "year") orderSummaryYear = event.target.value;
+    if (field === "month") orderSummaryMonth = event.target.value;
+    if (field === "person") orderSummaryPerson = event.target.value;
+    if (field === "division") orderSummaryDivision = event.target.value;
+    if (field === "status") orderSummaryStatus = event.target.value;
+    orderSummaryPage = 1;
+    renderSalesDesk();
+    return;
+  }
+  if (event.target.dataset.orderSummarySort !== undefined) {
+    orderSummarySort = event.target.value;
+    orderSummaryPage = 1;
+    renderSalesDesk();
+    return;
+  }
   if (event.target.dataset.costingAllFilter !== undefined) {
     costingAllSalesPerson = event.target.value;
     renderSalesDesk();
