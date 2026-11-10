@@ -8367,7 +8367,7 @@ function render() {
   setWorkflowTitle(state.details.project || workflowTitleFallback());
   $("#projectMeta").textContent = state.details.project || "Internal project";
   canvas.innerHTML = "";
-  state.nodes.forEach(renderNode);
+  state.nodes.filter(node => isDxWorkflow() || !["costing-table", "quotation", "costingTable"].includes(node.id) && !["costingTable", "quotation"].includes(node.type)).forEach(renderNode);
   sizeWorkflowCanvasToNodes();
   applyCanvasZoom();
   restoreWorkflowTableScrollState();
@@ -8431,9 +8431,7 @@ function applyCompactLayout(force) {
     "thermal-upload": [180, 255],
     "vrv-upload": [640, 250],
     "thermal-table": [55, 520],
-    "costing-table": [980, 130],
     "boq-table": [970, 430],
-    quotation: [1680, 340],
     "vrv-schedule": [170, 770]
   };
   state.nodes.forEach(node => {
@@ -8452,27 +8450,19 @@ function autoLayoutWorkflow() {
     "thermal-upload": [180, 255],
     "vrv-upload": [640, 250],
     "thermal-table": [55, 520],
-    "costing-table": [980, 130],
     "boq-table": [970, 430],
-    quotation: [1680, 340],
     "vrv-schedule": [170, 770]
   };
   const thermalRows = state.tables.thermal.rows.length;
-  const costingRows = state.tables.costing.rows.length;
   const boqRows = state.tables.boq.rows.length;
   const vrvRows = state.tables.vrvSchedule.rows.length;
   const thermalHeight = tableAutoHeight("thermal", thermalRows);
-  const costingHeight = tableAutoHeight("costing", costingRows);
   const boqHeight = tableAutoHeight("boq", boqRows);
   const vrvHeight = tableAutoHeight("vrvSchedule", vrvRows);
 
   if (isDxWorkflow()) {
     const target = dxScheduleTargetPosition({ thermalHeight });
     positions["vrv-schedule"] = [target.x, target.y];
-  } else {
-    positions["boq-table"][1] = positions["costing-table"][1] + costingHeight + 32;
-    positions.quotation[1] = Math.max(340, positions["boq-table"][1] - 100);
-    positions["vrv-schedule"][1] = 770;
   }
   state.nodes.forEach(node => {
     if (positions[node.id] && !node.locked) {
@@ -8480,10 +8470,10 @@ function autoLayoutWorkflow() {
         node.x = positions[node.id][0];
         node.y = positions[node.id][1];
       }
-      if (!node.userSized) applyAutoNodeSize(node, { thermalHeight, costingHeight, boqHeight, vrvHeight });
+      if (!node.userSized) applyAutoNodeSize(node, { thermalHeight, boqHeight, vrvHeight });
     }
   });
-  canvas.style.width = isDxWorkflow() ? "1420px" : "1950px";
+  canvas.style.width = isDxWorkflow() ? "1420px" : "1800px";
   canvas.style.height = `${positions["vrv-schedule"][1] + vrvHeight + 180}px`;
   sizeWorkflowCanvasToNodes();
 }
@@ -8504,7 +8494,7 @@ function dxScheduleTargetPosition({ thermalHeight } = {}) {
 function sizeWorkflowCanvasToNodes() {
   if (!canvas || !state?.nodes?.length) return;
   const width = Math.max(
-    isDxWorkflow() ? 1420 : 1950,
+    isDxWorkflow() ? 1420 : 1800,
     ...state.nodes.map(node => Math.ceil((node.x || 0) + (node.width || workflowNodeDefaultSize(node.id)?.[0] || 260) + 80))
   );
   const height = Math.max(
@@ -12798,7 +12788,7 @@ function normalizeDxThermalRows(rows = []) {
     })
     .filter(row => {
       const hasIdentity = String(row["Unit Ref"] || row.Location || "").trim();
-      return hasIdentity && hasDxValue(row.TKw) && hasDxValue(row.SKw) && hasDxValue(row["L/S"]);
+      return !!hasIdentity || (!!row.__source && /DUCT|WALL|SPLIT|DECORATIVE|PACKAGE|FCU|AHU/i.test(String(row.Type || '')));
     });
 }
 

@@ -259,6 +259,8 @@ body:has(#canvasView:not(.hidden) .dx-workspace) #viewActions {
 }
 .dx-left { display: flex; flex-direction: column; min-width: 0; gap: 10px; }
 .dx-left > .dx-card:first-child { display: flex; flex-direction: column; flex: 1; }
+.dx-capacity-source { display:flex; align-items:center; justify-content:space-between; gap:8px; order:5; margin-top:9px; color:#405578; font-size:10.5px; font-weight:600; }
+.dx-capacity-source select { min-width:160px; max-width:65%; padding:6px 8px; border:1px solid #cad8f1; border-radius:7px; background:#fff; color:#153d8e; font:inherit; cursor:pointer; }
 .dx-card-heading {
   display: flex;
   align-items: center;
@@ -545,6 +547,10 @@ body:has(#canvasView:not(.hidden) .dx-workspace) #viewActions {
 .dx-workspace td textarea { resize:none; }
 .dx-workspace td input:disabled, .dx-workspace td textarea:disabled { background:transparent; color:#2a3952; -webkit-text-fill-color:#2a3952; opacity:1; cursor:default; }
 .dx-workspace td input:enabled:focus, .dx-workspace td textarea:enabled:focus { background:#fff; border-color:#a6c7fd; box-shadow:0 0 0 2px #0860fa0b; outline:none; }
+.dx-thermal-table td .dx-fill-handle { position:absolute; right:0; bottom:0; z-index:3; width:16px; height:16px; padding:0; border:0; background:transparent; box-shadow:none; opacity:0; cursor:crosshair; cursor:cell; touch-action:none; }
+.dx-thermal-table td .dx-fill-handle:focus-visible { opacity:1; outline:1px dotted #526b91; outline-offset:-2px; }
+.dx-thermal-table td.dx-fill-preview { box-shadow:inset 0 0 0 2px #4f8cff; background:#eaf3ff; }
+@media(pointer:coarse) { .dx-thermal-table td .dx-fill-handle { width:20px; height:20px; } }
 .dx-workspace td input[list]:enabled:focus::-webkit-calendar-picker-indicator { opacity:1; }
 .dx-workspace td.dx-warning input, .dx-workspace td.dx-warning textarea { background:#fff2e1; border-color:transparent; }
 .dx-workspace td.dx-warning input:focus, .dx-workspace td.dx-warning textarea:focus { border-color:#edb767; }

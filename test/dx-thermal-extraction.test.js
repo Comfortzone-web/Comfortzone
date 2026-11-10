@@ -18,6 +18,88 @@ test('actual screenshots lock 13 columns and preserve 26/31/12 equipment rows in
  assert.equal(fixture.pages.flat().filter(row=>row[2].includes('\n')).length,7);
  const ctx=context();for(const page of pages)for(const crop of page.crops.regions){const geometry=await ctx.dxGridImage(Buffer.from(crop.image,'base64'),{mode:'inspect'});assert.ok(geometry.width<2100,'packed crop remains full-resolution after vision resizing');}
 });
+test('selection screenshot preserves separate calculated and first-selection column groups',async()=>{
+ const ctx=context(),image=fs.readFileSync(path.join(__dirname,'fixtures/dx-thermal/selection-groups.png'));
+ const geometry=await ctx.dxGridImage(image,{mode:'inspect'});
+ assert.equal(geometry.columnCount,18);
+ const calculated=await ctx.dxGridImage(image,{columns:[0,2,3,10,11,12],headerBottom:99});
+ const first=await ctx.dxGridImage(image,{columns:[0,2,3,15,16,17],headerBottom:99});
+ assert.equal(calculated.rowCount,25);
+ assert.equal(calculated.rowCount,first.rowCount);
+ assert.ok(first.regions.length>0);
+});
+test('selected First Selection group is passed to layout reads and retained with extracted rows',async()=>{
+ const image=fs.readFileSync(path.join(__dirname,'fixtures/dx-thermal/selection-groups.png'));
+ const geometry=await context().dxGridImage(image,{mode:'inspect'});
+ const crops=await context().dxGridImage(image,{columns:[0,2,3,15,16,17],headerBottom:99});
+ const regions=new Map(crops.regions.map(region=>[region.image,region]));
+ const upload={id:'selection',originalName:'selection-groups.png',mimeType:'image/png'};
+ let layoutPrompt='';
+ const ctx=context({callOpenAIJson:async(name,_schema,content)=>{
+  if(name.startsWith('dx_thermal_grid_layout')){
+   layoutPrompt=content[0].text;
+   return {orderedUploadIds:['selection'],columns:[0,5,6,15,16,17],pages:[{uploadId:'selection',hasHeader:true,headerBottom:99}],unclearFields:[]};
+  }
+  const sourceImage=content.find(item=>item.type==='input_image').image_url.split(',')[1];
+  const region=regions.get(sourceImage);
+  assert.ok(region);
+  return {rows:Array.from({length:region.rowCount},(_,index)=>({sourceRow:region.firstRow+index,values:['FCU-01 B','Decorative','Pump Room','3.90','3.10','200.00'],uncertainColumns:[]})),unclearFields:[]};
+ }});
+ const result=await ctx.extractDxGridThermal({id:'project',uploads:[upload]},[upload],new Map([['selection',{upload,bytes:image,geometry}]]),{capacitySource:'First Selection'});
+ assert.match(layoutPrompt,/selected the load group named "First Selection"/);
+ assert.deepEqual(Array.from(result.gridLayout.columns),[0,2,3,15,16,17]);
+ assert.equal(result.gridLayout.capacitySource,'First Selection');
+ assert.equal(result.customRows[0][3],'3.90');
+});
+test('wrong AI Type and Location indices are corrected and outdoor rows are excluded',async()=>{
+ const image=fs.readFileSync(path.join(__dirname,'fixtures/dx-thermal/selection-groups.png'));
+ const base=context(),geometry=await base.dxGridImage(image,{mode:'inspect'});
+ const crops=await base.dxGridImage(image,{columns:[0,2,3,10,11,12],headerBottom:99});
+ const regions=new Map(crops.regions.map(region=>[region.image,region]));
+ const upload={id:'selection',originalName:'selection-groups.png',mimeType:'image/png'};
+ const ctx=context({callOpenAIJson:async(name,_schema,content)=>{
+  if(name.startsWith('dx_thermal_grid_layout'))return {orderedUploadIds:['selection'],columns:[0,5,6,10,11,12],pages:[{uploadId:'selection',hasHeader:true,headerBottom:99}],unclearFields:[]};
+  const sourceImage=content.find(item=>item.type==='input_image').image_url.split(',')[1],region=regions.get(sourceImage);
+  assert.ok(region,'identity columns must use the corrected source crop');
+  const rows=Array.from({length:region.rowCount},(_,index)=>{
+   const sourceRow=region.firstRow+index,outdoor=[11,16,24].includes(sourceRow),total=sourceRow===25;
+   return {sourceRow,values:total?['','','TOTAL','137.30','115.40','9441.00']:outdoor?[`VRV-${sourceRow}`,'Outdoor Unit','Roof','','','']:[`FCU-${sourceRow}`,'Ducted',`Room ${sourceRow}`,'2.40','2.10','175.00'],uncertainColumns:[]};
+  });
+  return {rows,unclearFields:[]};
+ }});
+ const result=await ctx.extractDxGridThermal({id:'project',uploads:[upload]},[upload],new Map([['selection',{upload,bytes:image,geometry}]]),{capacitySource:'Calculated AC Load'});
+ assert.equal(result.customRows.length,21);
+ assert.deepEqual(Array.from(result.gridLayout.columns),[0,2,3,10,11,12]);
+ assert.deepEqual(Array.from(result.customRows[0].slice(0,3)),['FCU-1','Ducted','Room 1']);
+});
+test('malformed four-row reading falls back to physical single-row crops',async()=>{
+ const image=fs.readFileSync(path.join(__dirname,'fixtures/dx-thermal/selection-groups.png'));
+ const base=context(),geometry=await base.dxGridImage(image,{mode:'inspect'});
+ const request={columns:[0,2,3,10,11,12],headerBottom:99};
+ const grouped=await base.dxGridImage(image,request);
+ const singles=await base.dxGridImage(image,{...request,groupSize:1});
+ const regions=new Map([...grouped.regions,...singles.regions].map(region=>[region.image,region]));
+ const upload={id:'selection',originalName:'selection-groups.png',mimeType:'image/png'};
+ let singleReads=0;
+ const ctx=context({callOpenAIJson:async(name,_schema,content)=>{
+  if(name.startsWith('dx_thermal_grid_layout'))return {orderedUploadIds:['selection'],columns:request.columns,pages:[{uploadId:'selection',hasHeader:true,headerBottom:99}],unclearFields:[]};
+  const sourceImage=content.find(item=>item.type==='input_image').image_url.split(',')[1],region=regions.get(sourceImage);
+  assert.ok(region);
+  if(name.startsWith('dx_thermal_grid_single_')){
+   singleReads++;
+   const uncertain=region.firstRow===6;
+   return {unitRef:'FCU-01 B',type:'Decorative',location:'Pump Room',tKw:'2.40',sKw:'2.10',flowRate:uncertain?'':'175.00',uncertainColumns:uncertain?['L/S']:[],unclearFields:[]};
+  }
+  const rows=Array.from({length:region.rowCount},(_,index)=>({sourceRow:region.rowCount===1?1:region.firstRow+index,values:['FCU-01 B','Decorative','Pump Room','2.40','2.10','175.00'],uncertainColumns:[]}));
+  return {rows:region.firstRow===5 && region.rowCount===4?rows.slice(1):rows,unclearFields:[]};
+ }});
+ const result=await ctx.extractDxGridThermal({id:'project',uploads:[upload]},[upload],new Map([['selection',{upload,bytes:image,geometry}]]),{capacitySource:'Calculated AC Load'});
+ assert.equal(singleReads,8);
+ assert.equal(result.rowSources.length,grouped.rowCount);
+ assert.deepEqual(Array.from(result.rowSources.slice(4,8),source=>source.sourceRow),[5,6,7,8]);
+ assert.equal(result.customRows[5][5],'');
+ assert.match(result.customReviewCells['5:L/S'].reason,/could not be read/);
+});
 test('full pipeline keeps source order and corrects conflicting Type/load reads with independent agreement',async()=>{
  const pages=await regions(),regionRows=new Map();
  const uploads=pages.map((_,i)=>({id:`source-${i+1}`,originalName:`Screenshot 2026-10-08 ${['120948','121231','121309'][i]}.png`,storedName:`page-${i+1}.png`,mimeType:'image/png'}));
@@ -44,6 +126,18 @@ test('unresolved disagreement is flagged rather than silently accepted and missi
  assert.throws(()=>ctx.dxGridRowsByNumber({rows:[]},region),/omitted source rows/);
  assert.throws(()=>ctx.dxGridRowsByNumber({rows:[read('1').rows[0],read('1').rows[0]]},region),/inconsistent source-row alignment/);
 });
+test('a malformed AI row list is retried without shifting equipment values',async()=>{
+ let calls=0;
+ const ctx=context({callOpenAIJson:async()=>{
+  calls++;
+  const rows=[1,2].map(sourceRow=>({sourceRow,values:[`FCU-0${sourceRow}`,'Ducted',`Room ${sourceRow}`,'2.40','2.10','175.00'],uncertainColumns:[]}));
+  return {rows:calls===1?rows.slice(1):rows,unclearFields:[]};
+ }});
+ const result=await ctx.dxReadGridRegion({firstRow:1,rowCount:2,image:'fixture'});
+ assert.equal(calls,3);
+ assert.equal(result.reconciled.length,2);
+ assert.equal(result.reconciled[0].values[0],'FCU-01');
+});
 test('repeated FCU references in different rooms survive append without duplicate warnings',()=>{
  const ui=fs.readFileSync(path.join(root,'public/dx-workflow.js'),'utf8'),start=ui.indexOf('function dxMergeRows('),end=ui.indexOf('\n}',start)+2;
  const merge=vm.runInNewContext('('+ui.slice(start,end)+')',{structuredClone,dxExportColumns:fixture.columns});
@@ -65,7 +159,7 @@ test('append uses the saved header as context without extracting unselected head
 
 test('disagreeing header columns stop extraction before any row readings',async()=>{
  const pages=await regions();let calls=0;
- const ctx=context({callOpenAIJson:async(name)=>{assert.ok(name.startsWith('dx_thermal_grid_layout'));calls++;return {orderedUploadIds:['one'],columns:calls===1?[0,2,3,10,11,12]:calls===2?[0,1,3,10,11,12]:[0,3,4,10,11,12],pages:[{uploadId:'one',hasHeader:true,headerBottom:141}],unclearFields:[]};}});
+ const ctx=context({callOpenAIJson:async(name)=>{assert.ok(name.startsWith('dx_thermal_grid_layout'));calls++;return {orderedUploadIds:['one'],columns:calls===1?[0,2,3,10,11,12]:calls===2?[0,2,3,9,10,11]:[0,2,3,8,9,10],pages:[{uploadId:'one',hasHeader:true,headerBottom:141}],unclearFields:[]};}});
  const upload={id:'one',mimeType:'image/png',originalName:'page-1.png'};
  await assert.rejects(ctx.extractDxGridThermal({id:'project',uploads:[upload]},[upload],new Map([['one',{upload,bytes:images[0],geometry:pages[0].geometry}]])),/could not agree/);
  assert.equal(calls,3);

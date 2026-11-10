@@ -1787,6 +1787,9 @@ function hydrateProject(project) {
   project.lookup = loadMasterLookups();
   project.priceList = loadMasterPriceList();
   project.workflowMode = project.workflowMode === "dx" ? "dx" : "vrv";
+  if (project.workflowMode === "vrv" && Array.isArray(project.nodes)) {
+    project.nodes = project.nodes.filter(node => !["costing-table", "quotation"].includes(node.id) && !["costingTable", "quotation"].includes(node.type));
+  }
   if (!project.tables) project.tables = {};
   if (!project.tables.vrvSchedule) project.tables.vrvSchedule = { columns: workflowScheduleColumns(project.workflowMode), rows: [] };
   project.tables.vrvSchedule.columns = workflowScheduleColumns(project.workflowMode);
@@ -1881,9 +1884,7 @@ function defaultNodes() {
     { id: "thermal-upload", type: "thermalUpload", title: "Thermal Sheet", x: 180, y: 255, locked: false, data: {} },
     { id: "vrv-upload", type: "vrvUpload", title: "VRV Selection Report", x: 640, y: 250, locked: false, data: {} },
     { id: "thermal-table", type: "thermalTable", title: "Export File", x: 55, y: 520, locked: false, width: 520, height: 205, data: {} },
-    { id: "costing-table", type: "costingTable", title: "Costing Sheet", x: 980, y: 130, locked: false, width: 650, height: 220, data: {} },
     { id: "boq-table", type: "boqTable", title: "BOQ / Price", x: 970, y: 430, locked: false, width: 650, height: 190, data: {} },
-    { id: "quotation", type: "quotation", title: "Quotation", x: 1680, y: 340, locked: false, data: {} },
     { id: "vrv-schedule", type: "vrvSchedule", title: "VRV Schedule", x: 170, y: 770, locked: false, width: 1550, height: 230, data: {} }
   ];
 }
@@ -5273,8 +5274,9 @@ async function dxGridImage(bytes, request) {
   const heights=ys.slice(1).map((bottom,i)=>bottom-ys[i]).filter(value=>value>8).sort((a,b)=>a-b),median=heights[Math.floor(heights.length/2)] || 20;
   const bands=ys.slice(1).map((bottom,i)=>[ys[i],bottom]).filter(([a,b])=>a>=(request.headerBottom || 0)-3 && b-a>=Math.max(9,median*.45));
   const regions=[];
-  for(let offset=0;offset<bands.length;offset+=8){
-    const group=bands.slice(offset,offset+8),top=group[0][0],bottom=group[group.length-1][1],gutter=48,head=27;
+  const groupSize=request.groupSize===1?1:4;
+  for(let offset=0;offset<bands.length;offset+=groupSize){
+    const group=bands.slice(offset,offset+groupSize),top=group[0][0],bottom=group[group.length-1][1],gutter=48,head=27;
     const widths=columns.map(i=>xs[i+1]-xs[i]),w=gutter+widths.reduce((sum,v)=>sum+v,0)+columns.length*3,h=bottom-top+head+2;
     const rgb=Buffer.alloc(w*h*3,255);let x=gutter;
     dxGridLabel(rgb,w,h,'ROW',3,9);
@@ -5303,6 +5305,9 @@ function dxGridLayoutSchema() {
 function dxGridRowsSchema() {
   return {type:'object',additionalProperties:false,properties:{rows:{type:'array',items:{type:'object',additionalProperties:false,properties:{sourceRow:{type:'integer'},values:{type:'array',items:{type:'string'}},uncertainColumns:{type:'array',items:{type:'string',enum:dxExportColumns()}}},required:['sourceRow','values','uncertainColumns']}},unclearFields:{type:'array',items:{type:'string'}}},required:['rows','unclearFields']};
 }
+function dxGridSingleRowSchema() {
+  return {type:'object',additionalProperties:false,properties:{unitRef:{type:'string'},type:{type:'string'},location:{type:'string'},tKw:{type:'string'},sKw:{type:'string'},flowRate:{type:'string'},uncertainColumns:{type:'array',items:{type:'string',enum:dxExportColumns()}},unclearFields:{type:'array',items:{type:'string'}}},required:['unitRef','type','location','tKw','sKw','flowRate','uncertainColumns','unclearFields']};
+}
 function dxOrderedUploads(uploads) {
   return [...uploads].sort((a,b) => String(a.originalName || '').localeCompare(String(b.originalName || ''),undefined,{numeric:true,sensitivity:'base'}) || String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id).localeCompare(String(b.id)));
 }
@@ -5310,14 +5315,18 @@ function dxGridReadPrompt(region, verification = false) {
   return `Read this cropped thermal table ${verification ? 'independently again from its pixels. This is a verification pass; do not infer values from prior readings' : 'directly from its pixels'}.
 The only columns shown are Row (a source-row label), Unit Ref, Type, Location, TKw, SKw, L/S. The image was geometrically cropped from the actual source table, with unrelated columns removed.
 Return exactly ${region.rowCount} numbered source rows, numbered ${region.firstRow} through ${region.firstRow+region.rowCount-1}, once each, in order. Each values array contains exactly six strings in Unit Ref, Type, Location, TKw, SKw, L/S order. Never include the source-row label in values.
-Type is literal equipment Type, e.g. FCU. Do not substitute the System (e.g. Chilled Water), invent DX equipment families, or normalize text.
+Type is the literal equipment Type shown inside its own column, such as Ducted, Decorative, or FCU. Do not substitute System, Area, or any other column; do not infer a type from the unit reference.
 Read the ENTIRE Location cell between its top and bottom horizontal borders. A tall/merged cell can contain TWO lines, such as an LR line followed by a Storage line: include BOTH, separated by a newline, as ONE equipment row. Do not keep only the last line and do not split that equipment row into two.
 Keep all floor/unit prefixes, braces, hyphens, parentheses, spelling, and digits exactly as printed. Repeated Unit Ref values are separate rows, not duplicate equipment; identify them by the numbered source row AND location. Do not merge, sort or deduplicate rows.
-TKw, SKw, L/S are the three visible numeric columns, cropped ONLY from Calculated AC Load -> Total, Sensible, Flow Rate. Transcribe each value on the same numbered source row. Preserve zeros/decimal text; never calculate or substitute nearby values.
+TKw, SKw, L/S are the three visible numeric columns, cropped from the user's selected load group -> Total, Sensible, Flow Rate. Transcribe each value on the same numbered source row. Preserve zeros/decimal text; never calculate or substitute nearby values.
 If a cell is genuinely unreadable, return its best visible read or an empty string and mark that exact column in uncertainColumns. If a numbered strip is a total/heading/non-data row, return six empty values for it. Check every character and decimal in every cell before returning. JSON only.`;
 }
 function dxGridRowsByNumber(result, region) {
   const rows = new Map();
+  if(region.rowCount===1 && result.rows?.length===1 && result.rows[0].values?.length===6) {
+    rows.set(region.firstRow,{...result.rows[0],sourceRow:region.firstRow});
+    return rows;
+  }
   for (const row of result.rows || []) {
     if (!Number.isInteger(row.sourceRow) || row.sourceRow < region.firstRow || row.sourceRow >= region.firstRow + region.rowCount || rows.has(row.sourceRow) || row.values?.length !== 6) throw new Error('AI returned inconsistent source-row alignment');
     rows.set(row.sourceRow,row);
@@ -5347,16 +5356,46 @@ function dxReconcileGridReadings(readings, region) {
   return rows;
 }
 async function dxReadGridRegion(region) {
-  const read=verification=>callOpenAIJson(verification?'dx_thermal_grid_verification':'dx_thermal_grid_rows',dxGridRowsSchema(),[{type:'input_text',text:dxGridReadPrompt(region,verification)},{type:'input_image',image_url:`data:image/png;base64,${region.image}`,detail:'high'}]);
+  const read=async verification=>{
+    for(let attempt=0;attempt<3;attempt++) {
+      const correction=attempt ? `\nThe previous response did not match the numbered row strips. Return every printed ROW label from ${region.firstRow} through ${region.firstRow+region.rowCount-1} exactly once, including outdoor-unit, separator, blank, and total strips as six empty values. Do not renumber or split a wrapped cell.` : '';
+      const result=await callOpenAIJson(verification?'dx_thermal_grid_verification':'dx_thermal_grid_rows',dxGridRowsSchema(),[{type:'input_text',text:dxGridReadPrompt(region,verification)+correction},{type:'input_image',image_url:`data:image/png;base64,${region.image}`,detail:'high'}]);
+      try { dxGridRowsByNumber(result,region);return result; }
+      catch(error) { if(attempt===2) throw new Error(`Could not align thermal source rows ${region.firstRow}-${region.firstRow+region.rowCount-1} after three readings. Try a clearer screenshot of this table section.`); }
+    }
+  };
   const readings=await Promise.all([read(false),read(true)]);
   let reconciled=dxReconcileGridReadings(readings,region);
   if (reconciled.some(row=>Object.keys(row.flags).length)) { readings.push(await read(true));reconciled=dxReconcileGridReadings(readings,region); }
   return {reconciled,readings};
 }
-async function extractDxGridThermal(project, uploads, prepared) {
+async function dxReadSingleGridRegion(region) {
+  const read=async verification=>{
+    const answer=await callOpenAIJson(verification?'dx_thermal_grid_single_verification':'dx_thermal_grid_single_row',dxGridSingleRowSchema(),[
+      {type:'input_text',text:'This image contains exactly ONE physical thermal table row beneath the blue column labels. Ignore the ROW number at left. Return the six named fields unitRef, type, location, tKw, sKw, flowRate as strings. Read the three numeric values only from the shown TKw, SKw, L/S cells. Include the full Location text. If visible numeric load cells contain values, transcribe them even when the equipment reference repeats. Return empty strings only for an explicit Outdoor Unit, TOTAL, heading, or truly blank row. Never copy values from adjacent rows or infer a missing cell. Mark an unreadable cell in uncertainColumns. JSON only.'},
+      {type:'input_image',image_url:`data:image/png;base64,${region.image}`,detail:'high'}
+    ]);
+    const values=['unitRef','type','location','tKw','sKw','flowRate'].map(key=>safeExtract(answer[key]));
+    return {rows:[{sourceRow:region.firstRow,values,uncertainColumns:answer.uncertainColumns || []}],unclearFields:answer.unclearFields || []};
+  };
+  const readings=await Promise.all([read(false),read(true)]);
+  let reconciled=dxReconcileGridReadings(readings,region);
+  if(reconciled.some(row=>Object.keys(row.flags).length) || readings.every(result=>result.rows[0].values.every(value=>!safeExtract(value)))) {readings.push(await read(true));reconciled=dxReconcileGridReadings(readings,region);}
+  return {reconciled,readings};
+}
+function dxCapacitySource(value) {
+  return ['Calculated AC Load','First Selection','Second Selection'].includes(value) ? value : 'Calculated AC Load';
+}
+function dxLockedThermalColumns(columns) {
+  if (!Array.isArray(columns) || columns.length !== 6 || !Number.isInteger(columns[0])) return columns;
+  // These gridded DX sheets place System and Type after Unit Ref, then Location.
+  return [columns[0], columns[0] + 2, columns[0] + 3, ...columns.slice(3)];
+}
+async function extractDxGridThermal(project, uploads, prepared, options = {}) {
   const ordered=dxOrderedUploads(uploads);
+  const capacitySource=dxCapacitySource(options.capacitySource);
   const layoutContent=[{type:'input_text',text:`Identify ONLY the table layout and screenshot continuation order, not the data values. Images below are each labelled with uploadId, original filename, original pixel dimensions and detected vertical grid lines. Return all uploadIds exactly once in logical table/page order. Use visible headers/page numbers/continuation content first; filenames and capture timestamps break ties. Do not sort individual equipment rows or sort floors alphabetically.
-Find the screenshot containing column headers and lock its complete column layout. Return six zero-based ORIGINAL column indices for Unit Ref, Type, Location, Total kW, Sensible kW, Flow Rate L/s, in that exact order. System and Type are DIFFERENT columns: Type is the child header Type, NOT System. The Calculated AC Load group is the three far-right columns, AFTER the possibly empty Demand Control Volume column. Occupant Density is not a load column.
+The user selected the load group named "${capacitySource}". Find that exact GROUP HEADER in the screenshot containing column headers. Return six zero-based ORIGINAL column indices for Unit Ref, Type, Location, then Total kW, Sensible kW, Flow Rate L/s directly UNDER "${capacitySource}", in that exact order. System and Type are DIFFERENT columns: Type is the child header Type, NOT System. Other groups can repeat Total/Sensible/Flow Rate; do not take values from any other group. If "${capacitySource}" is absent, return an empty columns array and explain this in unclearFields. For First/Second Selection, skip their Quantity column and any Check Figures columns. For Calculated AC Load, use its own three child columns after Demand Control Volume, even if selection groups appear farther right.
 For each upload, indicate whether its own image shows headers and headerBottom as the original pixel y coordinate immediately beneath ALL header rows (0 when no headers). Validate continuation grid columns match the header-bearing screenshot. If the layout/order is ambiguous, explain it in unclearFields. JSON only.`}];
   for (const upload of ordered) {
     const item=prepared.get(upload.id);
@@ -5369,16 +5408,17 @@ For each upload, indicate whether its own image shows headers and headerBottom a
     if(!bytes) throw new Error('The saved header source is unavailable. Select a screenshot containing the table header.');
     layoutContent.push({type:'input_text',text:`CONTEXT ONLY: the following earlier screenshot supplies the column headers. It is NOT selected for extraction. Do not include ${contextHeader.id} in orderedUploadIds or pages. Extract only the previously labelled selected uploadIds.`},{type:'input_image',image_url:`data:${contextHeader.mimeType};base64,${bytes.toString('base64')}`,detail:'high'});
   }
-  const readLayout=verification=>callOpenAIJson(verification?'dx_thermal_grid_layout_verification':'dx_thermal_grid_layout',dxGridLayoutSchema(),verification?[...layoutContent,{type:'input_text',text:'Independently verify the header column indices and screenshot order. In particular distinguish System from Type, and Occupant Density/DCV from Calculated AC Load. Do not return data rows.'}]:layoutContent);
+  const readLayout=verification=>callOpenAIJson(verification?'dx_thermal_grid_layout_verification':'dx_thermal_grid_layout',dxGridLayoutSchema(),verification?[...layoutContent,{type:'input_text',text:`Independently verify the header column indices and screenshot order. The three numeric columns must be under the exact "${capacitySource}" group header. Distinguish System from Type and ignore Quantity, Check Figures, Occupant Density and DCV. Do not return data rows.`}]:layoutContent);
   const layouts=await Promise.all([readLayout(false),readLayout(true)]);
-  const signature=layout=>JSON.stringify([layout.orderedUploadIds,layout.columns,(layout.pages || []).map(page=>[page.uploadId,page.hasHeader,page.hasHeader && prepared.has(page.uploadId)?prepared.get(page.uploadId).geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,0):0]).sort((a,b)=>a[0].localeCompare(b[0]))]);
+  const signature=layout=>JSON.stringify([layout.orderedUploadIds,dxLockedThermalColumns(layout.columns),(layout.pages || []).map(page=>[page.uploadId,page.hasHeader,page.hasHeader && prepared.has(page.uploadId)?prepared.get(page.uploadId).geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,0):0]).sort((a,b)=>a[0].localeCompare(b[0]))]);
   if(signature(layouts[0])!==signature(layouts[1]))layouts.push(await readLayout(true));
   const layout=layouts.find(candidate=>layouts.filter(other=>signature(candidate)===signature(other)).length>=2);
   if(!layout)throw new Error('Independent readings could not agree on the header columns or screenshot order. Include a clear full-width header screenshot.');
-  if (!layout.pages?.some(page=>page.hasHeader) && !contextHeader) throw new Error('No readable thermal table header was found. Include the screenshot showing System/Type and Calculated AC Load headers.');
+  layout.columns=dxLockedThermalColumns(layout.columns);
+  if (!layout.pages?.some(page=>page.hasHeader) && !contextHeader) throw new Error(`No readable thermal table header was found. Include a screenshot showing System/Type and ${capacitySource} headers.`);
   const ids=layout.orderedUploadIds;
   if (ids.length!==ordered.length || new Set(ids).size!==ordered.length || ids.some(id=>!prepared.has(id))) throw new Error('Could not establish a reliable screenshot continuation order');
-  if (layout.columns?.length!==6 || new Set(layout.columns).size!==6 || layout.columns[4]!==layout.columns[3]+1 || layout.columns[5]!==layout.columns[4]+1) throw new Error('Could not uniquely lock the six thermal columns');
+  if (layout.columns?.length!==6 || new Set(layout.columns).size!==6 || layout.columns[4]!==layout.columns[3]+1 || layout.columns[5]!==layout.columns[4]+1) throw new Error(`Could not find the Total, Sensible and Flow Rate columns under ${capacitySource}. Select a group visible in the sheet header.`);
   const header=layout.pages.find(page=>page.hasHeader);const count=header?prepared.get(header.uploadId)?.geometry.columnCount:savedLayout?.columnCount;
   const rows=[],sources=[],review={},warnings=[...(layout.unclearFields || [])];
   for (const uploadId of ids) {
@@ -5386,24 +5426,42 @@ For each upload, indicate whether its own image shows headers and headerBottom a
     if (!page || item.geometry.columnCount!==count || layout.columns.some(index=>index<0 || index>=count)) throw new Error('Continuation screenshot columns do not match the header. Upload an uncropped full-width table screenshot.');
     const headerBottom=page.hasHeader?item.geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,item.geometry.yLines[0]):0;
     const crops=await dxGridImage(item.bytes,{columns:layout.columns,headerBottom});
+    let singleRowCrops;
     for (let batch=0;batch<crops.regions.length;batch+=2) {
-      const results=await Promise.all(crops.regions.slice(batch,batch+2).map(dxReadGridRegion));
+      const batchRegions=crops.regions.slice(batch,batch+2);
+      const attempts=await Promise.allSettled(batchRegions.map(dxReadGridRegion));
+      const results=[];
+      for(let index=0;index<attempts.length;index++) {
+        if(attempts[index].status==='fulfilled') { results.push(attempts[index].value);continue; }
+        if(!/align thermal source rows/.test(String(attempts[index].reason?.message || ''))) throw attempts[index].reason;
+        singleRowCrops ||= await dxGridImage(item.bytes,{columns:layout.columns,headerBottom,groupSize:1});
+        const failed=batchRegions[index];
+        const singles=singleRowCrops.regions.filter(region=>region.firstRow>=failed.firstRow && region.firstRow<failed.firstRow+failed.rowCount);
+        if(singles.length!==failed.rowCount) throw attempts[index].reason;
+        results.push(...await Promise.all(singles.map(dxReadSingleGridRegion)));
+      }
       for (const {reconciled,readings} of results) {
       for (const result of reconciled) {
-        if (!safeExtract(result.values[0] || result.values[2])) continue;
-        // Keep the established rule: a real blank load cell is not a valid thermal data row.
-        if (result.values.slice(3).some(value=>value==='')) { warnings.push(`${item.upload.originalName}, source row ${result.sourceRow}: a required load value could not be read; row omitted, review the source.`);continue; }
+        const [ref,type,location]=result.values.map(safeExtract);
+        if (!ref && !location && !/DUCT|WALL|SPLIT|DECORATIVE|PACKAGE|FCU|AHU/i.test(type)) continue;
+        if (/\boutdoor\s*unit\b/i.test(type) || /^(total|sub\s*total|grand\s*total)$/i.test(ref) || /^(total|sub\s*total|grand\s*total)$/i.test(location)) continue;
+        if (!type && result.values.slice(3).every(value=>!safeExtract(value))) continue;
         const index=rows.length; rows.push(result.values);sources.push({uploadId,filename:item.upload.originalName,sourceRow:result.sourceRow});
         for (const [column,flag] of Object.entries(result.flags)) review[`${index}:${column}`]={...flag,row:index,column};
+        if (!ref) review[`${index}:Unit Ref`]={row:index,column:'Unit Ref',first:'',second:'',reason:'Unit reference could not be read. Review this source row.'};
+        if (!location) review[`${index}:Location`]={row:index,column:'Location',first:'',second:'',reason:'Full location could not be read. Review this source row.'};
+        dxExportColumns().slice(3).forEach((column,offset)=>{
+          if (!safeExtract(result.values[offset+3])) review[`${index}:${column}`]={row:index,column,first:'',second:'',reason:'Load value could not be read from the selected column. Review this source cell.'};
+        });
       }
       for (const reading of readings) warnings.push(...(reading.unclearFields || []));
       }
     }
   }
   applyDxThermalColumnSanityReview(rows,review);
-  return {status:Object.keys(review).length || warnings.length?'needs_verification':'ok',rows:[],customColumns:dxExportColumns(),customRows:rows,customReviewCells:review,reviewCells:{},rowSources:sources,sourceUploadIds:ids,gridLayout:{columns:layout.columns,columnCount:count,headerUploadId:header?.uploadId || contextHeader?.id},unclearFields:[...new Set(warnings)],message:`Extracted ${rows.length} rows from ${ids.length} screenshots in verified source order.`};
+  return {status:Object.keys(review).length || warnings.length?'needs_verification':'ok',rows:[],customColumns:dxExportColumns(),customRows:rows,customReviewCells:review,reviewCells:{},rowSources:sources,sourceUploadIds:ids,gridLayout:{columns:layout.columns,columnCount:count,headerUploadId:header?.uploadId || contextHeader?.id,capacitySource},unclearFields:[...new Set(warnings)],message:`Extracted ${rows.length} rows from ${ids.length} screenshots in verified source order.`};
 }
-async function tryDxGridExtraction(project, uploads) {
+async function tryDxGridExtraction(project, uploads, options = {}) {
   if (!uploads.length || uploads.some(upload=>!/^image\/png$/i.test(upload.mimeType || ''))) return null;
   const prepared=new Map();
   for (const upload of uploads) {
@@ -5415,11 +5473,11 @@ async function tryDxGridExtraction(project, uploads) {
     if (geometry.columnCount<6 || geometry.yLines.length<3) return null;
     prepared.set(upload.id,{upload,bytes,geometry});
   }
-  return extractDxGridThermal(project,uploads,prepared);
+  return extractDxGridThermal(project,uploads,prepared,options);
 }
 
 async function extractDxThermalWithOpenAI(project, options, uploads) {
-  const gridded = await tryDxGridExtraction(project, uploads);
+  const gridded = await tryDxGridExtraction(project, uploads, options);
   if (gridded) return gridded;
   uploads = dxOrderedUploads(uploads);
   const customColumns = dxExportColumns();
@@ -5515,7 +5573,7 @@ async function extractDxThermalWithOpenAI(project, options, uploads) {
             const retry = await callOpenAIJson(
               "dx_thermal_sheet_targeted_retry",
               dxThermalJsonSchema(),
-              await thermalOpenAIContent(project, [upload], dxThermalTargetedRetryPrompt(retryCells))
+              await thermalOpenAIContent(project, [upload], dxThermalTargetedRetryPrompt(retryCells, options))
             );
             const retryColumns = Array.isArray(retry.customColumns) ? retry.customColumns.map(safeExtract).filter(Boolean) : [];
             const retryRows = Array.isArray(retry.customRows)
@@ -5593,7 +5651,7 @@ async function extractRegularThermalRowsForDx(project, options, upload) {
       ...options,
       workflowMode: "dx",
       customExtraction: true,
-      customInstruction: "Extract DX thermal table columns Unit Ref, Type, Location, Total, Sensible, and Flow Rate. Total, Sensible, and Flow Rate must come only from the dark-blue Calculated AC Load group at the far right. These are the three rightmost columns after Occupant Density. Do not use Occupant Density, Area, No. of People, or Outdoor Air. Skip rows where any of those three Calculated AC Load values are blank."
+      customInstruction: `Extract DX thermal table columns Unit Ref, Type, Location, Total, Sensible, and Flow Rate. Total, Sensible, and Flow Rate must come only from the group headed "${dxCapacitySource(options.capacitySource)}". Ignore all other repeated load groups, Quantity, Check Figures, Occupant Density, Area, No. of People, and Outdoor Air. Skip rows where any of the three selected load values are blank.`
     }))
   );
   const fallbackColumns = Array.isArray(customFallback.customColumns) ? customFallback.customColumns.map(safeExtract).filter(Boolean) : [];
@@ -5991,7 +6049,7 @@ function applyDxThermalColumnSanityReview(rows, customReviewCells, rowOffset = 0
     const flowLooksLikeKw = flow > 0 && total > 0 && (flow < 40 || flow < total * 8 || flow <= sensible || flow <= total);
     const totalLooksLikeFlow = total >= 75 && flowLooksLikeKw;
     if (flowLooksLikeKw) {
-      setDxThermalReview(customReviewCells, outputRow, columns[5], row?.[5], "", "Flow Rate looks like a nearby kW column, not L/s. Verify the value under Calculated AC Load -> Flow Rate L/s.");
+      setDxThermalReview(customReviewCells, outputRow, columns[5], row?.[5], "", "Flow Rate looks like a nearby kW column, not L/s. Verify the value under the selected load group -> Flow Rate L/s.");
       if (totalLooksLikeFlow) {
         setDxThermalReview(customReviewCells, outputRow, columns[3], row?.[3], "", "Total kW may be shifted from the Flow Rate column.");
       }
@@ -6416,6 +6474,8 @@ Return JSON only.`;
 }
 
 function dxThermalPrompt(options = {}) {
+  const selectedSource=dxCapacitySource(options.capacitySource);
+  if(selectedSource!=='Calculated AC Load') return `Read DX thermal equipment rows from the uploaded sheet. The user selected the load group headed "${selectedSource}". Find that exact group header before reading values. If it is absent, return no rows and explain that the selected group is unavailable in unclearFields. Other groups may repeat Total kW, Sensible kW and Flow Rate L/s: ignore ALL of them, including Calculated AC Load. Under "${selectedSource}", read only its Total, Sensible and Flow Rate child columns; skip Quantity and Check Figures. Lock these three original columns and follow them vertically for every row and continuation screenshot. Extract Unit Ref from Units Reference / No., Type from the Type child column (not System), and the entire Location cell. TKw = selected Total kW, SKw = selected Sensible kW, L/S = selected Flow Rate L/s. Keep values on the same physical row, preserve exact decimals, and never infer or copy neighboring columns. Skip outdoor units, headings and totals, and rows with any blank selected load value. Return dxRows with unitRef,type,location,tKw,sKw,flowRate; customColumns exactly ["Unit Ref","Type","Location","TKw","SKw","L/S"]; customRows with cells in that order; and any uncertainty in unclearFields. JSON only.`;
   return `
 You are an accurate DX thermal load table extraction assistant for scanned PDFs and screenshots.
 
@@ -6532,14 +6592,15 @@ If a cell is unclear, return "" for that cell and list it in unclearFields.
 Return JSON only.`;
 }
 
-function dxThermalTargetedRetryPrompt(retryCells = []) {
+function dxThermalTargetedRetryPrompt(retryCells = [], options = {}) {
+  const selectedSource=dxCapacitySource(options.capacitySource);
   const lines = (retryCells || []).map(cell => {
     const columnHint = cell.column === "TKw"
-      ? "Calculated AC Load -> Total kW"
+      ? `${selectedSource} -> Total kW`
       : cell.column === "SKw"
-        ? "Calculated AC Load -> Sensible kW"
+        ? `${selectedSource} -> Sensible kW`
         : cell.column === "L/S"
-          ? "Calculated AC Load -> Flow Rate L/s"
+          ? `${selectedSource} -> Flow Rate L/s`
           : cell.column;
     return `- Row anchor Unit Ref "${safeExtract(cell.unitRef)}", Location "${safeExtract(cell.location)}", retry "${cell.column}" (${columnHint}). First read: "${safeExtract(cell.first)}"`;
   }).join("\n");
@@ -6554,7 +6615,7 @@ Rules:
 - If the exact Unit Ref row cannot be found, return empty values for that row.
 - Do not use row position alone.
 - Do not read nearby rows.
-- For TKw/SKw/L/S, first locate the dark-blue "Calculated AC Load" group header, then read only inside its child columns:
+- For TKw/SKw/L/S, first locate the "${selectedSource}" group header, then read only inside its child columns:
   - TKw = Total kW/Total
   - SKw = Sensible kW/Sensible
   - L/S = Flow Rate L/s/Flow Rate

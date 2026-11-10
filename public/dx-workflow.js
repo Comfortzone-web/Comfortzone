@@ -43,6 +43,7 @@ function dxSaveInBackground() {
 }
 function dxData() {
   state.dx ||= { step: 1, reviewed: false, selectedUploadIds: thermalUploadIds(), match: { total: true, sensible: true, airflow: true, totalVariation: 0, sensibleVariation: 0, airflowVariation: 0 } };
+  state.dx.capacitySource ||= 'Calculated AC Load';
   state.dx.autosaveEnabled ??= projectPersisted && state.visible !== false;
   return state.dx;
 }
@@ -98,10 +99,34 @@ async function dxSave(options = {}) {
     return saved;
   } catch (error) { if (state === project) dxSetStatus('Save failed — changes are not saved'); throw error; }
 }
+const dxCanonicalTypes = ['Ducted','Ducted-Inv','Wall Mounted','Split','Packaged','Decorative'];
+function dxTypeDistance(a,b) {
+  const rows=Array.from({length:a.length+1},()=>Array(b.length+1).fill(0));
+  for(let i=0;i<=a.length;i++)rows[i][0]=i;
+  for(let j=0;j<=b.length;j++)rows[0][j]=j;
+  for(let i=1;i<=a.length;i++)for(let j=1;j<=b.length;j++){
+    rows[i][j]=Math.min(rows[i-1][j]+1,rows[i][j-1]+1,rows[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    if(i>1 && j>1 && a[i-1]===b[j-2] && a[i-2]===b[j-1])rows[i][j]=Math.min(rows[i][j],rows[i-2][j-2]+1);
+  }
+  return rows[a.length][b.length];
+}
+function dxCorrectType(value) {
+  const original=String(value ?? '').trim();
+  if(!original || /^(FCU|AHU|FAHU)$/i.test(original))return original;
+  const key=original.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const ranked=dxCanonicalTypes.map(type=>({type,distance:dxTypeDistance(key,type.toUpperCase().replace(/[^A-Z0-9]/g,''))})).sort((a,b)=>a.distance-b.distance);
+  const limit=key.length>=10?2:1;
+  return ranked[0].distance<=limit && (!ranked[1] || ranked[0].distance<ranked[1].distance) ? ranked[0].type : original;
+}
 function dxValidateTypes(rows) {
   for (const row of rows) {
+    row.Type=dxCorrectType(row.Type);
     if (/^(FCU|AHU|FAHU)$/i.test(String(row.Type || '').trim())) {
       row.__selectionWarning = `Source Type ${row.Type} was copied exactly. Review DX equipment compatibility separately; it is not an OCR correction.`;
+      continue;
+    }
+    if (/DUCT|WALL|SPLIT|DECORATIVE|PACKAGE|UATQ/i.test(row.Type || '')) {
+      if(row.__reviewCells?.Type)clearTableCellReview(row,'Type');
       continue;
     }
     if (!/DUCT|WALL|SPLIT|DECORATIVE|PACKAGE|UATQ/i.test(row.Type || '')) {
@@ -160,6 +185,10 @@ function renderDxWorkspace() {
     input.checked ? ids.add(input.dataset.dxFile) : ids.delete(input.dataset.dxFile);
     data.selectedUploadIds = [...ids]; dxChanged(); renderDxWorkspace();
   }));
+  canvas.querySelector('[data-dx-capacity-source]')?.addEventListener('change', event => {
+    data.capacitySource=event.target.value;
+    dxChanged();
+  });
   canvas.querySelectorAll('[data-dx-remove]').forEach(button => button.addEventListener('click', async () => {
     if (!confirm('Remove this uploaded file from the workflow? Existing extracted rows will remain.')) return;
     const id = button.dataset.dxRemove;
@@ -210,6 +239,7 @@ function dxStepOne() {
   const files = thermalUploadIds().map(findUpload).filter(Boolean).sort((a,b)=>String(a.originalName).localeCompare(String(b.originalName),undefined,{numeric:true,sensitivity:'base'}));
   const selected = files.filter(file => data.selectedUploadIds.includes(file.id)).length;
   return `<div class="dx-extraction-grid"><div class="dx-left">${dxCard(`${dxIcon('upload')}Thermal Sheet Upload${dxThermalActivity ? `<span class="dx-thermal-spinner" role="status" aria-label="${escapeHtml(dxThermalActivity)}" title="${escapeHtml(dxThermalActivity)}"></span>` : ''}`, `
+    <label class="dx-capacity-source">Load columns to read<select data-dx-capacity-source ${dxBusy ? 'disabled' : ''}>${['Calculated AC Load','First Selection','Second Selection'].map(source=>`<option value="${source}" ${data.capacitySource===source?'selected':''}>${source}</option>`).join('')}</select></label>
     <button class="dx-drop" data-dx-action="upload" ${dxBusy ? 'disabled' : ''}>${dxIcon('cloud-upload')}<strong>Drag & drop files here, or click to upload</strong><span>Upload PDF, PNG, JPG</span></button>
     <div class="dx-file-tools"><button data-dx-action="select-all">☑ Select All</button><button data-dx-action="clear">Clear Selection</button><span>${selected} files selected for extraction</span></div>
     <div class="dx-files">${files.map(file => `<div class="dx-file ${data.selectedUploadIds.includes(file.id) ? 'selected' : ''}"><input aria-label="Select ${escapeHtml(file.originalName)}" type="checkbox" data-dx-file="${escapeHtml(file.id)}" ${data.selectedUploadIds.includes(file.id) ? 'checked' : ''} ${dxBusy ? 'disabled' : ''}>${dxIcon(file.mimeType?.includes('pdf') ? 'file-text' : 'image')}<button class="dx-filename" data-dx-preview="${escapeHtml(file.id)}">${escapeHtml(file.originalName)}</button><small>${(file.size / 1024 / 1024).toFixed(2)} MB</small><button data-dx-remove="${escapeHtml(file.id)}" aria-label="Remove file" ${dxBusy ? 'disabled' : ''}>×</button></div>`).join('') || '<div class="dx-empty">No thermal sheets uploaded yet.</div>'}</div>
@@ -244,6 +274,66 @@ function dxFilterScheduleRows() {
     row.hidden = !!query && !Object.entries(item || {}).some(([key, value]) => !key.startsWith('__') && String(value ?? '').toLowerCase().includes(query));
   });
 }
+function dxFillThermalRows(rows,column,indexes,value) {
+  const next=numericDxValue(column,value);
+  indexes.forEach(index=>{
+    if(!rows[index])return;
+    rows[index][column]=next;
+    clearTableCellReview(rows[index],column);
+  });
+}
+function dxBindThermalFill(target,node) {
+  if(node.locked || dxBusy)return;
+  const scroll=target.querySelector('.dx-table-scroll');
+  target.querySelectorAll('[data-dx-cell]').forEach(input=>{
+    const cell=input.closest('td'),handle=document.createElement('button');
+    handle.type='button';handle.className='dx-fill-handle';
+    handle.setAttribute('aria-label',`Drag down to fill ${input.dataset.col}`);
+    handle.title='Drag down to copy this value';
+    cell.appendChild(handle);
+    handle.addEventListener('pointerdown',event=>{
+      if(event.button!==0 || !input.checkValidity()){if(!input.checkValidity())input.reportValidity();return;}
+      event.preventDefault();event.stopPropagation();
+      const column=input.dataset.col,start=Number(input.dataset.row),visible=()=>[...target.querySelectorAll('tr[data-dx-thermal-row]')].filter(row=>!row.hidden);
+      let targetRow=start,pointerY=event.clientY,active=true,frame=0;
+      const clearPreview=()=>target.querySelectorAll('.dx-fill-preview').forEach(el=>el.classList.remove('dx-fill-preview'));
+      const selected=()=>{const rows=visible(),from=rows.findIndex(row=>Number(row.dataset.dxThermalRow)===start),to=rows.findIndex(row=>Number(row.dataset.dxThermalRow)===targetRow);return from<0 || to<=from?[]:rows.slice(from,to+1).map(row=>Number(row.dataset.dxThermalRow));};
+      const update=()=>{
+        const rect=scroll.getBoundingClientRect(),cellRect=cell.getBoundingClientRect();
+        const y=Math.max(rect.top+6,Math.min(rect.bottom-6,pointerY));
+        const x=Math.max(rect.left+6,Math.min(rect.right-6,cellRect.left+cellRect.width/2));
+        const row=document.elementFromPoint(x,y)?.closest('tr[data-dx-thermal-row]');
+        if(row && !row.hidden)targetRow=Number(row.dataset.dxThermalRow);
+        clearPreview();selected().forEach(index=>target.querySelector(`[data-dx-thermal-row="${index}"] [data-dx-cell][data-col="${CSS.escape(column)}"]`)?.closest('td')?.classList.add('dx-fill-preview'));
+      };
+      const tick=()=>{
+        if(!active)return;
+        const rect=scroll.getBoundingClientRect();
+        if(pointerY>=rect.bottom-20)scroll.scrollTop+=12;
+        else if(pointerY<=rect.top+20)scroll.scrollTop-=12;
+        update();frame=requestAnimationFrame(tick);
+      };
+      const finish=apply=>{
+        if(!active)return;
+        active=false;cancelAnimationFrame(frame);update();
+        const indexes=apply?selected():[];clearPreview();
+        if(indexes.length<2)return;
+        const previous=state.tables.vrvSchedule.rows;
+        if(indexes.some(index=>previous[index]?.__manualProposal) && !confirm('Recalculate selected rows? Their manual proposed equipment will be replaced.'))return;
+        dxFillThermalRows(state.tables.thermal.rows,column,indexes,input.value);
+        dxValidateTypes(state.tables.thermal.rows);
+        buildDxSchedule();
+        state.tables.vrvSchedule.rows=state.tables.vrvSchedule.rows.map((generated,index)=>indexes.includes(index)?generated:previous[index] || generated);
+        dxChanged(true);renderDxWorkspace();
+      };
+      handle.setPointerCapture(event.pointerId);
+      handle.addEventListener('pointermove',move=>{pointerY=move.clientY;update();});
+      handle.addEventListener('pointerup',()=>finish(true),{once:true});
+      handle.addEventListener('pointercancel',()=>finish(false),{once:true});
+      frame=requestAnimationFrame(tick);
+    });
+  });
+}
 function dxMountTable(key, node) {
   const target = canvas.querySelector('[data-dx-table]');
   const table = state.tables[key];
@@ -261,7 +351,7 @@ function dxMountTable(key, node) {
     return `<td class="${flag ? 'dx-warning' : ''}">${col === 'Location' ? `<textarea aria-label="Row ${i+1} Location" title="${escapeHtml(row[col] ?? '')}" data-dx-cell data-key="${key}" data-row="${i}" data-col="Location" rows="${Math.min(4,Math.max(1,String(row[col] ?? '').split('\n').length))}" ${node.locked || dxBusy || derived ? 'disabled' : ''}>${escapeHtml(row[col] ?? '')}</textarea>` : `<input aria-label="Row ${i+1} ${escapeHtml(col)}" title="${escapeHtml(flag?.reason || col)}" data-dx-cell data-key="${key}" data-row="${i}" data-col="${escapeHtml(col)}" ${numeric ? (col === 'Qty' ? 'type="number" step="1" min="1"' : 'type="number" step="any" min="0"') : ''}  ${model ? 'list="dxModels"' : ''} ${col === 'Type' ? 'list="dxTypes"' : ''} value="${escapeHtml(row[col] ?? '')}" ${node.locked || dxBusy || derived ? 'disabled' : ''}>`}${flag ? '<span title="Needs review">⚠</span>' : ''}</td>`;
   }).join('')}</tr>`).join('') || `<tr><td colspan="${table.columns.length}" class="dx-empty"><div class="dx-table-empty">${dxIcon('table-2')}<strong>${schedule ? 'No schedule rows yet.' : 'Your thermal data will appear here'}</strong><span>${schedule ? 'Complete the thermal extraction step to build your schedule.' : 'Upload and extract thermal sheets to begin.'}</span></div></td></tr>`}</tbody></table></div>`;
   target.appendChild(workflowDatalist('dxModels', dxProposalCatalog.map(item => item.model)));
-  target.appendChild(workflowDatalist('dxTypes',['Ducted','Ducted-Inv','Wall Mounted','Split','Packaged']));
+  target.appendChild(workflowDatalist('dxTypes',dxCanonicalTypes));
   target.querySelectorAll('[data-dx-action]').forEach(dxBindAction);
   target.querySelectorAll('[data-dx-cell]').forEach(input => input.addEventListener('change', () => {
     if (node.locked || dxBusy) return;
@@ -291,6 +381,7 @@ function dxMountTable(key, node) {
     }
     dxChanged(specified); renderDxWorkspace();
   }));
+  if(!schedule)dxBindThermalFill(target,node);
   if (!schedule && dxSearch) canvas.querySelector('[data-dx-search]').dispatchEvent(new Event('input'));
 }
 function numericDxValue(col,value) { return ['TKw','SKw','L/S','Qty','NOMINAL TR'].includes(col) && value !== '' ? Number(value) : value; }
@@ -406,7 +497,7 @@ async function dxExtract(append) {
   try {
     await dxSave({storage:true});
     // Read-only extraction prevents the endpoint from replacing saved rows before append is merged.
-    const extracted=await scanThermal(true,{uploadIds:ids});
+    const extracted=await scanThermal(true,{uploadIds:ids,capacitySource:data.capacitySource});
     let rows;
     if(extracted.customRows?.length) rows=applyExtractionReviewCells(extracted.customRows.map(row=>Object.fromEntries((extracted.customColumns || dxExportColumns).map((col,i)=>[col,Array.isArray(row)?row[i]??'':row[col]??'']))),extracted.customReviewCells);
     else rows=applyExtractionReviewCells(extracted.rows || [],extracted.reviewCells);
