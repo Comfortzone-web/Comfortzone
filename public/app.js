@@ -4307,19 +4307,19 @@ function salesOrderBookHtml() {
         ${orderBookKpi("Order Value", salesCompactMoney(stats.orderValue), "Including VAT", "green")}
         ${orderBookKpi("Payment Received", salesCompactMoney(stats.received), "Including VAT", "purple")}
         ${orderBookKpi("Balance to Receive", salesCompactMoney(stats.balance), "Pending collection", "orange")}
-        ${orderBookKpi("Pending Jobs", stats.pendingJobs, "Not completed", "blue")}
+        ${orderBookKpi("Pending Jobs", stats.pendingJobs, "Not completed", "sky")}
         ${orderBookKpi("Delivery Pending", stats.deliveryPending, "Delivery Status", "red")}
       </div>
       ${salesOrderBookFiltersOpen ? salesOrderBookFilterPanel(orders) : ""}
+      <div class="order-book-tabs" role="tablist" aria-label="Order status">
+        ${salesOrderBookTabButton("all", "All Orders", filtered)}
+        ${salesOrderBookTabButton("partial", "Partially Done", filtered)}
+        ${salesOrderBookTabButton("completed", "Completed", filtered)}
+        ${salesOrderBookTabButton("invoice", "Invoice Pending", filtered)}
+        ${salesOrderBookTabButton("payment", "Payment Pending", filtered)}
+      </div>
       <div class="order-book-body ${detailOpen ? "has-detail" : ""}">
         <section class="order-book-table-card">
-          <div class="pipeline-tabs">
-            ${salesOrderBookTabButton("all", "All Orders")}
-            ${salesOrderBookTabButton("partial", "Partially Done")}
-            ${salesOrderBookTabButton("completed", "Completed")}
-            ${salesOrderBookTabButton("invoice", "Invoice Pending")}
-            ${salesOrderBookTabButton("payment", "Payment Pending")}
-          </div>
           <div class="pipeline-table-wrap">
             <table class="sales-table order-book-table">
               <thead><tr><th>Order No</th><th>Customer</th><th>Job Description</th><th>Order Value</th><th>Received</th><th>Balance</th><th>Order Status</th><th><span class="order-book-actions-label">Actions</span></th></tr></thead>
@@ -4335,18 +4335,24 @@ function salesOrderBookHtml() {
 }
 
 function orderBookKpi(label, value, caption, tone = "blue") {
+  const icons = {
+    "Total Orders": "clipboard-check", "Order Value": "coins",
+    "Payment Received": "hand-coins", "Balance to Receive": "layers-3",
+    "Pending Jobs": "hard-hat", "Delivery Pending": "truck"
+  };
   return `
     <article class="order-book-kpi ${tone}">
-      <div class="pipeline-kpi-icon">${salesPipelineKpiIcon(label)}</div>
-      <span>${escapeHtml(label)}</span>
+      <div class="order-book-kpi-heading"><span class="order-book-icon" style="--order-icon:url('/assets/dx-icons/${icons[label]}.svg')" aria-hidden="true"></span><span>${escapeHtml(label)}</span></div>
       <strong>${escapeHtml(String(value))}</strong>
       <small>${escapeHtml(caption)}</small>
     </article>
   `;
 }
 
-function salesOrderBookTabButton(tab, label) {
-  return `<button class="${salesOrderBookTab === tab ? "active" : ""}" data-sales-order-book-tab="${escapeHtml(tab)}">${escapeHtml(label)}</button>`;
+function salesOrderBookTabButton(tab, label, orders) {
+  const icons = { all: "layout-grid", partial: "hourglass", completed: "check", invoice: "file-text", payment: "wallet" };
+  const active = salesOrderBookTab === tab;
+  return `<button class="${active ? "active" : ""}" role="tab" aria-selected="${active}" data-sales-order-book-tab="${escapeHtml(tab)}"><span class="order-book-icon" style="--order-icon:url('/assets/dx-icons/${icons[tab]}.svg')" aria-hidden="true"></span><span class="order-book-tab-label">${escapeHtml(label)}</span><span class="order-book-tab-count">${salesOrderBookTabFilter(orders, tab).length}</span></button>`;
 }
 
 function salesOrderBookFilterPanel(orders) {
@@ -4533,12 +4539,12 @@ function orderMatchesOrderBookDateRange(order) {
   return true;
 }
 
-function salesOrderBookTabFilter(rows) {
-  if (salesOrderBookTab === "partial") return rows.filter(order => norm(order.status).includes("PARTIALLY"));
-  if (salesOrderBookTab === "completed") return rows.filter(order => norm(order.status).includes("COMPLETED"));
-  if (salesOrderBookTab === "invoice") return rows.filter(order => order.invoiceStatus !== "Attached" || norm(order.status).includes("INVOICE"));
-  if (salesOrderBookTab === "payment") return rows.filter(order => order.balance > 0.01 || norm(order.status).includes("PAYMENT"));
-  if (salesOrderBookTab === "closed") return rows.filter(order => ["CLOSED", "CANCELLED"].includes(norm(order.status)));
+function salesOrderBookTabFilter(rows, tab = salesOrderBookTab) {
+  if (tab === "partial") return rows.filter(order => norm(order.status).includes("PARTIALLY"));
+  if (tab === "completed") return rows.filter(order => norm(order.status).includes("COMPLETED"));
+  if (tab === "invoice") return rows.filter(order => order.invoiceStatus !== "Attached" || norm(order.status).includes("INVOICE"));
+  if (tab === "payment") return rows.filter(order => order.balance > 0.01 || norm(order.status).includes("PAYMENT"));
+  if (tab === "closed") return rows.filter(order => ["CLOSED", "CANCELLED"].includes(norm(order.status)));
   return rows;
 }
 
@@ -4551,7 +4557,7 @@ function salesOrderBookRow(order) {
       <td>${salesMoneyPlain(order.orderValue)}</td>
       <td class="money-positive">${salesMoneyPlain(order.paymentReceived)}</td>
       <td class="${order.balance > 0 ? "money-danger" : "money-positive"}">${salesMoneyPlain(Math.max(0, order.balance))}</td>
-      <td>${salesOrderBookBadge(order.status, "status")}</td>
+      <td>${salesOrderBookBadge(order.status, "status", true)}</td>
       <td>
         <div class="order-book-row-menu">
           ${rowMenu([
@@ -4566,9 +4572,10 @@ function salesOrderBookRow(order) {
   `;
 }
 
-function salesOrderBookBadge(label, type = "") {
+function salesOrderBookBadge(label, type = "", withIcon = false) {
   const key = String(label || "").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-  return `<span class="order-book-badge ${type} ${key}">${escapeHtml(label || "-")}</span>`;
+  const icon = key === "completed" ? "check" : key.includes("partial") ? "hourglass" : key.includes("pending") ? "hourglass" : "file-text";
+  return `<span class="order-book-badge ${type} ${key}">${withIcon ? `<span class="order-book-icon" style="--order-icon:url('/assets/dx-icons/${icon}.svg')" aria-hidden="true"></span>` : ""}${escapeHtml(label || "-")}</span>`;
 }
 
 function salesMoneyPlain(value) {
