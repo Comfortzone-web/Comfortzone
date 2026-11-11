@@ -757,6 +757,7 @@ async function createProject(options = {}) {
   }
   projectPersisted = false;
   projectTouched = false;
+  if (requestedMode === 'vrv') vrvStatus = 'Draft — enter Project Name or upload a file';
   if (requestedMode === "dx") { configureDxWorkflow(state, { resetTables: true }); if(!state.selectionNumber) state.selectionNumber=(await api("/api/projects/selection-number-preview")).selectionNumber; state.dx = { autosaveEnabled:false, step: 1, reviewed: false, selectedUploadIds: [], match: { total: true, sensible: false, airflow: false, totalVariation: 0, sensibleVariation: 0, airflowVariation: 0 } }; dxSaveStatus="Draft — enter Project Name or Specified values"; }
   else state.workflowMode = "vrv";
   ensureWorkflowPreparedByDefault();
@@ -776,6 +777,7 @@ async function loadProject(id) {
   dxSaveStatus = "All changes saved"; dxSearch = "";
   projectPersisted = true;
   projectTouched = false;
+  if (workflowMode(state) === 'vrv') vrvStatus = 'All changes saved';
   if (workflowMode(state) === "dx") { dxBoqPreparedId = ''; configureDxWorkflow(state, { resetTables: false }); }
   ensureWorkflowPreparedByDefault();
   applyCompactLayout(false);
@@ -848,7 +850,7 @@ async function saveProject(options = {}) {
   const opts = options && typeof options === "object" ? options : {};
   if (!opts.auto) projectTouched = true;
   if (!projectTouched && !opts.force && !opts.manual) return;
-  const workflowStarted = hasWorkflowSourceUpload() || opts.manual;
+  const workflowStarted = hasWorkflowSourceUpload() || !!state.details?.project?.trim() || opts.manual;
   if (!workflowStarted && !opts.allowHidden) {
     if (opts.manual) toast("Workflow saved");
     return;
@@ -858,6 +860,13 @@ async function saveProject(options = {}) {
   state = await api(`/api/projects/${state.id}`, { method: "PUT", body: JSON.stringify(state) });
   projectPersisted = true;
   projectTouched = false;
+  if (workflowMode(state) === 'vrv') {
+    vrvStatus = 'All changes saved';
+    const status = canvas.querySelector('[data-vrv-status]');
+    if (status) status.textContent = vrvStatus;
+    const number = canvas.querySelector('.dx-project-header input[readonly]');
+    if (number) number.value = state.selectionNumber || '';
+  }
   if (state.visible && !new URLSearchParams(location.search).get("project")) {
     history.replaceState(null, "", `?project=${state.id}`);
   }
@@ -870,7 +879,7 @@ async function ensureProjectSaved(options = {}) {
 }
 
 function scheduleProjectSave() {
-  if (!hasWorkflowSourceUpload()) return;
+  if (!hasWorkflowSourceUpload() && !state?.details?.project?.trim()) return;
   projectTouched = true;
   debounceSaveProject();
 }
@@ -913,6 +922,11 @@ async function showDocuments() {
   applySidebarSubnavVisibility();
   $("#pageTitle").textContent = "My WorkFlows";
   $("#projectMeta").textContent = "Search and reopen saved workflow canvases.";
+  const workflowActions = $("#viewActions");
+  workflowActions.innerHTML = '<input id="workflowSearchTop" type="search" aria-label="Search workflows" placeholder="Search workflows...">';
+  workflowActions.classList.remove("hidden");
+  workflowActions.querySelector("input").value = $("#searchInput").value;
+  workflowActions.querySelector("input").addEventListener("input", event => { $("#searchInput").value = event.target.value; loadProjectList(); });
   await loadProjectList();
 }
 
@@ -2024,7 +2038,6 @@ function orderBookPremiumSummaryHtml() {
   const live = rows.filter(order => !["CANCELLED", "CLOSED"].includes(norm(order.status)));
   const total = (list, key) => list.reduce((sum, order) => sum + (Number(order[key]) || 0), 0);
   const value = total(live, "valueWithoutVat");
-  const profit = total(live, "equipmentProfit");
   const received = total(live, "paymentReceived");
   const balance = live.reduce((sum, order) => sum + Math.max(0, Number(order.balance) || 0), 0);
   const days = month ? new Date(Number(year), Number(month), 0).getDate() : 12;
@@ -2070,7 +2083,7 @@ function orderBookPremiumSummaryHtml() {
       <button type="button" data-order-summary-reset>Clear</button></div></div>
     <div class="order-premium-kpis">${[
       ["Order Value", salesCompactMoney(value), "Booked value · Excl. VAT", "blue"],
-      ["Gross Profit", salesCompactMoney(profit), "Equipment profit", "green"],
+      ["Total Received", salesCompactMoney(received), "Received Amount", "green"],
       ["Balance Receivable", salesCompactMoney(balance), "Uncollected · Excl. VAT", "amber"],
       ["Total Orders", rows.length, `${rows.length - live.length} cancelled or closed`, "purple"],
       ["Average Order", salesCompactMoney(live.length ? value / live.length : 0), "Average booked value", "coral"]
@@ -2083,7 +2096,7 @@ function orderBookPremiumSummaryHtml() {
       ${panel("Top Customers", "Highest order values for the selected period", "TOP 5", `<div class="order-premium-customers">${byCustomer.map((entry, index) => `<div><span>${String(index + 1).padStart(2, "0")}</span><b>${escapeHtml(entry.name)} <small>(${entry.orders.length})</small></b><strong>${escapeHtml(salesCompactMoney(entry.value))}</strong></div>`).join("") || `<p>No orders in this period.</p>`}</div>`)}
       ${panel("Division Split", "Order value by business division", "DIVISION MIX", `<div class="order-premium-metrics">${byDivision.map(entry => `<div><div><span>${escapeHtml(entry.name)}</span><b>${escapeHtml(salesCompactMoney(entry.value))}</b></div><i><b style="width:${value ? entry.value / value * 100 : 0}%"></b></i></div>`).join("") || `<p>No orders in this period.</p>`}</div>`)}
       ${panel(month ? "Sales Report by Salesperson" : "Sales Report by Month", month ? `Individual sales performance in ${monthName} ${year} · Excluding VAT` : `Individual sales performance in ${year} · Excluding VAT`, month ? "MONTHLY DETAIL" : "ANNUAL DETAIL", `<div class="order-premium-table-wrap ${month ? "" : "order-premium-annual"}"><table><thead><tr><th>Sales Person</th>${month ? `<th>Actual Sales</th><th>Monthly Target</th><th>Achievement</th><th>Total Orders</th>` : `${series.map(entry => `<th>${entry.label}</th>`).join("")}<th>Total</th>`}</tr></thead><tbody>${byPerson.map(entry => `<tr><td><b>${escapeHtml(entry.name)}</b></td>${month ? `<td>${escapeHtml(salesCompactMoney(entry.actual))}</td><td>${escapeHtml(salesCompactMoney(entry.target))}</td><td><span class="order-premium-achievement ${entry.actual >= entry.target ? "met" : ""}">${entry.target ? Math.round(entry.actual / entry.target * 100) : 0}%</span></td><td>${entry.own.length}</td>` : `${series.map(point => { const actual = total(entry.own.filter(order => nativeDateValue(order.date).startsWith(point.key)), "valueWithoutVat"); const target = orderSummaryTarget(entry.name, point.key, people, changes); return actual > 0 ? `<td class="order-premium-month-${actual >= target ? "met" : "below"}" title="Target ${escapeHtml(salesMoney(target))}">${escapeHtml(salesCompactMoney(actual))}</td>` : `<td class="order-premium-month-empty">—</td>`; }).join("")}<td><b>${escapeHtml(salesCompactMoney(entry.actual))}</b></td>`}</tr>`).join("") || `<tr><td colspan="${month ? 5 : 14}">No orders in this period.</td></tr>`}</tbody></table></div>`, "order-premium-full")}
-      ${panel("Order Register", `${rows.length} matching orders · Select an order to view details`, "", `<div class="order-premium-register-tools"><input data-order-summary-search value="${escapeHtml(orderSummarySearch)}" placeholder="Search order, customer or project..." aria-label="Search summary orders"><select data-order-summary-sort aria-label="Sort orders"><option value="newest" ${orderSummarySort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${orderSummarySort === "oldest" ? "selected" : ""}>Oldest first</option></select></div><div class="order-premium-table-wrap"><table><thead><tr><th>Order No. / Date</th><th>Customer / Job</th><th>Sales Person</th><th>Division</th><th>Value (AED)</th><th>Received (AED)</th><th>Balance (AED)</th><th>Status</th></tr></thead><tbody>${shown.map(order => `<tr><td><button type="button" class="order-premium-order-link" data-order-summary-open="${escapeHtml(order.id)}">${escapeHtml(order.orderNo)}</button><small>${escapeHtml(order.date || "-")}</small></td><td><b>${escapeHtml(order.customer || "-")}</b><small>${escapeHtml(order.jobDescription || "-")}</small></td><td>${escapeHtml(order.salesPerson || "-")}</td><td>${escapeHtml(order.division || "-")}</td><td>${escapeHtml(salesMoney(order.orderValue))}</td><td>${escapeHtml(salesMoney(order.paymentReceived))}</td><td>${escapeHtml(salesMoney(order.balance))}</td><td><span class="order-premium-status ${norm(order.status).includes("PARTIALLY PAID") ? "partially-paid" : norm(order.status).includes("PENDING") ? "pending" : norm(order.status).includes("CANCEL") ? "cancelled" : norm(order.status).includes("HOLD") ? "hold" : ""}">${escapeHtml(order.status || "-")}</span></td></tr>`).join("") || `<tr><td colspan="8">No orders in this period.</td></tr>`}</tbody></table></div><div class="order-premium-pages"><span>Showing ${shown.length ? (orderSummaryPage - 1) * 12 + 1 : 0}–${Math.min(orderSummaryPage * 12, sorted.length)} of ${sorted.length} orders</span><div><button type="button" data-order-summary-page="previous" ${orderSummaryPage === 1 ? "disabled" : ""}>Previous</button><span>${orderSummaryPage} / ${pages}</span><button type="button" data-order-summary-page="next" ${orderSummaryPage === pages ? "disabled" : ""}>Next</button></div></div>`, "order-premium-full")}
+      ${panel("Order Register", `${rows.length} matching orders · Select an order to view details`, "", `<div class="order-premium-register-tools"><input data-order-summary-search value="${escapeHtml(orderSummarySearch)}" placeholder="Search order, customer or project..." aria-label="Search summary orders"><select data-order-summary-sort aria-label="Sort orders"><option value="newest" ${orderSummarySort === "newest" ? "selected" : ""}>Newest first</option><option value="oldest" ${orderSummarySort === "oldest" ? "selected" : ""}>Oldest first</option></select></div><div class="order-premium-table-wrap"><table><thead><tr><th>Order No. / Date</th><th>Customer / Job</th><th>Sales Person</th><th>Division</th><th>Value (AED)</th><th>Received (AED)</th><th>Balance (AED)</th><th>Status</th></tr></thead><tbody>${shown.map(order => `<tr><td><button type="button" class="order-premium-order-link" data-order-summary-open="${escapeHtml(order.id)}">${escapeHtml(order.orderNo)}</button><small>${escapeHtml(order.date || "-")}</small></td><td><b>${escapeHtml(order.customer || "-")}</b><small>${escapeHtml(order.jobDescription || "-")}</small></td><td>${escapeHtml(order.salesPerson || "-")}</td><td>${escapeHtml(order.division || "-")}</td><td>${escapeHtml(salesMoney(order.orderValue))}</td><td>${escapeHtml(salesMoney(order.paymentReceived))}</td><td>${escapeHtml(salesMoney(order.balance))}</td><td><span class="order-premium-status ${norm(order.status).includes("PARTIALLYPAID") ? "partially-paid" : norm(order.status).includes("PENDING") ? "pending" : norm(order.status).includes("CANCEL") ? "cancelled" : norm(order.status).includes("HOLD") ? "hold" : ""}">${escapeHtml(order.status || "-")}</span></td></tr>`).join("") || `<tr><td colspan="8">No orders in this period.</td></tr>`}</tbody></table></div><div class="order-premium-pages"><span>Showing ${shown.length ? (orderSummaryPage - 1) * 12 + 1 : 0}–${Math.min(orderSummaryPage * 12, sorted.length)} of ${sorted.length} orders</span><div><button type="button" data-order-summary-page="previous" ${orderSummaryPage === 1 ? "disabled" : ""}>Previous</button><span>${orderSummaryPage} / ${pages}</span><button type="button" data-order-summary-page="next" ${orderSummaryPage === pages ? "disabled" : ""}>Next</button></div></div>`, "order-premium-full")}
     </div></div>`;
 }
 
@@ -4694,11 +4707,7 @@ function blankOrderBookOrder() {
 }
 
 function nextOrderBookNo() {
-  const existing = salesOrderBookRows().map(order => order.orderNo).filter(Boolean);
-  const latest = existing.find(Boolean) || `CZ${String(new Date().getFullYear()).slice(-2)}-1000`;
-  const match = latest.match(/^(.*?)(\d+)$/);
-  if (!match) return `CZ${String(new Date().getFullYear()).slice(-2)}-1001`;
-  return `${match[1]}${String(Number(match[2]) + 1).padStart(match[2].length, "0")}`;
+  return salesData().nextOrderBookNo || `CZ${String(new Date().getFullYear()).slice(-2)}-0001`;
 }
 
 function openOrderBookForm(orderId = "") {
@@ -4714,7 +4723,7 @@ function openOrderBookForm(orderId = "") {
       </div>
       <div class="sales-lead-form">
         ${orderBookFormSection("Basic Details", [
-          orderBookField("orderNo", "Order No", item.orderNo),
+          orderBookField("orderNo", "Order No", item.orderNo, existing ? "text" : "readonly"),
           orderBookField("date", "Date", item.date, "dateText"),
           orderBookField("customer", "Customer", item.customer, "list", salesCustomerNames()),
           orderBookField("jobDescription", "Job Description", item.jobDescription, "textarea"),
@@ -4785,6 +4794,8 @@ function openOrderBookForm(orderId = "") {
     }
   });
   modal.querySelector("#saveOrderBookBtn").addEventListener("click", async () => {
+    const button = modal.querySelector("#saveOrderBookBtn");
+    if (button.disabled) return;
     const payload = collectOrderBookPayload(modal, item);
     if (!payload.orderNo || !payload.customer) return alert("Order No and customer are required.");
     if (!payload.salesPersonId) return alert("Select a Sales Person or Others.");
@@ -4793,11 +4804,19 @@ function openOrderBookForm(orderId = "") {
       : requireSavedSalesCustomer(payload.customer, "Order customer");
     if (!savedCustomer) return;
     payload.customer = savedCustomer.name;
-    salesCrmState = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(payload) });
-    salesOrderBookDetailId = payload.id || (salesData().orderBook || [])[0]?.id || "";
-    modal.remove();
-    renderSalesDesk();
-    toast("Order saved");
+    button.disabled = true;
+    button.textContent = "Saving...";
+    try {
+      const response = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(payload) });
+      salesCrmState = response;
+      salesOrderBookDetailId = response.savedItemId || payload.id || "";
+      modal.remove();
+      renderSalesDesk();
+      toast(`Order ${response.savedOrderNo || payload.orderNo} saved`);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Save Order";
+    }
   });
 }
 
@@ -4868,6 +4887,7 @@ function orderBookInvoiceRowHtml(invoice = {}) {
 
 function orderBookField(key, label, value = "", type = "text", options = []) {
   const attrs = `data-order-book-field="${escapeHtml(key)}"`;
+  if (type === "readonly") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}" readonly title="Final number is assigned when saved"></label>`;
   if (type === "textarea") return `<label class="span-two">${escapeHtml(label)}<textarea ${attrs}>${escapeHtml(value || "")}</textarea></label>`;
   if (type === "select") return `<label>${escapeHtml(label)}<select ${attrs}>${options.map(option => `<option ${String(value) === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   if (type === "list") {
@@ -6916,7 +6936,7 @@ async function createOrderBookFromQuotation(quoteId) {
     }]
   };
   try {
-    salesCrmState = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(order) });
+    salesCrmState = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify({ ...order, createNew: true }) });
     const savedOrder = (salesData().orderBook || []).find(item => item.id === orderId) || (salesData().orderBook || []).find(item => item.orderNo === order.orderNo);
     salesOrderBookDetailId = savedOrder?.id || orderId;
     salesOrderBookTab = "all";
@@ -8268,22 +8288,23 @@ async function loadProjectList() {
   const q = encodeURIComponent($("#searchInput").value || "");
   const projects = await api(`/api/projects?q=${q}`);
   const list = $("#projectList");
-  list.innerHTML = projects.map(project => `
-    <article class="project-card">
-      <div>
-        <h3>${escapeHtml(project.project || project.title || "Untitled Project")}</h3>
-        <p>${escapeHtml(project.customer || "No customer")} · ${new Date(project.updatedAt).toLocaleString()}</p>
-      </div>
-      <div class="project-card-actions">
+  list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects.map((project,index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td><button type="button" class="workflow-selection-link" data-workflow-action="open" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.selectionNumber || (project.workflowMode === 'dx' ? 'DX Workflow' : project.workflowMode === 'vrv' ? 'VRV Workflow' : 'Workflow'))}</button><small>${project.createdAt ? escapeHtml(new Date(project.createdAt).toLocaleDateString()) : ''}</small></td>
+      <td>${escapeHtml(project.project || project.title || "Untitled Project")}</td>
+      <td><span class="workflow-client">${escapeHtml(project.customer || "—")}</span><small class="workflow-consultant">${escapeHtml(project.consultant || "—")}</small></td>
+      <td><span class="workflow-status ${project.quotationDone ? 'done' : 'pending'}">${project.quotationDone ? 'Quotation Done' : 'Quotation Pending'}</span></td>
+      <td><div class="project-card-actions">
         <button class="workflow-menu-button" type="button" data-workflow-menu="${project.id}" aria-label="Workflow actions">...</button>
         <div class="workflow-row-menu hidden" data-workflow-menu-panel="${project.id}">
           <button type="button" data-workflow-action="open" data-project-id="${project.id}">Open Canvas</button>
           <button type="button" data-workflow-action="clone" data-project-id="${project.id}">Clone</button>
           <button type="button" class="danger-menu-item" data-workflow-action="delete" data-project-id="${project.id}">Delete</button>
         </div>
-      </div>
-    </article>
-  `).join("") || "<p>No saved projects found.</p>";
+      </div></td>
+    </tr>
+  `).join("") || '<tr><td colspan="6" class="pipeline-empty">No saved workflows found.</td></tr>'}</tbody></table></div>`;
   list.onclick = handleWorkflowListClick;
   document.removeEventListener("click", closeWorkflowMenus);
   document.addEventListener("click", closeWorkflowMenus);
@@ -8308,7 +8329,13 @@ async function handleWorkflowListClick(event) {
     const panel = document.querySelector(`[data-workflow-menu-panel="${CSS.escape(menuButton.dataset.workflowMenu)}"]`);
     const wasOpen = panel && !panel.classList.contains("hidden");
     closeWorkflowMenus();
-    if (panel && !wasOpen) panel.classList.remove("hidden");
+    if (panel && !wasOpen) {
+      const rect = menuButton.getBoundingClientRect();
+      panel.style.position = "fixed";
+      panel.style.top = `${rect.bottom + 6}px`;
+      panel.style.right = `${Math.max(8, window.innerWidth - rect.right)}px`;
+      panel.classList.remove("hidden");
+    }
     return;
   }
 
@@ -8351,13 +8378,14 @@ function scheduleWorkflowRender(options = {}) {
     workflowRenderRequest = 0;
     if (activeView !== "canvas" || !state) return;
     render();
-    if (shouldFit && !isDxWorkflow()) requestAnimationFrame(zoomToFit);
+    // Both workflow modes now use full-width step pages instead of a zoomed node canvas.
   });
 }
 
 function render() {
   canvas.classList.toggle("dx-workspace", isDxWorkflow());
   if (isDxWorkflow()) return renderDxWorkspace();
+  return renderVrvWorkspace();
   captureWorkflowNodeSizes();
   captureWorkflowTableScrollState();
   if (state.tables?.costing?.rows?.length) {
@@ -9346,6 +9374,12 @@ async function createSalesQuotationFromWorkflow() {
 }
 
 function workflowBoqQuoteItems() {
+  if (!isDxWorkflow() && state.tables.costing?.rows?.length) {
+    return state.tables.costing.rows.filter(row => row.Model && Number(row.Qty) > 0).map(row => ({
+      description: (state.tables.boq.rows || []).find(item => Number(item['S.No']) === Number(row['S.No']))?.Description || row.Model,
+      qty: Number(row.Qty), unit: 'Nos', unitPrice: Number(row['Increased Final Price (AED)'] || 0)
+    }));
+  }
   const boqRows = state.tables.boq.rows || [];
   if (!boqRows.length) return [{ description: "", qty: 1, unit: "Nos", unitPrice: 0 }];
   return boqRows.map(row => {
@@ -12345,7 +12379,7 @@ async function chooseUpload(nodeId) {
         state.details.project = projectNameFromFile(upload.originalName);
         state.title = state.details.project;
       }
-      if (nodeId === "vrv-upload") {
+      if (nodeId === "vrv-upload" && !state.vrv) {
         await extractVrvUpload(upload.id);
       }
       render();
@@ -12599,7 +12633,7 @@ function recalcCosting() {
     totalAmount += amount;
   });
   summary.totalAmount = round2(totalAmount);
-  summary.priceIncrease = num(summary.priceIncrease ?? 20) || 20;
+  summary.priceIncrease = Number.isFinite(Number(summary.priceIncrease)) ? Number(summary.priceIncrease) : 20;
   state.tables.costing.summary = summary;
 }
 
@@ -12945,6 +12979,8 @@ function columnKey(value) {
 
 function groupVrvRowsForSchedule(rows) {
   const groups = new Map();
+  const outdoorGroups = vrvExtractedOutdoorGroups();
+  const usedOutdoorGroups = new Set();
   rows.forEach(row => {
     const system = row.system || "";
     if (!groups.has(system)) groups.set(system, []);
@@ -12967,9 +13003,19 @@ function groupVrvRowsForSchedule(rows) {
     groups.get(system).outdoorRefs = refs;
   });
   const output = [];
+  const namedSystems = new Set([...groups.keys()].map(norm));
   groups.forEach((items, system) => {
-    const refs = normalizeOutdoorAssignments(system, items.outdoorRefs || []);
-    const startIndex = items.length <= 5 ? 1 : 2;
+    let refs = normalizeOutdoorAssignments(system, items.outdoorRefs || []);
+    if (!refs.length) {
+      let groupIndex = outdoorGroups.findIndex((group,index) => !usedOutdoorGroups.has(index) && norm(group[0]?.outdoorName) === norm(system));
+      if (groupIndex < 0) groupIndex = outdoorGroups.findIndex((group,index) => !usedOutdoorGroups.has(index) && !namedSystems.has(norm(group[0]?.outdoorName)));
+      if (groupIndex < 0) groupIndex = outdoorGroups.findIndex((_,index) => !usedOutdoorGroups.has(index));
+      if (groupIndex >= 0) {
+        usedOutdoorGroups.add(groupIndex);
+        refs = normalizeOutdoorAssignments(system,outdoorGroups[groupIndex],true);
+      }
+    }
+    const startIndex = items.length <= 5 ? 0 : 2;
     while (items.length < startIndex + refs.length) {
       items.push({ system, name: "", fcu: "", outdoorName: "", outdoorModel: "", outdoorComponents: [] });
     }
@@ -12978,6 +13024,7 @@ function groupVrvRowsForSchedule(rows) {
       if (!target) return;
       target.outdoorName = ref.outdoorName;
       target.outdoorModel = ref.outdoorModel;
+      target.outdoorPs = ref.outdoorPs || '';
       target.outdoorComponents = ref.outdoorComponents || [];
     });
     output.push(...items.map(item => {
@@ -12989,11 +13036,25 @@ function groupVrvRowsForSchedule(rows) {
   return output;
 }
 
-function normalizeOutdoorAssignments(system, refs) {
+function vrvExtractedOutdoorGroups() {
+  const groups = [];
+  for (const row of state.extracted?.vrv?.outdoorDetailsRows || []) {
+    const outdoorName = String(row.Name || '').trim();
+    const outdoorModel = String(row.Model || '').trim().replace(/^[-\s]+/,'');
+    if (!outdoorName || !outdoorModel) continue;
+    if (/^VRV/i.test(outdoorName)) groups.push([]);
+    if (!groups.length) continue;
+    groups[groups.length-1].push({outdoorName,outdoorModel,outdoorPs:String(row.PS || '').trim(),outdoorComponents:[]});
+  }
+  return groups.filter(group => group.length);
+}
+
+function normalizeOutdoorAssignments(system, refs, preserveParentName = false) {
   const cleaned = refs
     .map(ref => ({
       outdoorName: String(ref.outdoorName || "").trim(),
       outdoorModel: String(ref.outdoorModel || "").trim(),
+      outdoorPs: String(ref.outdoorPs || '').trim(),
       outdoorComponents: Array.isArray(ref.outdoorComponents) ? ref.outdoorComponents : []
     }))
     .filter(ref => ref.outdoorModel);
@@ -13009,19 +13070,21 @@ function normalizeOutdoorAssignments(system, refs) {
   const parentIndex = deduped.findIndex(ref => norm(ref.outdoorName) === norm(system) || /^VRV/i.test(ref.outdoorName));
   const parent = parentIndex >= 0 ? deduped[parentIndex] : deduped[0];
   const componentRefs = deduped.filter((_, index) => index !== (parentIndex >= 0 ? parentIndex : 0));
-  const componentModels = [...new Set([
-    ...(parent.outdoorComponents || []),
-    ...componentRefs.map(ref => ref.outdoorModel)
-  ].filter(Boolean).map(model => String(model).trim()).filter(Boolean))];
+  const componentModels = ((parent.outdoorComponents || []).length
+    ? parent.outdoorComponents
+    : componentRefs.map(ref => ref.outdoorModel))
+    .filter(Boolean).map(model => String(model).trim()).filter(Boolean);
   const assignments = [{
-    outdoorName: system,
+    outdoorName: preserveParentName ? parent.outdoorName : system,
     outdoorModel: parent.outdoorModel,
+    outdoorPs: parent.outdoorPs,
     outdoorComponents: componentModels
   }];
   componentRefs.forEach((ref, index) => {
     assignments.push({
       outdoorName: ref.outdoorName && !/^VRV/i.test(ref.outdoorName) ? ref.outdoorName : String.fromCharCode(65 + index),
       outdoorModel: ref.outdoorModel,
+      outdoorPs: ref.outdoorPs,
       outdoorComponents: []
     });
   });
@@ -13049,11 +13112,23 @@ const VRV_SYSTEM_TOTAL_COLUMNS = [
 function vrvSystemTotalRow(rows) {
   const totalRow = Object.fromEntries(state.tables.vrvSchedule.columns.map(column => [column, ""]));
   VRV_SYSTEM_TOTAL_COLUMNS.forEach(column => {
-    const total = rows.reduce((sum, row) => sum + num(row[column]), 0);
-    totalRow[column] = total ? fmt(round2(total)) : "";
+    totalRow[column] = vrvScheduleTotalValue(rows,column);
   });
   totalRow.__rowType = "total";
   return totalRow;
+}
+
+function vrvScheduleTotalValue(rows,column) {
+  const values = rows.map(row => String(row[column] ?? '').replace(/,/g,'').trim()).filter(value => value !== '' && Number.isFinite(Number(value)));
+  if (!values.length) return '';
+  if (column === 'PIC') {
+    const decimals = Math.min(8,Math.max(0,...values.map(value => (value.split('.')[1] || '').length)));
+    const scale = 10 ** decimals;
+    const total = values.reduce((sum,value) => sum + Math.round(Number(value)*scale),0)/scale;
+    return total ? total.toLocaleString('en-US',{maximumFractionDigits:decimals}) : '';
+  }
+  const total = values.reduce((sum,value) => sum + Number(value),0);
+  return total ? fmt(column === 'Proposed Air Flow Rate' ? Math.round(total) : round2(total)) : '';
 }
 
 function fillVrvScheduleLookups() {
@@ -13066,7 +13141,8 @@ function fillVrvScheduleLookups() {
       outdoorModel: row["Outdoor Model"],
       outdoorComponents: row.outdoorComponents || []
     }, outdoorMap);
-    return { ...row, ...indoorFields(indoor), ...outdoorFields(outdoor) };
+    const report = (state.extracted?.vrv?.vrvRows || []).find(item => norm(item.system) === norm(row.System) && norm(item.name) === norm(row.Name) && norm(item.fcu) === norm(row.FCU));
+    return { ...row, ...indoorFields(indoor), ...vrvReportIndoorFields(report,indoor), ...outdoorFields(outdoor), 'Outdoor PS': outdoor.ps || row['Outdoor PS'] || '' };
   });
 }
 
@@ -13104,9 +13180,20 @@ function vrvRow(item, thermal, indoor, outdoor) {
     "Air Flow Rate": thermal["Air Flow Rate"] || "",
     FCU: item.fcu,
     ...indoorFields(indoor),
+    ...vrvReportIndoorFields(item,indoor),
     "Outdoor Name": item.outdoorName,
     "Outdoor Model": item.outdoorModel,
-    ...outdoorFields(outdoor)
+    ...outdoorFields(outdoor),
+    'Outdoor PS': outdoor.ps || item.outdoorPs || ''
+  };
+}
+
+function vrvReportIndoorFields(item, indoor) {
+  return {
+    'Ambient - On Coil Temperature': item?.tmpC || indoor.ambient || '',
+    'Max TC': item?.maxTC || indoor.maxTC || '',
+    'Max SC': item?.maxSC || indoor.maxSC || '',
+    'Proposed Air Flow Rate': item?.airFlowRate || indoor.airflow || ''
   };
 }
 

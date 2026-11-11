@@ -1034,6 +1034,7 @@ async function readProject(projectId) {
 
 async function writeProject(project) {
   project.updatedAt = new Date().toISOString();
+  if (project.workflowMode === 'vrv') project.selectionNumber = await reserveVrvSelectionNumber(project);
   if (project.workflowMode === "dx" && project.visible !== false) {
     project.selectionNumber = await reserveDxNumber(project.id,project.dx?.selectionNumberEdited ? project.selectionNumber : undefined);
     if(project.dx)project.dx.selectionNumberEdited=false;
@@ -1565,6 +1566,7 @@ function normalizeSalesCrm(parsed = {}) {
   const fallback = defaultSalesCrm();
   const settings = { ...fallback.settings, ...(parsed.settings || {}) };
   const store = {
+    revision: Number(parsed.revision) || 0,
     settings,
     leads: Array.isArray(parsed.leads) ? parsed.leads : fallback.leads,
     customers: Array.isArray(parsed.customers) ? parsed.customers : fallback.customers,
@@ -1624,7 +1626,70 @@ async function readSalesCrm() {
 }
 
 async function writeSalesCrm(store) {
+  store.revision = (Number(store.revision) || 0) + 1;
   await writeStore("sales-crm", SALES_CRM_FILE, store);
+}
+
+function nextAvailableOrderBookNo(orders = [], year = new Date().getFullYear()) {
+  const prefix = `CZ${String(year).slice(-2)}-`;
+  let highest = 0;
+  for (const order of orders) {
+    const number = cleanCell(order.orderNo || "");
+    if (!number.startsWith(prefix) || !/^\d+$/.test(number.slice(prefix.length))) continue;
+    highest = Math.max(highest, Number(number.slice(prefix.length)));
+  }
+  return `${prefix}${String(highest + 1).padStart(4, "0")}`;
+}
+
+let orderBookCreateQueue = Promise.resolve();
+function createOrderBook(body, user, users = []) {
+  const pending = orderBookCreateQueue.then(async () => {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      let raw = USE_SUPABASE ? await readSupabaseValue("sales-crm") : await readSalesCrm();
+      if (raw == null) {
+        await readSalesCrm();
+        raw = await readSupabaseValue("sales-crm");
+      }
+      const store = normalizeSalesCrm(raw);
+      const selectedId = isStaff(user) ? user.id : cleanCell(body.salesPersonId || "");
+      const assignee = users.find(entry => entry.id === selectedId && entry.active !== false);
+      if (!assignee && !(isAdmin(user) && selectedId === "others")) return { status: 400, error: "Select a Sales Person or Others." };
+      const requestedNo = cleanCell(body.orderNo || "");
+      const prefix = `CZ${String(new Date().getFullYear()).slice(-2)}-`;
+      const orderNo = !requestedNo || (requestedNo.startsWith(prefix) && /^\d+$/.test(requestedNo.slice(prefix.length)))
+        ? nextAvailableOrderBookNo(store.orderBook)
+        : requestedNo;
+      if (store.orderBook.some(order => cleanCell(order.orderNo).toLowerCase() === orderNo.toLowerCase())) {
+        return { status: 409, error: `Order number ${orderNo} already exists.` };
+      }
+      if (body.id && store.orderBook.some(order => order.id === body.id)) {
+        return { status: 409, error: "This order has already been created." };
+      }
+      const item = normalizeSalesItem("orderBook", {
+        ...body, orderNo, salesPerson: assignee?.name || "Others",
+        salesPersonId: assignee?.id || "", ownerId: assignee?.id || ""
+      }, store);
+      store.orderBook.unshift(item);
+      if (USE_SUPABASE) {
+        store.revision += 1;
+        let query = supabase.from(SUPABASE_TABLE)
+          .update({ value: store, updated_at: new Date().toISOString() })
+          .eq("key", "sales-crm");
+        query = raw.revision == null
+          ? query.is("value->>revision", null)
+          : query.eq("value->>revision", String(raw.revision));
+        const { data, error } = await query.select("key");
+        if (error) throw new Error(`Order Book save failed: ${error.message}`);
+        if (!data?.length) continue;
+      } else {
+        await writeSalesCrm(store);
+      }
+      return { status: 200, store, item };
+    }
+    return { status: 503, error: "Order Book changed while saving. Please try again." };
+  });
+  orderBookCreateQueue = pending.catch(() => {});
+  return pending;
 }
 
 function salesCustomerToInventoryCustomer(customer, existing = null) {
@@ -1691,6 +1756,7 @@ async function salesCrmView(store, user) {
   const staff = isStaff(user);
   return {
     ...store,
+    nextOrderBookNo: nextAvailableOrderBookNo(store.orderBook),
     settings: staff ? {
       ...store.settings,
       nextEnquiryNo: staffNextEnquiryNo(user, store.leads),
@@ -1979,6 +2045,8 @@ async function listProjects(query = "", includeHidden = false) {
       if (!q) return true;
       const haystack = [
         project.title,
+        project.selectionNumber,
+        project.quotation?.quotationNo,
         project.details.customer,
         project.details.project,
         project.details.location,
@@ -1989,12 +2057,22 @@ async function listProjects(query = "", includeHidden = false) {
       return haystack.includes(q);
     });
   if (includeHidden) return filtered;
+  let quotedProjectIds = new Set();
+  try {
+    const sales = await readSalesCrm();
+    quotedProjectIds = new Set((sales.quotations || []).map(quote => cleanCell(quote.sourceDxWorkflowId)).filter(Boolean));
+  } catch (_) { /* Saved project quotation links remain available if Sales Desk is offline. */ }
   return filtered
     .map(project => ({
       id: project.id,
+      selectionNumber: project.selectionNumber || "",
+      createdAt: project.createdAt,
+      workflowMode: project.workflowMode || "",
+      quotationDone: quotedProjectIds.has(project.id) || !!project.dx?.boq?.quotationId || !!project.quotation?.quotationNo,
       title: project.title,
       project: project.details.project,
       customer: project.details.customer,
+      consultant: project.details.consultant || "",
       location: project.details.location,
       model: project.details.model,
       enquiryNo: project.details.enquiryNo,
@@ -2002,6 +2080,31 @@ async function listProjects(query = "", includeHidden = false) {
       updatedAt: project.updatedAt
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+const vrvNumberClaims = new Map();
+async function nextVrvSelectionNumber(projects = null) {
+  const year = new Date().getFullYear();
+  const prefix = `VRV-${year}-`;
+  const saved = projects || await listProjects('', true);
+  const maximum = saved.reduce((last, project) => {
+    const number = String(project.selectionNumber || '');
+    return number.startsWith(prefix) && /^\d+$/.test(number.slice(prefix.length))
+      ? Math.max(last, Number(number.slice(prefix.length))) : last;
+  }, 0);
+  const claimed = [...vrvNumberClaims.keys()].reduce((last, number) =>
+    number.startsWith(prefix) ? Math.max(last, Number(number.slice(prefix.length)) || 0) : last, 0);
+  return `${prefix}${String(Math.max(maximum, claimed) + 1).padStart(3, '0')}`;
+}
+
+async function reserveVrvSelectionNumber(project) {
+  const saved = await listProjects('', true);
+  const proposed = String(project.selectionNumber || '');
+  const used = saved.some(item => item.id !== project.id && item.selectionNumber === proposed);
+  const claimed = vrvNumberClaims.has(proposed) && vrvNumberClaims.get(proposed) !== project.id;
+  const number = proposed && !used && !claimed ? proposed : await nextVrvSelectionNumber(saved);
+  vrvNumberClaims.set(number, project.id);
+  return number;
 }
 
 function parseMultipart(buffer, contentType) {
@@ -3687,6 +3790,7 @@ async function handleApi(req, res) {
     const project = await createDefaultProject(user);
     const options=await readJson(req);
     if(options.workflowMode === "dx") {project.workflowMode="dx";project.selectionNumber=await reserveDxNumber.preview();}
+    if(options.workflowMode === "vrv") project.selectionNumber = await nextVrvSelectionNumber();
     if (url.searchParams.get("draft") === "1") {
       return send(res, 200, project);
     }
@@ -4064,6 +4168,14 @@ async function handleApi(req, res) {
   if (req.method === "POST" && url.pathname.match(/^\/api\/sales-crm\/(leads|customers|projects|quotations|followUps|orderBook)$/)) {
     const collection = url.pathname.split("/").pop();
     const body = await readJson(req);
+    if (collection === "orderBook" && (!(body.item || body).id || (body.item || body).createNew === true)) {
+      const result = await createOrderBook(body.item || body, user, req.authSettings?.users || []);
+      if (result.error) return send(res, result.status, { error: result.error });
+      return send(res, 200, {
+        ...(await salesCrmView(result.store, user)), savedItemId: result.item.id,
+        savedOrderNo: result.item.orderNo
+      });
+    }
     if (body.fromDxBoq && (collection !== "quotations" || !/^[a-zA-Z0-9-]+$/.test(body.sourceDxWorkflowId || ''))) return send(res, 400, { error: 'Invalid source DX Workflow.' });
     const releaseDx = body.fromDxBoq ? await lockDxQuotation(body.sourceDxWorkflowId) : () => {};
     try {
@@ -4072,6 +4184,10 @@ async function handleApi(req, res) {
     if (collection === "orderBook") {
       const previous = store.orderBook.find(entry => entry.id === rawItem.id);
       if (isStaff(user) && previous && !staffOwnsOrder(previous, user)) return sendForbidden(res);
+      if (!previous) return send(res, 404, { error: "Order not found. Refresh the Order Book and try again." });
+      const duplicate = store.orderBook.some(entry => entry.id !== previous.id
+        && cleanCell(entry.orderNo).toLowerCase() === cleanCell(rawItem.orderNo).toLowerCase());
+      if (duplicate) return send(res, 409, { error: `Order number ${cleanCell(rawItem.orderNo)} already exists.` });
       const selectedId = isStaff(user) ? user.id : cleanCell(rawItem.salesPersonId || "");
       const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId && entry.active !== false);
       if (!assignee && !(isAdmin(user) && selectedId === "others")) return send(res, 400, { error: "Select a Sales Person or Others." });
@@ -5100,7 +5216,7 @@ async function extractThermalWithOpenAI(project, options) {
     return { status: "no_files", rows: [], unclearFields: [], message: "Upload the thermal sheet PDF or screenshots first." };
   }
   if (isDxThermalExtraction) {
-    return extractDxThermalWithOpenAI(project, options, uploads);
+    return extractDxThermalLikeVrv(project, options, uploads);
   }
 
   let parsed;
@@ -5298,9 +5414,10 @@ function dxGridLayoutSchema() {
   return { type: 'object', additionalProperties: false, properties: {
     orderedUploadIds: { type:'array', items:{type:'string'} },
     columns: {type:'array',items:{type:'integer'}},
+    quantityColumn: {type:'integer'},
     pages:{type:'array',items:{type:'object',additionalProperties:false,properties:{uploadId:{type:'string'},hasHeader:{type:'boolean'},headerBottom:{type:'integer'}},required:['uploadId','hasHeader','headerBottom']}},
     unclearFields:{type:'array',items:{type:'string'}}
-  },required:['orderedUploadIds','columns','pages','unclearFields'] };
+  },required:['orderedUploadIds','columns','quantityColumn','pages','unclearFields'] };
 }
 function dxGridRowsSchema() {
   return {type:'object',additionalProperties:false,properties:{rows:{type:'array',items:{type:'object',additionalProperties:false,properties:{sourceRow:{type:'integer'},values:{type:'array',items:{type:'string'}},uncertainColumns:{type:'array',items:{type:'string',enum:dxExportColumns()}}},required:['sourceRow','values','uncertainColumns']}},unclearFields:{type:'array',items:{type:'string'}}},required:['rows','unclearFields']};
@@ -5395,7 +5512,7 @@ async function extractDxGridThermal(project, uploads, prepared, options = {}) {
   const ordered=dxOrderedUploads(uploads);
   const capacitySource=dxCapacitySource(options.capacitySource);
   const layoutContent=[{type:'input_text',text:`Identify ONLY the table layout and screenshot continuation order, not the data values. Images below are each labelled with uploadId, original filename, original pixel dimensions and detected vertical grid lines. Return all uploadIds exactly once in logical table/page order. Use visible headers/page numbers/continuation content first; filenames and capture timestamps break ties. Do not sort individual equipment rows or sort floors alphabetically.
-The user selected the load group named "${capacitySource}". Find that exact GROUP HEADER in the screenshot containing column headers. Return six zero-based ORIGINAL column indices for Unit Ref, Type, Location, then Total kW, Sensible kW, Flow Rate L/s directly UNDER "${capacitySource}", in that exact order. System and Type are DIFFERENT columns: Type is the child header Type, NOT System. Other groups can repeat Total/Sensible/Flow Rate; do not take values from any other group. If "${capacitySource}" is absent, return an empty columns array and explain this in unclearFields. For First/Second Selection, skip their Quantity column and any Check Figures columns. For Calculated AC Load, use its own three child columns after Demand Control Volume, even if selection groups appear farther right.
+The user selected the load group named "${capacitySource}". Find that exact GROUP HEADER in the screenshot containing column headers. Return six zero-based ORIGINAL column indices for Unit Ref, Type, Location, then Total kW, Sensible kW, Flow Rate L/s directly UNDER "${capacitySource}", in that exact order. Also return quantityColumn: the zero-based index of Quantity No. directly under the selected First/Second Selection group, or -1 for Calculated AC Load. System and Type are DIFFERENT columns: Type is the child header Type, NOT System. Other groups can repeat Total/Sensible/Flow Rate; do not take values from any other group. If "${capacitySource}" is absent, return an empty columns array and explain this in unclearFields. For First/Second Selection, Quantity No. is immediately BEFORE Total kW; the three load columns are quantityColumn+1, +2, +3. Never return Quantity No. as Total kW. Ignore any Check Figures columns. For Calculated AC Load, use its own three child columns after Demand Control Volume, even if selection groups appear farther right.
 For each upload, indicate whether its own image shows headers and headerBottom as the original pixel y coordinate immediately beneath ALL header rows (0 when no headers). Validate continuation grid columns match the header-bearing screenshot. If the layout/order is ambiguous, explain it in unclearFields. JSON only.`}];
   for (const upload of ordered) {
     const item=prepared.get(upload.id);
@@ -5410,11 +5527,13 @@ For each upload, indicate whether its own image shows headers and headerBottom a
   }
   const readLayout=verification=>callOpenAIJson(verification?'dx_thermal_grid_layout_verification':'dx_thermal_grid_layout',dxGridLayoutSchema(),verification?[...layoutContent,{type:'input_text',text:`Independently verify the header column indices and screenshot order. The three numeric columns must be under the exact "${capacitySource}" group header. Distinguish System from Type and ignore Quantity, Check Figures, Occupant Density and DCV. Do not return data rows.`}]:layoutContent);
   const layouts=await Promise.all([readLayout(false),readLayout(true)]);
-  const signature=layout=>JSON.stringify([layout.orderedUploadIds,dxLockedThermalColumns(layout.columns),(layout.pages || []).map(page=>[page.uploadId,page.hasHeader,page.hasHeader && prepared.has(page.uploadId)?prepared.get(page.uploadId).geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,0):0]).sort((a,b)=>a[0].localeCompare(b[0]))]);
+  const loadColumns=layout=>capacitySource==='Calculated AC Load'?layout.columns:layout.columns?.length===6?[...layout.columns.slice(0,3),layout.quantityColumn+1,layout.quantityColumn+2,layout.quantityColumn+3]:layout.columns;
+  const signature=layout=>JSON.stringify([layout.orderedUploadIds,dxLockedThermalColumns(loadColumns(layout)),layout.quantityColumn,(layout.pages || []).map(page=>[page.uploadId,page.hasHeader,page.hasHeader && prepared.has(page.uploadId)?prepared.get(page.uploadId).geometry.yLines.reduce((best,y)=>Math.abs(y-page.headerBottom)<Math.abs(best-page.headerBottom)?y:best,0):0]).sort((a,b)=>a[0].localeCompare(b[0]))]);
   if(signature(layouts[0])!==signature(layouts[1]))layouts.push(await readLayout(true));
   const layout=layouts.find(candidate=>layouts.filter(other=>signature(candidate)===signature(other)).length>=2);
   if(!layout)throw new Error('Independent readings could not agree on the header columns or screenshot order. Include a clear full-width header screenshot.');
-  layout.columns=dxLockedThermalColumns(layout.columns);
+  if(capacitySource!=='Calculated AC Load' && (!Number.isInteger(layout.quantityColumn) || layout.quantityColumn<0))throw new Error(`Could not locate Quantity No. under ${capacitySource}. Include a clear screenshot of that group header.`);
+  layout.columns=dxLockedThermalColumns(loadColumns(layout));
   if (!layout.pages?.some(page=>page.hasHeader) && !contextHeader) throw new Error(`No readable thermal table header was found. Include a screenshot showing System/Type and ${capacitySource} headers.`);
   const ids=layout.orderedUploadIds;
   if (ids.length!==ordered.length || new Set(ids).size!==ordered.length || ids.some(id=>!prepared.has(id))) throw new Error('Could not establish a reliable screenshot continuation order');
@@ -5474,6 +5593,48 @@ async function tryDxGridExtraction(project, uploads, options = {}) {
     prepared.set(upload.id,{upload,bytes,geometry});
   }
   return extractDxGridThermal(project,uploads,prepared,options);
+}
+
+async function extractDxThermalLikeVrv(project, options, uploads) {
+  const ordered = dxOrderedUploads(uploads);
+  const source = dxCapacitySource(options.capacitySource);
+  const columns = dxExportColumns();
+  const instruction = `Extract exactly these six columns in order: Unit Ref, Type, Location, TKw, SKw, L/S. TKw, SKw and L/S must be the Total kW, Sensible kW and Flow Rate L/s child columns under ${source}. For First or Second Selection, skip Quantity No. and Check Figures. Read Type from the Type column, not System. Keep every equipment row in screenshot order and preserve its full Location. Never shift a value from a neighboring column.`;
+  const readOptions = {...options, mode:'custom', customExtraction:true, customInstruction:instruction, capacitySource:source};
+  const read = async (verification = false) => callOpenAIJson(
+    verification ? 'dx_thermal_vrv_style_verification' : 'dx_thermal_vrv_style',
+    thermalJsonSchema(),
+    await thermalOpenAIContent(project, ordered, thermalPrompt(readOptions) + (verification ? '\nIndependently reread every source row. Check the selected load group and its three child columns; do not copy the prior result.' : ''))
+  );
+  const parsed = await read();
+  const rawRows = Array.isArray(parsed.customRows) ? parsed.customRows.map(row => Array.isArray(row.cells) ? row.cells.map(safeExtract) : []) : [];
+  const normalized = normalizeDxCustomThermalResult(parsed.customColumns || [], rawRows, parsed.rows || [], {keepIncomplete:true});
+  if (!normalized.rows.length) return {status:'needs_verification',rows:[],customColumns:columns,customRows:[],reviewCells:{},customReviewCells:{},unclearFields:parsed.unclearFields || [],message:'No DX thermal rows were detected. Check the selected load columns and source image.'};
+  const review = {};
+  const warnings = [...(parsed.unclearFields || [])];
+  try {
+    const verified = await read(true);
+    const verifyRows = Array.isArray(verified.customRows) ? verified.customRows.map(row => Array.isArray(row.cells) ? row.cells.map(safeExtract) : []) : [];
+    const second = normalizeDxCustomThermalResult(verified.customColumns || [], verifyRows, verified.rows || [], {keepIncomplete:true});
+    applyDxThermalSoftVerification(normalized.rows, second.rows, columns, review);
+    normalized.rows.forEach((row,index) => {
+      const check = second.rows[index];
+      if (check && thermalIdentityText(row[0]) === thermalIdentityText(check[0]) && safeExtract(row[1]) && safeExtract(check[1]) && safeExtract(row[1]).toLowerCase() !== safeExtract(check[1]).toLowerCase()) {
+        setDxThermalReview(review,index,columns[1],row[1],check[1],'Type verification mismatch');
+      }
+    });
+    warnings.push(...(verified.unclearFields || []));
+    if (second.rows.length !== normalized.rows.length) warnings.push(`Independent reading found ${second.rows.length} rows; first reading found ${normalized.rows.length}. Review the extracted rows.`);
+  } catch (error) {
+    warnings.push(`Independent verification was unavailable: ${error.message || error}`);
+  }
+  normalized.rows.forEach((row, index) => {
+    [0,1,2,3,4,5].forEach(columnIndex => {
+      if (!safeExtract(row[columnIndex])) setDxThermalReview(review,index,columns[columnIndex],'','','Source cell could not be read. Review against the thermal sheet.');
+    });
+  });
+  applyDxThermalColumnSanityReview(normalized.rows,review);
+  return {status:Object.keys(review).length || warnings.length ? 'needs_verification' : 'ok',rows:[],customColumns:columns,customRows:normalized.rows,reviewCells:{},customReviewCells:review,unclearFields:[...new Set(warnings)],message:`Extracted ${normalized.rows.length} DX thermal rows from ${ordered.length} file${ordered.length===1?'':'s'}.`};
 }
 
 async function extractDxThermalWithOpenAI(project, options, uploads) {
@@ -6386,9 +6547,10 @@ DX Workflow mapping:
 - Unit Ref = Units Reference / No. or Ref.
 - Type = AC System and Type child column named Type (e.g. FCU). Never read System (e.g. Chilled Water) as Type and never infer a DX family from the unit reference.
 - Location = Location.
-- TKw = Calculated AC Load Total kW.
-- SKw = Calculated AC Load Sensible kW.
-- L/S = Calculated AC Load Flow Rate L/s.
+- TKw = ${dxCapacitySource(options.capacitySource)} Total kW.
+- SKw = ${dxCapacitySource(options.capacitySource)} Sensible kW.
+- L/S = ${dxCapacitySource(options.capacitySource)} Flow Rate L/s.
+- For First Selection or Second Selection, skip Quantity No. before the three load values.
 - Return every row in customRows with cells in exactly that same order.
 - For this DX table, rows must have visible Unit Ref or Location plus visible TKw, SKw, and L/S.
 `
@@ -9383,6 +9545,7 @@ function extractVrvFile(file, originalName) {
       status: "needs_parser",
       materialRows: [],
       vrvRows: [],
+      outdoorDetailsRows: [],
       projectName: "",
       message: "Automatic VRV extraction is available for DOCX in this MVP. PDF/image parsing needs OCR."
     };
@@ -9392,16 +9555,24 @@ function extractVrvFile(file, originalName) {
   const documentXml = textStart.startsWith("<")
     ? bytes.toString("utf8")
     : unzipEntries(bytes)["word/document.xml"];
-  if (!documentXml) return { status: "error", materialRows: [], vrvRows: [], projectName: "", message: "Could not read DOCX document.xml" };
+  if (!documentXml) return { status: "error", materialRows: [], vrvRows: [], outdoorDetailsRows: [], projectName: "", message: "Could not read DOCX document.xml" };
   const text = xmlText(documentXml);
   const projectMatch = text.match(/Project name:\s*([^\n]+)/i);
   const projectName = projectMatch ? projectMatch[1].trim() : "";
   const materialRows = extractMaterialRows(documentXml);
   const vrvRows = extractVrvRows(documentXml, text);
+  const reportTables = extractTables(documentXml);
+  const outdoorCr = extractOutdoorCrValues(reportTables);
+  const outdoorDetailsRows = Object.values(extractOutdoorDetailRefs(reportTables)).flat().map(row => {
+    const key = `${normalizeVrvSystemName(row.outdoorName)}|${row.outdoorModel}`;
+    const values = outdoorCr.get(key) || [];
+    return {Name:row.outdoorName,Model:row.displayModel || row.outdoorModel,CR:values.shift() || '',PS:row.ps || ''};
+  });
   return {
-    status: materialRows.length || vrvRows.length ? "ok" : "empty",
+    status: materialRows.length || vrvRows.length || outdoorDetailsRows.length ? "ok" : "empty",
     materialRows,
     vrvRows,
+    outdoorDetailsRows,
     projectName,
     message: materialRows.length || vrvRows.length ? "VRV report extracted." : "No material rows were detected."
   };
@@ -9579,7 +9750,7 @@ function outdoorModelFromCell(value) {
 }
 
 function normalizeVrvSystemName(value) {
-  const raw = cleanCell(value).toUpperCase().replace(/[.。]+$/g, "");
+  const raw = cleanCell(value).toUpperCase().replace(/-\s+/g, "-").replace(/[.。]+$/g, "");
   const match = raw.match(/^VRV-[A-Z0-9-]+/i);
   return match ? match[0].toUpperCase() : raw;
 }
@@ -9625,6 +9796,7 @@ function extractOutdoorDetailRefs(tables) {
     for (const row of table.slice(2)) {
       const outdoorName = normalizeVrvSystemName(row[0]);
       const outdoorModel = outdoorModelFromCell(row[1]);
+      const ps = cleanCell(row[2]);
       if (!outdoorName || !outdoorModel) continue;
       if (/^VRV-[A-Z0-9-]+$/i.test(outdoorName)) {
         currentSystem = outdoorName;
@@ -9632,6 +9804,8 @@ function extractOutdoorDetailRefs(tables) {
         refsBySystem[currentSystem].push({
           outdoorName: currentSystem,
           outdoorModel,
+          displayModel: cleanCell(row[1]),
+          ps,
           outdoorComponents: []
         });
       } else if (/^[A-Z]$/i.test(outdoorName) && currentSystem) {
@@ -9639,6 +9813,8 @@ function extractOutdoorDetailRefs(tables) {
         refsBySystem[currentSystem].push({
           outdoorName,
           outdoorModel,
+          displayModel: cleanCell(row[1]),
+          ps,
           outdoorComponents: []
         });
       }
@@ -9657,13 +9833,34 @@ function extractOutdoorDetailRefs(tables) {
   return refsBySystem;
 }
 
+function extractOutdoorCrValues(tables) {
+  const values = new Map();
+  for (const table of tables) {
+    const header = (table[0] || []).map(cleanCell);
+    const nameIndex = header.findIndex(cell => /^name$/i.test(cell));
+    const modelIndex = header.findIndex(cell => /^model$/i.test(cell));
+    const crIndex = header.findIndex(cell => /^cr$/i.test(cell));
+    if (nameIndex < 0 || modelIndex < 0 || crIndex < 0) continue;
+    for (const row of table.slice(1)) {
+      const name = normalizeVrvSystemName(row[nameIndex]);
+      const model = outdoorModelFromCell(row[modelIndex]);
+      if (!/^VRV-/i.test(name) || !model) continue;
+      const key = `${name}|${model}`;
+      if (!values.has(key)) values.set(key,[]);
+      values.get(key).push(cleanCell(row[crIndex]));
+    }
+  }
+  return values;
+}
+
 function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
   const rows = [];
   const systemsInReport = Object.keys(outdoorRefsBySystem);
   const seenGroups = new Set();
   let systemIndex = 0;
 
-  for (const table of tables) {
+  for (let tableIndex = 0; tableIndex < tables.length; tableIndex += 1) {
+    const table = tables[tableIndex];
     const header = (table[0] || []).map(cleanCell);
     const headerText = table.slice(0, 3).flat().map(cleanCell).join("|").toLowerCase();
     const nameIndex = header.findIndex(cell => /^name$/i.test(cell));
@@ -9676,13 +9873,37 @@ function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
     );
     if (!isIndoorCoolingTable) continue;
 
+    const coolingHeader = (table[1] || []).map(cleanCell);
+    const columnIndex = label => coolingHeader.findIndex(cell => cell.toLowerCase() === label);
+    const coolingColumns = {tmpC:columnIndex('tmp c'),rqTC:columnIndex('rq tc'),maxTC:columnIndex('max tc'),rqSC:columnIndex('rq sc'),maxSC:columnIndex('max sc')};
+    let airflowRows = new Map();
+    for (let following = tableIndex + 1; following < tables.length; following += 1) {
+      const candidate = tables[following];
+      const labels = candidate.slice(0,3).flat().map(cleanCell).join('|').toLowerCase();
+      if (/rq tc|max tc/.test(labels)) break;
+      if (!/air flow rate/.test(labels)) continue;
+      const flowHeader = (candidate[0] || []).map(cleanCell);
+      const flowNameIndex = flowHeader.findIndex(cell => /^name$/i.test(cell));
+      const flowFcuIndex = flowHeader.findIndex(cell => /^fcu$/i.test(cell));
+      const flowIndex = (candidate[1] || []).map(cleanCell).findIndex(cell => /^air\s*flow\s*rate$/i.test(cell));
+      if (flowNameIndex < 0 || flowFcuIndex < 0 || flowIndex < 0) continue;
+      for (const flowRow of candidate.slice(2)) {
+        const key = `${cleanCell(flowRow[flowNameIndex]).toUpperCase()}|${cleanCell(flowRow[flowFcuIndex]).toUpperCase()}`;
+        if (!flowRow[flowNameIndex] || !flowRow[flowFcuIndex]) continue;
+        if (!airflowRows.has(key)) airflowRows.set(key,[]);
+        airflowRows.get(key).push(cleanCell(flowRow[flowIndex]));
+      }
+      break;
+    }
     const dataRows = [];
     for (const row of table.slice(1)) {
       const cells = row.map(cleanCell);
       const name = cells[nameIndex] || fcuNameFromCells(cells);
       const fcu = indoorModelFromCells([cells[fcuIndex]]) || indoorModelFromCells(cells);
       if (!name || !fcu) continue;
-      dataRows.push({ name, fcu });
+      const key = `${name.toUpperCase()}|${fcu.toUpperCase()}`;
+      const value = field => coolingColumns[field] >= 0 ? cells[coolingColumns[field]] || '' : '';
+      dataRows.push({ name, fcu, tmpC:value('tmpC'),rqTC:value('rqTC'),maxTC:value('maxTC'),rqSC:value('rqSC'),maxSC:value('maxSC'),airFlowRate:airflowRows.get(key)?.shift() || '' });
     }
     if (!dataRows.length) continue;
 
@@ -9697,6 +9918,12 @@ function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
         system: systemFromName(row.name, systemByPrefix, fallbackSystem),
         name: row.name,
         fcu: row.fcu,
+        tmpC: row.tmpC,
+        rqTC: row.rqTC,
+        maxTC: row.maxTC,
+        rqSC: row.rqSC,
+        maxSC: row.maxSC,
+        airFlowRate: row.airFlowRate,
         outdoorName: "",
         outdoorModel: ""
       });
@@ -9767,7 +9994,7 @@ function extractVrvRows(xml, text) {
     }
     if (!assignments.length) continue;
     if (systemRows[0]) systemRows[0].outdoorRefs = assignments;
-    const startIndex = systemRows.length <= 5 ? 1 : 2;
+    const startIndex = systemRows.length <= 5 ? 0 : 2;
     assignments.forEach((assignment, index) => {
       const target = systemRows[startIndex + index];
       if (!target) return;

@@ -143,6 +143,7 @@ function dxEnsureManualRows() {
 }
 function dxCard(title, body, actions = '', className = '') { return `<section class="dx-card ${className}"><div class="dx-card-heading"><h2>${title}</h2><div class="dx-actions">${actions}</div></div>${body}</section>`; }
 function renderDxWorkspace() {
+  canvas.classList.remove('vrv-workspace');
   const data = dxData();
   const step = [2,3].includes(data.step) ? data.step : 1;
   const pageScroll = canvas.closest('.canvas-wrap');
@@ -489,7 +490,7 @@ function dxMergeRows(existing,incoming) {
 }
 async function dxExtract(append) {
   const data=dxData();
-  const ids=data.selectedUploadIds.filter(id=>thermalUploadIds().includes(id));
+  const ids=thermalUploadIds().map(findUpload).filter(file=>file && data.selectedUploadIds.includes(file.id)).sort((a,b)=>String(a.originalName).localeCompare(String(b.originalName),undefined,{numeric:true,sensitivity:'base'})).map(file=>file.id);
   if (!ids.length) return toast('Select at least one uploaded file.');
   if (state.tables.thermal.rows.length && !append && !confirm('Replace extracted rows and corrections? The DX Schedule and manual proposal edits will also be replaced.')) return;
   dxThermalActivity='Reading and extracting thermal sheets';

@@ -75,6 +75,33 @@ test("Staff owns sales records and cannot access purchase orders", { timeout: 30
     assert.equal((await read(alice, "/api/sales-crm")).orderBook.length, 0);
     assert.equal((await read(bob, "/api/sales-crm")).orderBook.length, 2);
 
+    const year = String(new Date().getFullYear()).slice(-2);
+    await save(admin, "/api/sales-crm/orderBook/import", { orders: [
+      { id: "existing-order-121", orderNo: `CZ${year}-0121`, customer: "Existing", salesPerson: "Others" }
+    ] });
+    const aliceNext = (await read(alice, "/api/sales-crm")).nextOrderBookNo;
+    const bobNext = (await read(bob, "/api/sales-crm")).nextOrderBookNo;
+    assert.equal(aliceNext, `CZ${year}-0122`);
+    assert.equal(bobNext, aliceNext);
+    const [aliceNew, bobNew] = await Promise.all([
+      save(alice, "/api/sales-crm/orderBook", { orderNo: aliceNext, customer: "Alice New" }),
+      save(bob, "/api/sales-crm/orderBook", { orderNo: bobNext, customer: "Bob New" })
+    ]);
+    assert.deepEqual(new Set([aliceNew.savedOrderNo, bobNew.savedOrderNo]),
+      new Set([`CZ${year}-0122`, `CZ${year}-0123`]));
+    const allNumbers = (await read(admin, "/api/sales-crm")).orderBook.map(order => order.orderNo);
+    assert.equal(new Set(allNumbers).size, allNumbers.length);
+    assert.equal((await read(alice, "/api/sales-crm")).nextOrderBookNo, `CZ${year}-0124`);
+    assert.equal((await request(alice, "/api/sales-crm/orderBook", json({
+      id: aliceNew.savedItemId, orderNo: bobNew.savedOrderNo, customer: "Alice New"
+    }))).status, 409);
+    const fromQuote = await save(alice, "/api/sales-crm/orderBook", {
+      id: "quotation-order-1", createNew: true, orderNo: aliceNext, customer: "Quote Customer"
+    });
+    assert.equal(fromQuote.savedItemId, "quotation-order-1");
+    assert.equal(fromQuote.savedOrderNo, `CZ${year}-0124`);
+    assert.equal((await read(bob, "/api/sales-crm")).nextOrderBookNo, `CZ${year}-0125`);
+
     const customer = await save(alice, "/api/sales-crm/customers", { name: "Alice Client", contact: "Site Contact", role: "Engineer" });
     const savedCustomer = customer.customers.find(item => item.name === "Alice Client");
     assert.equal(savedCustomer.salesPerson, "Alice");

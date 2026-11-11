@@ -1,0 +1,122 @@
+.vrv-workspace{position:relative!important;min-width:0!important;width:100%!important;height:auto!important;transform:none!important;padding:16px 18px 78px;background:#f5f8ff;color:#10234d;font-family:Inter,Arial,sans-serif}.vrv-workspace .dx-project-header{margin-bottom:12px}.vrv-workspace .dx-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:3px;margin-bottom:14px}.vrv-workspace .dx-steps button{min-width:0;font-size:13px;white-space:nowrap}.vrv-workspace .dx-card{box-shadow:0 5px 14px rgba(19,55,112,.06)}.vrv-two-col{display:grid;grid-template-columns:minmax(310px,35%) minmax(0,1fr);gap:14px;min-height:525px}.vrv-left{display:flex;flex-direction:column;gap:12px}.vrv-left .dx-card{padding:12px}.vrv-main-table{min-width:0;min-height:520px}.vrv-drop{width:100%;min-height:104px;border:1px dashed #83adff;border-radius:10px;background:linear-gradient(130deg,#f7faff,#edf4ff);color:#10234d;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;cursor:pointer}.vrv-drop .dx-icon{width:30px;height:30px}.vrv-drop b{font-size:13px}.vrv-drop small,.vrv-file small,.vrv-subtitle,.vrv-help{color:#6780aa;font-size:12px}.vrv-files{display:flex;flex-direction:column;gap:6px;margin-top:9px}.vrv-file{display:flex;align-items:center;gap:6px;padding:7px 9px;border-radius:8px;background:#f1f5fc;min-width:0}.vrv-file>span{display:flex;align-items:center;gap:8px;flex:1;min-width:0}.vrv-file b{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vrv-file button{border:0;background:#fff;border-radius:6px;padding:5px;cursor:pointer}.vrv-file .dx-icon{width:17px;height:17px}.vrv-switch,.vrv-control-actions{display:flex;gap:8px;margin:12px 0}.vrv-switch .dx-button,.vrv-control-actions .dx-button{flex:1;justify-content:center}.vrv-control{display:block;margin:12px 0;font-size:13px;font-weight:600}.vrv-control select,.vrv-control>input,.vrv-left [data-vrv-other]{display:block;width:100%;height:37px;margin-top:6px;padding:0 10px;border:1px solid #cbdaf4;border-radius:7px;background:#fff;color:#10234d}.vrv-tokens{display:flex;flex-wrap:wrap;gap:5px;min-height:38px;margin-top:6px;padding:5px;border:1px solid #cbdaf4;border-radius:7px;background:#fff}.vrv-tokens span{display:inline-flex;gap:5px;align-items:center;padding:3px 7px;border-radius:5px;background:#e3edff;color:#0757db}.vrv-tokens button{border:0;background:none;color:inherit;cursor:pointer}.vrv-tokens input{border:0;outline:0;min-width:165px;flex:1}.vrv-badges{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.vrv-badges span,.vrv-boq-tools>span{padding:7px 11px;border-radius:8px;background:#e8f0ff;color:#075be4;font-size:12px}.vrv-table-scroll{overflow:auto;max-height:min(64vh,600px);border:1px solid #dce6f6;border-radius:8px}.vrv-main-table .vrv-table-scroll{min-height:390px}.vrv-table{border-collapse:collapse;min-width:100%;width:max-content;font-size:12px}.vrv-table th,.vrv-table td{border-right:1px solid #e0e8f4;border-bottom:1px solid #e7edf7;padding:10px 12px;min-width:85px;white-space:nowrap;text-align:center}.vrv-table th{position:sticky;top:0;background:#e5ebf5;color:#10234d;z-index:1;font-weight:700}.vrv-table tbody tr:nth-child(even){background:#f7f9fd}.vrv-table td[contenteditable=true]:focus{outline:2px solid #4f8cff;outline-offset:-2px;background:#fff}.vrv-table td.needs-review-cell{background:#fff0da}.vrv-table td.vrv-empty{height:280px;color:#7188af;font-size:14px}.vrv-note{padding:13px;border-radius:8px;background:#edf4ff;color:#2b4168;font-size:12px;line-height:1.5}.vrv-report-tabs{justify-content:flex-start}.vrv-report-tabs .dx-button{flex:0 1 auto}.vrv-schedule-card .vrv-table-scroll{max-height:56vh}.vrv-groups{display:grid;grid-template-columns:35% 65%;margin-top:12px;text-align:center;font-size:12px;font-weight:700}.vrv-groups span{padding:9px;background:#e1e7f1}.vrv-groups span+span{background:#cce0ff}.vrv-subtitle{margin:0}.vrv-help{margin:9px 0 0}.vrv-boq-tools{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin:12px 0}.vrv-boq-tools label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:600}.vrv-percent{display:flex;align-items:center;gap:4px;background:#f5f8ff;border:1px solid #d5e2f8;border-radius:7px;padding:4px 8px}.vrv-percent input{width:65px;text-align:center;border:0;background:transparent;outline:0;color:#10234d}.vrv-boq-card .vrv-table td:nth-child(2){text-align:left;min-width:250px}.vrv-boq-card .vrv-table td small{display:block;color:#7387a9;margin-top:3px}.vrv-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-top:16px}.vrv-kpis>div{padding:15px;border:1px solid #d8e5fc;border-radius:10px;background:#ebf3ff}.vrv-kpis>div:nth-child(3){background:#f0eaff}.vrv-kpis>div:nth-child(5){background:#e9f8ef}.vrv-kpis small{display:block;color:#38517a}.vrv-kpis strong{display:block;margin-top:5px;font-size:18px}.vrv-menu{position:relative}.vrv-menu summary{list-style:none;display:grid;place-items:center;width:38px;height:38px;border:1px solid #cbdaf4;border-radius:8px;background:#fff;color:#0663ec;cursor:pointer;font-size:22px}.vrv-menu summary::-webkit-details-marker{display:none}.vrv-menu>div{position:absolute;right:0;top:42px;z-index:10;display:flex;flex-direction:column;min-width:220px;padding:5px;background:#fff;border:1px solid #dce6f6;border-radius:8px;box-shadow:0 10px 28px #18376224}.vrv-menu .dx-button{border:0;justify-content:flex-start}.vrv-workspace .dx-footer{position:sticky;bottom:0;z-index:3;background:#f8fbff}.vrv-workspace .dx-card-heading h2{display:flex;align-items:center;gap:8px}@media(max-width:1000px){.vrv-two-col{grid-template-columns:1fr}.vrv-main-table{min-height:350px}.vrv-workspace .dx-steps{overflow:auto;display:flex}.vrv-workspace .dx-steps button{min-width:215px}.vrv-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.vrv-workspace{padding:10px 8px 70px}.vrv-boq-tools{flex-wrap:wrap;justify-content:flex-start}.vrv-kpis{grid-template-columns:1fr}}
+.vrv-delete-row{border:0;background:#ffeaea;color:#d52b3c;border-radius:5px;margin-left:10px;cursor:pointer;opacity:0}.vrv-table tr:hover .vrv-delete-row,.vrv-delete-row:focus-visible{opacity:1}.vrv-boq-card [data-vrv-price]:focus{outline:2px solid #4f8cff;outline-offset:-2px}
+.vrv-table .total-row{background:#eaf9e9!important;font-weight:700}.vrv-table .separator-row{height:10px;background:#fff!important}.vrv-table .total-row:last-child{background:#eee9ff!important}
+.vrv-schedule-card .vrv-group-head th{height:34px;background:#dfe6f1}.vrv-schedule-card .vrv-group-head th:nth-child(n+2){background:#cfe2ff}.vrv-schedule-card .vrv-table thead tr:nth-child(2) th{top:34px}.vrv-table .project-total-row{background:#eee8ff!important;font-weight:700}
+
+/* Keep VRV on the same type and spacing scale as the DX workspace. */
+.vrv-workspace{font-family:DXInter,Inter,'Segoe UI',sans-serif;gap:12px;padding:4px 20px 0;background:transparent;font-size:12px}
+.vrv-workspace .dx-card{border:1px solid var(--dx-line);border-radius:var(--dx-radius);box-shadow:var(--dx-shadow)}
+.vrv-workspace .dx-project-header{margin-bottom:0}
+.vrv-workspace .vrv-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;width:100%;min-height:40px;margin:0;padding:2px;overflow:visible}
+.vrv-workspace .vrv-steps button{box-sizing:border-box;width:100%;max-width:100%;min-width:0;min-height:36px;padding:4px 7px;gap:7px;justify-content:center;text-align:center;font-size:11px;line-height:1.25;white-space:normal;overflow:visible}
+.vrv-workspace .vrv-steps button>span{width:25px;height:25px;flex:0 0 25px}
+.vrv-two-col{grid-template-columns:minmax(300px,.37fr) minmax(0,.63fr);gap:12px;min-height:0;align-items:start}
+.vrv-left{gap:10px;min-width:0}
+.vrv-left .dx-card{padding:12px}
+.vrv-main-table{min-width:0;min-height:0;overflow:hidden}
+.vrv-workspace .dx-card-heading h2{font-size:14px;line-height:1.35;font-weight:650}
+.vrv-workspace .dx-card-heading .dx-button{min-height:28px;padding:4px 9px;font-size:10.5px}
+.vrv-drop{min-height:95px;gap:4px;font:inherit}
+.vrv-drop b{font-size:11.5px;line-height:1.4;font-weight:600}
+.vrv-drop small{font-size:10.5px}
+.vrv-drop .dx-icon{width:29px;height:29px}
+.vrv-workspace .vrv-control{margin:10px 0;font-size:11px;font-weight:600}
+.vrv-workspace .vrv-control select,.vrv-workspace .vrv-control>input,.vrv-workspace .vrv-left [data-vrv-other]{height:34px;font:inherit;font-size:12px}
+.vrv-workspace .vrv-switch,.vrv-workspace .vrv-control-actions{gap:7px;margin:10px 0}
+.vrv-workspace .vrv-switch .dx-button,.vrv-workspace .vrv-control-actions .dx-button{min-width:0;padding:6px 7px;font-size:10.5px}
+.vrv-badges{gap:8px;margin:0 0 9px}
+.vrv-badges span{min-height:26px;padding:5px 9px;border:1px solid #e9effb;border-radius:7px;background:#eaf2ff;font-size:10.5px}
+.vrv-badges span:last-child{color:#61718e;background:#f0f3f9}
+.vrv-workspace .vrv-table-scroll{display:block;width:100%;max-width:100%;overflow-x:auto;overflow-y:auto;scrollbar-gutter:stable;border-color:#dce6f6;overscroll-behavior-inline:contain}
+.vrv-workspace .vrv-main-table .vrv-table-scroll{min-height:300px;max-height:min(58vh,540px)}
+.vrv-workspace table.vrv-table{width:max-content!important;min-width:100%;table-layout:auto!important;border-collapse:separate;border-spacing:0;font-family:DXInter,Inter,'Segoe UI',sans-serif;font-size:11.5px}
+.vrv-workspace .vrv-table th,.vrv-workspace .vrv-table td{box-sizing:border-box;min-width:104px;padding:8px 10px;white-space:nowrap;text-overflow:clip;overflow:visible;line-height:1.35}
+.vrv-workspace .vrv-table th{font-size:10.5px;font-weight:650;background:#e5ebf5}
+.vrv-workspace .vrv-main-table .vrv-table th:nth-child(1),.vrv-workspace .vrv-main-table .vrv-table td:nth-child(1){min-width:112px}
+.vrv-workspace .vrv-main-table .vrv-table th:nth-child(2),.vrv-workspace .vrv-main-table .vrv-table td:nth-child(2){min-width:145px}
+.vrv-workspace .vrv-main-table .vrv-table th:nth-child(4),.vrv-workspace .vrv-main-table .vrv-table td:nth-child(4){min-width:165px}
+.vrv-workspace .vrv-main-table .vrv-table th:nth-child(n+5),.vrv-workspace .vrv-main-table .vrv-table td:nth-child(n+5){min-width:122px}
+.vrv-file{min-height:30px;margin:0;padding:5px 7px;border:1px solid #edf1f8;border-radius:5px;background:#fafcff}
+.vrv-file.selected{background:linear-gradient(90deg,#dfedff,#edf4ff);border-color:#e3edfd}
+.vrv-file input[type=checkbox]{width:14px;height:14px;margin:0;accent-color:#0962fb;flex:0 0 auto}
+.vrv-file .dx-icon{width:16px;height:16px}
+.vrv-file .vrv-filename{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;color:#273950;font-size:10.5px;font-weight:550}
+.vrv-file small{font-size:9.5px;white-space:nowrap}
+.vrv-file button{background:transparent}
+.vrv-file [data-vrv-remove]{display:grid;place-items:center;width:18px;height:18px;padding:0;color:#7888a0;font-size:16px;line-height:1}
+.vrv-workspace .dx-file-tools{margin:8px 0 5px}
+.vrv-files{max-height:180px;overflow:auto;margin-top:0;gap:3px}
+.vrv-upload-card:not(:has(.dx-file-tools)) .vrv-files{margin-top:9px}
+.vrv-workspace .dx-upload-actions{margin-top:9px;flex-wrap:nowrap}
+.vrv-workspace .dx-upload-actions .dx-button{font-size:10.5px;min-width:0}
+.vrv-workspace .dx-footer{background:#f8fbff}
+@media(max-width:1100px){.vrv-two-col{grid-template-columns:1fr}.vrv-workspace .vrv-main-table .vrv-table-scroll{min-height:260px}.vrv-workspace .vrv-steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.vrv-workspace{padding:4px 10px 0}.vrv-workspace .vrv-steps button{font-size:10px;gap:5px;padding-inline:4px}.vrv-workspace .vrv-steps button>span{width:22px;height:22px;flex-basis:22px}.vrv-workspace .dx-upload-actions{flex-wrap:wrap}}
+.vrv-options-menu .dx-table-menu-panel{max-height:min(300px,65vh);overflow-y:auto}
+.vrv-options-menu .dx-table-menu-panel [data-vrv-action="clear-table"]{color:#ba544d}
+
+/* DX-style data toolbar, empty state, and engineering table bands. */
+.vrv-data-toolbar{display:flex;align-items:center;gap:10px;min-width:0;margin-bottom:10px}
+.vrv-data-toolbar .vrv-badges{flex:1 1 auto;margin:0}
+.vrv-data-toolbar .vrv-badges span{display:inline-flex;align-items:center;gap:6px}
+.vrv-data-toolbar .vrv-badges .dx-icon{width:14px;height:14px}
+.vrv-data-toolbar .dx-search{flex:0 1 270px;width:270px;min-width:160px;max-width:270px;margin-left:auto}
+.vrv-workspace .vrv-table-scroll{border:1px solid #e4eaf5;border-radius:8px;background:#fff}
+.vrv-workspace .vrv-main-table .vrv-table-scroll{min-height:260px}
+.vrv-workspace .vrv-table th{border:0;border-right:1px solid #e1e8f4;border-bottom:1px solid #dfe8f4;background:linear-gradient(#eaf0f9,#e3ebf7);color:#354663;text-align:center}
+.vrv-workspace .vrv-table td{height:36px;border:0;border-right:1px solid #edf2f9;border-bottom:1px solid #eaf0f8;background:#fff;color:#2a3952;text-align:center;vertical-align:middle}
+.vrv-workspace .vrv-table tbody tr:nth-child(even) td{background:#f8faff}
+.vrv-workspace .vrv-table th:last-child,.vrv-workspace .vrv-table td:last-child{border-right:0}
+.vrv-workspace .vrv-table td.vrv-empty{height:220px;background:#fff;text-align:center}
+.vrv-workspace .vrv-table td.vrv-empty .dx-table-empty{min-height:205px}
+.vrv-workspace .vrv-table td.vrv-empty .dx-table-empty strong{font-size:11px;font-weight:550;color:#6d809f}
+.vrv-workspace .vrv-table td.vrv-empty .dx-table-empty span{font-size:10.5px;color:#96a3b7}
+.vrv-workspace .vrv-schedule-card{padding:10px}
+.vrv-workspace .vrv-schedule-card .vrv-table-scroll{max-height:min(56vh,560px);min-height:360px}
+.vrv-workspace .vrv-schedule-table{min-width:2450px!important}
+.vrv-workspace .vrv-schedule-table th,.vrv-workspace .vrv-schedule-table td{min-width:100px}
+.vrv-workspace .vrv-schedule-table th:nth-child(1),.vrv-workspace .vrv-schedule-table td:nth-child(1){min-width:85px}
+.vrv-workspace .vrv-schedule-table th:nth-child(2),.vrv-workspace .vrv-schedule-table td:nth-child(2){min-width:180px}
+.vrv-workspace .vrv-schedule-table th:nth-child(3),.vrv-workspace .vrv-schedule-table td:nth-child(3){min-width:180px}
+.vrv-workspace .vrv-schedule-table thead .vrv-group-head th{position:sticky;top:0;z-index:3;height:40px;padding:9px;font-size:12px;font-weight:700;letter-spacing:.2px}
+.vrv-workspace .vrv-schedule-table thead tr:nth-child(2) th{position:sticky;top:40px;z-index:2;min-height:62px;padding:8px 10px;white-space:normal;line-height:1.3}
+.vrv-workspace .vrv-schedule-table thead th.vrv-specified{background:#e5e8ee;color:#15223d}
+.vrv-workspace .vrv-schedule-table thead th.vrv-proposed{background:#c6dcf9;color:#15223d}
+.vrv-workspace .vrv-schedule-table tbody .vrv-placeholder-row td{height:44px}
+.vrv-workspace .vrv-schedule-table .total-row td{background:#eaf9e9!important;font-weight:700}
+.vrv-workspace .vrv-schedule-table .project-total-row td{background:#eee8ff!important;font-weight:700}
+.vrv-workspace .vrv-thermal-table tbody tr[hidden]{display:none}
+@media(max-width:750px){.vrv-data-toolbar{flex-wrap:wrap}.vrv-data-toolbar .dx-search{flex:1 1 100%;width:100%;max-width:none}}
+
+/* Compact VRV thermal sheet: give the data table the space and keep cells readable. */
+.vrv-workspace .vrv-step-one-grid{grid-template-columns:minmax(340px,.28fr) minmax(0,.72fr);gap:12px}
+.vrv-workspace .vrv-thermal-card{min-width:0}
+.vrv-workspace .vrv-thermal-card .vrv-table-scroll{min-height:300px;max-height:min(58vh,540px)}
+.vrv-workspace table.vrv-standard-table{width:100%!important;min-width:1060px!important;table-layout:fixed!important}
+.vrv-workspace .vrv-main-table .vrv-standard-table th,.vrv-workspace .vrv-main-table .vrv-standard-table td{min-width:0!important;width:auto;padding:7px 5px;white-space:normal!important;overflow-wrap:anywhere;word-break:normal;line-height:1.3}
+.vrv-workspace .vrv-standard-table th{height:45px;font-size:10.5px;font-weight:650;vertical-align:middle}
+.vrv-workspace .vrv-standard-table td{height:auto;min-height:36px;padding:6px 5px;vertical-align:middle}
+.vrv-workspace .vrv-thermal-table:not(.vrv-standard-table) th,.vrv-workspace .vrv-thermal-table:not(.vrv-standard-table) td{white-space:normal;overflow-wrap:anywhere;max-width:220px}
+.vrv-workspace .vrv-empty-panel{position:sticky;left:0;display:grid;place-items:center;width:100%;min-height:240px;background:#fff;text-align:center}
+.vrv-workspace .vrv-empty-panel .dx-table-empty{min-height:220px}
+.vrv-workspace .vrv-empty-panel .dx-table-empty strong{font-size:11px;font-weight:550;color:#6d809f}
+.vrv-workspace .vrv-empty-panel .dx-table-empty span{font-size:10.5px;color:#96a3b7}
+.vrv-workspace .vrv-upload-card .dx-upload-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.vrv-workspace .vrv-upload-card .dx-upload-actions .dx-button{width:100%;min-width:0;justify-content:center;white-space:nowrap}
+@media(max-width:1100px){.vrv-workspace .vrv-step-one-grid{grid-template-columns:1fr}.vrv-workspace .vrv-empty-panel{min-height:200px}}
+.vrv-workspace .vrv-selection-report .vrv-table{width:100%;min-width:760px;table-layout:fixed}
+.vrv-workspace .vrv-selection-report .vrv-table th,.vrv-workspace .vrv-selection-report .vrv-table td{min-width:0!important;width:auto;padding:7px 5px;white-space:normal;overflow-wrap:anywhere;text-align:center}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(1){width:9%}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(2){width:18%}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(3){width:16%}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(4){width:11%}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(n+5):nth-child(-n+8){width:8%}
+.vrv-workspace .vrv-selection-report .vrv-table th:nth-child(9){width:14%}
+.vrv-workspace .vrv-report-tabs{display:flex;flex-wrap:wrap;gap:6px}
+.vrv-workspace .vrv-report-tabs .dx-button{flex:1 1 150px;min-width:0;padding:7px 8px;white-space:normal;line-height:1.25;text-align:center}
+.vrv-workspace .vrv-schedule-table thead .vrv-group-head th:nth-child(3){background:#9fc4f3;color:#102a5e}
+.vrv-workspace .vrv-schedule-table thead tr:nth-child(2) th:nth-child(n+21){background:#afcef4;color:#102a5e}
+.vrv-workspace .vrv-manual-unit-price{display:block;width:96px;max-width:calc(100% - 12px);height:30px;margin:0 auto;box-sizing:border-box;padding:4px 6px;border:1px solid #b8cef0;border-radius:6px;background:#fff;color:#10234d;font:inherit;text-align:center}
+.vrv-workspace .vrv-manual-unit-price:focus{outline:2px solid #4f8cff;outline-offset:1px}
+.vrv-workspace .vrv-unit-price-display{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:center;cursor:text}
+.vrv-workspace .vrv-unit-price-display:focus-visible{outline:2px solid #4f8cff;outline-offset:2px;border-radius:3px}
