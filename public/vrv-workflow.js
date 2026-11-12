@@ -1,5 +1,7 @@
 /* Four-step VRV presentation. Extraction, engineering and price calculations remain in app.js. */
 let vrvBusy = false;
+let vrvUploading = false;
+let vrvBusyAction = '';
 let vrvStatus = 'Draft — enter Project Name or upload a file';
 let vrvThermalSearch = '';
 const vrvSteps = ['Thermal Sheet & Extraction', 'VRV Selection Report', 'VRV Schedule', 'BOQ & Quotation'];
@@ -53,7 +55,7 @@ function vrvUploadCard(nodeId, title, types) {
   const tools = thermal ? `<div class="dx-file-tools"><button type="button" data-vrv-action="select-all">☑ Select All</button><button type="button" data-vrv-action="clear-selection">Clear Selection</button><span>${selected} files selected</span></div>` : '';
   const actions = thermal ? `<div class="dx-actions dx-upload-actions">${vrvButton('upload-files','Upload Files','upload',true)}${vrvButton('preview-selected','Preview','eye')}</div>` : '';
   const capacitySource = thermal ? `<label class="dx-capacity-source">Load columns to read<select data-vrv-capacity-source ${vrvBusy ? 'disabled' : ''}>${['Calculated AC Load','First Selection','Second Selection'].map(source=>`<option value="${source}" ${vrvData().capacitySource===source?'selected':''}>${source}</option>`).join('')}</select></label>` : '';
-  return vrvCard(`${vrvIcon('upload')} ${title}`, `<button type="button" class="vrv-drop" data-vrv-pick="${nodeId}">${vrvIcon('cloud-upload')}<b>Drag & drop files here, or click to upload</b><small>Upload ${types}</small></button>${tools}<div class="vrv-files">${vrvFileList(nodeId) || '<div class="dx-empty">No files uploaded yet.</div>'}</div>${actions}${capacitySource}`,'','vrv-upload-card');
+  return vrvCard(`${vrvIcon('upload')} ${title}${thermal && vrvUploading ? '<span class="vrv-upload-spinner" role="status" aria-label="Uploading thermal sheet"></span>' : ''}`, `<button type="button" class="vrv-drop" data-vrv-pick="${nodeId}">${vrvIcon('cloud-upload')}<b>Drag & drop files here, or click to upload</b><small>Upload ${types}</small></button>${tools}<div class="vrv-files">${vrvFileList(nodeId) || '<div class="dx-empty">No files uploaded yet.</div>'}</div>${actions}${capacitySource}`,'','vrv-upload-card');
 }
 function vrvTable(key, rows = [], columns = []) {
   const node = state.nodes.find(item => item.id === (key === 'thermal' ? 'thermal-table' : 'vrv-schedule'));
@@ -75,7 +77,7 @@ function vrvStepOne() {
   const mode = `<div class="vrv-switch">${vrvButton('standard','Standard VRV Export','table-2',data.mode !== 'custom')}${vrvButton('custom','Custom Columns','table-2',data.mode === 'custom')}</div>`;
   const family = `<label class="vrv-control">Family / Model <span class="required">*</span><select data-vrv-family>${['FXMQ','FXAQ','FXFQ','FXSQ','Others'].map(value => `<option ${data.familyModel === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label>${data.familyModel === 'Others' ? `<input data-vrv-other placeholder="Enter family or model" value="${escapeHtml(data.otherFamily || '')}">` : ''}`;
   const tags = `<label class="vrv-control">Extract Columns<div class="vrv-tokens">${data.customColumns.map((column,index)=>`<span>${escapeHtml(column)}<button type="button" data-vrv-tag="${index}" aria-label="Remove ${escapeHtml(column)}">×</button></span>`).join('')}<input data-vrv-token-input placeholder="Type a column, then press comma"></div></label>`;
-  const controls = vrvCard(`${vrvIcon('layers-3')} Extraction Type`, `${mode}${data.mode === 'custom' ? tags : family}<div class="vrv-control-actions">${vrvButton('extract','Extract Data','play',true)}${vrvButton('append','Append Pages','file-plus-2')}</div>`);
+  const controls = vrvCard(`${vrvIcon('layers-3')} Extraction Type`, `${mode}${data.mode === 'custom' ? tags : family}<div class="vrv-control-actions">${vrvButton('extract',vrvBusyAction==='extract'?'Extracting...':'Extract Data','play',true)}${vrvButton('append',vrvBusyAction==='append'?'Extracting...':'Append Pages','file-plus-2')}</div>`);
   const flags = table.rows.reduce((sum,row)=>sum+Object.keys(row.__reviewCells || {}).length,0);
   const exportCard = vrvCard(`${vrvIcon('table-2')} Export File`, `<div class="vrv-data-toolbar"><div class="vrv-badges"><span>${vrvIcon('table-2')}${table.rows.length} rows extracted</span><span>${flags} cells flagged</span><span>${table.rows.length ? 'Extraction ready' : 'Awaiting extraction'}</span></div><input class="dx-search" data-vrv-search aria-label="Search extracted rows" placeholder="Search extracted rows…" value="${escapeHtml(vrvThermalSearch)}"></div>${vrvTable('thermal',table.rows,columns)}`,vrvButton('thermal-excel','Download Excel','download'),'vrv-main-table vrv-thermal-card');
   return `<div class="vrv-two-col vrv-step-one-grid"><div class="vrv-left">${vrvUploadCard('thermal-upload','Thermal Sheet Upload','PDF, DOC, DOCX, XLS, XLSX, PNG, JPG')}${controls}</div>${exportCard}</div>`;
@@ -86,7 +88,7 @@ function vrvStepTwo() {
   const rows = tab === 'system' ? vrvSelectionDisplayRows(extracted.vrvRows || []) : tab === 'outdoor' ? extracted.outdoorDetailsRows || [] : extracted.materialRows || [];
   const columns = tab === 'system' ? vrvSelectionColumns : tab === 'outdoor' ? ['Name','Model','CR','PS'] : [...new Set(rows.flatMap(row => Object.keys(row).filter(key => !key.startsWith('__'))))];
   const note = `<div class="vrv-note">Automatic structured extraction works for DOCX and XML files. PDF or image uploads may not produce structured rows.</div>`;
-  const actions = `<div class="vrv-control-actions">${vrvButton('report-extract','Extract VRV Report','play',true)}${vrvButton('report-rebuild','Rebuild Tables','refresh-cw')}</div>`;
+  const actions = `<div class="vrv-control-actions">${vrvButton('report-extract',vrvBusyAction==='report-extract'?'Extracting...':'Extract VRV Report','play',true)}${vrvButton('report-rebuild',vrvBusyAction==='report-rebuild'?'Extracting...':'Rebuild Tables','refresh-cw')}</div>`;
   const tabs = `<div class="vrv-switch vrv-report-tabs">${vrvButton('report-system',`System / Selection (${(extracted.vrvRows || []).length})`,'table-2',tab==='system')}${vrvButton('report-outdoor',`Outdoor Details (${(extracted.outdoorDetailsRows || []).length})`,'table-2',tab==='outdoor')}${vrvButton('report-material',`Material / BOQ (${(extracted.materialRows || []).length})`,'layers-3',tab==='material')}</div>`;
   return `<div class="vrv-two-col"><div class="vrv-left">${vrvUploadCard('vrv-upload','VRV Selection Report Upload','DOCX, XML, PDF, DOC, XLS, XLSX, PNG, JPG')}${note}${actions}</div>${vrvCard(`${vrvIcon('layers-3')} Extracted VRV Report`,`${tabs}${vrvTable('report',rows,columns.length ? columns : ['System','Name','FCU'])}`,vrvButton('report-excel','Download Excel','download'),`vrv-main-table ${tab==='system'?'vrv-selection-report':''}`)}</div>`;
 }
@@ -201,7 +203,7 @@ function renderVrvWorkspace() {
 function vrvDirty() { projectTouched=true;vrvStatus='Unsaved changes';const label=canvas.querySelector('[data-vrv-status]');if(label)label.textContent=vrvStatus;scheduleProjectSave(); }
 function vrvReprice() { const margin=Number(vrvData().margin)||0;state.tables.costing.summary.priceIncrease=margin;state.tables.costing.rows.forEach(row=>{row['Increased Final Price (AED)']='';});recalcCosting();buildBoqFromCosting(); }
 async function vrvRemoveUpload(id) { if(!confirm('Remove this uploaded file?'))return;state.uploads=state.uploads.filter(file=>file.id!==id);state.thermalChatUploadIds=(state.thermalChatUploadIds||[]).filter(value=>value!==id);for(const node of state.nodes)if(node.data?.uploadId===id)delete node.data.uploadId;vrvDirty();renderVrvWorkspace();saveProject(); }
-async function vrvUploadFiles(nodeId,files) { for(const file of files){try{await ensureProjectSaved({hidden:true});const form=new FormData();form.append('nodeId',nodeId);form.append('file',await workflowUploadFileForNode(nodeId,file));const upload=await api(`/api/projects/${state.id}/uploads`,{method:'POST',body:form});state.uploads.push(upload);const node=state.nodes.find(node=>node.id===nodeId);if(node)node.data.uploadId=upload.id;if(nodeId==='thermal-upload')state.thermalChatUploadIds=[...new Set([...thermalUploadIds(),upload.id])];vrvDirty();await saveProject();}catch(error){toast(error.message||'Upload failed');}}renderVrvWorkspace(); }
+async function vrvUploadFiles(nodeId,files) { if(!files.length)return;vrvUploading=nodeId==='thermal-upload';renderVrvWorkspace();try{for(const file of files){try{await ensureProjectSaved({hidden:true});const form=new FormData();form.append('nodeId',nodeId);form.append('file',await workflowUploadFileForNode(nodeId,file));const upload=await api(`/api/projects/${state.id}/uploads`,{method:'POST',body:form});state.uploads.push(upload);const node=state.nodes.find(node=>node.id===nodeId);if(node)node.data.uploadId=upload.id;if(nodeId==='thermal-upload')state.thermalChatUploadIds=[...new Set([...thermalUploadIds(),upload.id])];vrvDirty();await saveProject();}catch(error){toast(error.message||'Upload failed');}}}finally{vrvUploading=false;renderVrvWorkspace();} }
 function vrvExportSchedulePdf() {
   const table=state.tables.vrvSchedule;
   if(!table?.rows?.length)return toast('Generate a VRV Schedule before exporting PDF.');
@@ -218,7 +220,7 @@ async function vrvExtract(append) {
   const data=vrvData(), ids=vrvFiles('thermal-upload').map(file=>file.id).filter(id=>data.selectedUploadIds.includes(id));if(!ids.length)return toast('Select at least one uploaded thermal sheet.');
   const columns=data.customColumns;
   if(data.mode==='custom' && !columns.length)return toast('Add at least one column to extract.');
-  vrvBusy=true;renderVrvWorkspace();
+  vrvBusy=true;vrvBusyAction=append?'append':'extract';renderVrvWorkspace();
   try {
     await ensureProjectSaved({hidden:true});
     const selection={mode:data.mode,familyModel:data.familyModel==='Others'?data.otherFamily:data.familyModel,capacitySource:data.capacitySource,customInstruction:data.mode==='custom'?`Extract only these columns in this order: ${columns.join(', ')}.`:'',appendResults:append,uploadIds:ids};
@@ -231,7 +233,7 @@ async function vrvExtract(append) {
     state.tables.thermal.columns=[...nextColumns];state.tables.thermal.rows=append?[...state.tables.thermal.rows,...incoming]:incoming;
     data.extractedMode=data.mode;
     buildWorkflowScheduleFromThermal();vrvDirty();await saveProject();toast(result.message||`Extracted ${incoming.length} rows.`);
-  }catch(error){toast(error.message||'Thermal extraction failed');}finally{vrvBusy=false;renderVrvWorkspace();}
+  }catch(error){toast(error.message||'Thermal extraction failed');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}
 }
 async function vrvAction(action) {
   const data=vrvData();
@@ -274,7 +276,7 @@ async function vrvAction(action) {
     return downloadBlob(buildTableWorkbookBlob({title:'VRV Selection Report',columns,rows}),'VRV Selection Report.xlsx');
   }
   if(action==='report-extract'||action==='report-rebuild'||action==='regenerate'){
-    vrvBusy=true;renderVrvWorkspace();try{if(action==='report-extract'){const id=state.nodes.find(node=>node.id==='vrv-upload')?.data?.uploadId;if(!id)throw new Error('Upload a VRV Selection Report first.');await extractVrvUpload(id);}else await generateWorkflow();vrvDirty();await saveProject();}catch(error){toast(error.message||'Could not build VRV tables');}finally{vrvBusy=false;renderVrvWorkspace();}return;
+    vrvBusy=true;vrvBusyAction=action;renderVrvWorkspace();try{if(action==='report-extract'){const id=state.nodes.find(node=>node.id==='vrv-upload')?.data?.uploadId;if(!id)throw new Error('Upload a VRV Selection Report first.');await extractVrvUpload(id);}else await generateWorkflow();vrvDirty();await saveProject();}catch(error){toast(error.message||'Could not build VRV tables');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}return;
   }
   if(action==='add-row'){state.tables.costing.rows.push({Model:'',Qty:1,'Final Price (AED)':'','Increased Final Price (AED)':'','Amount (AED)':''});vrvReprice();vrvDirty();renderVrvWorkspace();return;}
   if(action==='quotation'){await saveProject({manual:true});return createSalesQuotationFromWorkflow();}

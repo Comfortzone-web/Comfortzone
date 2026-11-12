@@ -103,6 +103,8 @@
 .vrv-workspace .vrv-empty-panel .dx-table-empty span{font-size:10.5px;color:#96a3b7}
 .vrv-workspace .vrv-upload-card .dx-upload-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .vrv-workspace .vrv-upload-card .dx-upload-actions .dx-button{width:100%;min-width:0;justify-content:center;white-space:nowrap}
+.vrv-upload-spinner{display:inline-block;width:15px;height:15px;margin-left:8px;border:2px solid #b9d1ff;border-top-color:#0864eb;border-radius:50%;vertical-align:-2px;animation:vrv-upload-spin .7s linear infinite}
+@keyframes vrv-upload-spin{to{transform:rotate(360deg)}}
 @media(max-width:1100px){.vrv-workspace .vrv-step-one-grid{grid-template-columns:1fr}.vrv-workspace .vrv-empty-panel{min-height:200px}}
 .vrv-workspace .vrv-selection-report .vrv-table{width:100%;min-width:760px;table-layout:fixed}
 .vrv-workspace .vrv-selection-report .vrv-table th,.vrv-workspace .vrv-selection-report .vrv-table td{min-width:0!important;width:auto;padding:7px 5px;white-space:normal;overflow-wrap:anywhere;text-align:center}
