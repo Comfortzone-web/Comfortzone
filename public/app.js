@@ -3041,7 +3041,6 @@ const SALES_PROJECT_TABS = [
   { key: "ongoing", label: "Ongoing" },
   { key: "delivery", label: "Delivery Pending" },
   { key: "completed", label: "Completed" },
-  { key: "lost", label: "Lost / Closed" }
 ];
 
 function salesProjectsHtml() {
@@ -3149,23 +3148,9 @@ function salesProjectDetailHtml(project) {
         <p>Created Date: ${escapeHtml(formatSalesDateInput(project.date || project.createdDate || ""))}${project.engineer ? ` by ${escapeHtml(project.engineer)}` : ""}</p>
         ${rowMenu([
           { label: "Edit", action: "edit-project", id: project.id },
-          { label: "Mark as Lost / Closed", action: "project-lost", id: project.id },
           { label: "Delete", action: "delete-project", id: project.id, danger: true }
         ])}
       </div>
-      ${salesDetailSection("Project Information", [
-        ["Project No", salesProjectNo(project)],
-        ["Project Name", project.name],
-        ["Customer", project.customer],
-        ["Location", project.location],
-        ["Project Category", project.category || project.type],
-        ["Status", salesProjectStatus(project)],
-        ["Created Date", formatSalesDateInput(project.date || project.createdDate || "")]
-      ])}
-      <section class="pipeline-detail-section">
-        <h4>Scope Details</h4>
-        <p class="pipeline-muted">${escapeHtml(project.scope || project.description || "-")}</p>
-      </section>
       <section class="pipeline-detail-section">
         <h4>BOQ / Delivery Details</h4>
         ${salesProjectBoqTableHtml(project, boqRows)}
@@ -6209,7 +6194,7 @@ function quoteDraftFromSource(source = {}) {
     customer: source.customer || "",
     project: source.project || "",
     location: source.location || "",
-    paymentTerms: "30 Days Credit",
+    paymentTerms: "CDC",
     deliveryTime: "To be discussed",
     warranty: source.enquiryNo || "",
     quoteType: source.quoteType || "VRV",
@@ -9889,7 +9874,6 @@ function deliveryAllowedQty(stockItem, customerName, noteId = "") {
 function deliveryFormHtml(dn) {
   const customers = inventoryState.customers || [];
   const stock = inventoryState.dashboard.stock || [];
-  const customerProjects = deliveryProjectsForCustomer(dn.customerName);
   return `
     <section class="delivery-section delivery-information">
       <h3><span class="delivery-section-icon"><img src="/assets/maintenance-icons/file-text.svg" alt=""></span>Delivery Information</h3>
@@ -9900,11 +9884,11 @@ function deliveryFormHtml(dn) {
         <label>Contact Person<span class="delivery-field-control"><img src="/assets/maintenance-icons/user-round.svg" alt=""><input id="contactInput" value="${escapeHtml(dn.contactPerson)}" placeholder="Enter contact person"></span></label>
         <label>Phone<span class="delivery-field-control"><img src="/assets/maintenance-icons/phone.svg" alt=""><input id="phoneInput" value="${escapeHtml(dn.phone)}" placeholder="Enter phone number"></span></label>
         <label>Delivery Location<span class="delivery-field-control"><img src="/assets/maintenance-icons/map-pin.svg" alt=""><input id="locationInput" value="${escapeHtml(dn.deliveryLocation)}" placeholder="Enter delivery location"></span></label>
-        <label>Project Name<span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="projectInput" list="deliveryProjectList" placeholder="Type/select active project" value="${escapeHtml(dn.projectName)}"></span></label>
+        <label class="delivery-project-picker">Project Name<span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="projectInput" placeholder="Type/select active project" value="${escapeHtml(dn.projectName)}" autocomplete="off"></span><span class="delivery-project-options" data-delivery-project-options="name" hidden></span></label>
+        <label class="delivery-project-picker"><span class="delivery-project-no-label">Project No.<button type="button" id="loadProjectBoqBtn" class="delivery-load-boq" title="Load pending BOQ items" aria-label="Load pending BOQ items" ${dn.projectNo ? "" : "hidden"}><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""></button></span><span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="deliveryProjectNoInput" placeholder="Select or enter project no." value="${escapeHtml(dn.projectNo || "")}" autocomplete="off"></span><span class="delivery-project-options" data-delivery-project-options="number" hidden></span></label>
       </div>
     </section>
     <datalist id="customerList">${customers.map(c => `<option value="${escapeHtml(c.customerName)}"></option>`).join("")}</datalist>
-    <datalist id="deliveryProjectList">${customerProjects.map(project => `<option value="${escapeHtml(project)}"></option>`).join("")}</datalist>
     <datalist id="modelList">${stock.map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description)}</option>`).join("")}</datalist>
     <section class="delivery-section delivery-items-section">
     <h3><span class="delivery-section-icon"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""></span>Item Details</h3>
@@ -9941,9 +9925,6 @@ function openDeliveryModal(note = null) {
     <div class="modal delivery-note-modal">
       <div class="inventory-topbar">
         <div class="delivery-modal-heading"><span class="delivery-modal-title-icon"><img src="/assets/maintenance-icons/file-text.svg" alt=""></span><div><h2>${note ? "Edit Delivery Note" : "Create Delivery Note"}</h2><p class="inventory-muted">Create and issue outbound delivery notes.</p></div></div>
-        <label class="delivery-project-no-lookup">Project No.
-          <span class="delivery-field-control"><img src="/assets/maintenance-icons/building-2.svg" alt=""><input id="deliveryProjectNoInput" value="${escapeHtml(deliveryDraft.projectNo || "")}" placeholder="Enter project no." autocomplete="off"></span>
-        </label>
         <button class="mini-button delivery-close-button" data-close-delivery-modal title="Close" aria-label="Close"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
       </div>
       <div data-delivery-modal-body>
@@ -9956,6 +9937,9 @@ function openDeliveryModal(note = null) {
   modal.addEventListener("input", handleDeliveryModalInput);
   modal.addEventListener("change", handleDeliveryModalChange);
   modal.addEventListener("keydown", handleDeliveryModalKeydown);
+  modal.addEventListener("focusin", event => {
+    if (["projectInput", "deliveryProjectNoInput"].includes(event.target.id)) showDeliveryProjectOptions(event.target);
+  });
   modal.querySelector(".delivery-note-modal").addEventListener("scroll", () => modal.querySelector(".delivery-reservation-popover")?.remove());
   modal.querySelector("#dnNoInput")?.focus();
   loadSalesCrm()
@@ -10039,6 +10023,18 @@ function updateDeliveryQuantityLimits() {
 }
 
 function handleDeliveryModalClick(event) {
+  const projectOption = event.target.closest("[data-delivery-project-option]");
+  if (projectOption) {
+    const project = deliveryProjectsForCustomerRecords($("#customerNameInput")?.value || "").find(item => norm(salesProjectNo(item)) === norm(projectOption.dataset.deliveryProjectOption));
+    if (project) {
+      $("#projectInput").value = project.name || "";
+      $("#deliveryProjectNoInput").value = salesProjectNo(project) || "";
+      $("#loadProjectBoqBtn").hidden = false;
+    }
+    document.querySelectorAll(".delivery-project-options").forEach(panel => panel.hidden = true);
+    return;
+  }
+  if (!event.target.closest(".delivery-project-picker")) document.querySelectorAll(".delivery-project-options").forEach(panel => panel.hidden = true);
   if (event.target.closest("[data-close-reservation-popover]")) {
     event.target.closest(".delivery-reservation-popover")?.remove();
     return;
@@ -10060,6 +10056,7 @@ function handleDeliveryModalClick(event) {
   }
   if (target.dataset.closeDeliveryModal !== undefined) return closeDeliveryModal();
   if (target.id === "addDeliveryLineBtn") return addDeliveryLine();
+  if (target.id === "loadProjectBoqBtn") return fillDeliveryFromProjectNo($("#deliveryProjectNoInput")?.value || "");
   if (target.dataset.removeDeliveryLine) {
     deliveryDraft = collectDeliveryDraft(deliveryDraft.status || "Draft");
     deliveryDraft.lines.splice(Number(target.dataset.removeDeliveryLine), 1);
@@ -10079,6 +10076,21 @@ function handleDeliveryModalInput(event) {
     updateDeliveryProjectList(input.value);
     updateDeliveryQuantityLimits();
   }
+  if (input.id === "deliveryProjectNoInput") {
+    const button = $("#loadProjectBoqBtn");
+    if (button) button.hidden = !input.value.trim();
+    const project = deliveryProjectsForCustomerRecords($("#customerNameInput")?.value || "").find(item => norm(salesProjectNo(item)) === norm(input.value));
+    if (project) $("#projectInput").value = project.name || "";
+    showDeliveryProjectOptions(input);
+  }
+  if (input.id === "projectInput") {
+    showDeliveryProjectOptions(input);
+    const project = deliveryProjectsForCustomerRecords($("#customerNameInput")?.value || "").find(item => norm(item.name) === norm(input.value));
+    if (project) {
+      $("#deliveryProjectNoInput").value = salesProjectNo(project) || "";
+      $("#loadProjectBoqBtn").hidden = !salesProjectNo(project);
+    }
+  }
   if (input.dataset.deliveryLine) {
     const line = deliveryDraft.lines[Number(input.dataset.deliveryLine)];
     if (!line) return;
@@ -10093,7 +10105,13 @@ function handleDeliveryModalChange(event) {
     toggleSuggestionList(input);
   }
   if (input.id === "customerNameInput") return fillCustomerDetails();
-  if (input.id === "deliveryProjectNoInput") return fillDeliveryFromProjectNo(input.value);
+  if (input.id === "projectInput") {
+    const project = deliveryProjectsForCustomerRecords($("#customerNameInput")?.value || "").find(item => norm(item.name) === norm(input.value));
+    if (project) {
+      $("#deliveryProjectNoInput").value = salesProjectNo(project) || "";
+      $("#loadProjectBoqBtn").hidden = !salesProjectNo(project);
+    }
+  }
   if (input.dataset.deliveryModelLine) return updateDeliveryLineModel(Number(input.dataset.deliveryModelLine), input.value);
 }
 
@@ -10104,7 +10122,7 @@ function handleDeliveryModalKeydown(event) {
   }
   if (event.key !== "Enter" || event.target.id !== "deliveryProjectNoInput") return;
   event.preventDefault();
-  fillDeliveryFromProjectNo(event.target.value);
+  $("#loadProjectBoqBtn")?.focus();
 }
 
 function stockViewHtml() {
@@ -10164,7 +10182,7 @@ function stockModelModalHtml(mode = "edit") {
         <label>${isReturn ? "Returned Qty" : "Quantity"}<input id="stockQuantity" type="number" min="0" value="0"></label>
         ${reasonField}
       </div>
-      <p class="inventory-muted">${isAdd ? "The quantity will be added to the available warehouse stock." : isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
+      <p class="inventory-muted">${isAdd ? "Enter 0 to register a model without adding stock. A positive quantity adds stock to the warehouse." : isReturn ? "Returned qty adds stock back to the warehouse and appears as Return in Supplier DN." : "Quantity sets the current available stock using a manual inventory adjustment."}</p>
       <div class="inventory-actions">${isAdd ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Add to Stock</button>` : isReturn ? `<button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockReturnBtn">Save Return</button>` : `<button class="danger-button" id="deleteStockModelBtn">Delete Model</button><button class="ghost-button" id="clearStockModelBtn">Clear</button><button class="primary-button" id="saveStockModelBtn2">Save Model</button>`}</div>
     </div>
   `;
@@ -11394,10 +11412,18 @@ function fillCustomerDetails() {
 function deliveryProjectsForCustomer(customerName = "") {
   const customerKey = norm(customerName);
   if (!customerKey) return [];
-  return uniqueValues((salesData().projects || [])
-    .filter(project => norm(project.customer) === customerKey)
-    .map(project => project.name)
-    .filter(Boolean));
+  return uniqueValues(deliveryProjectsForCustomerRecords(customerName).map(project => project.name).filter(Boolean));
+}
+
+function deliveryProjectsForCustomerRecords(customerName = "") {
+  const customerKey = norm(customerName);
+  if (!customerKey) return [];
+  return (salesData().projects || []).filter(project => norm(project.customer) === customerKey &&
+    salesProjectBoqRows(project).some(row => {
+      const model = salesProjectModelNo(row.model || row.modelNo || row.description || row.boqDescription || "");
+      const ordered = Number(row.qty || row.quantity || row.totalQty || 0) || 0;
+      return model && ordered > salesProjectBoqDeliveredQty(project, row);
+    }));
 }
 
 function findDeliveryProjectByNo(projectNo = "") {
@@ -11420,7 +11446,7 @@ function deliveryLineFromProjectBoq(row = {}, project = {}) {
     modelNo,
     description: stockInfo?.description || row.description || row.boqDescription || "",
     availableQty: salesProjectStockQty(modelNo),
-    qtyGoingOut: pendingQty || orderedQty || 0
+    qtyGoingOut: pendingQty
   };
 }
 
@@ -11452,11 +11478,19 @@ function fillDeliveryFromProjectNo(projectNo = "") {
 }
 
 function updateDeliveryProjectList(customerName = "") {
-  const list = $("#deliveryProjectList");
-  if (!list) return;
-  list.innerHTML = deliveryProjectsForCustomer(customerName)
-    .map(project => `<option value="${escapeHtml(project)}"></option>`)
-    .join("");
+  document.querySelectorAll(".delivery-project-options").forEach(panel => panel.hidden = true);
+}
+
+function showDeliveryProjectOptions(input) {
+  const byName = input.id === "projectInput";
+  const panel = document.querySelector(`[data-delivery-project-options="${byName ? "name" : "number"}"]`);
+  if (!panel) return;
+  document.querySelectorAll(".delivery-project-options").forEach(other => { if (other !== panel) other.hidden = true; });
+  const query = norm(input.value);
+  const projects = deliveryProjectsForCustomerRecords($("#customerNameInput")?.value || "")
+    .filter(project => !query || norm(byName ? project.name : salesProjectNo(project)).includes(query));
+  panel.innerHTML = projects.map(project => `<button type="button" data-delivery-project-option="${escapeHtml(salesProjectNo(project))}"><strong>${escapeHtml(byName ? project.name : salesProjectNo(project))}</strong><small>${escapeHtml(byName ? salesProjectNo(project) : project.name)}</small></button>`).join("");
+  panel.hidden = !projects.length;
 }
 
 function openCustomerModal(customer = null) {
@@ -11568,13 +11602,19 @@ async function saveDelivery(status) {
       if (requestedByModel.get(key) > allowedQty) return alert(`Only ${allowedQty} unit(s) of ${line.modelNo} are available for ${note.customerName}; remaining stock is reserved for other customers.`);
     }
   }
-  inventoryState = await api("/api/inventory/delivery-notes", { method: "POST", body: JSON.stringify(note) });
   deliveryDraft = newDeliveryDraft();
   deliverySearchQuery = "";
   deliveryListPage = 1;
   closeDeliveryModal();
-  renderInventory();
-  toast(status === "Delivered" ? "Delivery Note delivered and stock reduced" : "Draft saved");
+  toast(status === "Delivered" ? "Creating delivery note..." : "Saving draft...");
+  try {
+    inventoryState = await api("/api/inventory/delivery-notes", { method: "POST", body: JSON.stringify(note) });
+    renderInventory();
+    toast(status === "Delivered" ? "Delivery Note delivered and stock reduced" : "Draft saved");
+  } catch (error) {
+    toast(error.message || "Delivery Note could not be saved. Please retry.");
+    throw error;
+  }
 }
 
 async function cancelDeliveryNote(deliveryNoteId) {
@@ -11778,7 +11818,7 @@ async function saveStockModel() {
   if (!payload.modelNo) return alert("Model No. is required.");
   if (isAdd && !payload.description) return alert("Description is required.");
   const stockQuantity = isReturn ? payload.returnQuantity : payload.quantity;
-  if (isAdd && !(stockQuantity > 0)) return alert(isReturn ? "Returned Qty must be greater than 0." : "Quantity must be greater than 0.");
+  if (isReturn && !(stockQuantity > 0)) return alert("Returned Qty must be greater than 0.");
   inventoryState = await api("/api/inventory/models", { method: "POST", body: JSON.stringify(payload) });
   renderInventory();
   toast(isReturn ? "Return added to warehouse" : isAdd ? "Stock added" : "Model saved");

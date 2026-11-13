@@ -6770,6 +6770,63 @@ td[contenteditable="true"]:focus {
   font-weight: 600;
 }
 
+.delivery-project-no-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.delivery-note-modal .delivery-load-boq {
+  display: inline-grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  padding: 0;
+  border: 1px solid #bcd6fb;
+  border-radius: 5px;
+  background: #e8f2ff;
+  cursor: pointer;
+}
+
+.delivery-note-modal .delivery-load-boq[hidden] { display: none; }
+.delivery-note-modal .delivery-load-boq:hover { background: #d7e9ff; }
+.delivery-note-modal .delivery-load-boq img { width: 15px; height: 15px; }
+
+.delivery-note-modal .delivery-project-picker { position: relative; }
+.delivery-note-modal .delivery-project-options {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid #cdddf5;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(13, 33, 73, .13);
+}
+.delivery-note-modal .delivery-project-options[hidden] { display: none; }
+.delivery-note-modal .delivery-project-options button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #0d2149;
+  text-align: left;
+  cursor: pointer;
+  font: 400 12px "Inter Enquiries", Inter, system-ui, sans-serif;
+}
+.delivery-note-modal .delivery-project-options button:hover { background: #eef5ff; }
+.delivery-note-modal .delivery-project-options strong { font-weight: 600; overflow-wrap: anywhere; }
+.delivery-note-modal .delivery-project-options small { color: #607596; font-size: 11px; overflow-wrap: anywhere; }
+
 .delivery-note-modal .delivery-required { color: #e32842; }
 
 .delivery-note-modal input:focus {
