@@ -79,8 +79,10 @@ let salesFollowUpFilter = "";
 let salesFollowUpFilterOpen = false;
 let salesOrderBookTab = "all";
 let orderSummaryYear = "";
+const ORDER_BOOK_UNIT_TYPES = ["CHILLER", "CHW FCU", "DX", "FAHU", "PACKAGE", "VRV", "VRV + DX", "PARTS", "OTHERS"];
 let orderSummaryMonth = "";
 let orderSummaryPerson = "";
+let orderSummaryUnitType = "";
 let orderSummaryDivision = "";
 let orderSummaryStatus = "";
 let orderSummaryPage = 1;
@@ -2077,7 +2079,7 @@ function orderBookSummaryHtml() {
   const years = [...new Set([year, ...all.map(order => nativeDateValue(order.date).slice(0, 4)).filter(Boolean)])].sort().reverse();
   const names = [...new Set(all.map(order => order.salesPerson).filter(Boolean))].sort();
   const divisions = [...new Set(all.map(order => order.division).filter(Boolean))].sort();
-  const rows = all.filter(order => nativeDateValue(order.date).startsWith(year) && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson) && (!orderSummaryDivision || order.division === orderSummaryDivision));
+  const rows = all.filter(order => nativeDateValue(order.date).startsWith(year) && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson) && (!orderSummaryUnitType || order.typeOfUnit === orderSummaryUnitType) && (!orderSummaryDivision || order.division === orderSummaryDivision));
   const live = rows.filter(order => !["CANCELLED", "CLOSED"].includes(norm(order.status)));
   const value = live.reduce((sum, order) => sum + order.valueWithoutVat, 0);
   const received = live.reduce((sum, order) => sum + order.paymentReceived, 0);
@@ -2099,7 +2101,7 @@ function orderBookSummaryHtml() {
   const statusCounts = [...new Set(rows.map(order => order.status))].map(name => ({ name, count: rows.filter(order => order.status === name).length }));
   const select = (field, items, placeholder, selected) => `<select data-order-summary-filter="${field}"><option value="">${placeholder}</option>${items.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? "selected" : ""}>${escapeHtml(item)}</option>`).join("")}</select>`;
   return `<div class="order-summary-page">
-    <div class="order-summary-toolbar"><div><h2>Order Book Summary</h2><p>Live sales and collection performance</p></div><div class="order-summary-filters">${select("year", years, "All years", year)}${isCurrentAdmin() ? select("person", names, "All sales people", orderSummaryPerson) : ""}${select("division", divisions, "All divisions", orderSummaryDivision)}</div></div>
+    <div class="order-summary-toolbar"><div><h2>Order Book Summary</h2><p>Live sales and collection performance</p></div><div class="order-summary-filters">${select("year", years, "All years", year)}${isCurrentAdmin() ? select("person", names, "All sales people", orderSummaryPerson) : ""}${select("unitType", ORDER_BOOK_UNIT_TYPES, "All unit types", orderSummaryUnitType)}${select("division", divisions, "All divisions", orderSummaryDivision)}</div></div>
     <div class="order-summary-kpis">
       ${[["Order Value", salesCompactMoney(value), "Excluding VAT"], ["Gross Profit", salesCompactMoney(profit), "Equipment profit"], ["Balance Receivable", salesCompactMoney(balance), "Outstanding"], ["Orders", rows.length, `${rows.length - live.length} cancelled or closed`], ["Average Order", salesCompactMoney(live.length ? value / live.length : 0), "Excluding VAT"]].map(([label, amount, note]) => `<div><span>${label}</span><strong>${amount}</strong><small>${note}</small></div>`).join("")}
     </div>
@@ -2127,6 +2129,7 @@ function orderBookPremiumSummaryHtml() {
   const statuses = [...new Set(all.map(order => order.status).filter(Boolean))].sort();
   const rows = all.filter(order => nativeDateValue(order.date).startsWith(period)
     && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson)
+    && (!orderSummaryUnitType || order.typeOfUnit === orderSummaryUnitType)
     && (!orderSummaryDivision || order.division === orderSummaryDivision)
     && (!orderSummaryStatus || order.status === orderSummaryStatus));
   const live = rows.filter(order => !["CANCELLED", "CLOSED"].includes(norm(order.status)));
@@ -2172,6 +2175,7 @@ function orderBookPremiumSummaryHtml() {
       ${select("year", years.map(item => [item, item]), "Year", year)}
       ${select("month", [["", "All Months"], ...Array.from({ length: 12 }, (_, i) => [String(i + 1).padStart(2, "0"), new Date(2000, i, 1).toLocaleString("en-US", { month: "long" })])], "Month", month)}
       ${isCurrentAdmin() ? select("person", [["", "All sales people"], ...names.map(name => [name, name])], "Sales Person", orderSummaryPerson) : ""}
+      ${select("unitType", [["", "All unit types"], ...ORDER_BOOK_UNIT_TYPES.map(name => [name, name])], "Type of Unit", orderSummaryUnitType)}
       ${select("division", [["", "All divisions"], ...divisions.map(name => [name, name])], "Division", orderSummaryDivision)}
       ${select("status", [["", "All statuses"], ...statuses.map(name => [name, name])], "Status", orderSummaryStatus)}
       <button type="button" data-order-summary-reset>Clear</button></div></div>
@@ -2198,6 +2202,7 @@ function exportOrderBookSummary() {
   const period = orderSummaryMonth ? `${orderSummaryYear || new Date().getFullYear()}-${orderSummaryMonth}` : orderSummaryYear || String(new Date().getFullYear());
   const rows = salesOrderBookRows().filter(order => nativeDateValue(order.date).startsWith(period)
     && (!orderSummaryPerson || order.salesPerson === orderSummaryPerson)
+    && (!orderSummaryUnitType || order.typeOfUnit === orderSummaryUnitType)
     && (!orderSummaryDivision || order.division === orderSummaryDivision)
     && (!orderSummaryStatus || order.status === orderSummaryStatus));
   if (!rows.length) return toast("No orders in this period to export");
@@ -4518,7 +4523,7 @@ function normalizeOrderBookOrder(order = {}, index = 0) {
     contactPerson: order.contactPerson || "",
     contactNumber: order.contactNumber || "",
     division: order.importedFromOrderBook ? order.division || "" : order.division || "Project/Inst",
-    typeOfUnit: order.typeOfUnit || "",
+    typeOfUnit: order.typeOfUnit === "VRV+DX" ? "VRV + DX" : order.typeOfUnit || "OTHERS",
     brand: order.importedFromOrderBook ? order.brand || "" : order.brand || "Daikin",
     salesPerson: order.salesPerson || "",
     status,
@@ -4698,7 +4703,7 @@ function salesOrderBookDetailPanel(order) {
         ["Customer", order.customer],
         ["Job Description", order.jobDescription],
         ["Division", order.division],
-        ["Type of Unit", order.typeOfUnit],
+        ["Type of Unit", order.typeOfUnit === "VRV+DX" ? "VRV + DX" : order.typeOfUnit || "OTHERS"],
         ["Brand", order.brand],
         ["Sales Person", order.salesPerson],
         ["Order Status", order.status],
@@ -4767,7 +4772,7 @@ function blankOrderBookOrder() {
     salesPerson: currentUser?.name || "",
     salesPersonId: currentUser?.id || "",
     division: "Project/Inst",
-    typeOfUnit: "",
+    typeOfUnit: "OTHERS",
     brand: "Daikin",
     status: "Order Confirmed",
     remarks: "",
@@ -4811,7 +4816,7 @@ function openOrderBookForm(orderId = "") {
           orderBookField("contactNumber", "Contact Number", item.contactNumber),
           orderBookSalesPersonField(item),
           orderBookField("division", "Division", item.division, "select", ["Project/Inst", "Maint/Replace", "Trading"]),
-          orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit),
+          orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit === "VRV+DX" ? "VRV + DX" : item.typeOfUnit || "OTHERS", "select", ORDER_BOOK_UNIT_TYPES),
           orderBookField("brand", "Brand", item.brand),
           `<div class="order-book-po-upload"><span>Upload PO</span><button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><div class="order-book-po-file"><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small><button type="button" class="order-book-po-remove" id="removeOrderBookPoBtn" title="Remove uploaded PO" aria-label="Remove uploaded PO" ${item.po?.fileName ? "" : "hidden"}>×</button></div></div>`,
           `<textarea id="orderBookUploadedPoJson" hidden>${escapeHtml(item.po ? JSON.stringify(item.po) : "")}</textarea>`
@@ -5610,6 +5615,7 @@ async function handleSalesClick(event) {
     orderSummaryYear = String(new Date().getFullYear());
     orderSummaryMonth = "";
     orderSummaryPerson = "";
+    orderSummaryUnitType = "";
     orderSummaryDivision = "";
     orderSummaryStatus = "";
     orderSummarySearch = "";
@@ -5999,6 +6005,7 @@ function handleSalesChange(event) {
     if (field === "year") orderSummaryYear = event.target.value;
     if (field === "month") orderSummaryMonth = event.target.value;
     if (field === "person") orderSummaryPerson = event.target.value;
+    if (field === "unitType") orderSummaryUnitType = event.target.value;
     if (field === "division") orderSummaryDivision = event.target.value;
     if (field === "status") orderSummaryStatus = event.target.value;
     orderSummaryPage = 1;
