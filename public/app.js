@@ -354,6 +354,48 @@ async function init() {
 }
 
 function bindShell() {
+  let lastInteraction = Date.now();
+  for (const eventName of ["pointerdown", "keydown", "wheel", "touchstart"]) {
+    document.addEventListener(eventName, () => { lastInteraction = Date.now(); }, { passive: true });
+  }
+  window.appLiveRefreshIdle = () => {
+    const root = document.querySelector({ salesDesk: "#salesDeskRoot", inventory: "#inventoryRoot", purchaseOrders: "#purchaseOrdersRoot", projects: "#projectsRoot", maintenance: "#maintenanceRoot" }[activeView]);
+    return Date.now() - lastInteraction >= 15000 &&
+      !document.activeElement?.matches?.("input, textarea, select, [contenteditable]") &&
+      !document.querySelector(".modal-backdrop, .sales-drawer-backdrop") &&
+      !document.body.classList.contains("maint-drawer-open") &&
+      !root?.querySelector(".row-menu-list:not(.hidden), .pm-modal-backdrop, .modal-backdrop, .amc-menu-popover, [aria-expanded='true'][data-pm-action]");
+  };
+  window.appRenderLiveUpdate = (root, render) => {
+    const pageX = window.scrollX, pageY = window.scrollY;
+    const positions = [...root.querySelectorAll("*")].map((element, index) => [index, element.scrollTop, element.scrollLeft])
+      .filter(([, top, left]) => top || left);
+    const rootTop = root.scrollTop, rootLeft = root.scrollLeft;
+    render();
+    const elements = root.querySelectorAll("*");
+    positions.forEach(([index, top, left]) => {
+      if (elements[index]) { elements[index].scrollTop = top; elements[index].scrollLeft = left; }
+    });
+    root.scrollTop = rootTop;
+    root.scrollLeft = rootLeft;
+    window.scrollTo(pageX, pageY);
+  };
+  let lastRefreshCheck = 0;
+  const refreshActiveView = (force = false) => {
+    if (document.hidden || !currentUser || !window.appLiveRefreshIdle()) return;
+    if (!force && Date.now() - lastRefreshCheck < 30000) return;
+    lastRefreshCheck = Date.now();
+    if (activeView === "salesDesk") refreshSalesCrmInBackground(force);
+    else if (activeView === "inventory") refreshInventoryInBackground(force);
+    else if (activeView === "purchaseOrders") refreshPurchaseOrdersInBackground(force);
+    else if (activeView === "projects") window.projectManagement?.revalidate?.();
+    else if (activeView === "maintenance") window.maintenanceModule?.revalidate?.();
+  };
+  window.setInterval(() => refreshActiveView(), 10000);
+  window.addEventListener("focus", () => window.setTimeout(() => refreshActiveView(true), 16000));
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) window.setTimeout(() => refreshActiveView(true), 16000);
+  });
   const setMobileNavOpen = open => {
     document.body.classList.toggle("mobile-nav-open", open);
     $("#mobileNavToggle").setAttribute("aria-expanded", String(open));
@@ -1720,6 +1762,7 @@ async function loadSalesCrm(options = {}) {
   if (salesCrmLoadPromise) return salesCrmLoadPromise;
   salesCrmLoadPromise = api("/api/sales-crm")
     .then(state => {
+      if (options.canApply && !options.canApply()) return salesCrmState;
       salesCrmState = state;
       salesCrmLoadedAt = Date.now();
       return state;
@@ -1730,13 +1773,18 @@ async function loadSalesCrm(options = {}) {
   return salesCrmLoadPromise;
 }
 
-function refreshSalesCrmInBackground() {
-  if (!salesCrmState || Date.now() - salesCrmLoadedAt < viewDataRefreshMs) return;
-  loadSalesCrm({ force: true })
+function salesHasActiveEditor() {
+  return !!(document.querySelector(".sales-drawer-backdrop, #salesDeskRoot .modal-backdrop") ||
+    document.activeElement?.closest?.("#salesDeskView input, #salesDeskView textarea, #salesDeskView select, #salesDeskView [contenteditable]"));
+}
+
+function refreshSalesCrmInBackground(force = false) {
+  if (!salesCrmState || !force && Date.now() - salesCrmLoadedAt < viewDataRefreshMs || salesHasActiveEditor() || !window.appLiveRefreshIdle?.()) return;
+  const previous = salesCrmState;
+  loadSalesCrm({ force: true, canApply: () => !salesHasActiveEditor() && window.appLiveRefreshIdle?.() })
     .then(() => {
-      const editingQuotation = salesDeskScreen === "quotation" && salesQuotationMode === "create";
-      const editingField = document.activeElement?.closest?.("#salesDeskView input, #salesDeskView textarea, #salesDeskView select, #salesDeskView [contenteditable]");
-      if (activeView === "salesDesk" && salesDeskScreen !== "costing" && !editingQuotation && !editingField) renderSalesDesk();
+      if (activeView === "salesDesk" && salesDeskScreen !== "costing" && !(salesDeskScreen === "quotation" && salesQuotationMode === "create") && !salesHasActiveEditor() && window.appLiveRefreshIdle?.() &&
+        JSON.stringify(previous) !== JSON.stringify(salesCrmState)) window.appRenderLiveUpdate($("#salesDeskRoot"), renderSalesDesk);
     })
     .catch(error => console.warn(error));
 }
@@ -7200,6 +7248,7 @@ async function loadPurchaseOrders(options = {}) {
   if (purchaseLoadPromise) return purchaseLoadPromise;
   purchaseLoadPromise = api("/api/purchase-orders")
     .then(state => {
+      if (options.canApply && !options.canApply()) return purchaseState;
       purchaseState = state;
       purchaseLoadedAt = Date.now();
       return state;
@@ -7210,11 +7259,16 @@ async function loadPurchaseOrders(options = {}) {
   return purchaseLoadPromise;
 }
 
-function refreshPurchaseOrdersInBackground() {
-  if (!purchaseState || Date.now() - purchaseLoadedAt < viewDataRefreshMs) return;
-  loadPurchaseOrders({ force: true })
+function refreshPurchaseOrdersInBackground(force = false) {
+  if (!purchaseState || !force && Date.now() - purchaseLoadedAt < viewDataRefreshMs ||
+    !window.appLiveRefreshIdle?.() ||
+    document.querySelector("#purchaseOrdersRoot .modal-backdrop") ||
+    document.activeElement?.closest?.("#purchaseOrdersRoot input, #purchaseOrdersRoot textarea, #purchaseOrdersRoot select")) return;
+  const previous = purchaseState;
+  loadPurchaseOrders({ force: true, canApply: () => window.appLiveRefreshIdle?.() })
     .then(() => {
-      if (activeView === "purchaseOrders") renderPurchaseOrders();
+      if (activeView === "purchaseOrders" && window.appLiveRefreshIdle?.() && !document.activeElement?.closest?.("#purchaseOrdersRoot input, #purchaseOrdersRoot textarea, #purchaseOrdersRoot select") &&
+        JSON.stringify(previous) !== JSON.stringify(purchaseState)) window.appRenderLiveUpdate($("#purchaseOrdersRoot"), renderPurchaseOrders);
     })
     .catch(error => console.warn(error));
 }
@@ -8360,12 +8414,13 @@ function inventoryHasActiveEditor() {
   return !!(editingField || editingModal || inventoryWritePending);
 }
 
-function refreshInventoryInBackground() {
-  if (!inventoryState || Date.now() - inventoryLoadedAt < viewDataRefreshMs) return;
-  loadInventory({ force: true, canApply: () => !inventoryHasActiveEditor() })
+function refreshInventoryInBackground(force = false) {
+  if (!inventoryState || !force && Date.now() - inventoryLoadedAt < viewDataRefreshMs || inventoryHasActiveEditor() || !window.appLiveRefreshIdle?.()) return;
+  const previous = inventoryState;
+  loadInventory({ force: true, canApply: () => !inventoryHasActiveEditor() && window.appLiveRefreshIdle?.() })
     .then(() => {
-      if (activeView === "inventory" && !inventoryHasActiveEditor()) renderInventory();
-      if (activeView === "salesDesk" && salesDeskScreen === "quotation" && salesQuotationMode === "create") renderSalesDesk();
+      if (JSON.stringify(previous) === JSON.stringify(inventoryState)) return;
+      if (activeView === "inventory" && !inventoryHasActiveEditor() && window.appLiveRefreshIdle?.()) window.appRenderLiveUpdate($("#inventoryRoot"), renderInventory);
     })
     .catch(error => console.warn(error));
 }

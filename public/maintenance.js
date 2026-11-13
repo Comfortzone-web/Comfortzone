@@ -103,9 +103,15 @@
     try {
       const data = await request("/api/maintenance/summary");
       if (requestId !== latestRequest) return;
+      if (background && (!window.appLiveRefreshIdle?.() || savePending || activeWrites || state.drawer ||
+        root.contains(document.activeElement) && document.activeElement.matches("input, textarea, select, [contenteditable]"))) return;
+      const changed = !background || JSON.stringify(state.data) !== JSON.stringify(data);
       state.data = data;
       lastLoadedAt = Date.now();
-      if (!background || !state.drawer) render();
+      if (changed && (!background || !state.drawer)) {
+        if (background) window.appRenderLiveUpdate(root, render);
+        else render();
+      }
     } finally {
       if (!background) { activeLoads--; syncWriteIndicator(); }
     }
@@ -2261,6 +2267,11 @@
   });
 
   window.maintenanceModule = { open, refresh, prefetch,
+    revalidate() {
+      if (!window.appLiveRefreshIdle?.() || savePending || activeWrites || state.drawer ||
+        root.contains(document.activeElement) && document.activeElement.matches("input, textarea, select, [contenteditable]")) return;
+      return revalidate();
+    },
     reset() { latestRequest++; state.data = null; lastLoadedAt = 0; prefetchPromise = null; backgroundRefresh = null; },
     dismiss() { billingUi.cleanupDraft(); state.drawer = ""; document.body.classList.remove("maint-drawer-open"); } };
   let pmResizeTimer;

@@ -1974,7 +1974,34 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushPaymentSave().catch(error => toast(error.message));
   });
-  window.projectManagement = { open, prefetch,
+  async function revalidate() {
+    if (!window.appLiveRefreshIdle?.() || activeWrites || paymentSaveTimer || state.modal || root.querySelector(".pm-modal-backdrop") ||
+      root.contains(document.activeElement) && document.activeElement.matches("input, textarea, select, [contenteditable]")) return;
+    const projectId = state.project?.id;
+    const request = projectId ? ++projectRequest : ++state.dashboardRequest;
+    const saveVersion = projectSaveVersion;
+    try {
+      const fresh = await api(projectId
+        ? `/api/project-management/projects/${encodeURIComponent(projectId)}`
+        : `/api/project-management/dashboard?q=${encodeURIComponent(state.search)}`);
+      if (!window.appLiveRefreshIdle?.() || activeWrites || paymentSaveTimer || state.modal || root.querySelector(".pm-modal-backdrop") ||
+        root.contains(document.activeElement) && document.activeElement.matches("input, textarea, select, [contenteditable]")) return;
+      if (projectId) {
+        if (request !== projectRequest || state.project?.id !== projectId || saveVersion !== projectSaveVersion) return;
+        if (JSON.stringify(state.project) === JSON.stringify(fresh)) return;
+        state.project = fresh;
+        projectCache.set(projectId, fresh);
+        window.appRenderLiveUpdate(root, renderDetail);
+      } else {
+        if (request !== state.dashboardRequest || state.project) return;
+        if (JSON.stringify(state.dashboard) === JSON.stringify(fresh)) return;
+        state.dashboard = fresh;
+        state.dashboardQuery = state.search;
+        window.appRenderLiveUpdate(root, renderDashboard);
+      }
+    } catch (error) { console.warn("Projects refresh failed:", error); }
+  }
+  window.projectManagement = { open, prefetch, revalidate,
     reset() { flushPaymentSave().catch(error => toast(error.message));
       cacheGeneration++; projectRequest++; state.dashboardRequest++; state.dashboard = null; state.dashboardQuery = "";
       state.project = null; projectCache.clear(); dashboardPrefetch = null; } };
