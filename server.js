@@ -9566,7 +9566,8 @@ function extractVrvFile(file, originalName) {
   const outdoorDetailsRows = Object.values(extractOutdoorDetailRefs(reportTables)).flat().map(row => {
     const key = `${normalizeVrvSystemName(row.outdoorName)}|${row.outdoorModel}`;
     const values = outdoorCr.get(key) || [];
-    return {Name:row.outdoorName,Model:row.displayModel || row.outdoorModel,CR:values.shift() || '',PS:row.ps || ''};
+    const cooling = values.shift() || {};
+    return {Name:row.outdoorName,Model:row.displayModel || row.outdoorModel,CR:cooling.cr || '', 'CC Kw':cooling.cc || '',PS:row.ps || ''};
   });
   return {
     status: materialRows.length || vrvRows.length || outdoorDetailsRows.length ? "ok" : "empty",
@@ -9841,13 +9842,15 @@ function extractOutdoorCrValues(tables) {
     const modelIndex = header.findIndex(cell => /^model$/i.test(cell));
     const crIndex = header.findIndex(cell => /^cr$/i.test(cell));
     if (nameIndex < 0 || modelIndex < 0 || crIndex < 0) continue;
+    const coolingHeader = (table[1] || []).map(cleanCell);
+    const ccIndex = coolingHeader.findIndex(cell => /^cc$/i.test(cell));
     for (const row of table.slice(1)) {
       const name = normalizeVrvSystemName(row[nameIndex]);
       const model = outdoorModelFromCell(row[modelIndex]);
       if (!/^VRV-/i.test(name) || !model) continue;
       const key = `${name}|${model}`;
       if (!values.has(key)) values.set(key,[]);
-      values.get(key).push(cleanCell(row[crIndex]));
+      values.get(key).push({cr:cleanCell(row[crIndex]),cc:ccIndex >= 0 ? cleanCell(row[ccIndex]) : ''});
     }
   }
   return values;

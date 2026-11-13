@@ -9741,3 +9741,16 @@ body.login-active .mobile-app-bar { display: none; }
   .order-book-page .order-book-tabs button { flex: 0 0 auto; }
   .order-book-page .order-book-table-card { padding: 8px 8px 0; }
 }
+.page-load-shell{margin:16px;padding:18px;background:#fff;border:1px solid #d9e4f4;border-radius:10px;box-shadow:0 4px 14px rgba(19,55,112,.05);color:#10234d}
+.page-load-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}
+.page-load-heading h2{margin:0;font:600 20px/1.3 Inter,Arial,sans-serif}
+.page-load-toolbar{display:flex;gap:10px;margin-bottom:18px}
+.page-load-shimmer,.page-load-table-head,.page-load-table-row{display:block;background:linear-gradient(90deg,#edf3fc 25%,#f8faff 50%,#edf3fc 75%);background-size:200% 100%;animation:page-load-shimmer 1.5s ease-in-out infinite}
+.page-load-toolbar .page-load-shimmer{width:125px;height:32px;border-radius:7px}
+.page-load-action{width:145px;height:34px;border-radius:7px}
+.page-load-table{overflow:hidden;border:1px solid #e2eaf6;border-radius:8px}
+.page-load-table-head{height:38px;background:#e7eef8}
+.page-load-table-row{height:43px;border-top:1px solid #e8eef7;animation-delay:.1s}
+.page-load-table-row:nth-child(even){background:#f6f9fe}
+@keyframes page-load-shimmer{to{background-position-x:-200%}}
+@media(prefers-reduced-motion:reduce){.page-load-shimmer,.page-load-table-head,.page-load-table-row{animation:none}}

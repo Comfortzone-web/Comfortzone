@@ -86,7 +86,7 @@ function vrvStepTwo() {
   const data = vrvData(), extracted = state.extracted?.vrv || {};
   const tab = ['system','outdoor','material'].includes(data.reportTab) ? data.reportTab : 'system';
   const rows = tab === 'system' ? vrvSelectionDisplayRows(extracted.vrvRows || []) : tab === 'outdoor' ? extracted.outdoorDetailsRows || [] : extracted.materialRows || [];
-  const columns = tab === 'system' ? vrvSelectionColumns : tab === 'outdoor' ? ['Name','Model','CR','PS'] : [...new Set(rows.flatMap(row => Object.keys(row).filter(key => !key.startsWith('__'))))];
+  const columns = tab === 'system' ? vrvSelectionColumns : tab === 'outdoor' ? ['Name','Model','CR','CC Kw','PS'] : [...new Set(rows.flatMap(row => Object.keys(row).filter(key => !key.startsWith('__'))))];
   const note = `<div class="vrv-note">Automatic structured extraction works for DOCX and XML files. PDF or image uploads may not produce structured rows.</div>`;
   const actions = `<div class="vrv-control-actions">${vrvButton('report-extract',vrvBusyAction==='report-extract'?'Extracting...':'Extract VRV Report','play',true)}${vrvButton('report-rebuild',vrvBusyAction==='report-rebuild'?'Extracting...':'Rebuild Tables','refresh-cw')}</div>`;
   const tabs = `<div class="vrv-switch vrv-report-tabs">${vrvButton('report-system',`System / Selection (${(extracted.vrvRows || []).length})`,'table-2',tab==='system')}${vrvButton('report-outdoor',`Outdoor Details (${(extracted.outdoorDetailsRows || []).length})`,'table-2',tab==='outdoor')}${vrvButton('report-material',`Material / BOQ (${(extracted.materialRows || []).length})`,'layers-3',tab==='material')}</div>`;
@@ -272,7 +272,7 @@ async function vrvAction(action) {
   if(action==='thermal-excel'||action==='schedule-excel')return downloadTable(action==='thermal-excel'?'thermal':'vrvSchedule');
   if(action==='report-excel'){
     const rows=data.reportTab==='material' ? state.extracted?.vrv?.materialRows || [] : data.reportTab==='outdoor' ? state.extracted?.vrv?.outdoorDetailsRows || [] : vrvSelectionDisplayRows(state.extracted?.vrv?.vrvRows || []);
-    const columns=data.reportTab==='material' ? [...new Set(rows.flatMap(row=>Object.keys(row).filter(key=>!key.startsWith('__'))))] : data.reportTab==='outdoor' ? ['Name','Model','CR','PS'] : vrvSelectionColumns;
+    const columns=data.reportTab==='material' ? [...new Set(rows.flatMap(row=>Object.keys(row).filter(key=>!key.startsWith('__'))))] : data.reportTab==='outdoor' ? ['Name','Model','CR','CC Kw','PS'] : vrvSelectionColumns;
     return downloadBlob(buildTableWorkbookBlob({title:'VRV Selection Report',columns,rows}),'VRV Selection Report.xlsx');
   }
   if(action==='report-extract'||action==='report-rebuild'||action==='regenerate'){

@@ -9,6 +9,10 @@ let drag = null;
 let canvasZoom = 0.72;
 let workflowDraftPromise = null;
 let workflowOpenSequence = 0;
+let workflowListRequest = 0;
+const workflowProjectCache = new Map();
+const workflowProjectLoads = new Map();
+let workflowCacheEpoch = 0;
 let workflowRenderRequest = 0;
 let preserveTableSizes = false;
 const workflowTableScrollState = {};
@@ -339,10 +343,8 @@ async function init() {
   } else if (projectManagementPath && canAccessModule("projects")) {
     await showProjects(projectManagementPath[1] || "");
   } else if (projectId) {
-    await loadSalesCrm().catch(() => {});
     await loadProject(projectId);
   } else {
-    await loadSalesCrm().catch(() => {});
     await showSalesDesk("dashboard");
   }
   warmNavigationData();
@@ -531,6 +533,9 @@ async function login(event) {
       method: "POST",
       body: JSON.stringify({ email: $("#loginEmail").value.trim(), password: $("#loginPassword").value })
     });
+    ++workflowCacheEpoch;
+    workflowProjectCache.clear();
+    workflowProjectLoads.clear();
     salesCrmState = null;
     costingState = null;
     salesQuotationDraft = null;
@@ -560,15 +565,16 @@ async function login(event) {
 
 function warmViewData() {
   if (isPoOnlyUser()) return;
-  loadCosting().catch(error => console.warn(error));
-  loadInventory().catch(error => console.warn(error));
   const run = () => {
+    loadSalesCrm().catch(error => console.warn(error));
+    loadCosting().catch(error => console.warn(error));
+    loadInventory().catch(error => console.warn(error));
     loadPurchaseOrders().catch(error => console.warn(error));
   };
   if ("requestIdleCallback" in window) {
-    window.requestIdleCallback(run, { timeout: 1200 });
+    window.requestIdleCallback(run, { timeout: 1500 });
   } else {
-    setTimeout(run, 300);
+    setTimeout(run, 500);
   }
 }
 
@@ -585,6 +591,9 @@ function warmNavigationData() {
 
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
+  ++workflowCacheEpoch;
+  workflowProjectCache.clear();
+  workflowProjectLoads.clear();
   window.maintenanceModule?.reset?.();
   window.projectManagement?.reset?.();
   currentUser = null;
@@ -734,55 +743,95 @@ async function createProject(options = {}) {
     return;
   }
   if (requestedMode === 'dx') { dxOpenFreshWorkflow(); return; }
-  if (fresh) {
-    state = null;
-    workflowDraftPromise = null;
-    projectPersisted = false;
-    projectTouched = false;
-  }
-  canvas.innerHTML = `<div class="workflow-loading-card">Loading workflow...</div>`;
-  try {
-    workflowDraftPromise = workflowDraftPromise || api("/api/projects?draft=1", { method: "POST", body: JSON.stringify({workflowMode:requestedMode}) })
-      .finally(() => {
-        workflowDraftPromise = null;
-      });
-    const draft = await workflowDraftPromise;
-    if (openSequence !== workflowOpenSequence) return;
-    state = draft;
-  } catch (error) {
-    if (openSequence !== workflowOpenSequence) return;
-    canvas.innerHTML = `<div class="workflow-loading-card">Unable to load workflow.</div>`;
-    toast(error.message || "Unable to load workflow");
-    return;
-  }
-  projectPersisted = false;
-  projectTouched = false;
-  if (requestedMode === 'vrv') vrvStatus = 'Draft — enter Project Name or upload a file';
-  if (requestedMode === "dx") { configureDxWorkflow(state, { resetTables: true }); if(!state.selectionNumber) state.selectionNumber=(await api("/api/projects/selection-number-preview")).selectionNumber; state.dx = { autosaveEnabled:false, step: 1, reviewed: false, selectedUploadIds: [], match: { total: true, sensible: false, airflow: false, totalVariation: 0, sensibleVariation: 0, airflowVariation: 0 } }; dxSaveStatus="Draft — enter Project Name or Specified values"; }
-  else state.workflowMode = "vrv";
-  ensureWorkflowPreparedByDefault();
-  if (!state.priceList.items.length) state.priceList.items = structuredClone(samplePriceItems);
-  applyCompactLayout(true);
-  history.replaceState(null, "", location.pathname);
-  setWorkflowSubnavActive(workflowMode(state));
-  scheduleWorkflowRender({ fit: true });
+  vrvOpenFreshWorkflow(openSequence);
 }
 
-async function loadProject(id) {
+function vrvOpenFreshWorkflow(openSequence = workflowOpenSequence) {
+  const now = new Date().toISOString();
+  const project = {
+    id: costingId(), workflowMode: 'vrv', title: 'VRV Workflow', visible: false,
+    createdAt: now, updatedAt: now,
+    details: { customer: '', contactPerson: '', telNo: '', email: '', project: '', date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()), location: '', model: 'Daikin', validity: 'Valid for 7 days', enquiryNo: '', preparedBy: currentUser?.name || '' },
+    quotation: { quotationNo: '', generatedDocId: '', generatedPdfId: '' }, layoutVersion: 'screenshot-v5',
+    nodes: [
+      { id: 'details', type: 'projectDetails', title: 'Project / Client Details', x: 0, y: 0, locked: false, data: {} },
+      { id: 'thermal-upload', type: 'thermalUpload', title: 'Thermal Sheet', x: 180, y: 255, locked: false, data: {} },
+      { id: 'vrv-upload', type: 'vrvUpload', title: 'VRV Selection Report', x: 640, y: 250, locked: false, data: {} },
+      { id: 'thermal-table', type: 'thermalTable', title: 'Export File', x: 55, y: 520, locked: false, width: 520, height: 205, data: {} },
+      { id: 'boq-table', type: 'boqTable', title: 'BOQ / Price', x: 970, y: 430, locked: false, width: 650, height: 190, data: {} },
+      { id: 'vrv-schedule', type: 'vrvSchedule', title: 'VRV Schedule', x: 170, y: 770, locked: false, width: 1550, height: 230, data: {} }
+    ],
+    uploads: [], tables: {
+      thermal: { columns: [...defaultThermalColumns], rows: [] },
+      vrvSchedule: { columns: [], rows: [] },
+      costing: { columns: ['S.No', 'Model', 'Qty', 'Final Price (AED)', 'Increased Final Price (AED)', 'Amount (AED)'], rows: [], summary: { priceIncrease: 20 } },
+      boq: { columns: ['S.No', 'Description', 'Qty', 'Unit'], rows: [], summary: { total: 0, vat: 0, netAmount: 0 } }
+    },
+    lookup: { indoorData: [], outdoorData: [] }, priceList: { items: [] }
+  };
+  state = project;
+  projectPersisted = false;
+  projectTouched = false;
+  vrvStatus = 'Draft — enter Project Name or upload a file';
+  applyCompactLayout(true);
+  history.replaceState(null, "", location.pathname);
+  setWorkflowSubnavActive('vrv');
+  renderVrvWorkspace();
+  api('/api/projects?draft=1', { method: 'POST', body: JSON.stringify({ workflowMode: 'vrv' }) }).then(draft => {
+    if (openSequence !== workflowOpenSequence || state?.id !== project.id) return;
+    state.lookup = draft.lookup || state.lookup;
+    state.priceList = draft.priceList || state.priceList;
+    if (!state.selectionNumber) state.selectionNumber = draft.selectionNumber;
+    const input = canvas.querySelector('[data-vrv-number]');
+    if (input && document.activeElement !== input) input.value = state.selectionNumber || '';
+  }).catch(error => { if (openSequence === workflowOpenSequence && state?.id === project.id) toast(error.message || 'Could not load workflow details.'); });
+}
+
+function fetchWorkflowProject(id) {
+  if (workflowProjectLoads.has(id)) return workflowProjectLoads.get(id);
+  const cacheEpoch = workflowCacheEpoch;
+  const request = api(`/api/projects/${id}`).then(project => {
+    if (cacheEpoch === workflowCacheEpoch) workflowProjectCache.set(id, { project, loadedAt: Date.now() });
+    return project;
+  }).finally(() => { if (workflowProjectLoads.get(id) === request) workflowProjectLoads.delete(id); });
+  workflowProjectLoads.set(id, request);
+  return request;
+}
+
+async function loadProject(id, mode = '') {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
   const openSequence = ++workflowOpenSequence;
-  const project = await api(`/api/projects/${id}`);
-  if (openSequence !== workflowOpenSequence) return;
-  state = project;
-  dxSaveStatus = "All changes saved"; dxSearch = "";
-  projectPersisted = true;
-  projectTouched = false;
-  if (workflowMode(state) === 'vrv') vrvStatus = 'All changes saved';
-  if (workflowMode(state) === "dx") { dxBoqPreparedId = ''; configureDxWorkflow(state, { resetTables: false }); }
-  ensureWorkflowPreparedByDefault();
-  applyCompactLayout(false);
-  showCanvas();
-  scheduleWorkflowRender({ fit: true });
+  const cached = workflowProjectCache.get(id);
+  const display = project => {
+    if (openSequence !== workflowOpenSequence) return;
+    state = structuredClone(project);
+    dxSaveStatus = "All changes saved"; dxSearch = "";
+    projectPersisted = true;
+    projectTouched = false;
+    if (workflowMode(state) === 'vrv') vrvStatus = 'All changes saved';
+    if (workflowMode(state) === "dx") { dxBoqPreparedId = ''; configureDxWorkflow(state, { resetTables: false }); }
+    ensureWorkflowPreparedByDefault();
+    applyCompactLayout(false);
+    showCanvas();
+    scheduleWorkflowRender({ fit: true });
+  };
+  if (cached) display(cached.project);
+  else {
+    showCanvas(mode);
+    setWorkflowTitle(mode === 'dx' ? 'DX Workflow' : 'VRV Workflow');
+    canvas.innerHTML = '<div class="dx-project-header dx-card"><div class="page-load-shimmer" style="height:46px"></div></div><div class="page-load-table"><div class="page-load-table-head"></div><div class="page-load-table-row"></div><div class="page-load-table-row"></div></div>';
+  }
+  const openedState = cached ? state : null;
+  try {
+    if (cached && Date.now() - cached.loadedAt < 15000) return;
+    const project = await fetchWorkflowProject(id);
+    if (openSequence !== workflowOpenSequence || (cached && (projectTouched || state !== openedState))) return;
+    display(project);
+  } catch (error) {
+    if (openSequence !== workflowOpenSequence) return;
+    if (!cached) renderPageLoadError('canvas', mode === 'dx' ? 'DX Workflow' : 'VRV Workflow', error, () => loadProject(id,mode));
+    toast(error.message || 'Could not open workflow');
+  }
 }
 
 function workflowMode(project = state) {
@@ -858,14 +907,15 @@ async function saveProject(options = {}) {
   state.visible = workflowStarted;
   state.title = state.details.project || state.details.customer || "Untitled Project";
   state = await api(`/api/projects/${state.id}`, { method: "PUT", body: JSON.stringify(state) });
+  workflowProjectCache.set(state.id,{project:structuredClone(state),loadedAt:Date.now()});
   projectPersisted = true;
   projectTouched = false;
   if (workflowMode(state) === 'vrv') {
     vrvStatus = 'All changes saved';
     const status = canvas.querySelector('[data-vrv-status]');
     if (status) status.textContent = vrvStatus;
-    const number = canvas.querySelector('.dx-project-header input[readonly]');
-    if (number) number.value = state.selectionNumber || '';
+    const number = canvas.querySelector('[data-vrv-number]');
+    if (number && document.activeElement !== number) number.value = state.selectionNumber || '';
   }
   if (state.visible && !new URLSearchParams(location.search).get("project")) {
     history.replaceState(null, "", `?project=${state.id}`);
@@ -894,8 +944,23 @@ function hasWorkflowSourceUpload() {
   );
 }
 
+function renderPageSkeleton(rootId, title) {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+  root.innerHTML = `<div class="page-load-shell" aria-busy="true" aria-label="Loading ${escapeHtml(title)}"><div class="page-load-heading"><h2>${escapeHtml(title)}</h2><span class="page-load-shimmer page-load-action"></span></div><div class="page-load-toolbar"><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span></div><div class="page-load-table"><div class="page-load-table-head"></div>${Array.from({ length: 5 }, () => '<div class="page-load-table-row"></div>').join('')}</div></div>`;
+}
+
+function renderPageLoadError(rootId, title, error, retry) {
+  const root = document.getElementById(rootId);
+  if (!root) return;
+  root.innerHTML = `<div class="page-load-shell"><div class="page-load-heading"><h2>${escapeHtml(title)}</h2></div><p role="alert">${escapeHtml(error?.message || 'Could not load this page.')}</p><button type="button" class="ghost-button">Retry</button></div>`;
+  root.querySelector('button')?.addEventListener('click', retry);
+}
+
 async function showDocuments() {
   if (!canAccessModule("workflow")) return showPurchaseOrders("list");
+  if (state?.id && projectTouched) workflowProjectCache.delete(state.id);
+  else if (state?.id && projectPersisted) workflowProjectCache.set(state.id,{project:structuredClone(state),loadedAt:Date.now()});
   activeView = "documents";
   hideProjectManagementView();
   setCanvasActionsVisible(false);
@@ -927,7 +992,11 @@ async function showDocuments() {
   workflowActions.classList.remove("hidden");
   workflowActions.querySelector("input").value = $("#searchInput").value;
   workflowActions.querySelector("input").addEventListener("input", event => { $("#searchInput").value = event.target.value; loadProjectList(); });
-  await loadProjectList();
+  if (!$("#projectList").innerHTML.trim()) renderPageSkeleton('projectList', 'My WorkFlows');
+  loadProjectList().catch(error => {
+    if (activeView === 'documents') renderPageLoadError('projectList', 'My WorkFlows', error, showDocuments);
+    toast(error.message || 'Unable to load Workflows');
+  });
 }
 
 async function showProjects(projectId = "", tab = "overview") {
@@ -1111,12 +1180,20 @@ async function showPurchaseOrders(screen = "form") {
   $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
   const needsInitialPurchase = !purchaseState;
-  const projectNamesPromise = screen === "form" ? loadPurchaseProjectNames() : Promise.resolve();
-  if (needsInitialPurchase) await loadPurchaseOrders().catch(() => {});
-  await projectNamesPromise;
   if (!purchaseDraft) purchaseDraft = newPurchaseDraft();
-  renderPurchaseOrders();
-  if (!needsInitialPurchase) refreshPurchaseOrdersInBackground();
+  if (needsInitialPurchase) {
+    renderPageSkeleton('purchaseOrdersRoot', screen === 'list' ? 'Purchase Orders' : 'Purchase Order');
+    loadPurchaseOrders().then(() => {
+      if (activeView === 'purchaseOrders' && purchaseScreen === screen) renderPurchaseOrders();
+    }).catch(error => {
+      if (activeView === 'purchaseOrders' && purchaseScreen === screen) renderPageLoadError('purchaseOrdersRoot', 'Purchase Orders', error, () => showPurchaseOrders(screen));
+      toast(error.message || 'Unable to load Purchase Orders');
+    });
+  } else {
+    renderPurchaseOrders();
+    refreshPurchaseOrdersInBackground();
+  }
+  if (screen === 'form') loadPurchaseProjectNames().catch(error => console.warn(error));
 }
 
 async function showAreaCalculation(mode = "detail") {
@@ -1149,10 +1226,21 @@ async function showAreaCalculation(mode = "detail") {
   $("#pageTitle").innerHTML = `<span>Area Calculation</span><b>&lt;</b><strong>Duct Area Calculator <span class="po-upload-spinner area-title-spinner ${areaCalculationUploadLoading ? "" : "hidden"}" aria-label="Uploading drawing"></span></strong>`;
   $("#projectMeta").textContent = "Upload duct drawings and review editable fabrication area calculations.";
   const needsInitialArea = !areaCalculationState;
-  if (needsInitialArea) await loadAreaCalculations().catch(() => {});
-  if (!areaCalculationActiveId && areaCalculationState?.calculations?.length) areaCalculationActiveId = areaCalculationState.calculations[0].id;
-  renderAreaCalculation();
-  if (!needsInitialArea) refreshAreaCalculationsInBackground();
+  if (needsInitialArea) {
+    renderPageSkeleton('areaCalculationRoot', 'Area Calculation');
+    loadAreaCalculations().then(() => {
+      if (activeView !== 'areaCalculation' || areaCalculationMode !== mode) return;
+      if (!areaCalculationActiveId && areaCalculationState?.calculations?.length) areaCalculationActiveId = areaCalculationState.calculations[0].id;
+      renderAreaCalculation();
+    }).catch(error => {
+      if (activeView === 'areaCalculation' && areaCalculationMode === mode) renderPageLoadError('areaCalculationRoot', 'Area Calculation', error, () => showAreaCalculation(mode));
+      toast(error.message || 'Unable to load Area Calculation');
+    });
+  } else {
+    if (!areaCalculationActiveId && areaCalculationState?.calculations?.length) areaCalculationActiveId = areaCalculationState.calculations[0].id;
+    renderAreaCalculation();
+    refreshAreaCalculationsInBackground();
+  }
 }
 
 function refreshAreaTitleSpinner() {
@@ -1270,9 +1358,17 @@ async function showSettings() {
   applySidebarSubnavVisibility();
   $("#pageTitle").textContent = "Settings";
   $("#projectMeta").textContent = "Admin settings, company details, attachments, and login access.";
-  await loadSettings();
-  await loadCosting({ force: true }).catch(error => toast(error.message || "Unable to load Costing Sheet settings"));
-  renderSettings();
+  if (settingsDraft) {
+    renderSettings();
+    return;
+  }
+  renderPageSkeleton('settingsRoot', 'Settings');
+  Promise.all([loadSettings(), loadCosting().catch(error => { console.warn(error); return null; })])
+    .then(() => { if (activeView === 'settings') renderSettings(); })
+    .catch(error => {
+      if (activeView === 'settings') renderPageLoadError('settingsRoot', 'Settings', error, showSettings);
+      toast(error.message || 'Unable to load Settings');
+    });
 }
 
 async function loadSettings() {
@@ -1807,13 +1903,11 @@ function renderSalesDesk() {
 }
 
 function renderCostingLoading() {
-  const root = $("#salesDeskRoot");
-  if (!root) return;
-  root.innerHTML = `<div class="sales-page sales-screen-costing"><section class="costing-all-page"><div class="costing-all-heading"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""><h2>${costingMode === "prices" ? "Model Price List" : costingMode === "all" ? "All Costing Sheets" : "Costing Sheet"}</h2></div><p class="sales-data-loading" role="status">Loading costing data...</p></section></div>`;
+  renderPageSkeleton('salesDeskRoot', costingMode === 'prices' ? 'Model Price List' : costingMode === 'all' ? 'All Costing Sheets' : 'Costing Sheet');
 }
 
 function renderSalesCrmLoading() {
-  $("#salesDeskRoot").innerHTML = `<div class="sales-page sales-screen-${salesDeskScreen}"><section class="costing-all-page"><p class="sales-data-loading" role="status">Loading Sales Desk...</p></section></div>`;
+  renderPageSkeleton('salesDeskRoot', 'Sales Desk');
 }
 
 function renderSalesDeskLoadError(message, source) {
@@ -8285,11 +8379,13 @@ function refreshInventoryInBackground() {
 }
 
 async function loadProjectList() {
+  const request = ++workflowListRequest;
   const q = encodeURIComponent($("#searchInput").value || "");
   const projects = await api(`/api/projects?q=${q}`);
+  if (request !== workflowListRequest || activeView !== 'documents') return;
   const list = $("#projectList");
   list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects.map((project,index) => `
-    <tr>
+    <tr data-workflow-mode="${escapeHtml(project.workflowMode || 'vrv')}">
       <td>${index + 1}</td>
       <td><button type="button" class="workflow-selection-link" data-workflow-action="open" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.selectionNumber || (project.workflowMode === 'dx' ? 'DX Workflow' : project.workflowMode === 'vrv' ? 'VRV Workflow' : 'Workflow'))}</button><small>${project.createdAt ? escapeHtml(new Date(project.createdAt).toLocaleDateString()) : ''}</small></td>
       <td>${escapeHtml(project.project || project.title || "Untitled Project")}</td>
@@ -8298,7 +8394,7 @@ async function loadProjectList() {
       <td><div class="project-card-actions">
         <button class="workflow-menu-button" type="button" data-workflow-menu="${project.id}" aria-label="Workflow actions">...</button>
         <div class="workflow-row-menu hidden" data-workflow-menu-panel="${project.id}">
-          <button type="button" data-workflow-action="open" data-project-id="${project.id}">Open Canvas</button>
+          <button type="button" data-workflow-action="open" data-project-id="${project.id}">Open</button>
           <button type="button" data-workflow-action="clone" data-project-id="${project.id}">Clone</button>
           <button type="button" class="danger-menu-item" data-workflow-action="delete" data-project-id="${project.id}">Delete</button>
         </div>
@@ -8306,16 +8402,36 @@ async function loadProjectList() {
     </tr>
   `).join("") || '<tr><td colspan="6" class="pipeline-empty">No saved workflows found.</td></tr>'}</tbody></table></div>`;
   list.onclick = handleWorkflowListClick;
+  list.onpointerover = event => {
+    const link = event.target.closest('[data-workflow-action="open"]');
+    const id = link?.dataset.projectId;
+    if (id && !workflowProjectCache.has(id)) fetchWorkflowProject(id).catch(() => {});
+  };
+  list.onfocusin = event => {
+    const link = event.target.closest('[data-workflow-action="open"]');
+    const id = link?.dataset.projectId;
+    if (id && !workflowProjectCache.has(id)) fetchWorkflowProject(id).catch(() => {});
+  };
   document.removeEventListener("click", closeWorkflowMenus);
   document.addEventListener("click", closeWorkflowMenus);
 }
 
 async function deleteProject(projectId) {
   if (!confirm("Delete this project canvas? This cannot be undone.")) return;
-  await api(`/api/projects/${projectId}`, { method: "DELETE" });
-  if (state && state.id === projectId) state = null;
-  await loadProjectList();
-  toast("Project deleted");
+  ++workflowListRequest;
+  const row = [...document.querySelectorAll('#projectList [data-workflow-action="open"]')]
+    .find(button => button.dataset.projectId === projectId)?.closest('tr');
+  row?.remove();
+  try {
+    await api(`/api/projects/${projectId}`, { method: "DELETE" });
+    workflowProjectCache.delete(projectId);
+    if (state && state.id === projectId) state = null;
+    toast("Project deleted");
+  } catch (error) {
+    toast(error.message || 'Could not delete workflow');
+  } finally {
+    loadProjectList().catch(error => toast(error.message || 'Could not refresh workflows'));
+  }
 }
 
 function closeWorkflowMenus() {
@@ -8344,7 +8460,7 @@ async function handleWorkflowListClick(event) {
   event.stopPropagation();
   closeWorkflowMenus();
   const projectId = actionButton.dataset.projectId;
-  if (actionButton.dataset.workflowAction === "open") return loadProject(projectId);
+  if (actionButton.dataset.workflowAction === "open") return loadProject(projectId,actionButton.closest('tr')?.dataset.workflowMode || '');
   if (actionButton.dataset.workflowAction === "delete") return deleteProject(projectId);
   if (actionButton.dataset.workflowAction === "clone") return cloneProject(projectId);
 }
@@ -9412,7 +9528,7 @@ function renderInventory() {
 }
 
 function renderInventoryLoading() {
-  $("#inventoryRoot").innerHTML = `<section class="inventory-card"><p class="inventory-loading-state" role="status">Loading Inventory...</p></section>`;
+  renderPageSkeleton('inventoryRoot', 'Inventory');
 }
 
 function renderInventoryLoadError() {
@@ -13142,7 +13258,7 @@ function fillVrvScheduleLookups() {
       outdoorComponents: row.outdoorComponents || []
     }, outdoorMap);
     const report = (state.extracted?.vrv?.vrvRows || []).find(item => norm(item.system) === norm(row.System) && norm(item.name) === norm(row.Name) && norm(item.fcu) === norm(row.FCU));
-    return { ...row, ...indoorFields(indoor), ...vrvReportIndoorFields(report,indoor), ...outdoorFields(outdoor), 'Outdoor PS': outdoor.ps || row['Outdoor PS'] || '' };
+    return { ...row, ...indoorFields(indoor), ...vrvReportIndoorFields(report,indoor), ...outdoorFields(outdoor), CC: vrvOutdoorCcForSchedule(row['Outdoor Name'],row['Outdoor Model'],outdoor), 'Outdoor PS': outdoor.ps || row['Outdoor PS'] || '' };
   });
 }
 
@@ -13184,6 +13300,7 @@ function vrvRow(item, thermal, indoor, outdoor) {
     "Outdoor Name": item.outdoorName,
     "Outdoor Model": item.outdoorModel,
     ...outdoorFields(outdoor),
+    CC: vrvOutdoorCcForSchedule(item.outdoorName,item.outdoorModel,outdoor),
     'Outdoor PS': outdoor.ps || item.outdoorPs || ''
   };
 }
@@ -13228,6 +13345,13 @@ function outdoorFields(outdoor) {
     "Outdoor WxHxD": outdoor.wxhxd || "",
     "Outdoor Weight": outdoor.weight || ""
   };
+}
+
+function vrvOutdoorCcForSchedule(name,model,outdoor) {
+  if (!/^VRV/i.test(String(name || '').trim())) return '';
+  const detail = (state.extracted?.vrv?.outdoorDetailsRows || []).find(row =>
+    norm(row.Name) === norm(name) && norm(row.Model) === norm(model));
+  return detail?.['CC Kw'] || outdoor.cc || '';
 }
 
 function outdoorDataForSchedule(item, outdoorMap) {
