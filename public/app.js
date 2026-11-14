@@ -943,7 +943,11 @@ async function saveProject(options = {}) {
   const opts = options && typeof options === "object" ? options : {};
   if (!opts.auto) projectTouched = true;
   if (!projectTouched && !opts.force && !opts.manual) return;
-  const workflowStarted = hasWorkflowSourceUpload() || !!state.details?.project?.trim() || opts.manual;
+  const manualSelectionStarted = state.vrv?.selectionMode === 'manual' && (
+    state.vrv.manual?.systems?.length > 0 ||
+    state.vrv.manual?.indoor?.some(row => [row.system,row.name,row.location,row.tc,row.sc,row.airflow].some(value => String(value ?? '').trim()))
+  );
+  const workflowStarted = hasWorkflowSourceUpload() || !!state.details?.project?.trim() || manualSelectionStarted || opts.manual;
   if (!workflowStarted && !opts.allowHidden) {
     if (opts.manual) toast("Workflow saved");
     return;
@@ -973,7 +977,11 @@ async function ensureProjectSaved(options = {}) {
 }
 
 function scheduleProjectSave() {
-  if (!hasWorkflowSourceUpload() && !state?.details?.project?.trim()) return;
+  const manualSelectionStarted = state?.vrv?.selectionMode === 'manual' && (
+    state.vrv.manual?.systems?.length > 0 ||
+    state.vrv.manual?.indoor?.some(row => [row.system,row.name,row.location,row.tc,row.sc,row.airflow].some(value => String(value ?? '').trim()))
+  );
+  if (!hasWorkflowSourceUpload() && !state?.details?.project?.trim() && !manualSelectionStarted) return;
   projectTouched = true;
   debounceSaveProject();
 }

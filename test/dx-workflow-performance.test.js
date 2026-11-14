@@ -31,13 +31,37 @@ test('a fresh DX workspace is editable before server metadata arrives and hydrat
 test('an older VRV draft response cannot overwrite a newer DX opening',async()=>{
  let resolveDraft;const draft=new Promise(resolve=>{resolveDraft=resolve;});
  const ctx={state:null,workflowOpenSequence:0,workflowDraftPromise:null,canAccessModule:()=>true,
-  showCanvas:()=>{},canvas:{innerHTML:''},api:()=>draft,workflowMode:p=>p?.workflowMode,
+  showCanvas:()=>{},canvas:{innerHTML:'',querySelector:()=>null},api:()=>draft,workflowMode:p=>p?.workflowMode,
+  costingId:()=> 'local-vrv',currentUser:{name:'User'},defaultThermalColumns:['Indoor','Room'],
+  applyCompactLayout:()=>{},history:{replaceState:()=>{}},location:{pathname:'/'},setWorkflowSubnavActive:()=>{},renderVrvWorkspace:()=>{},document:{activeElement:null},toast:()=>{},
   dxOpenFreshWorkflow:()=>{ctx.state={id:'new-dx',workflowMode:'dx'};}};
  vm.createContext(ctx);
  const start=app.indexOf('async function createProject('),end=app.indexOf('\n}',start)+2;
- vm.runInContext(app.slice(start,end),ctx);
+ const vrvStart=app.indexOf('function vrvOpenFreshWorkflow('),vrvEnd=app.indexOf('\n}',vrvStart)+2;
+ vm.runInContext(app.slice(start,end)+'\n'+app.slice(vrvStart,vrvEnd),ctx);
  const opening=ctx.createProject({workflowMode:'vrv',fresh:true});
+ assert.equal(ctx.state.id,'local-vrv','VRV is visible before server metadata arrives');
  await ctx.createProject({workflowMode:'dx',fresh:true});
  resolveDraft({id:'stale-vrv',workflowMode:'vrv'});await opening;
+ await new Promise(resolve=>setImmediate(resolve));
  assert.equal(ctx.state.id,'new-dx');
+});
+test('VRV first paint keeps edits while server metadata arrives',async()=>{
+ let resolveDraft;const draft=new Promise(resolve=>{resolveDraft=resolve;});
+ const numberInput={value:'Assigning…'};let renders=0;
+ const ctx={state:null,workflowOpenSequence:1,projectPersisted:false,projectTouched:false,vrvStatus:'',
+  costingId:()=> 'local-vrv',currentUser:{name:'User'},defaultThermalColumns:['Indoor','Room'],
+  applyCompactLayout:()=>{},history:{replaceState:()=>{}},location:{pathname:'/'},setWorkflowSubnavActive:()=>{},
+  renderVrvWorkspace:()=>{renders++;},api:()=>draft,canvas:{querySelector:selector=>selector==='[data-vrv-number]'?numberInput:null},
+  document:{activeElement:null},toast:()=>{}};
+ vm.createContext(ctx);
+ const start=app.indexOf('function vrvOpenFreshWorkflow('),end=app.indexOf('\n}',start)+2;
+ vm.runInContext(app.slice(start,end),ctx);ctx.vrvOpenFreshWorkflow();
+ assert.equal(renders,1);
+ ctx.state.details.project='Typed project';ctx.state.tables.thermal.rows.push({Indoor:'IDU-1'});
+ resolveDraft({id:'server-draft',selectionNumber:'VRV-2026-014',lookup:{indoorData:[{}]},priceList:{items:[]}});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(ctx.state.id,'local-vrv');assert.equal(ctx.state.details.project,'Typed project');
+ assert.equal(ctx.state.tables.thermal.rows[0].Indoor,'IDU-1');
+ assert.equal(numberInput.value,'VRV-2026-014');assert.equal(renders,1);
 });

@@ -143,7 +143,7 @@
         renderDetail();
       } else {
         state.project = null;
-        root.innerHTML = `<div class="pm-loading"><span class="pm-spinner"></span> Loading Project...</div>`;
+        root.innerHTML = `<div class="page-load-shell" aria-busy="true" aria-label="Loading Project"><div class="page-load-heading"><h2>Project</h2><span class="page-load-shimmer page-load-action"></span></div><div class="page-load-toolbar"><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span></div><div class="page-load-table"><div class="page-load-table-head"></div>${'<div class="page-load-table-row"></div>'.repeat(5)}</div></div>`;
       }
       const saveVersion = projectSaveVersion;
       try {
@@ -177,7 +177,7 @@
     const hasCachedDashboard = state.dashboard && state.dashboardQuery === query;
     clearTimeout(state.dashboardExpiryTimer);
     if (hasCachedDashboard) renderDashboard();
-    else if (!state.dashboard) root.innerHTML = `<div class="pm-loading"><span class="pm-spinner"></span> Loading Projects...</div>`;
+    else if (!state.dashboard) root.innerHTML = `<div class="page-load-shell" aria-busy="true" aria-label="Loading Projects"><div class="page-load-heading"><h2>Projects</h2><span class="page-load-shimmer page-load-action"></span></div><div class="page-load-toolbar"><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span></div><div class="page-load-table"><div class="page-load-table-head"></div>${'<div class="page-load-table-row"></div>'.repeat(5)}</div></div>`;
     try {
       const dashboard = query || !dashboardPrefetch ? await api(`/api/project-management/dashboard?q=${encodeURIComponent(query)}`) : await dashboardPrefetch;
       if (request !== state.dashboardRequest || state.project) return;

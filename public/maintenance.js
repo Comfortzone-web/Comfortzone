@@ -201,7 +201,7 @@
       }
       return;
     }
-    root.innerHTML = `<div class="maint-loading">Loading Maintenance...</div>`;
+    root.innerHTML = `<div class="page-load-shell" aria-busy="true" aria-label="Loading Maintenance"><div class="page-load-heading"><h2>Maintenance</h2><span class="page-load-shimmer page-load-action"></span></div><div class="page-load-toolbar"><span class="page-load-shimmer"></span><span class="page-load-shimmer"></span></div><div class="page-load-table"><div class="page-load-table-head"></div>${'<div class="page-load-table-row"></div>'.repeat(5)}</div></div>`;
     try {
       if (prefetchPromise) await prefetchPromise.catch(() => {});
       if (state.data) render();

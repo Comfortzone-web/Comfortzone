@@ -26,6 +26,7 @@ function vrvToolbarMenu(step) {
 }
 function vrvData() {
   state.vrv ||= { step: 1, mode: 'regular', familyModel: 'FXMQ', customColumns: [], reportTab: 'system', margin: 20 };
+  state.vrv.selectionMode ||= 'report';
   if (!state.vrv.customColumnsInitialized) {
     if (!state.vrv.customColumns?.length) state.vrv.customColumns = [...vrvDefaultCustomColumns];
     state.vrv.customColumnsInitialized = true;
@@ -84,6 +85,7 @@ function vrvStepOne() {
 }
 function vrvStepTwo() {
   const data = vrvData(), extracted = state.extracted?.vrv || {};
+  if (data.selectionMode === 'manual') return vrvManualStep();
   const tab = ['system','outdoor','material'].includes(data.reportTab) ? data.reportTab : 'system';
   const rows = tab === 'system' ? vrvSelectionDisplayRows(extracted.vrvRows || []) : tab === 'outdoor' ? extracted.outdoorDetailsRows || [] : extracted.materialRows || [];
   const columns = tab === 'system' ? vrvSelectionColumns : tab === 'outdoor' ? ['Name','Model','CR','CC Kw','PS'] : [...new Set(rows.flatMap(row => Object.keys(row).filter(key => !key.startsWith('__'))))];
@@ -99,7 +101,7 @@ function vrvStepThree() {
   const normal = rows.filter(row => !isGeneratedTableRow(row) && Object.values(row).some(Boolean));
   const systems = new Set(normal.map(row => row.System).filter(Boolean));
   const indoor = normal.filter(row => row.FCU).length;
-  const outdoor = new Set(normal.map(row => row['Outdoor Unit'] || row['Outdoor Model']).filter(Boolean)).size;
+  const outdoor = vrvData().selectionMode==='manual' ? vrvManualData().outdoor.reduce((sum,row)=>sum+Number(row.combo?.modules||0),0) : new Set(normal.map(row => row['Outdoor Unit'] || row['Outdoor Model']).filter(Boolean)).size;
   const badges = `<div class="vrv-badges"><span>Total Systems: ${systems.size}</span><span>Total Indoor: ${indoor}</span><span>Total Outdoor: ${outdoor}</span></div>`;
   const totals = Object.fromEntries(cols.map(col=>[col,'']));
   totals.System='Project Total';totals.__rowType='project-total';
@@ -111,7 +113,7 @@ function vrvBoqRows() { return state.tables.costing?.rows || []; }
 function vrvUnitPriceCell(row,index) {
   const listed = workflowCostingPriceItems().find(item => norm(item.model) === norm(row.Model) && num(item.finalPrice) > 0);
   if (listed) return vrvMoney(row['Final Price (AED)']);
-  return `<button type="button" class="vrv-unit-price-display" data-vrv-unit-price-open="${index}" aria-label="Edit Unit Price for ${escapeHtml(row.Model || `row ${index+1}`)}">${vrvMoney(row['Final Price (AED)'])}</button>`;
+  return `<button type="button" class="vrv-unit-price-display ${row['Final Price (AED)']===''?'vrv-price-missing':''}" data-vrv-unit-price-open="${index}" aria-label="Edit Unit Price for ${escapeHtml(row.Model || `row ${index+1}`)}">${row['Final Price (AED)']===''?'Price Missing — enter':vrvMoney(row['Final Price (AED)'])}</button>`;
 }
 function vrvRenderKeepingScroll() {
   const view = document.querySelector('#canvasView');
@@ -131,15 +133,17 @@ function vrvStepFour() {
   const vat = selling*0.05;
   const tr = rows.map((row,index)=>`<tr><td>${index+1}</td><td><b contenteditable="true" data-vrv-price="Model" data-row="${index}">${escapeHtml(row.Model || '')}</b><small>${escapeHtml((state.tables.boq.rows[index] || {}).Description || '')}</small></td><td contenteditable="true" data-vrv-price="Qty" data-row="${index}">${escapeHtml(row.Qty ?? '')}</td><td>Nos</td><td>${vrvUnitPriceCell(row,index)}</td><td>${vrvMoney(row['Increased Final Price (AED)'])}</td><td><b>${vrvMoney(row['Amount (AED)'])}</b><button type="button" class="vrv-delete-row" data-vrv-delete="${index}" aria-label="Delete row ${index+1}">×</button></td></tr>`).join('');
   const summary = [['Total Cost',cost],['Total Selling',selling],['Overall Margin',`${margin.toFixed(2)} %`],['VAT (5%)',vat],['Net Amount (Incl. VAT)',selling+vat]].map(([name,value])=>`<div><small>${name}</small><strong>${typeof value === 'string' ? value : vrvMoney(value)}</strong></div>`).join('');
-  return vrvCard(`${vrvIcon('clipboard-list')} BOQ & Quotation`,`<p class="vrv-subtitle">Material BOQ and pricing from the VRV Selection Report.</p><div class="vrv-boq-tools"><span>${rows.length} items from VRV Report</span><label>Overall Profit Margin <span class="vrv-percent"><input data-vrv-margin inputmode="decimal" value="${margin.toFixed(2)}">%</span></label>${vrvButton('add-row','Add Row','plus')}</div><div class="vrv-table-scroll"><table class="vrv-table"><thead><tr>${['Ref','Description / Model','Qty','Unit','Unit Price','Selling Price','Line Total'].map(col=>`<th>${col}</th>`).join('')}</tr></thead><tbody>${tr || '<tr><td colspan="7" class="vrv-empty">Extract a VRV Selection Report to populate the BOQ.</td></tr>'}</tbody></table></div><div class="vrv-kpis">${summary}</div>`,'','vrv-boq-card');
+  const source=data.selectionMode==='manual'?'Manual Selection':'VRV Selection Report';
+  return vrvCard(`${vrvIcon('clipboard-list')} BOQ & Quotation`,`<p class="vrv-subtitle">Material BOQ and pricing from ${source}.</p><div class="vrv-boq-tools"><span>${rows.length} items from ${source}</span><label>Overall Profit Margin <span class="vrv-percent"><input data-vrv-margin inputmode="decimal" value="${margin.toFixed(2)}">%</span></label>${vrvButton('add-row','Add Row','plus')}</div><div class="vrv-table-scroll"><table class="vrv-table"><thead><tr>${['Ref','Description / Model','Qty','Unit','Unit Price','Selling Price','Line Total'].map(col=>`<th>${col}</th>`).join('')}</tr></thead><tbody>${tr || `<tr><td colspan="7" class="vrv-empty">Complete ${source} to populate the BOQ.</td></tr>`}</tbody></table></div><div class="vrv-kpis">${summary}</div>`,'','vrv-boq-card');
 }
 function renderVrvWorkspace() {
   const data=vrvData(), step=data.step;
+  vrvSteps[1] = data.selectionMode === 'manual' ? 'Manual Selection' : 'VRV Selection Report';
   canvas.classList.add('dx-workspace','vrv-workspace'); canvas.style.cssText='';
-  setWorkflowTitle('VRV Workflow'); $('#projectMeta').textContent=vrvSteps[step-1];
+  setWorkflowTitle('VRV Workflow'); $('#projectMeta').textContent=step===2&&data.selectionMode==='manual'?'VRV Selection – Manual Mode':vrvSteps[step-1];
   document.querySelector('.top-actions:not(#viewActions)')?.classList.add('hidden');
   const actions=$('#viewActions'); actions.classList.remove('hidden');
-  actions.innerHTML=`${vrvButton('new','New Workflow','plus')}${vrvToolbarMenu(step)}`;
+  actions.innerHTML=`${step===2?`<details class="vrv-selection-mode-menu"><summary class="dx-button">Selection Mode ▾</summary><div class="dx-table-menu-panel"><button type="button" data-vrv-action="mode-report" class="dx-button">Report Selection ${data.selectionMode==='report'?'✓':''}</button><button type="button" data-vrv-action="mode-manual" class="dx-button">Manual Selection ${data.selectionMode==='manual'?'✓':''}</button></div></details>`:''}${vrvButton('new','New Workflow','plus')}${vrvToolbarMenu(step)}`;
   const fields=[['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
   canvas.innerHTML=`<div class="dx-project-header dx-card">${fields.map(([key,label,icon])=>`<label>${vrvIcon(icon)}<span>${label}<input ${key==='selectionNumber'?'data-vrv-number':`data-vrv-detail="${key}" data-detail-key="${key}"`} value="${escapeHtml(key==='selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div><nav class="dx-steps vrv-steps" aria-label="VRV workflow progress">${vrvSteps.map((name,index)=>`<button type="button" data-vrv-step="${index+1}" class="${step===index+1?'active':''} ${index+1<step?'complete':''}" ${step===index+1?'aria-current="step"':''}><span>${index+1<step?'✓':index+1}</span>Step 0${index+1} — ${name}</button>`).join('')}</nav>${step===1?vrvStepOne():step===2?vrvStepTwo():step===3?vrvStepThree():vrvStepFour()}<footer class="dx-footer"><span data-vrv-status>${escapeHtml(vrvStatus)}</span><div class="dx-actions">${step>1?vrvButton('back',`Back to ${vrvSteps[step-2]}`,'arrow-left'):''}${vrvButton(step<4?'next':'quotation',step<4?`Continue to ${vrvSteps[step]}`:'Create Quotation',step<4?'arrow-right':'file-text',true)}</div></footer>`;
   if (state.selectionNumber) canvas.querySelector('[data-vrv-number]').value = state.selectionNumber;
@@ -156,6 +160,10 @@ function renderVrvWorkspace() {
       if(data.step===nextStep)return;
       const active=document.activeElement;
       if(active && canvas.contains(active))active.blur();
+      if(data.selectionMode==='manual'&&data.step<3&&nextStep>=3){
+        vrvManualGenerate().then(()=>{data.step=nextStep;vrvDirty();renderVrvWorkspace();}).catch(error=>toast(error.message||'Complete manual selection before continuing'));
+        return;
+      }
       data.step=nextStep;vrvDirty();renderVrvWorkspace();
     };
     button.addEventListener('pointerdown',event=>{
@@ -178,7 +186,7 @@ function renderVrvWorkspace() {
   tokenInput?.addEventListener('keydown',event=>{if(event.key!==',' && event.key!=='Enter')return;event.preventDefault();event.stopPropagation();addTokens();});
   tokenInput?.addEventListener('input',()=>{if(tokenInput.value.includes(','))addTokens();});
   canvas.querySelectorAll('[data-vrv-tag]').forEach(button=>button.addEventListener('click',()=>{data.customColumns.splice(Number(button.dataset.vrvTag),1);vrvDirty();renderVrvWorkspace();}));
-  canvas.querySelectorAll('[data-vrv-cell][contenteditable="true"]').forEach(cell=>cell.addEventListener('blur',()=>{const table=state.tables[cell.dataset.vrvCell],row=table.rows[Number(cell.dataset.row)];row[cell.dataset.col]=cell.textContent.trim();clearTableCellReview(row,cell.dataset.col);if(cell.dataset.vrvCell==='thermal')buildWorkflowScheduleFromThermal();else {fillVrvScheduleLookups();rebuildVrvScheduleTotals();}vrvDirty();renderVrvWorkspace();}));
+  canvas.querySelectorAll('[data-vrv-cell][contenteditable="true"]').forEach(cell=>cell.addEventListener('blur',()=>{const table=state.tables[cell.dataset.vrvCell],row=table.rows[Number(cell.dataset.row)];row[cell.dataset.col]=cell.textContent.trim();clearTableCellReview(row,cell.dataset.col);if(cell.dataset.vrvCell==='thermal'){if(data.selectionMode==='manual')vrvManualPrefill();else buildWorkflowScheduleFromThermal();}else {if(data.selectionMode!=='manual')fillVrvScheduleLookups();rebuildVrvScheduleTotals();}vrvDirty();renderVrvWorkspace();}));
   canvas.querySelector('[data-vrv-margin]')?.addEventListener('change',event=>{data.margin=Math.min(99.99,Math.max(0,Number(event.target.value)||0));vrvReprice();vrvDirty();renderVrvWorkspace();});
   canvas.querySelectorAll('[data-vrv-price]').forEach(cell=>cell.addEventListener('blur',()=>{const row=state.tables.costing.rows[Number(cell.dataset.row)];if(cell.dataset.vrvPrice==='Qty')row.Qty=Math.max(0,Math.floor(Number(cell.textContent)||0));else {row.Model=cell.textContent.trim();row['Final Price (AED)']='';}vrvReprice();vrvDirty();renderVrvWorkspace();}));
   canvas.querySelectorAll('[data-vrv-unit-price-open]').forEach(button=>button.addEventListener('click',()=>{
@@ -199,6 +207,7 @@ function renderVrvWorkspace() {
     },{once:true});
   }));
   canvas.querySelectorAll('[data-vrv-delete]').forEach(button=>button.addEventListener('click',()=>{state.tables.costing.rows.splice(Number(button.dataset.vrvDelete),1);vrvReprice();vrvDirty();renderVrvWorkspace();}));
+  if(step===2 && data.selectionMode==='manual')vrvManualBind();
 }
 function vrvDirty() { projectTouched=true;vrvStatus='Unsaved changes';const label=canvas.querySelector('[data-vrv-status]');if(label)label.textContent=vrvStatus;scheduleProjectSave(); }
 function vrvReprice() { const margin=Number(vrvData().margin)||0;state.tables.costing.summary.priceIncrease=margin;state.tables.costing.rows.forEach(row=>{row['Increased Final Price (AED)']='';});recalcCosting();buildBoqFromCosting(); }
@@ -232,11 +241,28 @@ async function vrvExtract(append) {
     if(append && state.tables.thermal.rows.length && JSON.stringify(state.tables.thermal.columns)!==JSON.stringify(nextColumns))throw new Error('Append requires the same columns as the existing Export File.');
     state.tables.thermal.columns=[...nextColumns];state.tables.thermal.rows=append?[...state.tables.thermal.rows,...incoming]:incoming;
     data.extractedMode=data.mode;
-    buildWorkflowScheduleFromThermal();vrvDirty();await saveProject();toast(result.message||`Extracted ${incoming.length} rows.`);
+    if(data.selectionMode==='manual')vrvManualPrefill();else buildWorkflowScheduleFromThermal();vrvDirty();await saveProject();toast(result.message||`Extracted ${incoming.length} rows.`);
   }catch(error){toast(error.message||'Thermal extraction failed');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}
 }
 async function vrvAction(action) {
   const data=vrvData();
+  if(action==='mode-report'||action==='mode-manual'){
+    const nextMode=action==='mode-manual'?'manual':'report';
+    if(nextMode===data.selectionMode)return;
+    const populated = state.tables.vrvSchedule.rows.length || data.selectionMode==='manual' && (data.manual?.indoor?.length || data.manual?.systems?.length) || data.selectionMode==='report' && (state.extracted?.vrv?.vrvRows?.length || state.extracted?.vrv?.outdoorDetailsRows?.length);
+    if(populated && !confirm('Switch selection mode? Your current selection will be kept. Step 03 schedule and BOQ will be regenerated from the new mode.'))return;
+    if(nextMode==='manual'){
+      try { await window.VrvManual.load(); }
+      catch(error){toast(error.message||'Could not load manual selection catalog');return;}
+    }
+    vrvData().selectionMode=nextMode;
+    vrvData().step=2;
+    state.tables.vrvSchedule.rows=[];
+    state.tables.costing.rows=[];
+    state.tables.boq.rows=[];
+    if(nextMode==='manual')vrvManualPrefill();
+    vrvDirty();renderVrvWorkspace();return;
+  }
   if(action==='schedule-pdf')return vrvExportSchedulePdf();
   if(action==='lock'){
     const id=data.step===1?'thermal-table':'vrv-schedule';
@@ -247,11 +273,11 @@ async function vrvAction(action) {
   if(action==='clear-table'){
     if(!confirm('Clear the current VRV table? This removes its extracted and edited rows.'))return;
     if(data.step===1)state.tables.thermal.rows=[];
-    else if(data.step===2){state.extracted ||= {};state.extracted.vrv={};state.tables.vrvSchedule.rows=[];state.tables.costing.rows=[];state.tables.boq.rows=[];}
+    else if(data.step===2){if(data.selectionMode==='manual'){const manual=vrvManualData();manual.dismissedSources.push(...manual.indoor.map(row=>row.sourceKey).filter(Boolean));manual.indoor=[];manual.systems=[];manual.outdoor=[];manual.refnets=[];}else{state.extracted ||= {};state.extracted.vrv={};}state.tables.vrvSchedule.rows=[];state.tables.costing.rows=[];state.tables.boq.rows=[];}
     else state.tables.vrvSchedule.rows=[];
     vrvDirty();renderVrvWorkspace();return;
   }
-  if(action==='menu-regenerate')return data.step===1?vrvExtract(false):vrvAction(data.step===2?'report-extract':'regenerate');
+  if(action==='menu-regenerate')return data.step===1?vrvExtract(false):vrvAction(data.step===2&&data.selectionMode==='report'?'report-extract':'regenerate');
   if(action==='sync-schedule')return vrvAction('regenerate');
   if(action==='refresh-prices')return ensureWorkflowCostingPriceList().then(()=>{vrvReprice();vrvDirty();renderVrvWorkspace();});
   if(action==='upload-files')return canvas.querySelector('[data-vrv-pick="thermal-upload"]')?.click();
@@ -265,7 +291,12 @@ async function vrvAction(action) {
   }
   if(action==='new')return createProject({workflowMode:'vrv',fresh:true});
   if(action==='save'){await saveProject({manual:true});vrvStatus='All changes saved';renderVrvWorkspace();return;}
-  if(action==='back'||action==='next'){data.step+=action==='back'?-1:1;vrvDirty();renderVrvWorkspace();return;}
+  if(action==='back'||action==='next'){
+    if(action==='next'&&data.step===2&&data.selectionMode==='manual'){
+      try{await vrvManualGenerate();}catch(error){toast(error.message||'Complete manual selection before continuing');return;}
+    }
+    data.step+=action==='back'?-1:1;vrvDirty();renderVrvWorkspace();return;
+  }
   if(action==='standard'||action==='custom'){data.mode=action==='custom'?'custom':'regular';vrvDirty();renderVrvWorkspace();return;}
   if(action==='extract'||action==='append')return vrvExtract(action==='append');
   if(action==='report-system'||action==='report-outdoor'||action==='report-material'){data.reportTab=action==='report-system'?'system':action==='report-outdoor'?'outdoor':'material';renderVrvWorkspace();return;}
@@ -276,8 +307,11 @@ async function vrvAction(action) {
     return downloadBlob(buildTableWorkbookBlob({title:'VRV Selection Report',columns,rows}),'VRV Selection Report.xlsx');
   }
   if(action==='report-extract'||action==='report-rebuild'||action==='regenerate'){
-    vrvBusy=true;vrvBusyAction=action;renderVrvWorkspace();try{if(action==='report-extract'){const id=state.nodes.find(node=>node.id==='vrv-upload')?.data?.uploadId;if(!id)throw new Error('Upload a VRV Selection Report first.');await extractVrvUpload(id);}else await generateWorkflow();vrvDirty();await saveProject();}catch(error){toast(error.message||'Could not build VRV tables');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}return;
+    vrvBusy=true;vrvBusyAction=action;renderVrvWorkspace();try{if(action==='report-extract'){const id=state.nodes.find(node=>node.id==='vrv-upload')?.data?.uploadId;if(!id)throw new Error('Upload a VRV Selection Report first.');await extractVrvUpload(id);}else if(data.selectionMode==='manual')await vrvManualGenerate();else await generateWorkflow();vrvDirty();await saveProject();}catch(error){toast(error.message||'Could not build VRV tables');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}return;
   }
   if(action==='add-row'){state.tables.costing.rows.push({Model:'',Qty:1,'Final Price (AED)':'','Increased Final Price (AED)':'','Amount (AED)':''});vrvReprice();vrvDirty();renderVrvWorkspace();return;}
-  if(action==='quotation'){await saveProject({manual:true});return createSalesQuotationFromWorkflow();}
+  if(action==='quotation'){
+    if(data.selectionMode==='manual'&&state.tables.costing.rows.some(row=>row.Model&&Number(row.Qty)>0&&!(Number(row['Final Price (AED)'])>0)))return toast('Enter the missing Unit Prices before creating the quotation.');
+    await saveProject({manual:true});return createSalesQuotationFromWorkflow();
+  }
 }
