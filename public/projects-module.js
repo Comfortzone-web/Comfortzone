@@ -1723,9 +1723,21 @@
       return;
     }
     if (action === "delete-project") {
+      if (target.disabled) return;
       if (!confirm("Delete this project and its documents? This cannot be undone.")) return;
-      await api(`/api/project-management/projects/${encodeURIComponent(state.project.id)}`, { method: "DELETE" });
-      toast("Project deleted"); return window.showProjects();
+      target.disabled = true;
+      const original = target.textContent;
+      target.textContent = "Deleting...";
+      try {
+        await api(`/api/project-management/projects/${encodeURIComponent(state.project.id)}`, { method: "DELETE" });
+        toast("Project deleted");
+        return window.showProjects();
+      } catch (error) {
+        toast(error.message || "Project could not be deleted. Retry from this button.");
+      } finally {
+        if (target.isConnected) { target.disabled = false; target.textContent = original; }
+      }
+      return;
     }
   }
 

@@ -14,7 +14,7 @@ async function freePort() {
   return port;
 }
 
-test("entered enquiry and quotation numbers persist and drive the next number", { timeout: 30000 }, async () => {
+test("entered enquiry and quotation numbers persist and drive the next number", { timeout: 30000 }, async t => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "cz-quote-numbering-"));
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -51,14 +51,43 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
       return response.headers.get("set-cookie").split(";")[0];
     };
     const admin = await login("admin@comfortzone.local", "admin123");
+    const orderPayload = { id: "compact-order-test", createNew: true, customer: "Test Customer", jobDescription: "Test Order", salesPersonId: "others" };
+    const compactStart = performance.now();
+    const order = await save(admin, "/api/sales-crm/orderBook?compact=1", orderPayload);
+    const compactMs = performance.now() - compactStart;
+    assert.equal(order.savedItem.id, orderPayload.id);
+    assert.equal(order.savedItem.customer, orderPayload.customer);
+    assert.ok(order.nextOrderBookNo);
+    assert.equal(order.orderBook, undefined);
+    const duplicateOrder = await request(admin, "/api/sales-crm/orderBook?compact=1", json(orderPayload));
+    assert.equal(duplicateOrder.status, 409);
+    const fullOrderState = await (await request(admin, "/api/sales-crm")).json();
+    assert.equal(fullOrderState.orderBook.filter(item => item.id === orderPayload.id).length, 1);
+    assert.ok(JSON.stringify(order).length < JSON.stringify(fullOrderState).length);
+    const fullStart = performance.now();
+    const fullSave = await save(admin, "/api/sales-crm/orderBook", { ...orderPayload, id: "full-order-test" });
+    const fullMs = performance.now() - fullStart;
+    t.diagnostic(`Order Book save response: compact ${compactMs.toFixed(0)} ms / ${JSON.stringify(order).length} bytes; full ${fullMs.toFixed(0)} ms / ${JSON.stringify(fullSave).length} bytes`);
+    const { user: adminUser } = await (await request(admin, "/api/auth/me")).json();
+    const project = await save(admin, "/api/sales-crm/projects?compact=1", {
+      name: "Fast Project", customer: "Test Customer", ownerIds: [adminUser.id], boq: []
+    });
+    assert.equal(project.savedItem.name, "Fast Project");
+    assert.equal(project.savedItem.ownerIds[0], adminUser.id);
+    assert.ok(project.nextProjectNo);
+    assert.equal(project.projects, undefined);
+    const savedProject = (await (await request(admin, "/api/sales-crm")).json()).projects.find(item => item.id === project.savedItemId);
+    assert.equal(savedProject.name, "Fast Project");
     const year = String(new Date().getFullYear()).slice(-2);
     const adminNo = `EN${year}-1212`;
     const first = await save(admin, "/api/sales-crm/quotations", { no: adminNo, customer: "A", items: [] });
     assert.equal(first.quotations[0].no, adminNo);
     assert.equal(first.settings.nextQuotationNo, `EN${year}-1213`);
     assert.equal((await (await request(admin, "/api/sales-crm")).json()).settings.nextQuotationNo, `EN${year}-1213`);
-    const second = await save(admin, "/api/sales-crm/quotations", { customer: "B", items: [] });
-    assert.equal(second.quotations[0].no, `EN${year}-1213`);
+    const second = await save(admin, "/api/sales-crm/quotations?compact=1", { customer: "B", items: [] });
+    assert.equal(second.savedItem.no, `EN${year}-1213`);
+    assert.equal(second.nextQuotationNo, `EN${year}-1214`);
+    assert.equal(second.quotations, undefined);
     const revision = await save(admin, "/api/sales-crm/quotations", { no: `${adminNo}-R1`, customer: "A", items: [] });
     assert.equal(revision.quotations[0].no, `${adminNo}-R1`);
     assert.equal(revision.settings.nextQuotationNo, `EN${year}-1214`);

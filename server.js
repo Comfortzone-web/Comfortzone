@@ -1752,8 +1752,7 @@ function mergedSalesCustomers(salesCustomers = [], inventoryCustomers = []) {
 }
 
 async function salesCrmView(store, user) {
-  const inventory = await readInventory();
-  const appSettings = await readSettings();
+  const [inventory, appSettings] = await Promise.all([readInventory(), readSettings()]);
   const staff = isStaff(user);
   return {
     ...store,
@@ -4187,6 +4186,10 @@ async function handleApi(req, res) {
     if (collection === "orderBook" && (!(body.item || body).id || (body.item || body).createNew === true)) {
       const result = await createOrderBook(body.item || body, user, req.authSettings?.users || []);
       if (result.error) return send(res, result.status, { error: result.error });
+      if (url.searchParams.get("compact") === "1") return send(res, 200, {
+        savedItem: result.item, savedItemId: result.item.id, savedOrderNo: result.item.orderNo,
+        nextOrderBookNo: nextAvailableOrderBookNo(result.store.orderBook)
+      });
       return send(res, 200, {
         ...(await salesCrmView(result.store, user)), savedItemId: result.item.id,
         savedOrderNo: result.item.orderNo
@@ -4358,6 +4361,18 @@ async function handleApi(req, res) {
     }
     await writeSalesCrm(store);
     if (collection === "customers") await syncSalesCustomerToInventory(item);
+    if (collection === "projects" && url.searchParams.get("compact") === "1") return send(res, 200, {
+      savedItem: item, savedItemId: item.id,
+      nextProjectNo: store.settings.nextProjectNo
+    });
+    if (collection === "quotations" && url.searchParams.get("compact") === "1") return send(res, 200, {
+      savedItem: item, savedItemId: item.id,
+      nextQuotationNo: store.settings.nextQuotationNo
+    });
+    if (collection === "orderBook" && url.searchParams.get("compact") === "1") return send(res, 200, {
+      savedItem: item, savedItemId: item.id, savedOrderNo: item.orderNo,
+      nextOrderBookNo: nextAvailableOrderBookNo(store.orderBook)
+    });
     return send(res, 200, { ...(await salesCrmView(store, user)), savedItemId: item.id });
     } finally { releaseDx(); }
   }

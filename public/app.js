@@ -89,6 +89,7 @@ let orderSummaryPage = 1;
 let orderSummarySearch = "";
 let orderSummarySort = "newest";
 let salesOrderBookDetailId = "";
+const pendingSalesDeletes = new Set();
 let salesOrderBookFiltersOpen = false;
 let salesOrderBookFilters = {
   salesPerson: "",
@@ -4052,7 +4053,13 @@ function collectSalesProjectBoqRows(container) {
 }
 
 async function saveSalesProject(payload) {
-  salesCrmState = await api("/api/sales-crm/projects", { method: "POST", body: JSON.stringify(payload) });
+  const response = await api("/api/sales-crm/projects?compact=1", { method: "POST", body: JSON.stringify(payload) });
+  const projects = [...(salesData().projects || [])];
+  const index = projects.findIndex(project => project.id === response.savedItemId);
+  if (index >= 0) projects[index] = response.savedItem;
+  else projects.unshift(response.savedItem);
+  salesCrmState = { ...salesData(), projects, settings: { ...salesData().settings, nextProjectNo: response.nextProjectNo } };
+  salesCrmLoadedAt = Date.now();
   renderSalesDesk();
   toast("Project saved");
 }
@@ -4810,7 +4817,8 @@ function salesOrderBookDetailPanel(order) {
 function blankOrderBookOrder() {
   const no = nextOrderBookNo();
   return {
-    id: "",
+    id: crypto.randomUUID(),
+    createNew: true,
     orderNo: no,
     date: todaySalesDateInput(),
     customer: "",
@@ -4940,12 +4948,19 @@ function openOrderBookForm(orderId = "") {
     button.disabled = true;
     button.textContent = "Saving...";
     try {
-      const response = await api("/api/sales-crm/orderBook", { method: "POST", body: JSON.stringify(payload) });
-      salesCrmState = response;
+      const response = await api("/api/sales-crm/orderBook?compact=1", { method: "POST", body: JSON.stringify(payload) });
+      const orders = [...(salesData().orderBook || [])];
+      const index = orders.findIndex(order => order.id === response.savedItemId);
+      if (index >= 0) orders[index] = response.savedItem;
+      else orders.unshift(response.savedItem);
+      salesCrmState = { ...salesData(), orderBook: orders, nextOrderBookNo: response.nextOrderBookNo };
+      salesCrmLoadedAt = Date.now();
       salesOrderBookDetailId = response.savedItemId || payload.id || "";
       modal.remove();
       renderSalesDesk();
       toast(`Order ${response.savedOrderNo || payload.orderNo} saved`);
+    } catch (error) {
+      toast(error.message || "Order could not be saved. Check the form and retry.");
     } finally {
       button.disabled = false;
       button.textContent = "Save Order";
@@ -6274,27 +6289,21 @@ function quoteDraftFromSource(source = {}) {
 async function startSalesQuotationDraft(source = {}, triggerButton = null) {
   if (salesQuotationOpening) return;
   salesQuotationOpening = true;
-  const originalButtonHtml = triggerButton?.innerHTML;
-  if (triggerButton) {
-    triggerButton.disabled = true;
-    triggerButton.textContent = "Opening...";
-  }
-  try {
-    await loadSalesCrm({ force: true });
-  } catch (error) {
-    return toast(error.message || "Could not load the next quotation number");
-  } finally {
-    salesQuotationOpening = false;
-    if (triggerButton?.isConnected) {
-      triggerButton.disabled = false;
-      triggerButton.innerHTML = originalButtonHtml;
-    }
-  }
   salesQuotationDraft = null;
   salesQuotationRevisionNoLock = "";
   salesQuotationDraft = quoteDraftFromSource(source);
+  const draft = salesQuotationDraft;
+  const displayedNo = draft.quotationNo;
   salesQuotationMode = "create";
   showSalesDesk("quotation");
+  salesQuotationOpening = false;
+  loadSalesCrm({ force: true }).then(() => {
+    if (salesQuotationDraft !== draft || salesQuotationMode !== "create" || activeView !== "salesDesk" || salesDeskScreen !== "quotation") return;
+    const input = document.querySelector('[data-sales-quote-field="quotationNo"]');
+    if (input?.value !== displayedNo || draft.quotationNo !== displayedNo) return;
+    draft.quotationNo = cleanNextSalesQuotationNo();
+    input.value = draft.quotationNo;
+  }).catch(error => toast(error.message || "Could not refresh the next quotation number"));
 }
 
 async function saveSalesQuotation(status = "Draft", triggerButton = null) {
@@ -6328,8 +6337,14 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
     requestedQuotationNo
   };
   try {
-    salesCrmState = await api("/api/sales-crm/quotations", { method: "POST", body: JSON.stringify(quote) });
-    const savedQuote = (salesCrmState.quotations || []).find(item => item.id === salesCrmState.savedItemId) || quote;
+    const response = await api("/api/sales-crm/quotations?compact=1", { method: "POST", body: JSON.stringify(quote) });
+    const quotations = [...(salesData().quotations || [])];
+    const index = quotations.findIndex(item => item.id === response.savedItemId);
+    if (index >= 0) quotations[index] = response.savedItem;
+    else quotations.unshift(response.savedItem);
+    salesCrmState = { ...salesData(), quotations, settings: { ...salesData().settings, nextQuotationNo: response.nextQuotationNo } };
+    salesCrmLoadedAt = Date.now();
+    const savedQuote = response.savedItem;
     markLeadQuoteSentFromQuotation(savedQuote).catch(error => console.warn(error));
     if (status === "Sent") {
       salesQuotationDraft = {
@@ -6429,19 +6444,25 @@ function editSalesQuotation(quoteId) {
 }
 
 async function deleteSalesItem(collection, itemId) {
-  if (!itemId || !confirm("Delete this CRM record?")) return;
-  const optimisticProject = collection === "projects";
-  const previousIndex = optimisticProject ? (salesData().projects || []).findIndex(item => item.id === itemId) : -1;
-  const previousItem = previousIndex >= 0 ? salesData().projects.splice(previousIndex, 1)[0] : null;
+  const key = `${collection}:${itemId}`;
+  if (!itemId || pendingSalesDeletes.has(key) || !confirm("Delete this CRM record?")) return;
+  pendingSalesDeletes.add(key);
+  const rows = salesData()[collection] || [];
+  const previousIndex = rows.findIndex(item => item.id === itemId);
+  const previousItem = previousIndex >= 0 ? rows.splice(previousIndex, 1)[0] : null;
   if (previousItem && activeView === "salesDesk") renderSalesDesk();
+  toast("Deleting...");
   try {
     salesCrmState = await api(`/api/sales-crm/${collection}/${encodeURIComponent(itemId)}`, { method: "DELETE" });
     if (activeView === "salesDesk") renderSalesDesk();
     toast("CRM record deleted");
   } catch (error) {
-    if (previousItem) salesData().projects.splice(previousIndex, 0, previousItem);
+    const currentRows = salesData()[collection] || rows;
+    if (previousItem && !currentRows.some(item => item.id === itemId)) currentRows.splice(Math.min(previousIndex, currentRows.length), 0, previousItem);
     if (previousItem && activeView === "salesDesk") renderSalesDesk();
-    alert(error.message || "Could not delete this CRM record.");
+    toast(`${error.message || "Could not delete this CRM record."} Retry from the action menu.`);
+  } finally {
+    pendingSalesDeletes.delete(key);
   }
 }
 
@@ -6811,6 +6832,8 @@ function openSalesForm(collection, itemId = "") {
   document.body.appendChild(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#saveSalesFormBtn").addEventListener("click", async () => {
+    const button = modal.querySelector("#saveSalesFormBtn");
+    if (button.disabled) return;
     const payload = { ...item };
     config.fields.forEach(field => {
       const el = modal.querySelector(`[data-sales-form-field="${field.key}"]`);
@@ -6818,10 +6841,18 @@ function openSalesForm(collection, itemId = "") {
       payload[field.key] = field.type === "dateText" ? formatSalesDateInput(value) : field.type === "money" ? sanitizeSalesMoneyInput(value) : value;
     });
     if (!config.required(payload)) return alert(config.requiredMessage);
-    salesCrmState = await api(`/api/sales-crm/${collection}`, { method: "POST", body: JSON.stringify(payload) });
-    modal.remove();
-    renderSalesDesk();
-    toast(`${config.title} saved`);
+    button.disabled = true;
+    button.textContent = "Saving...";
+    try {
+      salesCrmState = await api(`/api/sales-crm/${collection}`, { method: "POST", body: JSON.stringify(payload) });
+      modal.remove();
+      renderSalesDesk();
+      toast(`${config.title} saved`);
+    } catch (error) {
+      toast(error.message || `${config.title} could not be saved. Please retry.`);
+    } finally {
+      if (button.isConnected) { button.disabled = false; button.textContent = "Save"; }
+    }
   });
 }
 
