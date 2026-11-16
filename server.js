@@ -782,6 +782,7 @@ function publicSettings(settings, user) {
     company2: settings.company2,
     attachments: settings.attachments,
     salesTargets: settings.salesTargets || [],
+    workflowSalesPeople: isAdmin(user) ? (settings.users || []).filter(item => isStaff(item) && item.active !== false).map(item => ({ id: item.id, name: item.name })) : [],
     users: isStaff(user) ? [] : (settings.users || []).map(({ passwordHash: _passwordHash, ...entry }) => entry)
   };
 }
@@ -1911,6 +1912,10 @@ async function createDefaultProject(user = null) {
   const projectId = id();
   return {
     id: projectId,
+    ownerId: user?.id || "",
+    salesPerson: cleanCell(user?.name || ""),
+    createdById: user?.id || "",
+    createdByName: cleanCell(user?.name || ""),
     title: "Untitled Project",
     workflowMode: "vrv",
     visible: false,
@@ -2024,7 +2029,15 @@ function defaultOutdoorData() {
   ];
 }
 
-async function listProjects(query = "", includeHidden = false) {
+function workflowCanAccess(project, user) {
+  return !!project && (!isStaff(user) || !!project.ownerId && project.ownerId === user.id);
+}
+
+function workflowSalesPerson(project, users = []) {
+  return cleanCell(users.find(item => item.id === project.ownerId)?.name || project.salesPerson || project.details?.preparedBy || "");
+}
+
+async function listProjects(query = "", includeHidden = false, user = null, users = []) {
   const q = query.toLowerCase();
   let projects = [];
   if (USE_SUPABASE) {
@@ -2041,6 +2054,7 @@ async function listProjects(query = "", includeHidden = false) {
   }
   const filtered = projects
     .filter(project => includeHidden || project.visible !== false)
+    .filter(project => !user || workflowCanAccess(project, user))
     .filter(project => {
       if (!q) return true;
       const haystack = [
@@ -2053,6 +2067,7 @@ async function listProjects(query = "", includeHidden = false) {
         project.details.model,
         project.details.enquiryNo,
         project.details.preparedBy,
+        workflowSalesPerson(project, users),
       ].join(" ").toLowerCase();
       return haystack.includes(q);
     });
@@ -2077,6 +2092,7 @@ async function listProjects(query = "", includeHidden = false) {
       model: project.details.model,
       enquiryNo: project.details.enquiryNo,
       preparedBy: project.details.preparedBy,
+      salesPerson: workflowSalesPerson(project, users),
       updatedAt: project.updatedAt
     }))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -3779,7 +3795,7 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "GET" && url.pathname === "/api/projects") {
-    return send(res, 200, await listProjects(url.searchParams.get("q") || ""));
+    return send(res, 200, await listProjects(url.searchParams.get("q") || "", false, user, req.authSettings?.users || []));
   }
 
   if (req.method === "GET" && url.pathname === "/api/projects/selection-number-preview") {
@@ -4194,7 +4210,6 @@ async function handleApi(req, res) {
       rawItem = { ...rawItem, salesPerson: assignee?.name || "Others", salesPersonId: assignee?.id || "", ownerId: assignee?.id || "" };
     }
     if (body.fromDxBoq) {
-      const DXBoq = require("./public/dx-boq");
       const quoteId = `dx-${body.sourceDxWorkflowId}`;
       const existing = store.quotations.find(quote => quote.id === quoteId);
       if (existing) {
@@ -4203,7 +4218,9 @@ async function handleApi(req, res) {
       }
       if (body.modifyDxBoq && !existing) return send(res, 404, { error: 'Linked quotation not found. Create a quotation first.' });
       const project = await readProject(body.sourceDxWorkflowId);
+      if (project && !workflowCanAccess(project, user)) return notFound(res);
       if (!project || project.workflowMode !== 'dx' || !project.dx?.boq) return send(res, 400, { error: 'Save the DX BOQ before creating a quotation.' });
+      const DXBoq = require("./public/dx-boq");
       const boq = DXBoq.sync(project.dx.boq, project.tables?.vrvSchedule?.rows || [], (await readCostingSheets()).priceItems);
       const errors = DXBoq.validate(boq);
       if (boq.rows.length !== project.dx.boq.rows.length) errors.push('DX Schedule changed. Open Step 03 and review its BOQ.');
@@ -4959,16 +4976,33 @@ async function handleApi(req, res) {
     const project = await readProject(projectId);
 
     if (req.method === "PUT" && parts.length === 3) {
+      if (project && !workflowCanAccess(project, user)) return notFound(res);
       const next = await readJson(req);
       next.id = projectId;
       next.createdAt = project?.createdAt || next.createdAt || new Date().toISOString();
+      next.ownerId = project ? project.ownerId || "" : user.id;
+      next.salesPerson = project ? workflowSalesPerson(project, req.authSettings?.users || []) : user.name;
+      next.createdById = project ? project.createdById || "" : user.id;
+      next.createdByName = project ? project.createdByName || cleanCell(project.details?.preparedBy || "") : user.name;
       try { await writeProject(next); } catch(error) { return send(res,error.status || 500,{error:error.message}); }
       return send(res, 200, next);
     }
 
     if (!project) return notFound(res);
+    if (!workflowCanAccess(project, user)) return notFound(res);
 
-    if (req.method === "GET" && parts.length === 3) return send(res, 200, project);
+    if (req.method === "PATCH" && parts[3] === "sales-person" && parts.length === 4) {
+      if (!isAdmin(user)) return sendForbidden(res);
+      const body = await readJson(req);
+      const assignee = (req.authSettings?.users || []).find(item => item.id === body.userId && isStaff(item) && item.active !== false);
+      if (!assignee) return send(res, 400, { error: "Select an active Staff login." });
+      project.ownerId = assignee.id;
+      project.salesPerson = assignee.name;
+      await writeProject(project);
+      return send(res, 200, { ownerId: project.ownerId, salesPerson: project.salesPerson });
+    }
+
+    if (req.method === "GET" && parts.length === 3) return send(res, 200, { ...project, salesPerson: workflowSalesPerson(project, req.authSettings?.users || []) });
 
     if (req.method === "DELETE" && parts.length === 3) {
       await deleteProject(projectId);
@@ -5023,7 +5057,6 @@ async function handleApi(req, res) {
         project.uploads.push(upload);
         const node = project.nodes.find(item => item.id === upload.nodeId);
         if (node) node.data.uploadId = upload.id;
-        if (upload.nodeId === "thermal-upload" || upload.nodeId === "vrv-upload") project.visible = project.workflowMode === "dx" ? !!project.dx?.autosaveEnabled : true;
         await writeProject(project);
         for (let index = 0; index < totalChunks; index += 1) {
           await deleteUpload(`projects/${projectId}/.chunks/${chunkUploadId}`, `${index}.part`);
@@ -5058,7 +5091,6 @@ async function handleApi(req, res) {
         project.uploads.push(upload);
         const node = project.nodes.find(n => n.id === nodeId);
         if (node) node.data.uploadId = uploadId;
-        if (nodeId === "thermal-upload" || nodeId === "vrv-upload") project.visible = project.workflowMode === "dx" ? !!project.dx?.autosaveEnabled : true;
         await writeProject(project);
         return send(res, 201, upload);
       } catch (error) {

@@ -133,6 +133,44 @@ test('all India indoor selection uses RXQ and user limits can produce no match',
   assert.equal(m.refnets.length,0);
 });
 
+test('outdoor connection kits follow RXQ/RXYTQ module counts and flow into BOQ',async()=>{
+  await engine.load();
+  const ui={window:{},vrvData:()=>({manual:current}),escapeHtml:value=>String(value??'')};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/vrv-manual-ui.js'),'utf8'),ui);
+  let current;
+  for(const [series,origin,twoModel,threeModel] of [
+    ['RXQ','India','BHFP22P1006','BHFP22P1516'],
+    ['RXYTQ','Czech Republic','BHFQ22P1007','BHFQ22P1517']
+  ]) {
+    current=manual([row('A','VRV-01',6,5,300,'Ducted',origin),row('B','VRV-01',6,5,300,'Ducted',origin)]);
+    engine.calculate(current);
+    assert.equal(current.outdoor[0].series,series);
+    assert.equal(current.refnets.some(line=>line.kind==='outdoor-connection'),false);
+    for(const [count,model] of [[2,twoModel],[3,threeModel]]) {
+      const combo=catalog.combos.find(item=>item.series===series&&item.modules===count);
+      current.outdoor[0].overrideKey=combo.id;
+      current.outdoor[0].selectionMode='Manual Override';
+      engine.calculate(current);
+      const kit=current.refnets.filter(line=>line.kind==='outdoor-connection');
+      assert.equal(kit.length,1);
+      assert.equal(kit[0].model,model);
+      assert.equal(kit[0].qty,1);
+      assert.equal(kit[0].description,`Multi connection piping kit for ${count} modules`);
+      assert.equal(current.refnets.at(-1).model,model);
+      const materials=ui.vrvManualMaterials(current).items;
+      assert.equal(materials.find(item=>item.model===model)?.qty,1);
+      assert.equal(materials.find(item=>item.model===model)?.fallback,kit[0].description);
+      assert.ok(materials.findIndex(item=>item.model===model)>materials.findIndex(item=>item.category==='refnet'));
+      assert.ok(materials.findIndex(item=>item.model===model)<materials.findIndex(item=>item.category==='thermostat'));
+      ui.workflowCostingPriceItems=()=>[{model,description:'Generic price list description'}];
+      const boq=ui.vrvManualBoq();
+      assert.match(boq,new RegExp(`<td>${model}</td><td>1</td><td>Multi connection piping kit for ${count} modules</td>`));
+      engine.calculate(current);
+      assert.equal(current.refnets.filter(line=>line.model===model).length,1);
+    }
+  }
+});
+
 test('hundreds of indoor rows and systems are grouped without spreadsheet row limits',async()=>{
   await engine.load();
   const rows=Array.from({length:200},(_,index)=>row(`IDU-${index}`,`VRV-${String(index+1).padStart(3,'0')}`,2,1.5,150));
@@ -179,6 +217,91 @@ test('Step 1 prefill preserves manual values and does not duplicate on revisit',
   assert.equal(data.manual.indoor.length,1);
   assert.equal(data.manual.indoor[0].name,'Office');
   assert.doesNotMatch(html,/Import Excel|Export Excel/);
+});
+
+test('replacement custom extraction restores dismissed rows and maps every thermal column',async()=>{
+  await engine.load();
+  const data={selectionMode:'manual'};
+  const state={tables:{thermal:{rows:[
+    {'Unit Reference no.':'BS2-IDU-01',Location:'Pump Room','Total Kw':'6.50','Sensible Kw':'5.90','Flow Rate L/s':'487.00'},
+    {'Unit Reference no.':'BS2-IDU-02',Location:'Lift Lobby','Total Kw':'3.50','Sensible Kw':'3.20','Flow Rate L/s':'268.00'}
+  ]}}};
+  const normalized=value=>String(value).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const ctx={window:context.window,state,vrvData:()=>data,crypto:{randomUUID:()=>`id-${data.manual?.indoor?.length||0}`},
+    firstRowValue:(source,keys)=>{const values=new Map(Object.entries(source).map(([key,value])=>[normalized(key),value]));return keys.map(key=>values.get(normalized(key))).find(value=>value!==undefined&&value!==null&&value!=='')??'';}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/vrv-manual-ui.js'),'utf8'),ctx);
+  const m=ctx.vrvManualData();
+  m.dismissedSources=['NAME:BS2-IDU-01|0','NAME:BS2-IDU-02|0'];
+  m.indoor=[{id:'kept',sourceKey:'NAME:BS2-IDU-01|0',name:'Old name',location:'Staff room',tc:'1',edited:['location'],type:'Any',origin:'Any'},
+    {id:'stale',sourceKey:'NAME:OLD-IDU|0',name:'Old unit',edited:[],type:'Any',origin:'Any'}];
+  ctx.vrvManualPrepareThermalReplacement();
+  ctx.vrvManualPrefill();
+  assert.equal(m.dismissedSources.length,0);
+  assert.equal(m.indoor.length,2);
+  assert.deepEqual(m.indoor.map(row=>[row.name,row.location,row.tc,row.sc,row.airflow]),[
+    ['BS2-IDU-01','Staff room','6.50','5.90','487.00'],
+    ['BS2-IDU-02','Lift Lobby','3.50','3.20','268.00']
+  ]);
+  ctx.vrvManualPrefill();
+  assert.equal(m.indoor.length,2);
+});
+
+test('Regenerate restores deleted and cleared indoor rows with their system grouping',async()=>{
+  await engine.load();
+  const data={selectionMode:'manual'};
+  const state={tables:{thermal:{rows:[
+    {'Unit Reference no.':'IDU-01',Location:'Office','Total Kw':'6.0','Sensible Kw':'5.0','Flow Rate L/s':'300'},
+    {'Unit Reference no.':'IDU-02',Location:'Lobby','Total Kw':'4.0','Sensible Kw':'3.5','Flow Rate L/s':'220'}
+  ]}}};
+  const normalized=value=>String(value).toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const ctx={window:context.window,state,vrvData:()=>data,crypto:{randomUUID:()=>`id-${data.manual?.indoor?.length||0}`},
+    firstRowValue:(source,keys)=>{const values=new Map(Object.entries(source).map(([key,value])=>[normalized(key),value]));return keys.map(key=>values.get(normalized(key))).find(value=>value!==undefined&&value!==null&&value!=='')??'';}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/vrv-manual-ui.js'),'utf8'),ctx);
+  const m=ctx.vrvManualData();
+  m.dismissedSources=['NAME:IDU-01|0','NAME:IDU-02|0'];
+  m.regenerateSourceSystems={'NAME:IDU-01|0':'VRV-01','NAME:IDU-02|0':'VRV-01'};
+  m.regenerateSystems=['VRV-01'];
+  ctx.vrvManualPrefill();
+  assert.equal(m.indoor.length,0);
+  ctx.vrvManualRegenerateFromThermal();
+  assert.equal(m.indoor.length,2);
+  assert.ok(m.indoor.every(row=>row.system==='VRV-01'));
+  assert.equal(m.outdoor.length,1);
+  assert.equal(m.outdoor[0].count,2);
+  ctx.vrvManualRegenerateFromThermal();
+  assert.equal(m.indoor.length,2);
+});
+
+test('auto groups floor references in order and leaves unknown references for staff',async()=>{
+  await engine.load();
+  const names=['FCU-BF-01','FCU-BF-02','BS2-IDU-01','BS1-IDU-02','GF-IDU-01','FF-IDU-01','1F-IDU-02','SF-IDU-01','2F-IDU-02','IDU-UNKNOWN'];
+  const m=manual(names.map(name=>row(name,'',6,5.5,310)));
+  const ctx={window:context.window};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/vrv-manual-ui.js'),'utf8'),ctx);
+  m.indoor[1].location='Ground Floor';
+  assert.equal(ctx.vrvManualFloor('FCU-BF-12','Ground Floor'),-1);
+  engine.calculate(m);ctx.vrvManualAutoGroup(m);engine.calculate(m);
+  assert.deepEqual(m.indoor.map(item=>item.system),['VRV-01','VRV-01','VRV-01','VRV-01','VRV-02','VRV-03','VRV-03','VRV-04','VRV-04','']);
+  m.indoor[4].system='VRV-09';m.indoor[4].edited=['system'];
+  ctx.vrvManualAutoGroup(m);
+  assert.equal(m.indoor[4].system,'VRV-09');
+  assert.equal(m.indoor[9].system,'');
+});
+
+test('a floor splits when the next indoor unit has no eligible outdoor combination',async()=>{
+  await engine.load();
+  const m=manual(Array.from({length:16},(_,index)=>row(`3F-IDU-${index+1}`,'',6,5.5,310)));
+  m.settings.maxHP=16;
+  const ctx={window:context.window};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/vrv-manual-ui.js'),'utf8'),ctx);
+  engine.calculate(m);ctx.vrvManualAutoGroup(m);engine.calculate(m);
+  assert.ok(m.autoSystems.length>1);
+  assert.equal(m.indoor.reduce((sum,item)=>sum+(item.system?1:0),0),16);
+  assert.ok(m.outdoor.every(system=>system.count>0));
+  assert.ok(m.outdoor.every(system=>system.combo));
+  const assigned=m.indoor.map(item=>item.system);
+  ctx.vrvManualAutoGroup(m);
+  assert.deepEqual(m.indoor.map(item=>item.system),assigned);
 });
 
 test('manual selection supplies existing schedule and BOQ builders with selected catalog models',async()=>{

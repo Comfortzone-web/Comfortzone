@@ -64,6 +64,28 @@ body:has(#canvasView:not(.hidden) .dx-workspace) #viewActions {
   justify-content: flex-end;
   gap: 9px;
 }
+.workflow-sales-person-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 130px;
+  max-width: 220px;
+  height: 38px;
+  padding: 5px 11px;
+  border: 1px solid #d5e2f5;
+  border-radius: 9px;
+  background: #fff;
+  color: #102a5e;
+  font-family: DXInter, Inter, sans-serif;
+}
+.workflow-sales-person-badge svg { width: 16px; height: 16px; flex: none; fill: none; stroke: #143a83; stroke-width: 1.8; stroke-linecap: round; }
+.workflow-sales-person-badge span { min-width: 0; }
+.workflow-sales-person-badge small { display: block; color: #60769a; font-size: 9px; line-height: 1.1; font-weight: 600; }
+.workflow-sales-person-badge strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; line-height: 1.2; font-weight: 700; }
+.workflow-sales-person-editable { cursor: pointer; }
+.workflow-sales-person-editable select { display:block; width:100%; max-width:172px; padding:0 14px 0 0; border:0; background:transparent; color:#102a5e; font:700 11px/1.2 DXInter,Inter,sans-serif; cursor:pointer; }
+.workflow-sales-person-editable select:focus-visible { outline:2px solid #74a8ff; outline-offset:2px; border-radius:3px; }
+.workflow-sales-person-editable select:disabled { cursor:wait; }
 .dx-workspace {
   display: flex;
   flex-direction: column;

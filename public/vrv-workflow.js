@@ -2,7 +2,7 @@
 let vrvBusy = false;
 let vrvUploading = false;
 let vrvBusyAction = '';
-let vrvStatus = 'Draft — enter Project Name or upload a file';
+let vrvStatus = 'Draft — enter Project Name, Client Name, or extract thermal data';
 let vrvThermalSearch = '';
 const vrvSteps = ['Thermal Sheet & Extraction', 'VRV Selection Report', 'VRV Schedule', 'BOQ & Quotation'];
 const vrvSelectionColumns = ['System','Name','FCU','°C - (DBT/WBT)','Rq TC','Max TC','Rq SC','Max SC','Air Flow Rate'];
@@ -140,10 +140,11 @@ function renderVrvWorkspace() {
   const data=vrvData(), step=data.step;
   vrvSteps[1] = data.selectionMode === 'manual' ? 'Manual Selection' : 'VRV Selection Report';
   canvas.classList.add('dx-workspace','vrv-workspace'); canvas.style.cssText='';
-  setWorkflowTitle('VRV Workflow'); $('#projectMeta').textContent=step===2&&data.selectionMode==='manual'?'VRV Selection – Manual Mode':vrvSteps[step-1];
+  setWorkflowTitle('VRV Workflow'); $('#projectMeta').textContent=`Created by: ${state.createdByName || state.details?.preparedBy || 'Unknown'}`;
   document.querySelector('.top-actions:not(#viewActions)')?.classList.add('hidden');
   const actions=$('#viewActions'); actions.classList.remove('hidden');
-  actions.innerHTML=`${step===2?`<details class="vrv-selection-mode-menu"><summary class="dx-button">Selection Mode ▾</summary><div class="dx-table-menu-panel"><button type="button" data-vrv-action="mode-report" class="dx-button">Report Selection ${data.selectionMode==='report'?'✓':''}</button><button type="button" data-vrv-action="mode-manual" class="dx-button">Manual Selection ${data.selectionMode==='manual'?'✓':''}</button></div></details>`:''}${vrvButton('new','New Workflow','plus')}${vrvToolbarMenu(step)}`;
+  actions.innerHTML=`${step===2?`<details class="vrv-selection-mode-menu"><summary class="dx-button">Selection Mode ▾</summary><div class="dx-table-menu-panel"><button type="button" data-vrv-action="mode-report" class="dx-button">Report Selection ${data.selectionMode==='report'?'✓':''}</button><button type="button" data-vrv-action="mode-manual" class="dx-button">Manual Selection ${data.selectionMode==='manual'?'✓':''}</button></div></details>`:''}${dxSalesPersonBadge()}${vrvButton('new','New Workflow','plus')}${vrvToolbarMenu(step)}`;
+  workflowBindSalesPerson(actions);
   const fields=[['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
   canvas.innerHTML=`<div class="dx-project-header dx-card">${fields.map(([key,label,icon])=>`<label>${vrvIcon(icon)}<span>${label}<input ${key==='selectionNumber'?'data-vrv-number':`data-vrv-detail="${key}" data-detail-key="${key}"`} value="${escapeHtml(key==='selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div><nav class="dx-steps vrv-steps" aria-label="VRV workflow progress">${vrvSteps.map((name,index)=>`<button type="button" data-vrv-step="${index+1}" class="${step===index+1?'active':''} ${index+1<step?'complete':''}" ${step===index+1?'aria-current="step"':''}><span>${index+1<step?'✓':index+1}</span>Step 0${index+1} — ${name}</button>`).join('')}</nav>${step===1?vrvStepOne():step===2?vrvStepTwo():step===3?vrvStepThree():vrvStepFour()}<footer class="dx-footer"><span data-vrv-status>${escapeHtml(vrvStatus)}</span><div class="dx-actions">${step>1?vrvButton('back',`Back to ${vrvSteps[step-2]}`,'arrow-left'):''}${vrvButton(step<4?'next':'quotation',step<4?`Continue to ${vrvSteps[step]}`:'Create Quotation',step<4?'arrow-right':'file-text',true)}</div></footer>`;
   if (state.selectionNumber) canvas.querySelector('[data-vrv-number]').value = state.selectionNumber;
@@ -209,7 +210,7 @@ function renderVrvWorkspace() {
   canvas.querySelectorAll('[data-vrv-delete]').forEach(button=>button.addEventListener('click',()=>{state.tables.costing.rows.splice(Number(button.dataset.vrvDelete),1);vrvReprice();vrvDirty();renderVrvWorkspace();}));
   if(step===2 && data.selectionMode==='manual')vrvManualBind();
 }
-function vrvDirty() { projectTouched=true;vrvStatus='Unsaved changes';const label=canvas.querySelector('[data-vrv-status]');if(label)label.textContent=vrvStatus;scheduleProjectSave(); }
+function vrvDirty() { projectTouched=true;vrvStatus=workflowAutosaveReady()?'Unsaved changes':'Draft — enter Project Name, Client Name, or extract thermal data';const label=canvas.querySelector('[data-vrv-status]');if(label)label.textContent=vrvStatus;scheduleProjectSave(); }
 function vrvReprice() { const margin=Number(vrvData().margin)||0;state.tables.costing.summary.priceIncrease=margin;state.tables.costing.rows.forEach(row=>{row['Increased Final Price (AED)']='';});recalcCosting();buildBoqFromCosting(); }
 async function vrvRemoveUpload(id) { if(!confirm('Remove this uploaded file?'))return;state.uploads=state.uploads.filter(file=>file.id!==id);state.thermalChatUploadIds=(state.thermalChatUploadIds||[]).filter(value=>value!==id);for(const node of state.nodes)if(node.data?.uploadId===id)delete node.data.uploadId;vrvDirty();renderVrvWorkspace();saveProject(); }
 async function vrvUploadFiles(nodeId,files) { if(!files.length)return;vrvUploading=nodeId==='thermal-upload';renderVrvWorkspace();try{for(const file of files){try{await ensureProjectSaved({hidden:true});const form=new FormData();form.append('nodeId',nodeId);form.append('file',await workflowUploadFileForNode(nodeId,file));const upload=await api(`/api/projects/${state.id}/uploads`,{method:'POST',body:form});state.uploads.push(upload);const node=state.nodes.find(node=>node.id===nodeId);if(node)node.data.uploadId=upload.id;if(nodeId==='thermal-upload')state.thermalChatUploadIds=[...new Set([...thermalUploadIds(),upload.id])];vrvDirty();await saveProject();}catch(error){toast(error.message||'Upload failed');}}}finally{vrvUploading=false;renderVrvWorkspace();} }
@@ -239,7 +240,9 @@ async function vrvExtract(append) {
     const incoming=applyExtractionReviewCells(source,result.rows?.length?result.reviewCells:result.customReviewCells);
     const nextColumns=data.mode==='custom' ? (result.customColumns?.length?result.customColumns:columns) : defaultThermalColumns;
     if(append && state.tables.thermal.rows.length && JSON.stringify(state.tables.thermal.columns)!==JSON.stringify(nextColumns))throw new Error('Append requires the same columns as the existing Export File.');
+    if(!append)vrvManualPrepareThermalReplacement();
     state.tables.thermal.columns=[...nextColumns];state.tables.thermal.rows=append?[...state.tables.thermal.rows,...incoming]:incoming;
+    if(incoming.some(row=>Object.entries(row).some(([key,value])=>!key.startsWith('__')&&String(value??'').trim())))data.lastExtracted=new Date().toISOString();
     data.extractedMode=data.mode;
     if(data.selectionMode==='manual')vrvManualPrefill();else buildWorkflowScheduleFromThermal();vrvDirty();await saveProject();toast(result.message||`Extracted ${incoming.length} rows.`);
   }catch(error){toast(error.message||'Thermal extraction failed');}finally{vrvBusy=false;vrvBusyAction='';renderVrvWorkspace();}
@@ -273,11 +276,17 @@ async function vrvAction(action) {
   if(action==='clear-table'){
     if(!confirm('Clear the current VRV table? This removes its extracted and edited rows.'))return;
     if(data.step===1)state.tables.thermal.rows=[];
-    else if(data.step===2){if(data.selectionMode==='manual'){const manual=vrvManualData();manual.dismissedSources.push(...manual.indoor.map(row=>row.sourceKey).filter(Boolean));manual.indoor=[];manual.systems=[];manual.outdoor=[];manual.refnets=[];}else{state.extracted ||= {};state.extracted.vrv={};}state.tables.vrvSchedule.rows=[];state.tables.costing.rows=[];state.tables.boq.rows=[];}
+    else if(data.step===2){if(data.selectionMode==='manual'){const manual=vrvManualData();manual.regenerateSourceSystems||={};manual.indoor.forEach(row=>{if(row.sourceKey&&row.system)manual.regenerateSourceSystems[row.sourceKey]=row.system;});manual.regenerateSystems=[...new Set([...(manual.regenerateSystems||[]),...manual.systems])];manual.dismissedSources.push(...manual.indoor.map(row=>row.sourceKey).filter(Boolean));manual.indoor=[];manual.systems=[];manual.outdoor=[];manual.refnets=[];}else{state.extracted ||= {};state.extracted.vrv={};}state.tables.vrvSchedule.rows=[];state.tables.costing.rows=[];state.tables.boq.rows=[];}
     else state.tables.vrvSchedule.rows=[];
     vrvDirty();renderVrvWorkspace();return;
   }
-  if(action==='menu-regenerate')return data.step===1?vrvExtract(false):vrvAction(data.step===2&&data.selectionMode==='report'?'report-extract':'regenerate');
+  if(action==='menu-regenerate')return data.step===1?vrvExtract(false):vrvAction(data.step===2&&data.selectionMode==='manual'?'manual-regenerate':data.step===2?'report-extract':'regenerate');
+  if(action==='manual-regenerate'){
+    try{await window.VrvManual.load();vrvManualRegenerateFromThermal();state.tables.vrvSchedule.rows=[];state.tables.costing.rows=[];state.tables.boq.rows=[];vrvDirty();await saveProject();toast('Manual selection restored from Step 1.');}
+    catch(error){toast(error.message||'Could not restore manual selection');}
+    finally{renderVrvWorkspace();}
+    return;
+  }
   if(action==='sync-schedule')return vrvAction('regenerate');
   if(action==='refresh-prices')return ensureWorkflowCostingPriceList().then(()=>{vrvReprice();vrvDirty();renderVrvWorkspace();});
   if(action==='upload-files')return canvas.querySelector('[data-vrv-pick="thermal-upload"]')?.click();
@@ -290,7 +299,7 @@ async function vrvAction(action) {
     return;
   }
   if(action==='new')return createProject({workflowMode:'vrv',fresh:true});
-  if(action==='save'){await saveProject({manual:true});vrvStatus='All changes saved';renderVrvWorkspace();return;}
+  if(action==='save'){await saveProject({manual:true});vrvStatus=workflowAutosaveReady()?'All changes saved':'Draft — enter Project Name, Client Name, or extract thermal data';renderVrvWorkspace();return;}
   if(action==='back'||action==='next'){
     if(action==='next'&&data.step===2&&data.selectionMode==='manual'){
       try{await vrvManualGenerate();}catch(error){toast(error.message||'Complete manual selection before continuing');return;}

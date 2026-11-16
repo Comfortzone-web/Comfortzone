@@ -8,6 +8,24 @@ const server=fs.readFileSync(path.join(__dirname,'../server.js'),'utf8');
 const app=fs.readFileSync(path.join(__dirname,'../public/app.js'),'utf8');
 const ui=fs.readFileSync(path.join(__dirname,'../public/dx-workflow.js'),'utf8');
 function extract(source,name) { const start=source.indexOf('function '+name+'('); assert.ok(start>=0,name); const end=source.indexOf('\n}',start)+2;return source.slice(start,end); }
+test('DX and VRV autosave begins only after project, client, or filled extraction',()=>{
+ const project={visible:false,details:{project:'',customer:''},tables:{thermal:{rows:[]}},dx:{lastExtracted:''},vrv:{lastExtracted:''},uploads:[{id:'uploaded'}]};
+ const dxCtx={state:project,projectPersisted:false,dxData:()=>project.dx,dxHasSpecifiedValues:()=>project.tables.thermal.rows.some(row=>Object.values(row).some(value=>String(value??'').trim()))};
+ const vrvCtx={state:project,projectPersisted:false};
+ vm.runInNewContext(extract(ui,'dxAutosaveReady'),dxCtx);
+ vm.runInNewContext(extract(app,'workflowAutosaveReady'),vrvCtx);
+ const ready=()=>[dxCtx.dxAutosaveReady(),vrvCtx.workflowAutosaveReady()];
+ assert.deepEqual(ready(),[false,false]);
+ project.tables.thermal.rows=[{'Unit Ref':'MAN-01'}];
+ assert.deepEqual(ready(),[false,false]);
+ project.details.project='Project A';assert.deepEqual(ready(),[true,true]);
+ project.details.project='';project.details.customer='Client A';assert.deepEqual(ready(),[true,true]);
+ project.details.customer='';project.dx.lastExtracted='2026-11-16';project.vrv.lastExtracted='2026-11-16';
+ assert.deepEqual(ready(),[true,true]);
+ project.tables.thermal.rows=[];assert.deepEqual(ready(),[false,false]);
+ project.visible=true;dxCtx.projectPersisted=true;vrvCtx.projectPersisted=true;
+ assert.deepEqual(ready(),[true,true]);
+});
 test('selection numbers are unique under concurrent allocation and stable on reopen',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'dx-numbering-test-'));
  const create=vm.runInNewContext('('+extract(server,'createDxNumbering')+')',{fs,path});

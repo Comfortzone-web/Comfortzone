@@ -12,6 +12,8 @@ function dxOpenFreshWorkflow() {
   const now = new Date().toISOString();
   const project = {
     id: costingId(), workflowMode:'dx', title:'DX Workflow', visible:false, createdAt:now, updatedAt:now,
+    ownerId:currentUser?.id || '', salesPerson:currentUser?.name || '',
+    createdById:currentUser?.id || '', createdByName:currentUser?.name || '',
     details:{customer:'',contactPerson:'',telNo:'',email:'',project:'',date:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Dubai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),location:'',model:'Daikin',validity:'Valid for 7 days',enquiryNo:'',preparedBy:currentUser?.name || ''},
     quotation:{quotationNo:'',generatedDocId:'',generatedPdfId:''},
     nodes:[{id:'details',type:'details',data:{}},{id:'thermal-upload',type:'upload',data:{}},{id:'thermal-table',type:'thermalTable',data:{}},{id:'vrv-schedule',type:'vrvSchedule',data:{}}],
@@ -20,7 +22,7 @@ function dxOpenFreshWorkflow() {
     dx:{autosaveEnabled:false,step:1,reviewed:false,selectedUploadIds:[],match:{total:true,sensible:false,airflow:false,totalVariation:0,sensibleVariation:0,airflowVariation:0}}
   };
   state=project; projectPersisted=false; projectTouched=false;
-  dxSaveStatus='Draft — enter Project Name or Specified values'; dxSearch=''; dxScheduleSearch='';
+  dxSaveStatus='Draft — enter Project Name, Client Name, or extract thermal data'; dxSearch=''; dxScheduleSearch='';
   configureDxWorkflow(project,{resetTables:true});
   history.replaceState(null,'',location.pathname); showCanvas('dx'); renderDxWorkspace();
   // Only hydrate server-owned metadata. Never replace edits, rows or the local ID.
@@ -48,6 +50,32 @@ function dxData() {
   return state.dx;
 }
 function dxIcon(name) { return `<img class="dx-icon" src="/assets/dx-icons/${name}.svg" alt="">`; }
+function dxSalesPersonBadge() {
+  const name = state.salesPerson || state.details?.preparedBy || currentUser?.name || 'Unassigned';
+  const icon='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5.5 20v-2a6.5 6.5 0 0 1 13 0v2"/></svg>';
+  if(String(currentUser?.role||'').toLowerCase()!=='admin')return `<div class="workflow-sales-person-badge" aria-label="Sales Person: ${escapeHtml(name)}">${icon}<span><small>Sales Person</small><strong>${escapeHtml(name)}</strong></span></div>`;
+  const staff=appSettings?.workflowSalesPeople||(appSettings?.users||[]).filter(user=>String(user.role||'').toLowerCase()==='staff'&&user.active!==false);
+  const currentIsStaff=staff.some(user=>user.id===state.ownerId);
+  return `<label class="workflow-sales-person-badge workflow-sales-person-editable">${icon}<span><small>Sales Person</small><select data-workflow-sales-person aria-label="Sales Person">${currentIsStaff?'':`<option value="" selected disabled>${escapeHtml(name)}</option>`}${staff.map(user=>`<option value="${escapeHtml(user.id)}" ${user.id===state.ownerId?'selected':''}>${escapeHtml(user.name)}</option>`).join('')}</select></span></label>`;
+}
+function workflowBindSalesPerson(root) {
+  const select=root.querySelector('[data-workflow-sales-person]');
+  if(!select)return;
+  select.addEventListener('change',async()=>{
+    const project=state,ownerId=select.value;
+    select.disabled=true;
+    try {
+      if(isDxWorkflow())await dxSave({manual:true});
+      else await saveProject({manual:true});
+      const assigned=await api(`/api/projects/${encodeURIComponent(project.id)}/sales-person`,{method:'PATCH',body:JSON.stringify({userId:ownerId})});
+      if(state?.id!==project.id)return;
+      state.ownerId=assigned.ownerId;state.salesPerson=assigned.salesPerson;
+      workflowProjectCache.set(state.id,{project:structuredClone(state),loadedAt:Date.now()});
+      render();
+      toast(`Sales Person changed to ${assigned.salesPerson}`);
+    } catch(error) { select.disabled=false;select.value=project.ownerId||'';toast(error.message||'Could not change Sales Person'); }
+  });
+}
 function dxButton(action, label, icon, primary = false) {
   return `<button type="button" data-dx-action="${action}" class="dx-button ${primary ? 'dx-primary' : ''}" ${dxBusy ? 'disabled' : ''}>${icon ? dxIcon(icon) : ''}${label}</button>`;
 }
@@ -60,12 +88,16 @@ function dxChanged(review = false) {
   ++dxRevision;
   const project = state;
   if (review) dxData().reviewed = false;
-  dxSetStatus('Unsaved changes');
+  dxSetStatus(dxAutosaveReady() ? 'Unsaved changes' : 'Draft — enter Project Name, Client Name, or extract thermal data');
   clearTimeout(dxTimer);
   dxTimer = setTimeout(() => { if (state === project) dxSave().catch(() => {}); }, 600);
 }
 function dxHasSpecifiedValues() {
   return (state.tables?.thermal?.rows || []).some(row=>dxExportColumns.some(column=>String(row[column] ?? '').trim() !== ''));
+}
+function dxAutosaveReady() {
+  return !!(projectPersisted && state.visible !== false || String(state.details?.project || '').trim() ||
+    String(state.details?.customer || '').trim() || dxData().lastExtracted && dxHasSpecifiedValues());
 }
 async function dxSave(options = {}) {
   if (!state || !isDxWorkflow()) return;
@@ -73,8 +105,8 @@ async function dxSave(options = {}) {
   const project = state;
   const data=dxData();
   if (data.boq) data.boq = DXBoq.calculate(DXBoq.syncQuantities(data.boq, project.tables.vrvSchedule.rows));
-  if(options.manual || String(project.details.project || '').trim() || dxHasSpecifiedValues() || data.boq?.rows?.some(row=>row.model))data.autosaveEnabled=true;
-  if(!data.autosaveEnabled && !options.storage) {dxSetStatus('Draft — enter Project Name or Specified values');return;}
+  if(dxAutosaveReady())data.autosaveEnabled=true;
+  if(!data.autosaveEnabled && !options.storage) {dxSetStatus('Draft — enter Project Name, Client Name, or extract thermal data');return;}
   project.visible = !!data.autosaveEnabled;
   project.title = project.details.project || project.details.customer || 'DX Workflow';
   const revision = ++dxRevision;
@@ -93,7 +125,7 @@ async function dxSave(options = {}) {
       project.updatedAt = saved.updatedAt;
       projectPersisted = saved.visible !== false;
       projectTouched = false;
-      if (revision === dxRevision) dxSetStatus(data.autosaveEnabled ? 'All changes saved' : 'Draft — enter Project Name or Specified values');
+      if (revision === dxRevision) dxSetStatus(data.autosaveEnabled ? 'All changes saved' : 'Draft — enter Project Name, Client Name, or extract thermal data');
       document.querySelector('[data-dx-number]')?.setAttribute('value', saved.selectionNumber || '');
     }
     return saved;
@@ -156,11 +188,12 @@ function renderDxWorkspace() {
   canvas.style.cssText = '';
   canvas.classList.add('dx-workspace');
   setWorkflowTitle('DX Workflow');
-  $('#projectMeta').textContent = ['Thermal Sheet & Extraction','DX Schedule – Model Selection & Review','BOQ & Quotation'][step-1];
+  $('#projectMeta').textContent = `Created by: ${state.createdByName || state.details?.preparedBy || 'Unknown'}`;
   document.querySelector('.top-actions:not(#viewActions)')?.classList.add('hidden');
   const headerActions = $('#viewActions');
   headerActions.classList.remove('hidden');
-  headerActions.innerHTML = `${dxButton('new','New Workflow','plus')}${step === 3 ? dxBoqMenu() : step === 2 ? dxScheduleMenu() : dxThermalTableMenu()}`;
+  headerActions.innerHTML = `${dxSalesPersonBadge()}${dxButton('new','New Workflow','plus')}${step === 3 ? dxBoqMenu() : step === 2 ? dxScheduleMenu() : dxThermalTableMenu()}`;
+  workflowBindSalesPerson(headerActions);
   headerActions.querySelectorAll('[data-dx-action]').forEach(dxBindAction);
   const fields = [['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
   canvas.innerHTML = `<div class="dx-project-header dx-card">${fields.map(([key,label,icon]) => `<label>${dxIcon(icon)}<span>${label}<input ${key === 'selectionNumber' ? 'data-dx-number data-dx-selection' : `data-dx-detail="${key}" data-detail-key="${key}"`} ${key === 'customer' ? 'list="workflowCustomerList"' : key === 'project' ? 'list="workflowProjectList"' : ''} value="${escapeHtml(key === 'selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div>

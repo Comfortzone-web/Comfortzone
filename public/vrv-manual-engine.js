@@ -93,13 +93,17 @@ window.VrvManual = (() => {
   }
   function refnets(systems, rows) {
     const output = [];
+    const connectionKits = {
+      RXQ: {2:'BHFP22P1006',3:'BHFP22P1516'},
+      RXYTQ: {2:'BHFQ22P1007',3:'BHFQ22P1517'}
+    };
     const grouped=new Map();
     rows.forEach(row=>{const name=String(row.system||'').trim();if(!grouped.has(name))grouped.set(name,[]);grouped.get(name).push(row);});
     for (const system of systems) {
       const indoor = (grouped.get(system.system)||[]).filter(row => row.selection?.status === 'Selected');
       if (!system.combo || !['Auto Selected','Manual Override','Review Required'].includes(system.validationStatus) || indoor.length !== system.count) continue;
       const family = catalog.refnet[system.series];
-      if (!family || indoor.length < 2) continue;
+      if (!family) continue;
       const material = new Map();
       const add = (kit,description) => {
         for (const part of String(kit || '').split(/\s*\+\s*/).filter(Boolean)) {
@@ -107,16 +111,22 @@ window.VrvManual = (() => {
         }
       };
       const lookup = (entries,value) => [...entries].reverse().find(item => value >= item.from);
-      const first = lookup(family.first,numeric(system.combo.hp));
-      if (!first) { output.push({ system:system.system, status:'REFNET lookup unavailable for outdoor HP' }); continue; }
-      add(first.model,`First branch from ${first.from} HP`);
-      for (let i=1;i<indoor.length-1;i++) {
-        const downstream = indoor.slice(i).reduce((sum,row)=>sum+numeric(row.selection.index),0);
-        const kit = lookup(family.downstream,downstream);
-        if (!kit) { output.push({ system:system.system, status:'REFNET lookup unavailable for downstream index' }); continue; }
-        add(kit.model,`Downstream index from ${kit.from}`);
+      if (indoor.length >= 2) {
+        const first = lookup(family.first,numeric(system.combo.hp));
+        if (!first) output.push({ system:system.system, status:'REFNET lookup unavailable for outdoor HP' });
+        else add(first.model,`First branch from ${first.from} HP`);
+        for (let i=1;i<indoor.length-1;i++) {
+          const downstream = indoor.slice(i).reduce((sum,row)=>sum+numeric(row.selection.index),0);
+          const kit = lookup(family.downstream,downstream);
+          if (!kit) { output.push({ system:system.system, status:'REFNET lookup unavailable for downstream index' }); continue; }
+          add(kit.model,`Downstream index from ${kit.from}`);
+        }
       }
       for (const [model,entry] of material) output.push({system:system.system,series:system.series,hp:system.combo.hp,model,qty:entry.qty,description:[...entry.descriptions].join('; '),status:'Preliminary'});
+      const moduleCount = modules(system.combo).length;
+      const connectionModel = connectionKits[system.series]?.[moduleCount];
+      if (connectionModel) output.push({system:system.system,series:system.series,hp:system.combo.hp,model:connectionModel,qty:1,
+        description:`Multi connection piping kit for ${moduleCount} modules`,kind:'outdoor-connection',status:'Preliminary'});
     }
     return output;
   }

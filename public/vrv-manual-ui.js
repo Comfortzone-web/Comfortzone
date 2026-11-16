@@ -19,6 +19,73 @@ function vrvManualRender(){
   if(view){view.scrollTop=top;view.scrollLeft=left;}
   const next=canvas.querySelector('.vrv-manual-scroll');if(next){next.scrollTop=tableTop;next.scrollLeft=tableLeft;}
 }
+function vrvManualPrepareThermalReplacement() {
+  const manual=vrvManualData();
+  manual.dismissedSources=[];
+  manual.indoor=manual.indoor.filter(row=>!row.sourceKey || row.edited?.length);
+}
+function vrvManualRegenerateFromThermal() {
+  const manual=vrvManualData();
+  manual.dismissedSources=[];
+  vrvManualPrefill();
+  const previousSystems=manual.regenerateSourceSystems||{};
+  manual.indoor.forEach(row=>{if(row.sourceKey&&!row.system&&previousSystems[row.sourceKey])row.system=previousSystems[row.sourceKey];});
+  manual.systems=[...new Set([...(manual.systems||[]),...manual.indoor.map(row=>row.system).filter(Boolean)])];
+  manual.regenerateSourceSystems={};
+  manual.regenerateSystems=[];
+  window.VrvManual.calculate(manual);
+  return manual;
+}
+function vrvManualFloor(name,location='') {
+  const tokens=String(name||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+  for(const token of tokens){
+    if(/^(?:BS|BF)\d*$/.test(token)||token==='BASEMENT')return -1;
+    if(token==='GF'||token==='GROUND')return 0;
+    if(token==='FF'||token==='FIRST')return 1;
+    if(token==='SF'||token==='SECOND')return 2;
+    const numbered=token.match(/^(\d+)F(?:LOOR)?$/);
+    if(numbered)return Number(numbered[1]);
+  }
+  const place=String(location||'').toUpperCase();
+  if(/\bBASEMENT\b/.test(place))return -1;
+  if(/\bGROUND\b/.test(place))return 0;
+  const floor=place.match(/\b(\d+)(?:ST|ND|RD|TH)?\s+FLOOR\b/);
+  if(floor)return Number(floor[1]);
+  if(/\bFIRST\s+FLOOR\b/.test(place))return 1;
+  if(/\bSECOND\s+FLOOR\b/.test(place))return 2;
+  return null;
+}
+function vrvManualFloorFits(rows,settings) {
+  if(!rows.length||rows.some(row=>row.selection?.status!=='Selected'))return false;
+  const index=rows.reduce((sum,row)=>sum+Number(row.selection.index),0);
+  const target=Number(settings.targetCR);
+  if(!target||target>Number(settings.maxCR))return false;
+  const series=rows.every(row=>row.selection.origin==='India')?'RXQ':'RXYTQ';
+  return window.VrvManual.eligibleCombos({index,requiredIndex:index/(target/100),series},settings)
+    .some(combo=>index/combo.index*100>=95);
+}
+function vrvManualAutoGroup(manual) {
+  if(!window.VrvManual.catalog)return;
+  const prior=new Set(manual.autoSystems||[]);
+  const isFixed=row=>row.edited?.includes('system')||row.system&&!prior.has(row.system);
+  const fixed=manual.indoor.filter(row=>isFixed(row)&&row.system).map(row=>row.system);
+  const reserved=new Set([...manual.systems.filter(system=>!prior.has(system)),...fixed]);
+  manual.systems=manual.systems.filter(system=>!prior.has(system)||reserved.has(system));
+  const floors=new Map();
+  manual.indoor.forEach(row=>{if(isFixed(row))return;const floor=vrvManualFloor(row.name,row.location);if(floor===null){row.system='';return;}if(!floors.has(floor))floors.set(floor,[]);floors.get(floor).push(row);});
+  const assigned=[];let nextNumber=1;
+  const nextSystem=()=>{let name;do{name=`VRV-${String(nextNumber++).padStart(2,'0')}`;}while(reserved.has(name));reserved.add(name);assigned.push(name);return name;};
+  for(const floor of [...floors.keys()].sort((a,b)=>a-b)){
+    let system='',group=[];
+    for(const row of floors.get(floor)){
+      if(group.length&&vrvManualFloorFits(group,manual.settings)&&!vrvManualFloorFits([...group,row],manual.settings)){system='';group=[];}
+      if(!system)system=nextSystem();
+      row.system=system;group.push(row);
+    }
+  }
+  manual.autoSystems=assigned;
+  manual.systems=[...new Set([...manual.systems,...assigned])];
+}
 function vrvManualPrefill() {
   const manual=vrvManualData();
   const seen=new Map();
@@ -35,7 +102,7 @@ function vrvManualPrefill() {
     if(existing){for(const [key,value] of Object.entries(values))if(!existing.edited?.includes(key))existing[key]=value;return;}
     manual.indoor.push({id:crypto.randomUUID(),sourceKey,system:'',...values,type:manual.defaults.type,origin:manual.defaults.origin});
   });
-  if(window.VrvManual.catalog)window.VrvManual.calculate(manual);
+  if(window.VrvManual.catalog){window.VrvManual.calculate(manual);vrvManualAutoGroup(manual);window.VrvManual.calculate(manual);}
 }
 function vrvManualOptions(values,selected) {return values.map(value=>`<option value="${escapeHtml(value)}" ${value===selected?'selected':''}>${escapeHtml(value)}</option>`).join('');}
 function vrvManualInput(row,key,type='text') {if(type==='text'&&key!=='system')return `<textarea data-manual-field="${key}" data-manual-id="${row.id}" rows="1" aria-label="${key}">${escapeHtml(row[key]??'')}</textarea>`;return `<input data-manual-field="${key}" data-manual-id="${row.id}" type="${type}" ${type==='number'?'min="0" step="any"':''} ${key==='system'?'list="vrv-manual-system-options"':''} value="${escapeHtml(row[key]??'')}" aria-label="${key}">`;}
@@ -178,8 +245,8 @@ function vrvManualMaterials(m) {
   validOutdoor.forEach(row=>[row.combo.a,row.combo.b,row.combo.c].forEach(model=>add(model,1,'outdoor',`${row.series||'VRV'} outdoor unit`)));
   if(validOutdoor.length!==m.outdoor.length || (m.indoor.length && !m.outdoor.length))warnings.push('Outdoor Selection');
   const validSystems=new Set(validOutdoor.map(row=>row.system));
-  m.refnets.forEach(row=>{
-    if(validSystems.has(row.system) && row.model && Number(row.qty)>0)add(row.model,row.qty,'refnet',row.description||'REFNET branch piping kit');
+  [...m.refnets.filter(row=>row.kind!=='outdoor-connection'),...m.refnets.filter(row=>row.kind==='outdoor-connection')].forEach(row=>{
+    if(validSystems.has(row.system) && row.model && Number(row.qty)>0)add(row.model,row.qty,row.kind==='outdoor-connection'?'outdoor-connection':'refnet',row.description||'REFNET branch piping kit');
   });
   if(m.refnets.some(row=>!validSystems.has(row.system) || !row.model || !Number.isFinite(Number(row.qty)) || Number(row.qty)<=0))warnings.push('REFNET Material Breakdown');
   items.delete('BRC1H82W');
@@ -195,7 +262,7 @@ function vrvManualBoq() {
     }).catch(()=>{});
   }
   const descriptions=new Map(prices.map(item=>[String(item.model||'').trim().toUpperCase(),item.description]));
-  const rows=items.map(item=>`<tr><td>${escapeHtml(item.model)}</td><td>${item.qty}</td><td>${escapeHtml(item.category==='thermostat'?item.fallback:descriptions.get(item.model.toUpperCase())||item.fallback)}</td></tr>`).join('');
+  const rows=items.map(item=>`<tr><td>${escapeHtml(item.model)}</td><td>${item.qty}</td><td>${escapeHtml(['thermostat','outdoor-connection'].includes(item.category)?item.fallback:descriptions.get(item.model.toUpperCase())||item.fallback)}</td></tr>`).join('');
   const warning=warnings.length?`<p class="vrv-manual-boq-warning" role="status">Incomplete: ${warnings.map(escapeHtml).join(', ')}. Quantities shown include completed selections only.</p>`:'';
   return `${warning}<div class="vrv-manual-scroll vrv-manual-boq-scroll"><table class="vrv-manual-table vrv-manual-boq"><colgroup><col style="width:30%"><col style="width:16%"><col style="width:54%"></colgroup><thead><tr><th>Model</th><th>Qty</th><th>Description</th></tr></thead><tbody>${rows||'<tr><td colspan="3" class="vrv-manual-boq-empty">Complete selections to see materials.</td></tr>'}</tbody></table></div>`;
 }
@@ -206,7 +273,7 @@ function vrvManualBind() {
   canvas.querySelectorAll('[data-manual-apply]').forEach(button=>button.onclick=()=>{const m=vrvManualData();m.indoor.forEach(row=>{row.type=m.defaults.type;row.origin=m.defaults.origin;row.edited ||= [];for(const field of ['type','origin'])if(!row.edited.includes(field))row.edited.push(field);});vrvManualCommit(m);});
   canvas.querySelectorAll('[data-manual-field]').forEach(input=>input.onchange=()=>{const m=vrvManualData();let row=m.indoor.find(row=>row.id===input.dataset.manualId);if(!row&&input.dataset.manualId.startsWith('starter-')){row={id:crypto.randomUUID(),system:'',name:'',location:'',tc:'',sc:'',airflow:'',type:m.defaults.type,origin:m.defaults.origin};m.indoor.push(row);}if(!row)return;row[input.dataset.manualField]=input.value;row.edited ||= [];if(!row.edited.includes(input.dataset.manualField))row.edited.push(input.dataset.manualField);vrvManualCommit(m);});
   canvas.querySelectorAll('[data-manual-add]').forEach(button=>button.onclick=()=>{const m=vrvManualData();if(button.dataset.manualAdd==='indoor')m.indoor.push({id:crypto.randomUUID(),system:'',name:'',location:'',tc:'',sc:'',airflow:'',type:m.defaults.type,origin:m.defaults.origin});else {let i=1;while(m.systems.includes(`VRV-${String(i).padStart(2,'0')}`))i++;m.systems.push(`VRV-${String(i).padStart(2,'0')}`);}vrvManualCommit(m);});
-  canvas.querySelectorAll('[data-manual-delete]').forEach(button=>button.onclick=()=>{if(!confirm('Delete this indoor unit? Outdoor and REFNET results will update.'))return;const m=vrvManualData(),removed=m.indoor.find(row=>row.id===button.dataset.manualDelete);if(removed?.sourceKey)m.dismissedSources.push(removed.sourceKey);m.indoor=m.indoor.filter(row=>row.id!==button.dataset.manualDelete);vrvManualCommit(m);});
+  canvas.querySelectorAll('[data-manual-delete]').forEach(button=>button.onclick=()=>{if(!confirm('Delete this indoor unit? Outdoor and REFNET results will update.'))return;const m=vrvManualData(),removed=m.indoor.find(row=>row.id===button.dataset.manualDelete);if(removed?.sourceKey){m.dismissedSources.push(removed.sourceKey);if(removed.system){m.regenerateSourceSystems||={};m.regenerateSourceSystems[removed.sourceKey]=removed.system;}}m.indoor=m.indoor.filter(row=>row.id!==button.dataset.manualDelete);vrvManualCommit(m);});
   canvas.querySelectorAll('[data-manual-system-field]').forEach(input=>input.onchange=()=>{const m=vrvManualData(),row=m.outdoor.find(row=>row.system===input.dataset.manualSystem);if(!row)return;const key=input.dataset.manualSystemField==='series'?'seriesPreference':input.dataset.manualSystemField;row[key]=key==='seriesPreference'&&input.value===row.recommendedSeries?'Auto':key==='targetCR'?Number(input.value):input.value;if(key==='targetCR')row.targetOverride=true;vrvManualCommit(m);});
   canvas.querySelectorAll('[data-manual-combo-open]').forEach(button=>button.onclick=()=>vrvManualOpenComboPopover(button));
   canvas.querySelectorAll('[data-manual-combo-reset]').forEach(button=>button.onclick=()=>{const m=vrvManualData(),row=m.outdoor.find(item=>item.system===button.dataset.manualComboReset);if(!row)return;row.overrideKey='';row.selectedComboId='';row.selectionMode='Automatic';row.seriesPreference='Auto';vrvManualCommit(m);});

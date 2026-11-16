@@ -794,6 +794,8 @@ function vrvOpenFreshWorkflow(openSequence = workflowOpenSequence) {
   const now = new Date().toISOString();
   const project = {
     id: costingId(), workflowMode: 'vrv', title: 'VRV Workflow', visible: false,
+    ownerId: currentUser?.id || '', salesPerson: currentUser?.name || '',
+    createdById: currentUser?.id || '', createdByName: currentUser?.name || '',
     createdAt: now, updatedAt: now,
     details: { customer: '', contactPerson: '', telNo: '', email: '', project: '', date: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Dubai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()), location: '', model: 'Daikin', validity: 'Valid for 7 days', enquiryNo: '', preparedBy: currentUser?.name || '' },
     quotation: { quotationNo: '', generatedDocId: '', generatedPdfId: '' }, layoutVersion: 'screenshot-v5',
@@ -816,7 +818,7 @@ function vrvOpenFreshWorkflow(openSequence = workflowOpenSequence) {
   state = project;
   projectPersisted = false;
   projectTouched = false;
-  vrvStatus = 'Draft — enter Project Name or upload a file';
+  vrvStatus = 'Draft — enter Project Name, Client Name, or extract thermal data';
   applyCompactLayout(true);
   history.replaceState(null, "", location.pathname);
   setWorkflowSubnavActive('vrv');
@@ -943,13 +945,9 @@ async function saveProject(options = {}) {
   const opts = options && typeof options === "object" ? options : {};
   if (!opts.auto) projectTouched = true;
   if (!projectTouched && !opts.force && !opts.manual) return;
-  const manualSelectionStarted = state.vrv?.selectionMode === 'manual' && (
-    state.vrv.manual?.systems?.length > 0 ||
-    state.vrv.manual?.indoor?.some(row => [row.system,row.name,row.location,row.tc,row.sc,row.airflow].some(value => String(value ?? '').trim()))
-  );
-  const workflowStarted = hasWorkflowSourceUpload() || !!state.details?.project?.trim() || manualSelectionStarted || opts.manual;
+  const workflowStarted = workflowAutosaveReady();
   if (!workflowStarted && !opts.allowHidden) {
-    if (opts.manual) toast("Workflow saved");
+    if (opts.manual) toast("Enter a Project Name, Client Name, or extract thermal data before saving.");
     return;
   }
   state.visible = workflowStarted;
@@ -977,22 +975,17 @@ async function ensureProjectSaved(options = {}) {
 }
 
 function scheduleProjectSave() {
-  const manualSelectionStarted = state?.vrv?.selectionMode === 'manual' && (
-    state.vrv.manual?.systems?.length > 0 ||
-    state.vrv.manual?.indoor?.some(row => [row.system,row.name,row.location,row.tc,row.sc,row.airflow].some(value => String(value ?? '').trim()))
-  );
-  if (!hasWorkflowSourceUpload() && !state?.details?.project?.trim() && !manualSelectionStarted) return;
+  if (!workflowAutosaveReady()) return;
   projectTouched = true;
   debounceSaveProject();
 }
 
-function hasWorkflowSourceUpload() {
+function workflowAutosaveReady() {
   if (!state) return false;
-  if (state.visible) return true;
-  return state.nodes.some(node =>
-    (node.id === "thermal-upload" || node.id === "vrv-upload") &&
-    node.data &&
-    node.data.uploadId
+  if (projectPersisted && state.visible !== false) return true;
+  if (String(state.details?.project || '').trim() || String(state.details?.customer || '').trim()) return true;
+  return !!state.vrv?.lastExtracted && (state.tables?.thermal?.rows || []).some(row =>
+    Object.entries(row).some(([key,value]) => !key.startsWith('__') && String(value ?? '').trim())
   );
 }
 
@@ -8439,12 +8432,13 @@ async function loadProjectList() {
   const projects = await api(`/api/projects?q=${q}`);
   if (request !== workflowListRequest || activeView !== 'documents') return;
   const list = $("#projectList");
-  list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects.map((project,index) => `
+  list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects.map((project,index) => `
     <tr data-workflow-mode="${escapeHtml(project.workflowMode || 'vrv')}">
       <td>${index + 1}</td>
       <td><button type="button" class="workflow-selection-link" data-workflow-action="open" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.selectionNumber || (project.workflowMode === 'dx' ? 'DX Workflow' : project.workflowMode === 'vrv' ? 'VRV Workflow' : 'Workflow'))}</button><small>${project.createdAt ? escapeHtml(new Date(project.createdAt).toLocaleDateString()) : ''}</small></td>
       <td>${escapeHtml(project.project || project.title || "Untitled Project")}</td>
       <td><span class="workflow-client">${escapeHtml(project.customer || "—")}</span><small class="workflow-consultant">${escapeHtml(project.consultant || "—")}</small></td>
+      <td class="workflow-sales-person">${escapeHtml(project.salesPerson || project.preparedBy || "—")}</td>
       <td><span class="workflow-status ${project.quotationDone ? 'done' : 'pending'}">${project.quotationDone ? 'Quotation Done' : 'Quotation Pending'}</span></td>
       <td><div class="project-card-actions">
         <button class="workflow-menu-button" type="button" data-workflow-menu="${project.id}" aria-label="Workflow actions">...</button>
@@ -8455,7 +8449,7 @@ async function loadProjectList() {
         </div>
       </div></td>
     </tr>
-  `).join("") || '<tr><td colspan="6" class="pipeline-empty">No saved workflows found.</td></tr>'}</tbody></table></div>`;
+  `).join("") || '<tr><td colspan="7" class="pipeline-empty">No saved workflows found.</td></tr>'}</tbody></table></div>`;
   list.onclick = handleWorkflowListClick;
   list.onpointerover = event => {
     const link = event.target.closest('[data-workflow-action="open"]');
@@ -8530,8 +8524,12 @@ async function cloneProject(projectId) {
   clone.updatedAt = draft.updatedAt;
   clone.visible = true;
   clone.title = `${baseTitle} (Copy)`;
+  clone.ownerId = currentUser?.id || '';
+  clone.salesPerson = currentUser?.name || '';
+  clone.createdById = currentUser?.id || '';
+  clone.createdByName = currentUser?.name || '';
+  clone.details = { ...(clone.details || {}), preparedBy: currentUser?.name || '', project: `${baseTitle} (Copy)` };
   clone.quotation = draft.quotation || clone.quotation;
-  clone.details = { ...(clone.details || {}), project: `${baseTitle} (Copy)` };
   clone.uploads = [];
   clone.nodes = (clone.nodes || []).map(node => ({
     ...node,
@@ -12380,6 +12378,7 @@ async function extractThermalFromChat(options = {}) {
   addChat(`Selected ${thermalSelectionLabel()}.`);
   addChat("Extracting values into the Export File table...");
   let extracted;
+  let extractedRowsFilled = false;
   workflowUploadLoading = true;
   refreshWorkflowTitleSpinner();
   try {
@@ -12400,6 +12399,7 @@ async function extractThermalFromChat(options = {}) {
     const thermalRows = isDxWorkflow()
       ? normalizeDxThermalRows(applyExtractionReviewCells(extracted.rows, extracted.reviewCells))
       : applyExtractionReviewCells(extracted.rows, extracted.reviewCells);
+    extractedRowsFilled = thermalRows.some(row => Object.entries(row).some(([key,value]) => !key.startsWith('__') && String(value ?? '').trim()));
     state.tables.thermal.columns = workflowThermalColumns();
     state.tables.thermal.rows = thermalChatSelection.appendResults
       ? [...(state.tables.thermal.rows || []), ...thermalRows]
@@ -12421,6 +12421,7 @@ async function extractThermalFromChat(options = {}) {
     }), extracted.customReviewCells);
     const existingColumns = state.tables.thermal.columns || [];
     if (isDxWorkflow()) nextRows = normalizeDxThermalRows(nextRows);
+    extractedRowsFilled = nextRows.some(row => Object.entries(row).some(([key,value]) => !key.startsWith('__') && String(value ?? '').trim()));
     state.tables.thermal.columns = isDxWorkflow()
       ? workflowThermalColumns()
       : thermalChatSelection.appendResults && existingColumns.length
@@ -12438,6 +12439,10 @@ async function extractThermalFromChat(options = {}) {
     }
   } else {
     addChat(extracted.message || "No rows were extracted. Upload a clearer screenshot and try again.");
+  }
+  if (extractedRowsFilled) {
+    if (isDxWorkflow()) { state.dx ||= {}; state.dx.lastExtracted = new Date().toISOString(); }
+    else { state.vrv ||= {}; state.vrv.lastExtracted = new Date().toISOString(); }
   }
   render();
   saveProject();

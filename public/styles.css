@@ -7293,6 +7293,15 @@ td[contenteditable="true"]:focus {
 .workflow-table th:nth-child(4) { width: 22%; }
 .workflow-table .workflow-client { font-weight: 600; }
 .workflow-table .workflow-consultant { margin-top: 4px; }
+.workflow-table { min-width: 980px; }
+.workflow-table th:first-child, .workflow-table td:first-child { width: 54px; }
+.workflow-table th:nth-child(2) { width: 16%; }
+.workflow-table th:nth-child(3) { width: 25%; }
+.workflow-table th:nth-child(4) { width: 17%; }
+.workflow-table th:nth-child(5) { width: 14%; }
+.workflow-table th:nth-child(6) { width: 135px; }
+.workflow-table th:last-child, .workflow-table td:last-child { width: 74px; }
+.workflow-table .workflow-sales-person { font-weight: 600; }
 @media(max-width: 680px) { #workflowSearchTop { width: min(260px, 50vw); } }
 
 .area-calculation-view {
