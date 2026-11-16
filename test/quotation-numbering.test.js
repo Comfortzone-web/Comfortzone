@@ -161,6 +161,43 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
     });
     assert.equal(bobQuote.quotations[0].no, `CZ-QTN-${year}-001`);
     assert.equal(bobQuote.settings.nextQuotationNo, `CZ-QTN-${year}-002`);
+    const { settings: adminSettings } = await (await request(admin, "/api/auth/me")).json();
+    const aliceId = adminSettings.users.find(entry => entry.name === "Alice").id;
+    const bobId = adminSettings.users.find(entry => entry.name === "Bob").id;
+    const assigned = await save(admin, "/api/sales-crm/quotations?compact=1", {
+      no: `ASSIGN-${year}-1`, customer: "Assigned Customer", ownerId: aliceId, salesperson: "Wrong Name", items: []
+    });
+    assert.equal(assigned.savedItem.ownerId, aliceId);
+    assert.equal(assigned.savedItem.salesperson, "Alice");
+    assert.ok((await (await request(alice, "/api/sales-crm")).json()).quotations.some(quote => quote.id === assigned.savedItemId));
+    assert.ok(!(await (await request(bob, "/api/sales-crm")).json()).quotations.some(quote => quote.id === assigned.savedItemId));
+    const reassigned = await save(admin, "/api/sales-crm/quotations?compact=1", {
+      ...assigned.savedItem, ownerId: bobId, salesperson: "Wrong Name"
+    });
+    assert.equal(reassigned.savedItem.ownerId, bobId);
+    assert.equal(reassigned.savedItem.salesperson, "Bob");
+    assert.ok(!(await (await request(alice, "/api/sales-crm")).json()).quotations.some(quote => quote.id === assigned.savedItemId));
+    assert.ok((await (await request(bob, "/api/sales-crm")).json()).quotations.some(quote => quote.id === assigned.savedItemId));
+    const staffCannotReassign = await save(bob, "/api/sales-crm/quotations?compact=1", {
+      ...reassigned.savedItem, ownerId: aliceId, salesperson: "Alice"
+    });
+    assert.equal(staffCannotReassign.savedItem.ownerId, bobId);
+    assert.equal(staffCannotReassign.savedItem.salesperson, "Bob");
+    const invalidAssignee = await request(admin, "/api/sales-crm/quotations?compact=1", json({
+      ...reassigned.savedItem, ownerId: "missing-user"
+    }));
+    assert.equal(invalidAssignee.status, 400);
+    const customPerson = await save(admin, "/api/sales-crm/quotations?compact=1", {
+      no: `CUSTOM-${year}-1`, customer: "Custom Customer", ownerId: "", salesperson: "External Agent", items: []
+    });
+    assert.equal(customPerson.savedItem.salesperson, "External Agent");
+    assert.equal(customPerson.savedItem.ownerId, "");
+    assert.ok(!(await (await request(alice, "/api/sales-crm")).json()).quotations.some(quote => quote.id === customPerson.savedItemId));
+    const typedLogin = await save(admin, "/api/sales-crm/quotations?compact=1", {
+      ...customPerson.savedItem, ownerId: "", salesperson: "Alice"
+    });
+    assert.equal(typedLogin.savedItem.ownerId, aliceId);
+    assert.ok((await (await request(alice, "/api/sales-crm")).json()).quotations.some(quote => quote.id === customPerson.savedItemId));
   } finally {
     server.kill();
     if (server.exitCode === null) await new Promise(resolve => server.once("exit", resolve));

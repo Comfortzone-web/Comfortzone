@@ -4271,6 +4271,34 @@ async function handleApi(req, res) {
       entry.id === item.id ||
       (collection === "customers" && inventoryNorm(entry.name) === inventoryNorm(item.name))
     ));
+    if (collection === "quotations") {
+      if (isStaff(user)) {
+        item.ownerId = user.id;
+        item.salesperson = user.name;
+      } else if (isAdmin(user) && !body.fromDxBoq) {
+        const selectedId = cleanCell(rawItem.ownerId || "");
+        if (selectedId) {
+          const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId
+            && entry.active !== false && (isStaff(entry) || isAdmin(entry)));
+          if (!assignee) return send(res, 400, { error: "Select an active sales person." });
+          item.ownerId = assignee.id;
+          item.salesperson = assignee.name;
+        } else if (Object.prototype.hasOwnProperty.call(rawItem, "ownerId")) {
+          const name = cleanCell(rawItem.salesperson || "");
+          if (!name) return send(res, 400, { error: "Enter a sales person." });
+          const assignee = (req.authSettings?.users || []).find(entry => entry.active !== false
+            && (isStaff(entry) || isAdmin(entry)) && cleanCell(entry.name).toLowerCase() === name.toLowerCase());
+          item.ownerId = assignee?.id || "";
+          item.salesperson = assignee?.name || name;
+        } else if (existingIndex < 0) {
+          item.ownerId = user.id;
+          item.salesperson = user.name;
+        } else {
+          item.ownerId = store.quotations[existingIndex].ownerId || "";
+          item.salesperson = store.quotations[existingIndex].salesperson || item.salesperson;
+        }
+      }
+    }
     if (collection === "projects") {
       const existingProject = existingIndex >= 0 ? store.projects[existingIndex] : null;
       if (isStaff(user) && existingProject && !salesProjectAssignedTo(existingProject, user)) return sendForbidden(res);

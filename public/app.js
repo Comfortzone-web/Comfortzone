@@ -10,6 +10,8 @@ let canvasZoom = 0.72;
 let workflowDraftPromise = null;
 let workflowOpenSequence = 0;
 let workflowListRequest = 0;
+const workflowListCache = new Map();
+const workflowListLoads = new Map();
 const workflowProjectCache = new Map();
 const workflowProjectLoads = new Map();
 let workflowCacheEpoch = 0;
@@ -52,6 +54,7 @@ let areaCalculationSaveTimer = null;
 let areaCalculationDraggedRowIndex = null;
 let salesDeskScreen = "dashboard";
 let salesQuotationMode = "list";
+let salesQuotationJustCreated = false;
 let salesProjectMode = "list";
 let salesProjectFilter = "";
 let salesProjectDetailId = "";
@@ -89,6 +92,8 @@ let orderSummaryPage = 1;
 let orderSummarySearch = "";
 let orderSummarySort = "newest";
 let salesOrderBookDetailId = "";
+const pendingOrderBookSaves = new Map();
+const orderBookSaveNotices = new Map();
 const pendingSalesDeletes = new Set();
 let salesOrderBookFiltersOpen = false;
 let salesOrderBookFilters = {
@@ -479,7 +484,7 @@ function bindShell() {
   $("#zoomOutBtn").addEventListener("click", () => setZoom(canvasZoom - 0.1));
   $("#zoomInBtn").addEventListener("click", () => setZoom(canvasZoom + 0.1));
   $("#zoomFitBtn").addEventListener("click", zoomToFit);
-  $("#searchInput").addEventListener("input", debounce(loadProjectList, 150));
+  $("#searchInput").addEventListener("input", debounce(() => loadProjectList().catch(error => toast(error.message || "Could not refresh workflows")), 150));
   $("#closeChatBtn").addEventListener("click", () => $("#chatPanel").classList.add("hidden"));
   $("#confirmThermalBtn").addEventListener("click", extractThermalFromChat);
   $("#thermalFileInput").addEventListener("change", uploadThermalFromChat);
@@ -501,6 +506,11 @@ function bindShell() {
     button.addEventListener("click", () => {
       if (!canAccessModule("sales")) return showLockedModuleToast();
       collapsedSidebarGroups.delete("sales");
+      if (button.dataset.salesView === "quotation" && salesQuotationJustCreated) {
+        salesQuotationMode = "list";
+        salesQuotationDraft = null;
+        salesQuotationJustCreated = false;
+      }
       if (button.dataset.salesView === "costing") {
         costingMode = "all";
         costingHistoryOpen = false;
@@ -524,7 +534,17 @@ function bindShell() {
   $("#salesDeskRoot").addEventListener("click", handleSalesClick);
   $("#salesDeskRoot").addEventListener("input", handleSalesInput);
   $("#salesDeskRoot").addEventListener("change", handleSalesChange);
+  $("#salesDeskRoot").addEventListener("focusin", event => {
+    if (event.target.matches("[data-sales-quote-person-input]")) renderSalesQuotePersonOptions();
+  });
+  $("#salesDeskRoot").addEventListener("keydown", handleSalesQuotePersonKeydown);
   $("#salesDeskRoot").addEventListener("focusout", event => {
+    if (event.target.matches("[data-sales-quote-person-input]")) {
+      setTimeout(() => {
+        const picker = document.querySelector("[data-sales-quote-person-picker]");
+        if (picker && !picker.contains(document.activeElement)) picker.querySelector("[data-sales-quote-person-options]").hidden = true;
+      }, 0);
+    }
     if (event.target.dataset.costingField !== "increasedFinalPrice") return;
     const rowEl = event.target.closest("[data-costing-row]");
     if (rowEl) event.target.value = costingMoney(activeCostingOrDraft().rows[Number(rowEl.dataset.costingRow)]?.increasedFinalPrice);
@@ -579,11 +599,16 @@ async function login(event) {
       body: JSON.stringify({ email: $("#loginEmail").value.trim(), password: $("#loginPassword").value })
     });
     ++workflowCacheEpoch;
+    workflowListCache.clear();
+    workflowListLoads.clear();
     workflowProjectCache.clear();
     workflowProjectLoads.clear();
+    orderBookSaveNotices.forEach(notice => notice.remove());
+    orderBookSaveNotices.clear();
     salesCrmState = null;
     costingState = null;
     salesQuotationDraft = null;
+    salesQuotationJustCreated = false;
     salesLeadDetailId = "";
     salesCrmLoadedAt = 0;
     costingLoadedAt = 0;
@@ -624,11 +649,13 @@ function warmViewData() {
 }
 
 function warmNavigationData() {
-  const run = async () => {
+  const run = () => {
     if (canAccessModule("maintenance") && activeView !== "maintenance")
-      await window.maintenanceModule?.prefetch?.().catch(() => {});
+      window.maintenanceModule?.prefetch?.()?.catch(() => {});
     if (canAccessModule("projects") && activeView !== "projects")
-      await window.projectManagement?.prefetch?.().catch(() => {});
+      window.projectManagement?.prefetch?.()?.catch(() => {});
+    if (canAccessModule("workflow") && activeView !== "documents")
+      fetchWorkflowList("").catch(() => {});
   };
   if ("requestIdleCallback" in window) window.requestIdleCallback(run, { timeout: 800 });
   else setTimeout(run, 200);
@@ -637,14 +664,19 @@ function warmNavigationData() {
 async function logout() {
   await api("/api/auth/logout", { method: "POST", body: "{}" }).catch(() => {});
   ++workflowCacheEpoch;
+  workflowListCache.clear();
+  workflowListLoads.clear();
   workflowProjectCache.clear();
   workflowProjectLoads.clear();
+  orderBookSaveNotices.forEach(notice => notice.remove());
+  orderBookSaveNotices.clear();
   window.maintenanceModule?.reset?.();
   window.projectManagement?.reset?.();
   currentUser = null;
   salesCrmState = null;
   costingState = null;
   salesQuotationDraft = null;
+  salesQuotationJustCreated = false;
   salesCrmLoadedAt = 0;
   costingLoadedAt = 0;
   applyRoleAccess();
@@ -1037,10 +1069,15 @@ async function showDocuments() {
   workflowActions.innerHTML = '<input id="workflowSearchTop" type="search" aria-label="Search workflows" placeholder="Search workflows...">';
   workflowActions.classList.remove("hidden");
   workflowActions.querySelector("input").value = $("#searchInput").value;
-  workflowActions.querySelector("input").addEventListener("input", event => { $("#searchInput").value = event.target.value; loadProjectList(); });
-  if (!$("#projectList").innerHTML.trim()) renderPageSkeleton('projectList', 'My WorkFlows');
+  const searchWorkflows = debounce(() => loadProjectList().catch(error => toast(error.message || "Could not refresh workflows")), 150);
+  workflowActions.querySelector("input").addEventListener("input", event => {
+    $("#searchInput").value = event.target.value;
+    renderWorkflowList(workflowListCache.get(event.target.value));
+    searchWorkflows();
+  });
   loadProjectList().catch(error => {
-    if (activeView === 'documents') renderPageLoadError('projectList', 'My WorkFlows', error, showDocuments);
+    if (activeView === 'documents' && !workflowListCache.has($("#searchInput").value || ""))
+      renderPageLoadError('projectList', 'My WorkFlows', error, showDocuments);
     toast(error.message || 'Unable to load Workflows');
   });
 }
@@ -4266,6 +4303,67 @@ function salesQuotationTabButton(value, label) {
   });
 }
 
+function salesQuotePersonUsers() {
+  const users = appSettings?.users?.length ? appSettings.users : [currentUser];
+  return users.filter(user => user?.id && user.name && user.active !== false && ["ADMIN", "STAFF"].includes(norm(user.role)));
+}
+
+function salesQuotePersonName() {
+  if (isStaffUser()) return currentUser?.name || "";
+  const draft = salesQuotationDraft || {};
+  const users = salesQuotePersonUsers();
+  const selected = users.find(user => user.id === draft.ownerId)
+    || users.find(user => !draft.ownerId && norm(user.name) === norm(draft.salesperson));
+  if (selected) {
+    draft.ownerId = selected.id;
+    draft.salesperson = selected.name;
+  }
+  return selected?.name || draft.salesperson || "";
+}
+
+function salesQuotePersonFieldHtml() {
+  const name = salesQuotePersonName();
+  const linked = salesQuotePersonUsers().some(user => user.id === salesQuotationDraft?.ownerId);
+  return `<div class="sales-quote-person-field"><span>Sales Person</span><div class="sales-quote-person-picker" data-sales-quote-person-picker>
+    <input type="text" data-sales-quote-person-input class="${linked ? "is-linked" : ""}" value="${escapeHtml(name)}" ${isCurrentAdmin() ? 'role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off"' : "readonly"} aria-label="Sales Person" placeholder="Select or type a name">
+    ${isCurrentAdmin() ? `<div class="sales-project-person-options" data-sales-quote-person-options role="listbox" hidden></div>` : ""}
+  </div></div>`;
+}
+
+function renderSalesQuotePersonOptions() {
+  const input = document.querySelector("[data-sales-quote-person-input]");
+  const options = document.querySelector("[data-sales-quote-person-options]");
+  if (!input || !options) return;
+  const query = salesQuotationDraft?.ownerId && input.value === salesQuotationDraft.salesperson ? "" : input.value.trim().toLowerCase();
+  const matches = salesQuotePersonUsers().filter(user => user.name.toLowerCase().includes(query));
+  const open = document.activeElement === input;
+  options.hidden = !open;
+  input.setAttribute("aria-expanded", String(open));
+  if (!open) return;
+  options.innerHTML = matches.length
+    ? matches.map(user => `<button type="button" role="option" data-sales-quote-person-option="${escapeHtml(user.id)}">${escapeHtml(user.name)}</button>`).join("")
+    : `<span class="sales-project-person-no-match">No matching sales people</span>`;
+}
+
+function updateSalesQuotePersonInput(input) {
+  if (!salesQuotationDraft || !isCurrentAdmin()) return;
+  const person = salesQuotePersonUsers().find(user => norm(user.name) === norm(input.value));
+  salesQuotationDraft.ownerId = person?.id || "";
+  salesQuotationDraft.salesperson = person?.name || input.value;
+  input.classList.toggle("is-linked", !!person);
+  renderSalesQuotePersonOptions();
+}
+
+function handleSalesQuotePersonKeydown(event) {
+  if (!event.target.matches("[data-sales-quote-person-input]") || !["Backspace", "Delete"].includes(event.key) || !salesQuotationDraft?.ownerId || !isCurrentAdmin()) return;
+  event.preventDefault();
+  event.target.value = "";
+  salesQuotationDraft.ownerId = "";
+  salesQuotationDraft.salesperson = "";
+  event.target.classList.remove("is-linked");
+  renderSalesQuotePersonOptions();
+}
+
 function salesCreateQuotationHtml() {
   salesQuotationDraft = salesQuotationDraft || quoteDraftFromSource();
   salesQuotationDraft.quoteType = salesQuotationDraft.quoteType || "VRV";
@@ -4293,7 +4391,7 @@ function salesCreateQuotationHtml() {
           <label>Quotation No<input data-sales-quote-field="quotationNo" value="${escapeHtml(salesQuotationDraft.quotationNo)}"></label>
           <label>Quotation Date<input type="date" data-sales-quote-field="quotationDate" value="${nativeDateValue(salesQuotationDraft.quotationDate)}"></label>
           <label>Validity<select data-sales-quote-field="validity">${["7 Days", "15 Days", "30 Days"].map(v => `<option ${salesQuotationDraft.validity === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-          <label>Sales Person<input data-sales-quote-field="salesperson" value="${escapeHtml(salesQuotationDraft.salesperson)}"></label>
+          ${salesQuotePersonFieldHtml()}
           <label>Customer Name<input data-sales-quote-field="customer" list="salesQuoteCustomerList" placeholder="Type to search customer..." value="${escapeHtml(salesQuotationDraft.customer || "")}"><datalist id="salesQuoteCustomerList">${salesCustomerNames().map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist></label>
           <label>Project Name<input data-sales-quote-field="project" list="salesQuoteProjectList" placeholder="Type to search project..." value="${escapeHtml(salesQuotationDraft.project || "")}"><datalist id="salesQuoteProjectList">${salesData().projects.map(p => `<option value="${escapeHtml(p.name)}"></option>`).join("")}</datalist></label>
           <label>Payment Terms<input data-sales-quote-field="paymentTerms" value="${escapeHtml(salesQuotationDraft.paymentTerms)}"></label>
@@ -4851,9 +4949,80 @@ function nextOrderBookNo() {
   return salesData().nextOrderBookNo || `CZ${String(new Date().getFullYear()).slice(-2)}-0001`;
 }
 
-function openOrderBookForm(orderId = "") {
+function showOrderBookSaveNotice(orderId, status, message, retry) {
+  let notice = orderBookSaveNotices.get(orderId);
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.className = "order-book-save-notice";
+    notice.setAttribute("role", "status");
+    notice.style.top = `${24 + orderBookSaveNotices.size * 64}px`;
+    document.body.appendChild(notice);
+    orderBookSaveNotices.set(orderId, notice);
+  }
+  clearTimeout(notice._dismissTimer);
+  notice.classList.toggle("is-error", status === "failed");
+  notice.replaceChildren();
+  const label = document.createElement("span");
+  label.textContent = message;
+  notice.appendChild(label);
+  if (retry) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "Retry";
+    button.addEventListener("click", () => {
+      notice.remove();
+      orderBookSaveNotices.delete(orderId);
+      retry();
+    });
+    notice.appendChild(button);
+  }
+  if (status === "saved") notice._dismissTimer = setTimeout(() => {
+    notice.remove();
+    orderBookSaveNotices.delete(orderId);
+  }, 3000);
+}
+
+async function saveOrderBookInBackground(payload) {
+  if (pendingOrderBookSaves.has(payload.id)) return;
+  const userId = currentUser?.id;
+  pendingOrderBookSaves.set(payload.id, payload);
+  showOrderBookSaveNotice(payload.id, "saving", `Saving order ${payload.orderNo}...`);
+  try {
+    let response;
+    try {
+      response = await api("/api/sales-crm/orderBook?compact=1", { method: "POST", body: JSON.stringify(payload) });
+    } catch (error) {
+      if (!payload.createNew) throw error;
+      const latest = await api("/api/sales-crm").catch(() => null);
+      const savedItem = latest?.orderBook?.find(order => order.id === payload.id);
+      if (!savedItem) throw error;
+      response = { savedItem, savedItemId: savedItem.id, savedOrderNo: savedItem.orderNo, nextOrderBookNo: latest.nextOrderBookNo };
+    }
+    if (currentUser?.id !== userId) return;
+    const orders = [...(salesData().orderBook || [])];
+    const index = orders.findIndex(order => order.id === response.savedItemId);
+    if (index >= 0) orders[index] = response.savedItem;
+    else orders.unshift(response.savedItem);
+    salesCrmState = { ...salesData(), orderBook: orders, nextOrderBookNo: response.nextOrderBookNo };
+    salesCrmLoadedAt = Date.now();
+    salesOrderBookDetailId = response.savedItemId;
+    if (activeView === "salesDesk" && salesDeskScreen === "orderBook") renderSalesDesk();
+    showOrderBookSaveNotice(payload.id, "saved", `Order ${response.savedOrderNo || payload.orderNo} saved`);
+  } catch (error) {
+    if (currentUser?.id !== userId) return;
+    showOrderBookSaveNotice(payload.id, "failed", error.message || "Order could not be saved.", () => {
+      showSalesDesk("orderBook");
+      openOrderBookForm(payload.id, payload);
+    });
+  } finally {
+    pendingOrderBookSaves.delete(payload.id);
+  }
+}
+
+function openOrderBookForm(orderId = "", draft = null) {
+  if (orderId && pendingOrderBookSaves.has(orderId)) return toast("This order is still saving.");
   const existing = orderId ? salesOrderBookRows().find(item => item.id === orderId) : null;
-  const item = existing ? structuredClone(existing) : blankOrderBookOrder();
+  const item = draft ? structuredClone(draft) : existing ? structuredClone(existing) : blankOrderBookOrder();
   const modal = document.createElement("div");
   modal.className = "modal-backdrop sales-drawer-backdrop";
   modal.innerHTML = `
@@ -4947,24 +5116,8 @@ function openOrderBookForm(orderId = "") {
     payload.customer = savedCustomer.name;
     button.disabled = true;
     button.textContent = "Saving...";
-    try {
-      const response = await api("/api/sales-crm/orderBook?compact=1", { method: "POST", body: JSON.stringify(payload) });
-      const orders = [...(salesData().orderBook || [])];
-      const index = orders.findIndex(order => order.id === response.savedItemId);
-      if (index >= 0) orders[index] = response.savedItem;
-      else orders.unshift(response.savedItem);
-      salesCrmState = { ...salesData(), orderBook: orders, nextOrderBookNo: response.nextOrderBookNo };
-      salesCrmLoadedAt = Date.now();
-      salesOrderBookDetailId = response.savedItemId || payload.id || "";
-      modal.remove();
-      renderSalesDesk();
-      toast(`Order ${response.savedOrderNo || payload.orderNo} saved`);
-    } catch (error) {
-      toast(error.message || "Order could not be saved. Check the form and retry.");
-    } finally {
-      button.disabled = false;
-      button.textContent = "Save Order";
-    }
+    modal.remove();
+    saveOrderBookInBackground(payload);
   });
 }
 
@@ -5673,6 +5826,16 @@ async function handleSalesClick(event) {
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
+  if (target.dataset.salesQuotePersonOption) {
+    const person = salesQuotePersonUsers().find(user => user.id === target.dataset.salesQuotePersonOption);
+    if (!person) return;
+    salesQuotationDraft.ownerId = person.id;
+    salesQuotationDraft.salesperson = person.name;
+    const input = document.querySelector("[data-sales-quote-person-input]");
+    if (input) { input.value = person.name; input.classList.add("is-linked"); input.blur(); }
+    document.querySelector("[data-sales-quote-person-options]").hidden = true;
+    return;
+  }
   if (target.dataset.orderBookImport !== undefined) return $("#salesDeskRoot [data-order-book-import-file]")?.click();
   if (target.dataset.orderSummaryExport !== undefined) return exportOrderBookSummary();
   if (target.dataset.orderSummaryReset !== undefined) {
@@ -5964,6 +6127,10 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.salesQuotePersonInput !== undefined) {
+    updateSalesQuotePersonInput(event.target);
+    return;
+  }
   if (event.target.dataset.orderSummarySearch !== undefined) {
     const cursor = event.target.selectionStart || 0;
     orderSummarySearch = event.target.value;
@@ -6256,12 +6423,15 @@ function salesQuoteApplyRefnetCombine(enabled) {
 
 function quoteDraftFromSource(source = {}) {
   const loginName = String(currentUser?.name || "").trim();
+  const salesperson = source.salesperson || source.salesPerson || source.preparedBy || loginName;
+  const matchingPerson = salesQuotePersonUsers().find(user => norm(user.name) === norm(salesperson));
   return {
     id: source.id || "",
     quotationNo: source.quotationNo || source.no || cleanNextSalesQuotationNo(),
     quotationDate: new Date().toLocaleDateString("en-GB").replace(/\//g, "-"),
     validity: "7 Days",
-    salesperson: source.salesperson || source.salesPerson || source.preparedBy || loginName,
+    salesperson,
+    ownerId: source.ownerId || source.salesPersonId || matchingPerson?.id || "",
     customer: source.customer || "",
     project: source.project || "",
     location: source.location || "",
@@ -6289,6 +6459,7 @@ function quoteDraftFromSource(source = {}) {
 async function startSalesQuotationDraft(source = {}, triggerButton = null) {
   if (salesQuotationOpening) return;
   salesQuotationOpening = true;
+  salesQuotationJustCreated = false;
   salesQuotationDraft = null;
   salesQuotationRevisionNoLock = "";
   salesQuotationDraft = quoteDraftFromSource(source);
@@ -6310,6 +6481,12 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
   if (!salesQuotationDraft || salesQuotationSaving) return;
   const savedCustomer = requireSavedSalesCustomer(salesQuotationDraft.customer, "Quotation customer");
   if (!savedCustomer) return;
+  if (isCurrentAdmin() && !String(salesQuotationDraft.salesperson || "").trim())
+    return toast("Enter a sales person before saving the quotation.");
+  if (isStaffUser()) {
+    salesQuotationDraft.ownerId = currentUser.id;
+    salesQuotationDraft.salesperson = currentUser.name;
+  }
   salesQuotationSaving = true;
   const originalButtonText = triggerButton?.textContent || "";
   if (triggerButton) {
@@ -6347,12 +6524,14 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
     const savedQuote = response.savedItem;
     markLeadQuoteSentFromQuotation(savedQuote).catch(error => console.warn(error));
     if (status === "Sent") {
+      salesQuotationJustCreated = true;
       salesQuotationDraft = {
         ...structuredClone(savedQuote),
         quotationNo: savedQuote.no || savedQuote.quotationNo || requestedQuotationNo,
         quotationDate: savedQuote.date || salesQuotationDraft.quotationDate
       };
     } else {
+      salesQuotationJustCreated = false;
       salesQuotationMode = "list";
       salesQuotationDraft = null;
     }
@@ -6431,6 +6610,7 @@ async function deleteLeadFollowUp(leadId, followIndex) {
 function editSalesQuotation(quoteId) {
   const quote = findSalesQuotation(quoteId);
   if (!quote) return;
+  salesQuotationJustCreated = false;
   salesQuotationRevisionNoLock = "";
   salesQuotationDraft = {
     ...structuredClone(quote),
@@ -8457,13 +8637,37 @@ function refreshInventoryInBackground(force = false) {
     .catch(error => console.warn(error));
 }
 
+function fetchWorkflowList(query) {
+  if (workflowListLoads.has(query)) return workflowListLoads.get(query);
+  const epoch = workflowCacheEpoch;
+  const pending = api(`/api/projects?q=${encodeURIComponent(query)}`).then(projects => {
+    if (epoch === workflowCacheEpoch) workflowListCache.set(query, projects);
+    return projects;
+  }).finally(() => {
+    if (workflowListLoads.get(query) === pending) workflowListLoads.delete(query);
+  });
+  workflowListLoads.set(query, pending);
+  return pending;
+}
+
 async function loadProjectList() {
   const request = ++workflowListRequest;
-  const q = encodeURIComponent($("#searchInput").value || "");
-  const projects = await api(`/api/projects?q=${q}`);
+  const query = $("#searchInput").value || "";
+  renderWorkflowList(workflowListCache.get(query));
+  let projects;
+  try {
+    projects = await fetchWorkflowList(query);
+  } catch (error) {
+    if (request !== workflowListRequest || activeView !== 'documents') return;
+    throw error;
+  }
   if (request !== workflowListRequest || activeView !== 'documents') return;
+  renderWorkflowList(projects);
+}
+
+function renderWorkflowList(projects) {
   const list = $("#projectList");
-  list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects.map((project,index) => `
+  list.innerHTML = `<div class="workflow-table-wrap"><table class="workflow-table"><thead><tr><th>S.No</th><th>Selection No.</th><th>Project Name</th><th>Client / Consultant</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead><tbody>${projects?.map((project,index) => `
     <tr data-workflow-mode="${escapeHtml(project.workflowMode || 'vrv')}">
       <td>${index + 1}</td>
       <td><button type="button" class="workflow-selection-link" data-workflow-action="open" data-project-id="${escapeHtml(project.id)}">${escapeHtml(project.selectionNumber || (project.workflowMode === 'dx' ? 'DX Workflow' : project.workflowMode === 'vrv' ? 'VRV Workflow' : 'Workflow'))}</button><small>${project.createdAt ? escapeHtml(new Date(project.createdAt).toLocaleDateString()) : ''}</small></td>
@@ -8480,7 +8684,7 @@ async function loadProjectList() {
         </div>
       </div></td>
     </tr>
-  `).join("") || '<tr><td colspan="7" class="pipeline-empty">No saved workflows found.</td></tr>'}</tbody></table></div>`;
+  `).join("") || `<tr><td colspan="7" class="pipeline-empty">${projects ? "No saved workflows found." : "Loading workflows..."}</td></tr>`}</tbody></table></div>`;
   list.onclick = handleWorkflowListClick;
   list.onpointerover = event => {
     const link = event.target.closest('[data-workflow-action="open"]');
@@ -8499,6 +8703,7 @@ async function loadProjectList() {
 async function deleteProject(projectId) {
   if (!confirm("Delete this project canvas? This cannot be undone.")) return;
   ++workflowListRequest;
+  workflowListCache.clear();
   const row = [...document.querySelectorAll('#projectList [data-workflow-action="open"]')]
     .find(button => button.dataset.projectId === projectId)?.closest('tr');
   row?.remove();

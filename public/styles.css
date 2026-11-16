@@ -9820,3 +9820,13 @@ body.login-active .mobile-app-bar { display: none; }
 .page-load-table-row:nth-child(even){background:#f6f9fe}
 @keyframes page-load-shimmer{to{background-position-x:-200%}}
 @media(prefers-reduced-motion:reduce){.page-load-shimmer,.page-load-table-head,.page-load-table-row{animation:none}}
+.order-book-save-notice{position:fixed;top:24px;right:24px;z-index:200;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:11px 14px;border:1px solid #b8d0f6;border-radius:8px;background:#f5f9ff;box-shadow:0 10px 28px rgba(16,42,85,.16);color:#10234d;font:500 13px/1.4 Inter,Arial,sans-serif}
+.order-book-save-notice.is-error{border-color:#efb4b4;background:#fff8f8;color:#8b2020}
+.order-book-save-notice button{flex:none;border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit;padding:5px 9px;font:600 12px Inter,Arial,sans-serif;cursor:pointer}
+.sales-quote-person-field{display:grid;gap:6px;min-width:0;color:#536887;font-size:12px;font-weight:600}
+.sales-quote-person-picker{position:relative;display:flex;align-items:center;min-height:36px;padding:4px 9px;border:1px solid #d5e2f3;border-radius:6px;background:#fff}
+.sales-quote-person-picker:focus-within{border-color:#6aa2f8;box-shadow:0 0 0 2px rgba(11,99,246,.14)}
+.sales-quote-create-page .sales-form-grid .sales-quote-person-picker input[data-sales-quote-person-input]{width:100%;min-height:26px;padding:2px 0;border:0;outline:0;box-shadow:none;background:transparent;font-size:13px;font-weight:400}
+.sales-quote-create-page .sales-form-grid .sales-quote-person-picker input[data-sales-quote-person-input].is-linked{font-weight:600}
+.sales-quote-create-page .sales-form-grid .sales-quote-person-picker input[data-sales-quote-person-input]:focus{border:0;outline:0;box-shadow:none}
+.sales-quote-person-picker .sales-project-person-options{z-index:30;font-weight:400}
