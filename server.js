@@ -1656,6 +1656,11 @@ function nextAvailableOrderBookNo(orders = [], year = new Date().getFullYear()) 
 }
 
 let orderBookCreateQueue = Promise.resolve();
+function orderBookProjectNumberTaken(orders, projectNo, orderId = "") {
+  const target = cleanCell(projectNo || "").toLowerCase();
+  return !!target && orders.some(order => order.id !== orderId && cleanCell(order.projectNo || "").toLowerCase() === target);
+}
+
 function createOrderBook(body, user, users = []) {
   const pending = orderBookCreateQueue.then(async () => {
     for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -1674,6 +1679,7 @@ function createOrderBook(body, user, users = []) {
       if (store.orderBook.some(order => cleanCell(order.orderNo).toLowerCase() === orderNo.toLowerCase())) {
         return { status: 409, error: `Order number ${orderNo} already exists.` };
       }
+      if (orderBookProjectNumberTaken(store.orderBook, body.projectNo, body.id)) return { status: 409, error: `Project No. ${cleanCell(body.projectNo)} is already linked to another order.` };
       if (body.id && store.orderBook.some(order => order.id === body.id)) {
         return { status: 409, error: "This order has already been created." };
       }
@@ -1681,6 +1687,15 @@ function createOrderBook(body, user, users = []) {
         ...body, orderNo, salesPerson: assignee.name,
         salesPersonId: assignee.id, ownerId: assignee.id
       }, store);
+      if (item.projectNo) {
+        const project = store.projects.find(entry => cleanCell(entry.projectNo || entry.projectId).toLowerCase() === item.projectNo.toLowerCase());
+        if (project) {
+          if (cleanCell(project.customer).toLowerCase() !== cleanCell(item.customer).toLowerCase()) return { status: 400, error: "Project and order must have the same customer." };
+          if (project.orderBookNo && cleanCell(project.orderBookNo).toLowerCase() !== item.orderNo.toLowerCase()) return { status: 409, error: `Project No. ${item.projectNo} is already linked to another order.` };
+          project.orderBookNo = item.orderNo;
+          project.division = item.division;
+        }
+      }
       store.orderBook.unshift(item);
       if (USE_SUPABASE) {
         store.revision += 1;
@@ -1762,6 +1777,14 @@ function mergedSalesCustomers(salesCustomers = [], inventoryCustomers = []) {
   return merged.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
 }
 
+function salesProjectWithPayment(store, project) {
+  const projectNo = cleanCell(project.projectNo || project.projectId).toLowerCase();
+  const orderNo = cleanCell(project.orderBookNo).toLowerCase();
+  const order = store.orderBook.find(entry => orderNo && cleanCell(entry.orderNo).toLowerCase() === orderNo
+    || projectNo && cleanCell(entry.projectNo).toLowerCase() === projectNo && cleanCell(entry.customer).toLowerCase() === cleanCell(project.customer).toLowerCase());
+  return order ? { ...project, linkedOrderPayment: { orderNo: order.orderNo, orderValue: order.orderValue, paymentReceived: order.paymentReceived } } : project;
+}
+
 async function salesCrmView(store, user) {
   const [inventory, appSettings] = await Promise.all([readInventory(), readSettings()]);
   const staff = isStaff(user);
@@ -1779,7 +1802,7 @@ async function salesCrmView(store, user) {
     } : { ...store.settings, salesTargets: appSettings.salesTargets || [], salesPeople: appSettings.users.map(({ id, name, email, role, active }) => ({ id, name, email, role, active })) },
     leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
-    projects: staff ? store.projects.filter(item => salesProjectAssignedTo(item, user)) : store.projects,
+    projects: (staff ? store.projects.filter(item => salesProjectAssignedTo(item, user)) : store.projects).map(project => salesProjectWithPayment(store, project)),
     orderBook: staff ? store.orderBook.filter(item => staffOwnsOrder(item, user)) : store.orderBook,
     customers: mergedSalesCustomers(store.customers || [], inventory.customers || [])
   };
@@ -2765,10 +2788,12 @@ function normalizeSalesItem(collection, input, store) {
       salesPersons: Array.isArray(base.salesPersons) ? base.salesPersons.map(cleanCell).filter(Boolean).slice(0, 3) : [],
       projectNo,
       projectId: projectNo,
+      orderBookNo: cleanCell(base.orderBookNo || ""),
       name: cleanCell(base.name || ""),
       customer: cleanCell(base.customer || ""),
       location: cleanCell(base.location || ""),
       category: cleanCell(base.category || base.type || "Commercial"),
+      division: cleanCell(base.division || (["Trading", "Project/Inst", "Maint/Replace"].includes(base.category) ? base.category : "Project/Inst")),
       type: cleanCell(base.type || base.category || "Commercial"),
       productType: cleanCell(base.productType || base.requirement || ""),
       requirement: cleanCell(base.requirement || base.productType || ""),
@@ -2865,6 +2890,7 @@ function normalizeSalesItem(collection, input, store) {
       date: base.sourceDateMissing ? "" : cleanCell(base.date || todayDisplayDate()),
       customer: cleanCell(base.customer || ""),
       jobDescription: cleanCell(base.jobDescription || base.project || ""),
+      projectNo: cleanCell(base.projectNo || ""),
       location: cleanCell(base.location || ""),
       contactPerson: cleanCell(base.contactPerson || ""),
       contactNumber: cleanCell(base.contactNumber || ""),
@@ -4299,6 +4325,7 @@ async function handleApi(req, res) {
       const duplicate = store.orderBook.some(entry => entry.id !== previous.id
         && cleanCell(entry.orderNo).toLowerCase() === cleanCell(rawItem.orderNo).toLowerCase());
       if (duplicate) return send(res, 409, { error: `Order number ${cleanCell(rawItem.orderNo)} already exists.` });
+      if (orderBookProjectNumberTaken(store.orderBook, rawItem.projectNo, previous.id)) return send(res, 409, { error: `Project No. ${cleanCell(rawItem.projectNo)} is already linked to another order.` });
       const selectedId = cleanCell(rawItem.salesPersonId || "");
       const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId
         && entry.active !== false && (isAdmin(entry) || isStaff(entry)));
@@ -4356,6 +4383,19 @@ async function handleApi(req, res) {
     const item = normalizeSalesItem(collection, requestedQuotationNo
       ? { ...rawItem, no: requestedQuotationNo, quotationNo: requestedQuotationNo }
       : rawItem, store);
+    if (collection === "orderBook") {
+      const previous = store.orderBook.find(order => order.id === item.id);
+      const linkedProject = item.projectNo ? store.projects.find(project => cleanCell(project.projectNo || project.projectId).toLowerCase() === item.projectNo.toLowerCase()) : null;
+      if (linkedProject && cleanCell(linkedProject.customer).toLowerCase() !== cleanCell(item.customer).toLowerCase()) return send(res, 400, { error: "Project and order must have the same customer." });
+      if (linkedProject && linkedProject.orderBookNo && cleanCell(linkedProject.orderBookNo).toLowerCase() !== cleanCell(previous?.orderNo).toLowerCase()) return send(res, 409, { error: `Project No. ${item.projectNo} is already linked to another order.` });
+      for (const project of store.projects) {
+        if (project !== linkedProject && cleanCell(project.orderBookNo).toLowerCase() === cleanCell(previous?.orderNo).toLowerCase()) project.orderBookNo = "";
+      }
+      if (linkedProject) {
+        linkedProject.orderBookNo = item.orderNo;
+        linkedProject.division = item.division;
+      }
+    }
     if (collection === "quotations" && requestedQuotationNo) {
       const revisionMatch = requestedQuotationNo.match(/-R(\d+)$/i);
       const revisionNo = revisionMatch ? Number(revisionMatch[1]) || 0 : 0;
@@ -4412,6 +4452,18 @@ async function handleApi(req, res) {
       item.ownerIds = assignedIds;
       item.salesPerson = assignees[0].name;
       item.salesPersons = assignees.map(entry => entry.name);
+      const selectedOrder = item.orderBookNo ? store.orderBook.find(order => cleanCell(order.orderNo).toLowerCase() === item.orderBookNo.toLowerCase()) : null;
+      if (item.orderBookNo && !selectedOrder) return send(res, 400, { error: "Select an existing Orderbook No." });
+      if (selectedOrder && store.projects.some(project => project.id !== item.id && cleanCell(project.orderBookNo).toLowerCase() === item.orderBookNo.toLowerCase())) return send(res, 409, { error: `Order ${item.orderBookNo} is already linked to another project.` });
+      if (selectedOrder && cleanCell(selectedOrder.customer).toLowerCase() !== cleanCell(item.customer).toLowerCase()) return send(res, 400, { error: "Project and order must have the same customer." });
+      if (selectedOrder && selectedOrder.projectNo && cleanCell(selectedOrder.projectNo).toLowerCase() !== item.projectNo.toLowerCase()) return send(res, 409, { error: `Order ${selectedOrder.orderNo} is already linked to another project.` });
+      for (const order of store.orderBook) {
+        if (order !== selectedOrder && cleanCell(order.projectNo).toLowerCase() === cleanCell(existingProject?.projectNo || item.projectNo).toLowerCase()) order.projectNo = "";
+      }
+      if (selectedOrder) {
+        selectedOrder.projectNo = item.projectNo;
+        selectedOrder.division = item.division;
+      }
       const boqModels = new Set((item.boq || []).map(row => inventoryNorm(row.model || row.modelNo)).filter(Boolean));
       for (const upload of item.directDeliveryUploads || []) {
         upload.lines = (upload.lines || []).map(line => ({ ...line, status: boqModels.has(inventoryNorm(line.modelNo)) ? "Matched" : "Not in BOQ" }));
@@ -4489,7 +4541,7 @@ async function handleApi(req, res) {
     await writeSalesCrm(store);
     if (collection === "customers") await syncSalesCustomerToInventory(item);
     if (collection === "projects" && url.searchParams.get("compact") === "1") return send(res, 200, {
-      savedItem: item, savedItemId: item.id,
+      savedItem: salesProjectWithPayment(store, item), savedItemId: item.id,
       nextProjectNo: store.settings.nextProjectNo
     });
     if (collection === "quotations" && url.searchParams.get("compact") === "1") return send(res, 200, {

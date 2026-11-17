@@ -3162,15 +3162,14 @@ function salesProjectsHtml() {
 function salesProjectTableHtml(rows) {
   return `
     <table class="sales-table sales-project-table">
-      <thead><tr><th>Project & Customer</th><th>Location</th><th>Product Type</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Project & Customer</th><th>Location</th><th>Payment Status</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(project => {
         const projectNo = salesProjectNo(project);
-        const productType = salesProjectProduct(project);
         return `
         <tr class="${project.id === salesProjectDetailId ? "selected" : ""}">
           <td><strong>${escapeHtml(project.name || projectNo)}</strong><br><span>${escapeHtml(project.customer || "-")}</span></td>
           <td>${escapeHtml(project.location || "-")}</td>
-          <td>${escapeHtml(productType || "-")}</td>
+          <td>${salesProjectPaymentHtml(project)}</td>
           <td>${escapeHtml(salesProjectPeople(project) || "-")}</td>
           <td>${salesBadge(salesProjectCurrentStatus(project))}</td>
           <td>
@@ -3207,6 +3206,30 @@ function salesProjectMatchesTab(project, tab) {
 
 function salesProjectNo(project = {}) {
   return project.projectNo || project.projectId || project.no || "";
+}
+
+function salesProjectOrderBookNo(project = {}) {
+  if (!salesProjectNo(project)) return project.orderBookNo || "";
+  const linked = (salesData().orderBook || []).find(order => norm(order.projectNo) === norm(salesProjectNo(project)) && norm(order.customer) === norm(project.customer));
+  return linked?.orderNo || project.orderBookNo || "";
+}
+
+function salesProjectDivision(project = {}) {
+  const orderNo = salesProjectOrderBookNo(project);
+  const order = (salesData().orderBook || []).find(item => norm(item.orderNo) === norm(orderNo));
+  return order?.division || project.division || (["Trading", "Project/Inst", "Maint/Replace"].includes(project.category) ? project.category : "Project/Inst");
+}
+
+function salesProjectPaymentHtml(project = {}) {
+  const orderNo = salesProjectOrderBookNo(project);
+  const order = (salesData().orderBook || []).find(item => norm(item.orderNo) === norm(orderNo));
+  const payment = order || project.linkedOrderPayment;
+  if (!orderNo || !payment) return `<span class="sales-project-payment-empty">-</span>`;
+  const value = Math.max(0, Number(payment.orderValue || 0));
+  const received = Math.max(0, Number(payment.paymentReceived || 0));
+  const pending = Math.max(0, value - received);
+  const label = pending <= 0.01 ? "Payment Completed" : "Payment Pending";
+  return `<div class="sales-project-payment ${pending > 0.01 ? "is-pending" : ""}"><strong>${escapeHtml(salesMoney(pending))}</strong><small>${label}</small></div>`;
 }
 
 function salesProjectStatus(project = {}) {
@@ -3561,11 +3584,11 @@ function openSalesProjectDrawer(itemId = "") {
             ${salesProjectDrawerField("Project Name", "name", project.name)}
             <label>Customer<input list="salesProjectCustomerList" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}"></label>
             ${salesProjectDrawerField("Location", "location", project.location)}
-            ${salesProjectDrawerField("Project Category", "category", project.category || project.type, salesProjectCategoryOptions())}
+            ${salesProjectDrawerField("Division", "division", salesProjectDivision(project), ["Project/Inst", "Maint/Replace", "Trading"])}
             ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project), salesProjectStatusOptions())}
             ${salesPersonField}
             ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
-            ${salesProjectDrawerField("Target Completion Date", "targetDate", formatSalesDateInput(project.targetDate || ""), null, "dateText")}
+            <label>Orderbook No.<select data-project-drawer-field="orderBookNo"><option value="">Select Orderbook No.</option>${(salesData().orderBook || []).filter(order => norm(order.customer) === norm(project.customer) && (!(salesData().projects || []).some(other => other.id !== project.id && norm(salesProjectOrderBookNo(other)) === norm(order.orderNo)))).map(order => `<option value="${escapeHtml(order.orderNo)}" ${norm(salesProjectOrderBookNo(project)) === norm(order.orderNo) ? "selected" : ""}>${escapeHtml(order.orderNo)}</option>`).join("")}</select></label>
           </div>
         </section>
         <section class="sales-project-form-section">
@@ -3599,6 +3622,20 @@ function openSalesProjectDrawer(itemId = "") {
     </section>
   `;
   document.body.appendChild(modal);
+  const orderBookSelect = modal.querySelector('[data-project-drawer-field="orderBookNo"]');
+  const projectCustomer = modal.querySelector('[data-project-drawer-field="customer"]');
+  const projectDivision = modal.querySelector('[data-project-drawer-field="division"]');
+  orderBookSelect?.addEventListener("change", () => {
+    const order = (salesData().orderBook || []).find(item => norm(item.orderNo) === norm(orderBookSelect.value));
+    if (order?.division && projectDivision) projectDivision.value = order.division;
+  });
+  projectCustomer?.addEventListener("input", () => {
+    const selected = orderBookSelect.value;
+    const orders = (salesData().orderBook || []).filter(order => norm(order.customer) === norm(projectCustomer.value)
+      && !(salesData().projects || []).some(other => other.id !== project.id && norm(salesProjectOrderBookNo(other)) === norm(order.orderNo)));
+    orderBookSelect.innerHTML = `<option value="">Select Orderbook No.</option>${orders.map(order => `<option value="${escapeHtml(order.orderNo)}">${escapeHtml(order.orderNo)}</option>`).join("")}`;
+    if (orders.some(order => order.orderNo === selected)) orderBookSelect.value = selected;
+  });
   modal._salesPersonIds = selectedSalesPeople;
   const personSearch = modal.querySelector("[data-project-person-search]");
   const personOptions = modal.querySelector("[data-project-person-options]");
@@ -4156,7 +4193,12 @@ async function saveSalesProject(payload) {
   const index = projects.findIndex(project => project.id === response.savedItemId);
   if (index >= 0) projects[index] = response.savedItem;
   else projects.unshift(response.savedItem);
-  salesCrmState = { ...salesData(), projects, settings: { ...salesData().settings, nextProjectNo: response.nextProjectNo } };
+  const orderBook = (salesData().orderBook || []).map(order => {
+    if (norm(order.orderNo) === norm(response.savedItem.orderBookNo)) return { ...order, projectNo: salesProjectNo(response.savedItem), division: response.savedItem.division };
+    if (norm(order.projectNo) === norm(salesProjectNo(response.savedItem))) return { ...order, projectNo: "" };
+    return order;
+  });
+  salesCrmState = { ...salesData(), projects, orderBook, settings: { ...salesData().settings, nextProjectNo: response.nextProjectNo } };
   salesCrmLoadedAt = Date.now();
   renderSalesDesk();
   toast("Project saved");
@@ -4596,7 +4638,7 @@ function salesOrderBookHtml() {
   const orders = salesOrderBookRows();
   const searched = salesOrderBookSearch(orders);
   const filtered = salesOrderBookAdvancedFilter(searched);
-  const rows = salesOrderBookTabFilter(filtered);
+  const rows = salesOrderBookTabFilter(filtered).sort((a, b) => String(b.orderNo || "").localeCompare(String(a.orderNo || ""), undefined, { numeric: true, sensitivity: "base" }));
   const selected = salesOrderBookDetailId ? orders.find(order => order.id === salesOrderBookDetailId) : null;
   const detailOpen = !!selected;
   const stats = salesOrderBookStats(orders);
@@ -5062,11 +5104,17 @@ async function saveOrderBookInBackground(payload) {
     if (currentUser?.id !== userId) return;
     const orders = [...(salesData().orderBook || [])];
     const index = orders.findIndex(order => order.id === response.savedItemId);
+    const previousOrderNo = index >= 0 ? orders[index].orderNo : "";
     const visible = !isStaffUser() || response.savedItem.salesPersonId === userId;
     if (index >= 0 && !visible) orders.splice(index, 1);
     else if (index >= 0) orders[index] = response.savedItem;
     else if (visible) orders.unshift(response.savedItem);
-    salesCrmState = { ...salesData(), orderBook: orders, nextOrderBookNo: response.nextOrderBookNo };
+    const projects = (salesData().projects || []).map(project => {
+      if (norm(salesProjectNo(project)) === norm(response.savedItem.projectNo) && norm(project.customer) === norm(response.savedItem.customer)) return { ...project, orderBookNo: response.savedItem.orderNo, division: response.savedItem.division };
+      if (previousOrderNo && norm(project.orderBookNo) === norm(previousOrderNo)) return { ...project, orderBookNo: "" };
+      return project;
+    });
+    salesCrmState = { ...salesData(), orderBook: orders, projects, nextOrderBookNo: response.nextOrderBookNo };
     salesCrmLoadedAt = Date.now();
     salesOrderBookDetailId = visible ? response.savedItemId : "";
     if (activeView === "salesDesk" && salesDeskScreen === "orderBook") renderSalesDesk();
@@ -5107,7 +5155,9 @@ function openOrderBookForm(orderId = "", draft = null) {
           orderBookField("division", "Division", item.division, "select", ["Project/Inst", "Maint/Replace", "Trading"]),
           orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit === "VRV+DX" ? "VRV + DX" : item.typeOfUnit || "OTHERS", "select", ORDER_BOOK_UNIT_TYPES),
           orderBookField("brand", "Brand", item.brand),
-          `<div class="order-book-po-upload"><span>Upload PO</span><button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><div class="order-book-po-file"><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small><button type="button" class="order-book-po-remove" id="removeOrderBookPoBtn" title="Remove uploaded PO" aria-label="Remove uploaded PO" ${item.po?.fileName ? "" : "hidden"}>×</button></div></div>`,
+          `<div class="order-book-project-field"><label for="orderBookProjectNo">Project No.</label><input id="orderBookProjectNo" data-order-book-field="projectNo" value="${escapeHtml(item.projectNo || "")}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search project no. or name"><div class="order-book-project-options" data-order-book-project-options role="listbox" hidden></div></div>`,
+          `<div class="order-book-grid-spacer"></div>`,
+          `<div class="order-book-po-upload"><button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><div class="order-book-po-file"><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small><button type="button" class="order-book-po-remove" id="removeOrderBookPoBtn" title="Remove uploaded PO" aria-label="Remove uploaded PO" ${item.po?.fileName ? "" : "hidden"}>×</button></div></div>`,
           `<textarea id="orderBookUploadedPoJson" hidden>${escapeHtml(item.po ? JSON.stringify(item.po) : "")}</textarea>`
         ])}
         ${orderBookFormSection("Commercial Details", [
@@ -5120,7 +5170,7 @@ function openOrderBookForm(orderId = "", draft = null) {
           orderBookField("otherCosts", "Other Costs without VAT", item.otherCosts, "money")
         ])}
         ${orderBookFormSection("Payment & Job Status", [
-          orderBookField("paymentReceived", "Payment Received Inc. VAT", item.paymentReceived, "money"),
+          orderBookField("paymentReceived", "Payment Received Inc. VAT", item.paymentReceived, "readonlyMoney"),
           orderBookField("deliveryStatus", "Delivery Status", item.deliveryStatus || "Pending Delivery", "select", orderBookDeliveryStatuses()),
           orderBookField("status", "Order Status", item.status, "select", orderBookJobStatuses()),
           orderBookField("remarks", "Remarks", item.remarks, "textarea")
@@ -5134,6 +5184,8 @@ function openOrderBookForm(orderId = "", draft = null) {
     </aside>
   `;
   document.body.appendChild(modal);
+  modal.dataset.orderBookId = item.id || "";
+  setupOrderBookProjectPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#scanOrderBookPoBtn")?.addEventListener("click", () => scanOrderBookPoIntoForm(modal));
   modal.querySelector("#removeOrderBookPoBtn")?.addEventListener("click", () => {
@@ -5147,6 +5199,12 @@ function openOrderBookForm(orderId = "", draft = null) {
     modal.querySelector("#removeOrderBookPoBtn").hidden = true;
   });
   modal.querySelector("#scanOrderBookInvoiceBtn")?.addEventListener("click", () => scanOrderBookInvoiceIntoForm(modal));
+  modal.querySelector("#addOrderBookPaymentBtn")?.addEventListener("click", () => {
+    const body = modal.querySelector("#orderBookInvoiceRows");
+    body.querySelector(".order-book-empty-row")?.remove();
+    body.insertAdjacentHTML("beforeend", orderBookInvoiceRowHtml({ id: `manual-${Date.now()}-${Math.random().toString(36).slice(2)}` }));
+    body.lastElementChild?.querySelector('[data-order-invoice-field="totalAmount"]')?.focus();
+  });
   modal.addEventListener("input", event => {
     if (event.target.matches('[data-order-book-field="valueWithoutVat"]')) {
       const value = salesNumber(event.target.value);
@@ -5170,6 +5228,7 @@ function openOrderBookForm(orderId = "", draft = null) {
     if (button.disabled) return;
     const payload = collectOrderBookPayload(modal, item);
     if (!payload.orderNo || !payload.customer) return alert("Order No and customer are required.");
+    if (payload.projectNo && (salesData().orderBook || []).some(order => order.id !== payload.id && norm(order.projectNo) === norm(payload.projectNo))) return alert(`Project No. ${payload.projectNo} is already linked to another order.`);
     if (!payload.salesPersonId) return alert("Select a sales person.");
     const savedCustomer = existing && existing.importedFromOrderBook && norm(payload.customer) === norm(existing.customer)
       ? { name: existing.customer }
@@ -5182,6 +5241,48 @@ function openOrderBookForm(orderId = "", draft = null) {
     modal.remove();
     saveOrderBookInBackground(payload);
   });
+}
+
+function setupOrderBookProjectPicker(modal) {
+  const input = modal.querySelector('[data-order-book-field="projectNo"]');
+  const customer = modal.querySelector('[data-order-book-field="customer"]');
+  const options = modal.querySelector("[data-order-book-project-options]");
+  const description = modal.querySelector('[data-order-book-field="jobDescription"]');
+  if (!input || !customer || !options) return;
+  const render = () => {
+    const customerKey = norm(customer.value);
+    const query = norm(input.value);
+    const used = new Set((salesData().orderBook || []).filter(order => order.id !== modal.dataset.orderBookId).map(order => norm(order.projectNo)).filter(Boolean));
+    const matches = customerKey ? (salesData().projects || []).filter(project => norm(project.customer) === customerKey && !used.has(norm(salesProjectNo(project)))
+      && (!query || norm(salesProjectNo(project)).includes(query) || norm(project.name).includes(query))).slice(0, 30) : [];
+    options.innerHTML = matches.map(project => `<button type="button" role="option" data-order-project-no="${escapeHtml(salesProjectNo(project))}"><strong>${escapeHtml(salesProjectNo(project))}</strong><span>${escapeHtml(project.name || "")}</span></button>`).join("");
+    options.hidden = document.activeElement !== input || !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", render);
+  customer.addEventListener("input", () => { input.value = ""; render(); });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest("[data-order-project-no]");
+    if (!option) return;
+    input.value = option.dataset.orderProjectNo;
+    const projectName = option.querySelector("span")?.textContent?.trim() || "";
+    if (projectName && description) {
+      const current = description.value.trim();
+      const previous = input.dataset.selectedProjectName || "";
+      const base = previous && current === previous ? "" : previous && current.endsWith(` - ${previous}`) ? current.slice(0, -(` - ${previous}`).length).trim() : current;
+      description.value = !base ? projectName : base === projectName || base.endsWith(` - ${projectName}`) ? base : `${base} - ${projectName}`;
+      input.dataset.selectedProjectName = projectName;
+    }
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+  });
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") options.hidden = true;
+    if (event.key === "Enter" && !options.hidden) { event.preventDefault(); options.querySelector("button")?.click(); }
+  });
+  input.addEventListener("blur", () => { options.hidden = true; input.setAttribute("aria-expanded", "false"); });
 }
 
 function orderBookStatuses() {
@@ -5206,7 +5307,7 @@ function orderBookInvoicePaymentsSection(item) {
     <section class="sales-lead-form-section order-book-payments-section">
       <div class="order-book-section-head">
         <h3>Payments</h3>
-        <button type="button" class="sales-secondary" id="scanOrderBookInvoiceBtn">Upload Invoice</button>
+        <div class="order-book-payment-actions"><button type="button" class="sales-secondary" id="addOrderBookPaymentBtn">Add Payment</button><button type="button" class="sales-secondary" id="scanOrderBookInvoiceBtn">Upload Invoice</button></div>
       </div>
       <small id="orderBookInvoiceScanStatus" class="order-book-scan-status">Upload invoice to auto-fill payment received. If total is unclear, amount stays blank.</small>
       <div class="order-book-payment-table-wrap">
@@ -5252,6 +5353,7 @@ function orderBookInvoiceRowHtml(invoice = {}) {
 function orderBookField(key, label, value = "", type = "text", options = []) {
   const attrs = `data-order-book-field="${escapeHtml(key)}"`;
   if (type === "readonly") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}" readonly title="Final number is assigned when saved"></label>`;
+  if (type === "readonlyMoney") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value ? String(value) : "")}" readonly title="Calculated from payment rows"></label>`;
   if (type === "textarea") return `<label class="span-two">${escapeHtml(label)}<textarea ${attrs}>${escapeHtml(value || "")}</textarea></label>`;
   if (type === "select") return `<label>${escapeHtml(label)}<select ${attrs}>${options.map(option => `<option ${String(value) === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   if (type === "list") {
@@ -5266,7 +5368,7 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
 function orderBookSalesPersonField(item) {
   const people = orderBookSalesPeople();
   const selected = orderBookSalesPersonId(item, people);
-  return `<label class="order-book-sales-person">Sales Person <b>*</b><select data-order-book-field="salesPersonId" required>
+  return `<label class="order-book-sales-person"><span class="sales-lead-label-text">Sales Person<span class="required-star">*</span></span><select data-order-book-field="salesPersonId" required>
     <option value="">Select sales person</option>
     ${people.map(person => `<option value="${escapeHtml(person.id)}" ${person.id === selected ? "selected" : ""}>${escapeHtml(person.name)}</option>`).join("")}
   </select></label>`;
