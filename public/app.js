@@ -13458,6 +13458,7 @@ function groupVrvRowsForSchedule(rows) {
       refs.push(...explicitRefs.map(ref => ({
         outdoorName: ref.outdoorName || "",
         outdoorModel: ref.outdoorModel || "",
+        outdoorPs: ref.ps || ref.outdoorPs || "",
         outdoorComponents: Array.isArray(ref.outdoorComponents) ? ref.outdoorComponents : []
       })));
     } else if (row.outdoorModel) {
@@ -13699,7 +13700,7 @@ function outdoorFields(outdoor) {
 }
 
 function vrvOutdoorCcForSchedule(name,model,outdoor) {
-  if (!/^VRV/i.test(String(name || '').trim())) return '';
+  if (!String(name || '').trim() || /^[A-Z]$/i.test(String(name).trim())) return '';
   const detail = (state.extracted?.vrv?.outdoorDetailsRows || []).find(row =>
     norm(row.Name) === norm(name) && norm(row.Model) === norm(model));
   return detail?.['CC Kw'] || outdoor.cc || '';

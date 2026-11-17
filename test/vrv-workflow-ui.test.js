@@ -38,6 +38,12 @@ test('VRV steps render the live project tables and report tabs', () => {
   assert.match(run('vrvStepThree()'), /Room A/);
 });
 
+test('VRV report displays extraction reconciliation warnings', () => {
+  const { project, run } = workflow();
+  project.extracted.vrv = { vrvRows: [], outdoorDetailsRows: [], materialRows: [], warnings: ['Indoor quantities differ from the material list.'] };
+  assert.match(run('vrvStepTwo()'), /Review extraction: Indoor quantities differ from the material list\./);
+});
+
 test('custom export displays only requested columns and BOQ uses saved pricing', () => {
   const { project, run } = workflow();
   run("vrvData().mode='custom'; vrvData().customColumns=['Indoor','Room']");

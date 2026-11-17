@@ -1859,6 +1859,23 @@ function hydrateProject(project) {
   if (!project.tables) project.tables = {};
   if (!project.tables.vrvSchedule) project.tables.vrvSchedule = { columns: workflowScheduleColumns(project.workflowMode), rows: [] };
   project.tables.vrvSchedule.columns = workflowScheduleColumns(project.workflowMode);
+  if (project.workflowMode === "vrv" && Array.isArray(project.tables.vrvSchedule.rows)) {
+    const outdoorByModel = new Map(project.lookup.outdoorData.map(item => [cleanCell(item.model).toUpperCase(), item]));
+    const fields = [
+      ["Outdoor Nominal Index", "nominalIndex"], ["Ambient Temp", "ambient"], ["CC", "cc"],
+      ["PI ESMA", "piEsma"], ["Outdoor PS", "ps"], ["Outdoor MCA", "mca"],
+      ["MOP", "mop"], ["RLA", "rla"], ["Outdoor WxHxD", "wxhxd"], ["Outdoor Weight", "weight"]
+    ];
+    for (const row of project.tables.vrvSchedule.rows) {
+      const outdoor = outdoorByModel.get(cleanCell(row["Outdoor Model"]).toUpperCase());
+      if (!outdoor) continue;
+      for (const [column, key] of fields) {
+        if (column === "CC" && /^[A-Z]$/i.test(cleanCell(row["Outdoor Name"]))) continue;
+        if (cleanCell(row[column]) || outdoor[key] == null || !cleanCell(outdoor[key])) continue;
+        row[column] = outdoor[key];
+      }
+    }
+  }
   if (!project.tables.thermal) project.tables.thermal = { columns: workflowThermalColumns(project.workflowMode), rows: [] };
   if (project.workflowMode === "dx" && !project.tables.thermal.rows?.length) {
     project.tables.thermal.columns = workflowThermalColumns(project.workflowMode);
@@ -9637,21 +9654,57 @@ function extractVrvFile(file, originalName) {
   const materialRows = extractMaterialRows(documentXml);
   const vrvRows = extractVrvRows(documentXml, text);
   const reportTables = extractTables(documentXml);
+  const outdoorRefsBySystem = extractOutdoorDetailRefs(reportTables);
   const outdoorCr = extractOutdoorCrValues(reportTables);
-  const outdoorDetailsRows = Object.values(extractOutdoorDetailRefs(reportTables)).flat().map(row => {
+  const outdoorDetailsRows = Object.values(outdoorRefsBySystem).flat().map(row => {
     const key = `${normalizeVrvSystemName(row.outdoorName)}|${row.outdoorModel}`;
     const values = outdoorCr.get(key) || [];
     const cooling = values.shift() || {};
     return {Name:row.outdoorName,Model:row.displayModel || row.outdoorModel,CR:cooling.cr || '', 'CC Kw':cooling.cc || '',PS:row.ps || ''};
   });
+  const warnings = validateVrvReportCounts(materialRows, vrvRows, outdoorRefsBySystem);
   return {
-    status: materialRows.length || vrvRows.length || outdoorDetailsRows.length ? "ok" : "empty",
+    status: warnings.length ? "partial" : materialRows.length || vrvRows.length || outdoorDetailsRows.length ? "ok" : "empty",
     materialRows,
     vrvRows,
     outdoorDetailsRows,
+    warnings,
     projectName,
-    message: materialRows.length || vrvRows.length ? "VRV report extracted." : "No material rows were detected."
+    message: warnings.length ? `VRV report needs review: ${warnings.join(' ')}` : materialRows.length || vrvRows.length ? "VRV report extracted." : "No material rows were detected."
   };
+}
+
+function validateVrvReportCounts(materialRows, indoorRows, outdoorRefsBySystem) {
+  const warnings = [];
+  const expected = new Map();
+  for (const row of materialRows) {
+    const model = cleanCell(row.model).toUpperCase();
+    const qty = Number(row.qty);
+    if (model && Number.isFinite(qty)) expected.set(model, (expected.get(model) || 0) + qty);
+  }
+  const indoor = new Map();
+  for (const row of indoorRows) {
+    const model = cleanCell(row.fcu).toUpperCase();
+    if (model) indoor.set(model, (indoor.get(model) || 0) + 1);
+  }
+  const outdoor = new Map();
+  for (const refs of Object.values(outdoorRefsBySystem)) {
+    const components = refs.filter(ref => /^[A-Z]$/i.test(ref.outdoorName)).map(ref => ref.outdoorModel);
+    const models = components.length ? components : refs.map(ref => ref.outdoorModel);
+    for (const model of models) outdoor.set(model, (outdoor.get(model) || 0) + 1);
+  }
+  const compare = (label, actual, prefix) => {
+    const models = [...new Set([...expected.keys(), ...actual.keys()])].filter(model => prefix.test(model));
+    const differences = models.filter(model => (expected.get(model) || 0) !== (actual.get(model) || 0));
+    if (differences.length) warnings.push(`${label} quantities differ from the material list: ${differences.slice(0, 4).map(model => `${model} ${actual.get(model) || 0}/${expected.get(model) || 0}`).join(', ')}${differences.length > 4 ? ', …' : ''} (extracted/expected).`);
+  };
+  if (expected.size) {
+    compare('Indoor', indoor, /^FX/i);
+    compare('Outdoor', outdoor, /^(?:RXY|RXQ)/i);
+  }
+  if (indoorRows.some(row => !row.system)) warnings.push('Some indoor rows could not be assigned to an outdoor system.');
+  if (indoorRows.some(row => row.__systemAssignment === 'order')) warnings.push('Some system assignments use table order because no matching system heading was found; verify those pairings.');
+  return warnings;
 }
 
 function unzipEntries(buffer) {
@@ -9831,6 +9884,30 @@ function normalizeVrvSystemName(value) {
   return match ? match[0].toUpperCase() : raw;
 }
 
+function parseVrvSystemHeading(line) {
+  const heading = cleanCell(line).match(/^(.{1,100}?)\s+-\s+((?:RXY|RXQ)[A-Z0-9-]+)(?:\s*=\s*(.*))?$/i);
+  if (!heading) return null;
+  const system = normalizeVrvSystemName(heading[1]);
+  const components = (heading[3]?.match(/\b(?:RXY|RXQ)[A-Z0-9-]+\b/gi) || []).map(model => model.toUpperCase());
+  return { system, main:heading[2].toUpperCase(), components };
+}
+
+function reportSystemHeadingsByTable(xml) {
+  const headings = [];
+  const matches = xml.matchAll(/<w:tbl[\s\S]*?<\/w:tbl>/g);
+  let previousEnd = 0;
+  let current = "";
+  for (const match of matches) {
+    for (const line of xmlText(xml.slice(previousEnd, match.index)).split("\n")) {
+      const heading = parseVrvSystemHeading(line);
+      if (heading) current = heading.system;
+    }
+    headings.push(current);
+    previousEnd = match.index + match[0].length;
+  }
+  return headings;
+}
+
 function fcuNameFromCells(cells) {
   for (const cell of cells) {
     const match = cleanCell(cell).match(/\bFCU-[A-Z0-9-]+\b/i);
@@ -9865,16 +9942,16 @@ function extractOutdoorDetailRefs(tables) {
     const header = (table[0] || []).map(cleanCell).join("|").toLowerCase();
     if (!header.includes("name") || !header.includes("model")) continue;
     const hasOutdoorColumns = headRows.includes("mca") || headRows.includes("wxhxd") || headRows.includes("weight") || headRows.includes("ps");
-    const hasOutdoorRows = table.some(row => /^VRV-/i.test(cleanCell(row[0])) && outdoorModelFromCell(row[1]));
+    const hasOutdoorRows = table.some(row => cleanCell(row[0]) && !/^[A-Z]$/i.test(cleanCell(row[0])) && outdoorModelFromCell(row[1]));
     if (!hasOutdoorColumns || !hasOutdoorRows) continue;
 
     let currentSystem = "";
-    for (const row of table.slice(2)) {
+    for (const row of table.slice(1)) {
       const outdoorName = normalizeVrvSystemName(row[0]);
       const outdoorModel = outdoorModelFromCell(row[1]);
       const ps = cleanCell(row[2]);
       if (!outdoorName || !outdoorModel) continue;
-      if (/^VRV-[A-Z0-9-]+$/i.test(outdoorName)) {
+      if (!/^[A-Z]$/i.test(outdoorName)) {
         currentSystem = outdoorName;
         refsBySystem[currentSystem] = refsBySystem[currentSystem] || [];
         refsBySystem[currentSystem].push({
@@ -9898,10 +9975,10 @@ function extractOutdoorDetailRefs(tables) {
   }
 
   for (const refs of Object.values(refsBySystem)) {
-    const parent = refs.find(ref => /^VRV-/i.test(ref.outdoorName));
+    const parent = refs.find(ref => !/^[A-Z]$/i.test(ref.outdoorName));
     if (parent) {
       parent.outdoorComponents = refs
-        .filter(ref => !/^VRV-/i.test(ref.outdoorName))
+        .filter(ref => /^[A-Z]$/i.test(ref.outdoorName))
         .map(ref => ref.outdoorModel)
         .filter(Boolean);
     }
@@ -9922,7 +9999,7 @@ function extractOutdoorCrValues(tables) {
     for (const row of table.slice(1)) {
       const name = normalizeVrvSystemName(row[nameIndex]);
       const model = outdoorModelFromCell(row[modelIndex]);
-      if (!/^VRV-/i.test(name) || !model) continue;
+      if (!name || /^[A-Z]$/i.test(name) || !model) continue;
       const key = `${name}|${model}`;
       if (!values.has(key)) values.set(key,[]);
       values.get(key).push({cr:cleanCell(row[crIndex]),cc:ccIndex >= 0 ? cleanCell(row[ccIndex]) : ''});
@@ -9931,10 +10008,9 @@ function extractOutdoorCrValues(tables) {
   return values;
 }
 
-function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
+function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem, tableSystems = []) {
   const rows = [];
   const systemsInReport = Object.keys(outdoorRefsBySystem);
-  const seenGroups = new Set();
   let systemIndex = 0;
 
   for (let tableIndex = 0; tableIndex < tables.length; tableIndex += 1) {
@@ -9985,15 +10061,13 @@ function extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem) {
     }
     if (!dataRows.length) continue;
 
-    const signature = dataRows.map(row => `${row.name}|${row.fcu}`).join(";");
-    if (seenGroups.has(signature)) continue;
-    seenGroups.add(signature);
-
     const firstNamedSystem = systemFromName(dataRows[0].name, systemByPrefix, "");
-    const fallbackSystem = firstNamedSystem || systemsInReport[systemIndex] || "";
+    const fallbackSystem = tableSystems[tableIndex] || firstNamedSystem || systemsInReport[systemIndex] || "";
+    const systemAssignment = tableSystems[tableIndex] ? 'heading' : firstNamedSystem ? 'name' : fallbackSystem ? 'order' : 'missing';
     for (const row of dataRows) {
       rows.push({
         system: systemFromName(row.name, systemByPrefix, fallbackSystem),
+        __systemAssignment: systemAssignment,
         name: row.name,
         fcu: row.fcu,
         tmpC: row.tmpC,
@@ -10020,21 +10094,13 @@ function extractVrvRows(xml, text) {
   for (const system of Object.keys(outdoorRefsBySystem)) {
     systemByPrefix[system.replace(/^VRV-/i, "").toUpperCase()] = system;
   }
-  const systemLines = text.split("\n").filter(line => /^VRV-[A-Z0-9]+/i.test(line.trim()));
-  for (const line of systemLines) {
-    const system = (line.match(/^(VRV-[A-Z0-9]+)/i) || [])[1];
-    if (system) {
-      const normalizedSystem = system.toUpperCase();
-      systemByPrefix[system.replace(/^VRV-/i, "").toUpperCase()] = normalizedSystem;
-      const main = (line.match(/-\s*((?:RXY[A-Z0-9]+|RXQ[A-Z0-9]+))\s*=/i) || [])[1];
-      const componentsPart = line.includes("=") ? line.split("=").slice(1).join("=") : "";
-      const components = (componentsPart.match(/(?:RXY[A-Z0-9]+|RXQ[A-Z0-9]+)/gi) || []).map(part => cleanCell(part).toUpperCase());
-      if (main || components.length) {
-        outdoorBySystem[normalizedSystem] = { main, components };
-      }
-    }
+  for (const line of text.split("\n")) {
+    const heading = parseVrvSystemHeading(line);
+    if (!heading) continue;
+    if (heading.system.startsWith("VRV-")) systemByPrefix[heading.system.slice(4)] = heading.system;
+    outdoorBySystem[heading.system] = heading;
   }
-  const rows = extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem);
+  const rows = extractIndoorGroups(tables, systemByPrefix, outdoorRefsBySystem, reportSystemHeadingsByTable(xml));
   if (!rows.length) {
     for (const line of text.split("\n")) {
       const cells = line.split(/\s{2,}|\t|\|/);
