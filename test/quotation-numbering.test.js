@@ -51,7 +51,8 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
       return response.headers.get("set-cookie").split(";")[0];
     };
     const admin = await login("admin@comfortzone.local", "admin123");
-    const orderPayload = { id: "compact-order-test", createNew: true, customer: "Test Customer", jobDescription: "Test Order", salesPersonId: "others" };
+    const { user: adminUser } = await (await request(admin, "/api/auth/me")).json();
+    const orderPayload = { id: "compact-order-test", createNew: true, customer: "Test Customer", jobDescription: "Test Order", salesPersonId: adminUser.id };
     const compactStart = performance.now();
     const order = await save(admin, "/api/sales-crm/orderBook?compact=1", orderPayload);
     const compactMs = performance.now() - compactStart;
@@ -68,7 +69,6 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
     const fullSave = await save(admin, "/api/sales-crm/orderBook", { ...orderPayload, id: "full-order-test" });
     const fullMs = performance.now() - fullStart;
     t.diagnostic(`Order Book save response: compact ${compactMs.toFixed(0)} ms / ${JSON.stringify(order).length} bytes; full ${fullMs.toFixed(0)} ms / ${JSON.stringify(fullSave).length} bytes`);
-    const { user: adminUser } = await (await request(admin, "/api/auth/me")).json();
     const project = await save(admin, "/api/sales-crm/projects?compact=1", {
       name: "Fast Project", customer: "Test Customer", ownerIds: [adminUser.id], boq: []
     });
@@ -79,6 +79,20 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
     const savedProject = (await (await request(admin, "/api/sales-crm")).json()).projects.find(item => item.id === project.savedItemId);
     assert.equal(savedProject.name, "Fast Project");
     const year = String(new Date().getFullYear()).slice(-2);
+    const manualOrder = await save(admin, "/api/sales-crm/orderBook?compact=1", {
+      ...orderPayload, id: "manual-order-test", orderNo: `CZ${year}-0004`, manualOrderNo: true
+    });
+    assert.equal(manualOrder.savedOrderNo, `CZ${year}-0004`);
+    assert.equal(manualOrder.nextOrderBookNo, `CZ${year}-0003`);
+    const duplicateManual = await request(admin, "/api/sales-crm/orderBook?compact=1", json({
+      ...orderPayload, id: "duplicate-manual-order", orderNo: `CZ${year}-0004`, manualOrderNo: true
+    }));
+    assert.equal(duplicateManual.status, 409);
+    const autoOrder = await save(admin, "/api/sales-crm/orderBook?compact=1", {
+      ...orderPayload, id: "gap-order-test", orderNo: `CZ${year}-9999`, manualOrderNo: false
+    });
+    assert.equal(autoOrder.savedOrderNo, `CZ${year}-0003`);
+    assert.equal(autoOrder.nextOrderBookNo, `CZ${year}-0005`);
     const adminNo = `EN${year}-1212`;
     const first = await save(admin, "/api/sales-crm/quotations", { no: adminNo, customer: "A", items: [] });
     assert.equal(first.quotations[0].no, adminNo);
@@ -116,6 +130,9 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
         name, email: `${name.toLowerCase()}@example.test`, role: "Staff", password: "test-password"
       });
     }
+    await save(admin, "/api/settings/users", {
+      name: "Maintenance User", email: "maintenance@example.test", role: "MTS", password: "test-password"
+    });
     const alice = await login("alice@example.test", "test-password");
     const bob = await login("bob@example.test", "test-password");
     const collidingNext = await save(alice, "/api/sales-crm/quotations", {
@@ -198,6 +215,30 @@ test("entered enquiry and quotation numbers persist and drive the next number", 
     });
     assert.equal(typedLogin.savedItem.ownerId, aliceId);
     assert.ok((await (await request(alice, "/api/sales-crm")).json()).quotations.some(quote => quote.id === customPerson.savedItemId));
+    const staffDirectory = (await (await request(alice, "/api/sales-crm")).json()).settings.orderBookSalesPeople;
+    assert.ok(staffDirectory.some(person => person.id === adminUser.id));
+    assert.ok(staffDirectory.some(person => person.id === bobId));
+    assert.ok(!staffDirectory.some(person => person.name === "Maintenance User"));
+    const staffOrder = await save(alice, "/api/sales-crm/orderBook?compact=1", {
+      id: "staff-order-test", createNew: true, customer: "Staff Customer", salesPersonId: aliceId,
+      orderNo: `CZ${year}-0099`, manualOrderNo: true
+    });
+    assert.equal(staffOrder.savedOrderNo, `CZ${year}-0099`);
+    const staffRenumber = await save(alice, "/api/sales-crm/orderBook?compact=1", {
+      ...staffOrder.savedItem, orderNo: `CZ${year}-0100`, salesPersonId: bobId
+    });
+    assert.equal(staffRenumber.savedOrderNo, `CZ${year}-0100`);
+    assert.equal(staffRenumber.savedItem.salesPerson, "Bob");
+    assert.ok(!(await (await request(alice, "/api/sales-crm")).json()).orderBook.some(order => order.id === staffOrder.savedItemId));
+    assert.ok((await (await request(bob, "/api/sales-crm")).json()).orderBook.some(order => order.id === staffOrder.savedItemId));
+    const adminRenumber = await save(admin, "/api/sales-crm/orderBook?compact=1", {
+      ...staffRenumber.savedItem, orderNo: `CZ${year}-0101`, salesPersonId: adminUser.id
+    });
+    assert.equal(adminRenumber.savedOrderNo, `CZ${year}-0101`);
+    const invalidSalesPerson = await request(admin, "/api/sales-crm/orderBook?compact=1", json({
+      ...orderPayload, id: "invalid-sales-person-order", salesPersonId: "others"
+    }));
+    assert.equal(invalidSalesPerson.status, 400);
   } finally {
     server.kill();
     if (server.exitCode === null) await new Promise(resolve => server.once("exit", resolve));

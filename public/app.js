@@ -3162,7 +3162,7 @@ function salesProjectsHtml() {
 function salesProjectTableHtml(rows) {
   return `
     <table class="sales-table sales-project-table">
-      <thead><tr><th>Project & Customer</th><th>Location</th><th>Product Type</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Project & Customer</th><th>Location</th><th>Product Type</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(project => {
         const projectNo = salesProjectNo(project);
         const productType = salesProjectProduct(project);
@@ -3171,7 +3171,8 @@ function salesProjectTableHtml(rows) {
           <td><strong>${escapeHtml(project.name || projectNo)}</strong><br><span>${escapeHtml(project.customer || "-")}</span></td>
           <td>${escapeHtml(project.location || "-")}</td>
           <td>${escapeHtml(productType || "-")}</td>
-          <td>${salesBadge(salesProjectStatus(project))}</td>
+          <td>${escapeHtml(salesProjectPeople(project) || "-")}</td>
+          <td>${salesBadge(salesProjectCurrentStatus(project))}</td>
           <td>
             <div class="sales-project-actions">
               ${rowMenu([
@@ -3182,7 +3183,7 @@ function salesProjectTableHtml(rows) {
             </div>
           </td>
         </tr>`;
-      }).join("") || `<tr><td colspan="5">No projects found.</td></tr>`}</tbody>
+      }).join("") || `<tr><td colspan="6">No projects found.</td></tr>`}</tbody>
     </table>
   `;
 }
@@ -3195,7 +3196,7 @@ function salesSelectedProject(rows, allRows) {
 }
 
 function salesProjectMatchesTab(project, tab) {
-  const status = norm(salesProjectStatus(project));
+  const status = norm(salesProjectCurrentStatus(project));
   if (!tab || tab === "all") return true;
   if (tab === "ongoing") return !["completed", "lost", "lost / closed", "closed"].includes(status);
   if (tab === "delivery") return status.includes("delivery");
@@ -3212,12 +3213,25 @@ function salesProjectStatus(project = {}) {
   return project.status || "Ongoing";
 }
 
+function salesProjectCurrentStatus(project = {}) {
+  const rows = salesProjectBoqRows(project).filter(row => row.model || row.modelNo || row.description || Number(row.qty || row.quantity || 0));
+  if (!rows.length) return "Ongoing";
+  return rows.some(row => Number(row.qty || row.quantity || 0) > salesProjectBoqDeliveredQty(project, row))
+    ? "Delivery Pending" : "Completed";
+}
+
+function salesProjectPeople(project = {}) {
+  const ids = project.ownerIds?.length ? project.ownerIds : project.ownerId ? [project.ownerId] : [];
+  const users = appSettings?.users || salesData().settings?.salesPeople || [];
+  const names = ids.map((id, index) => users.find(user => user.id === id)?.name || project.salesPersons?.[index] || (id === project.ownerId ? project.salesPerson : "")).filter(Boolean);
+  return [...new Set(names)].join(", ") || project.salesPerson || "";
+}
+
 function salesProjectAutoStatus(project = {}) {
-  const existingStatus = salesProjectStatus(project);
-  if (["LOST", "LOSTCLOSED", "CLOSED"].includes(norm(existingStatus))) return existingStatus;
   const rows = salesProjectBoqRows(project).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
   if (!rows.length) return "Ongoing";
-  return rows.some(row => (Number(row.qty || 0) - Number(row.deliveredQty || 0)) > 0) ? "Delivery Pending" : "Completed";
+  return rows.some(row => Number(row.pendingQty ?? (Number(row.qty || 0) - Number(row.deliveredQty || 0))) > 0)
+    ? "Delivery Pending" : "Completed";
 }
 
 function salesProjectProduct(project = {}) {
@@ -3232,7 +3246,7 @@ function salesProjectDetailHtml(project) {
       <div class="pipeline-detail-head">
         <div class="pipeline-detail-title">
           <h3>${escapeHtml(project.name || salesProjectNo(project) || "Project")}</h3>
-          ${salesBadge(salesProjectStatus(project))}
+          ${salesBadge(salesProjectCurrentStatus(project))}
         </div>
         <button class="mini-button" type="button" data-sales-project-close-detail aria-label="Close project details">X</button>
       </div>
@@ -3264,6 +3278,7 @@ function salesProjectDetailField(label, key, value = "", type = "text", options 
 }
 
 function salesProjectBoqTableHtml(project, boqRows) {
+  const deliveryStarted = boqRows.some(row => salesProjectBoqDeliveredQty(project, row) > 0);
   return `
     <table class="sales-mini-table sales-project-detail-boq-table">
       <thead><tr><th>Model</th><th>Qty</th><th>Delivered Qty</th><th>Pending Qty</th></tr></thead>
@@ -3272,7 +3287,7 @@ function salesProjectBoqTableHtml(project, boqRows) {
         const qty = Number(row.qty || row.quantity || 0) || 0;
         const delivered = salesProjectBoqDeliveredQty(project, row);
         const pending = qty - delivered;
-        return `<tr><td>${escapeHtml(model || "-")}</td><td>${qty || ""}</td><td class="sales-project-delivered-qty">${delivered || ""}</td><td class="sales-project-pending-qty">${pending}</td></tr>`;
+        return `<tr class="${deliveryStarted && pending > 0 ? "sales-project-partial-delivery" : ""}"><td>${escapeHtml(model || "-")}</td><td>${qty || ""}</td><td class="sales-project-delivered-qty">${delivered || ""}</td><td class="sales-project-pending-qty">${pending}</td></tr>`;
       }).join("") || `<tr><td colspan="4">No BOQ items yet.</td></tr>`}</tbody>
     </table>
   `;
@@ -3329,7 +3344,7 @@ function salesProjectProductTypes() {
 }
 
 function salesProjectStatusOptions() {
-  return ["Ongoing", "Delivery Pending", "Completed", "Lost / Closed"];
+  return ["Ongoing", "Delivery Pending", "Completed"];
 }
 
 function salesProjectCategoryOptions() {
@@ -3417,7 +3432,7 @@ function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}) {
   const canReserve = pending > 0;
   const reserve = canReserve && !!(row.reserve || row.reserveStock);
   return `
-    <tr data-project-boq-row data-project-boq-origin-model="${escapeHtml(model)}">
+    <tr data-project-boq-row data-project-boq-origin-model="${escapeHtml(model)}" ${row.imported ? "data-project-boq-imported" : ""}>
       <td>
         <input data-suggestion-list="salesProjectModelList" data-project-boq-field="model" value="${escapeHtml(model)}">
         <input type="hidden" data-project-boq-field="description" value="${escapeHtml(row.description || "")}">
@@ -3547,7 +3562,7 @@ function openSalesProjectDrawer(itemId = "") {
             <label>Customer<input list="salesProjectCustomerList" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}"></label>
             ${salesProjectDrawerField("Location", "location", project.location)}
             ${salesProjectDrawerField("Project Category", "category", project.category || project.type, salesProjectCategoryOptions())}
-            ${salesProjectDrawerField("Status", "status", salesProjectStatus(project), salesProjectStatusOptions())}
+            ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project), salesProjectStatusOptions())}
             ${salesPersonField}
             ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
             ${salesProjectDrawerField("Target Completion Date", "targetDate", formatSalesDateInput(project.targetDate || ""), null, "dateText")}
@@ -3558,7 +3573,7 @@ function openSalesProjectDrawer(itemId = "") {
           ${salesProjectDrawerField("Scope / Work Description", "scope", project.scope || project.description || "", null, "textarea")}
         </section>
         <section class="sales-project-form-section">
-          <h3><span>3</span> BOQ / Delivery Details</h3>
+          <div class="sales-project-boq-heading"><div class="sales-project-boq-heading-title"><h3><span>3</span> BOQ / Delivery Details</h3><button type="button" class="sales-project-boq-reading" data-project-boq-reading aria-live="polite" hidden disabled><span class="sales-project-boq-spinner" aria-hidden="true"></span>Reading BOQ...</button></div><label class="sales-project-boq-upload sales-secondary"><img src="/assets/maintenance-icons/upload.svg" alt="">Upload BOQ<input type="file" accept=".csv,.xlsx,.pdf,.png,.jpg,.jpeg,.webp" data-project-boq-upload hidden></label></div><p class="sales-project-boq-feedback" data-project-boq-feedback role="status" hidden></p>
           <div class="sales-project-boq-wrap">
             <table class="sales-project-boq-edit">
               <colgroup>
@@ -3620,6 +3635,43 @@ function openSalesProjectDrawer(itemId = "") {
   modal.querySelectorAll("[data-close-project-drawer]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("[data-add-project-boq]").addEventListener("click", () => {
     modal.querySelector(".sales-project-boq-edit tbody").insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({}, modal.querySelectorAll("[data-project-boq-row]").length, project));
+    salesProjectRefreshDrawerStatus(modal);
+  });
+  modal.querySelector("[data-project-boq-upload]").addEventListener("change", async event => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const label = event.target.closest(".sales-project-boq-upload");
+    const reading = modal.querySelector("[data-project-boq-reading]");
+    const feedback = modal.querySelector("[data-project-boq-feedback]");
+    const saveButton = modal.querySelector("[data-save-project-drawer]");
+    label.classList.add("is-loading");
+    reading.hidden = false;
+    feedback.hidden = true;
+    saveButton.disabled = true;
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await api("/api/sales-crm/projects/boq/preview", { method: "POST", body: form });
+      if (!modal.isConnected) return;
+      if (!Array.isArray(result.rows) || !result.rows.length) throw new Error("No Model and BOQ quantity rows were recognized. Check the file or enter them manually.");
+      const body = modal.querySelector(".sales-project-boq-edit tbody");
+      const existing = [...body.querySelectorAll("[data-project-boq-row]")];
+      if (existing.length === 1 && !existing[0].querySelector('[data-project-boq-field="model"]')?.value.trim()) existing[0].remove();
+      result.rows.forEach(row => body.insertAdjacentHTML("beforeend", salesProjectDrawerBoqRowHtml({ ...row, imported: true }, body.children.length, project)));
+      body.querySelectorAll("[data-project-boq-imported]").forEach(row => salesProjectUpdateBoqRow(row, false, project));
+      salesProjectRefreshDrawerStatus(modal);
+      feedback.textContent = `${result.rows.length} BOQ row${result.rows.length === 1 ? "" : "s"} added. Review before saving.`;
+      feedback.classList.remove("is-error");
+      feedback.hidden = false;
+      loadInventory({ force: true }).then(() => {
+        if (modal.isConnected) body.querySelectorAll("[data-project-boq-imported]").forEach(row => salesProjectUpdateBoqRow(row, false, project));
+      }).catch(error => console.warn("Could not refresh stock model matches", error));
+    } catch (error) {
+      feedback.textContent = error.message || "Could not import BOQ file";
+      feedback.classList.add("is-error");
+      feedback.hidden = false;
+    }
+    finally { label.classList.remove("is-loading"); reading.hidden = true; saveButton.disabled = false; event.target.value = ""; }
   });
   modal.addEventListener("input", event => {
     if (event.target === personSearch) {
@@ -3683,6 +3735,7 @@ function openSalesProjectDrawer(itemId = "") {
       const row = deleteButton.closest("[data-project-boq-row]");
       if (row?.querySelector('[data-project-boq-field="reserve"]')?.checked) return;
       row?.remove();
+      salesProjectRefreshDrawerStatus(modal);
       return;
     }
     if (event.target.closest("[data-clear-project-direct]")) clearSalesProjectDirectDelivery(modal);
@@ -3762,6 +3815,7 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false, project = {}) {
   if (descriptionInput && modelInfo?.description) descriptionInput.value = modelInfo.description;
   if (pendingCell) pendingCell.textContent = String(pending);
   if (stockCell) stockCell.textContent = model ? String(stock) : "";
+  row.querySelector('[data-project-boq-field="model"]')?.closest("td")?.classList.toggle("sales-project-model-unmatched", !!model && row.hasAttribute("data-project-boq-imported") && !modelInfo);
   if (reserveInput) {
     if (!canReserve) reserveInput.checked = false;
     reserveInput.disabled = !canReserve;
@@ -3775,6 +3829,13 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false, project = {}) {
     deleteButton.disabled = !!reserveInput?.checked;
     deleteButton.title = deleteButton.disabled ? "Unreserve this row before deleting it" : "Delete BOQ row";
   }
+  const modal = row.closest(".sales-project-drawer-backdrop");
+  if (modal) salesProjectRefreshDrawerStatus(modal);
+}
+
+function salesProjectRefreshDrawerStatus(modal) {
+  const statusField = modal.querySelector('[data-project-drawer-field="status"]');
+  if (statusField) statusField.value = salesProjectAutoStatus({ boq: collectSalesProjectBoqRows(modal) });
 }
 
 async function uploadSalesProjectDirectDelivery(modal, project, file) {
@@ -5001,11 +5062,13 @@ async function saveOrderBookInBackground(payload) {
     if (currentUser?.id !== userId) return;
     const orders = [...(salesData().orderBook || [])];
     const index = orders.findIndex(order => order.id === response.savedItemId);
-    if (index >= 0) orders[index] = response.savedItem;
-    else orders.unshift(response.savedItem);
+    const visible = !isStaffUser() || response.savedItem.salesPersonId === userId;
+    if (index >= 0 && !visible) orders.splice(index, 1);
+    else if (index >= 0) orders[index] = response.savedItem;
+    else if (visible) orders.unshift(response.savedItem);
     salesCrmState = { ...salesData(), orderBook: orders, nextOrderBookNo: response.nextOrderBookNo };
     salesCrmLoadedAt = Date.now();
-    salesOrderBookDetailId = response.savedItemId;
+    salesOrderBookDetailId = visible ? response.savedItemId : "";
     if (activeView === "salesDesk" && salesDeskScreen === "orderBook") renderSalesDesk();
     showOrderBookSaveNotice(payload.id, "saved", `Order ${response.savedOrderNo || payload.orderNo} saved`);
   } catch (error) {
@@ -5033,7 +5096,7 @@ function openOrderBookForm(orderId = "", draft = null) {
       </div>
       <div class="sales-lead-form">
         ${orderBookFormSection("Basic Details", [
-          orderBookField("orderNo", "Order No", item.orderNo, existing ? "text" : "readonly"),
+          orderBookField("orderNo", "Order No", item.orderNo),
           orderBookField("date", "Date", item.date, "dateText"),
           orderBookField("customer", "Customer", item.customer, "list", salesCustomerNames()),
           orderBookField("jobDescription", "Job Description", item.jobDescription, "textarea"),
@@ -5071,7 +5134,6 @@ function openOrderBookForm(orderId = "", draft = null) {
     </aside>
   `;
   document.body.appendChild(modal);
-  setupOrderBookSalesPersonPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#scanOrderBookPoBtn")?.addEventListener("click", () => scanOrderBookPoIntoForm(modal));
   modal.querySelector("#removeOrderBookPoBtn")?.addEventListener("click", () => {
@@ -5108,12 +5170,13 @@ function openOrderBookForm(orderId = "", draft = null) {
     if (button.disabled) return;
     const payload = collectOrderBookPayload(modal, item);
     if (!payload.orderNo || !payload.customer) return alert("Order No and customer are required.");
-    if (!payload.salesPersonId) return alert("Select a Sales Person or Others.");
+    if (!payload.salesPersonId) return alert("Select a sales person.");
     const savedCustomer = existing && existing.importedFromOrderBook && norm(payload.customer) === norm(existing.customer)
       ? { name: existing.customer }
       : requireSavedSalesCustomer(payload.customer, "Order customer");
     if (!savedCustomer) return;
     payload.customer = savedCustomer.name;
+    if (!existing && payload.orderNo !== item.orderNo) payload.manualOrderNo = true;
     button.disabled = true;
     button.textContent = "Saving...";
     modal.remove();
@@ -5202,19 +5265,17 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
 
 function orderBookSalesPersonField(item) {
   const people = orderBookSalesPeople();
-  const admin = norm(currentUser?.role) === "ADMIN";
   const selected = orderBookSalesPersonId(item, people);
-  const name = people.find(person => person.id === selected)?.name || (selected === "others" ? "Others" : item.salesPerson || currentUser?.name || "");
-  return `<div class="order-book-sales-person"><span>Sales Person <b>*</b></span>
-    <span class="order-book-person-control" data-order-book-person-picker><span class="order-book-person-tag" data-order-book-sales-tag>${escapeHtml(name)}${admin ? `<button type="button" data-order-book-person-remove aria-label="Remove ${escapeHtml(name)}">×</button>` : ""}</span>
-    ${admin ? `<input type="text" data-order-book-person-search role="combobox" aria-label="Search login names" aria-autocomplete="list" aria-expanded="false" autocomplete="off"><span class="order-book-person-options" data-order-book-person-options role="listbox" hidden></span>` : ""}
-    <input type="hidden" data-order-book-field="salesPersonId" value="${escapeHtml(admin ? selected : currentUser?.id || "")}"></span>
-  </div>`;
+  return `<label class="order-book-sales-person">Sales Person <b>*</b><select data-order-book-field="salesPersonId" required>
+    <option value="">Select sales person</option>
+    ${people.map(person => `<option value="${escapeHtml(person.id)}" ${person.id === selected ? "selected" : ""}>${escapeHtml(person.name)}</option>`).join("")}
+  </select></label>`;
 }
 
 function orderBookSalesPeople() {
-  const users = appSettings?.users?.length ? appSettings.users : salesData().settings?.salesPeople || [];
-  return users.filter(person => person.id && person.name && person.active !== false);
+  const users = appSettings?.users?.length ? appSettings.users : salesData().settings?.orderBookSalesPeople?.length
+    ? salesData().settings.orderBookSalesPeople : [currentUser];
+  return users.filter(person => person?.id && person.name && person.active !== false && ["ADMIN", "STAFF"].includes(norm(person.role)));
 }
 
 function orderBookSalesPersonId(item, people) {
@@ -5223,54 +5284,6 @@ function orderBookSalesPersonId(item, people) {
   const legacyNames = { ABHISHEK: "ABHISHEK", AMAL: "AMALSAIMON", AMALSAIMON: "AMALSAIMON", YOONUS: "YOONUS", ALAA: "ALAAALANI", ALAAALANI: "ALAAALANI" };
   const name = legacyNames[norm(item.salesPerson)] || "";
   return people.find(person => norm(person.name) === name)?.id || "others";
-}
-
-function setupOrderBookSalesPersonPicker(modal) {
-  const search = modal.querySelector("[data-order-book-person-search]");
-  if (!search) return;
-  const people = orderBookSalesPeople();
-  const hidden = modal.querySelector('[data-order-book-field="salesPersonId"]');
-  const tag = modal.querySelector("[data-order-book-sales-tag]");
-  const options = modal.querySelector("[data-order-book-person-options]");
-  const choose = id => {
-    hidden.value = id;
-    const name = people.find(person => person.id === id)?.name || "Others";
-    tag.innerHTML = `${escapeHtml(name)}<button type="button" data-order-book-person-remove aria-label="Remove ${escapeHtml(name)}">×</button>`;
-    tag.hidden = false;
-    search.value = "";
-    options.hidden = true;
-    search.blur();
-  };
-  const renderOptions = () => {
-    const matches = [...people, { id: "others", name: "Others" }].filter(person => person.name.toLowerCase().includes(search.value.trim().toLowerCase()));
-    const open = document.activeElement === search;
-    options.hidden = !open;
-    search.setAttribute("aria-expanded", String(open));
-    options.innerHTML = open ? matches.map(person => `<button type="button" role="option" data-order-book-person-option="${escapeHtml(person.id)}">${escapeHtml(person.name)}</button>`).join("") || `<span>No matching login names</span>` : "";
-  };
-  search.addEventListener("focus", renderOptions);
-  search.addEventListener("input", renderOptions);
-  search.addEventListener("keydown", event => {
-    if (event.key === "Escape") { options.hidden = true; search.blur(); }
-    if (event.key === "Enter") {
-      const first = options.querySelector("[data-order-book-person-option]");
-      if (first) { event.preventDefault(); choose(first.dataset.orderBookPersonOption); }
-    }
-  });
-  search.addEventListener("blur", () => setTimeout(() => { options.hidden = true; search.setAttribute("aria-expanded", "false"); }, 100));
-  modal.querySelector("[data-order-book-person-picker]").addEventListener("click", event => {
-    const choice = event.target.closest("[data-order-book-person-option]");
-    if (choice) {
-      choose(choice.dataset.orderBookPersonOption);
-    } else if (event.target.closest("[data-order-book-person-remove]")) {
-      event.preventDefault();
-      event.stopPropagation();
-      hidden.value = "";
-      tag.textContent = "";
-      tag.hidden = true;
-      search.focus();
-    } else if (event.target !== search) search.focus();
-  });
 }
 
 function collectOrderBookPayload(modal, base) {

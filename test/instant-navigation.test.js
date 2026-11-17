@@ -34,6 +34,7 @@ test("Order Book save waits for confirmation after showing Saving", async () => 
     pendingOrderBookSaves: new Map(), currentUser: { id: "user-1" },
     salesCrmState: { orderBook: [], nextOrderBookNo: "CZ26-0001" }, salesCrmLoadedAt: 0,
     salesOrderBookDetailId: "", activeView: "salesDesk", salesDeskScreen: "orderBook",
+    isStaffUser: () => false,
     salesData: () => context.salesCrmState,
     showOrderBookSaveNotice: (...args) => notices.push(args),
     api: () => new Promise(resolve => { resolveSave = resolve; }),

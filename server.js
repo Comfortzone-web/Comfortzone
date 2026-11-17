@@ -1634,12 +1634,25 @@ async function writeSalesCrm(store) {
 function nextAvailableOrderBookNo(orders = [], year = new Date().getFullYear()) {
   const prefix = `CZ${String(year).slice(-2)}-`;
   let highest = 0;
+  const used = new Set();
   for (const order of orders) {
     const number = cleanCell(order.orderNo || "");
     if (!number.startsWith(prefix) || !/^\d+$/.test(number.slice(prefix.length))) continue;
-    highest = Math.max(highest, Number(number.slice(prefix.length)));
+    const value = Number(number.slice(prefix.length));
+    if (!Number.isSafeInteger(value) || value < 1) continue;
+    used.add(value);
+    highest = Math.max(highest, value);
   }
-  return `${prefix}${String(highest + 1).padStart(4, "0")}`;
+  let gapStart = 0;
+  // Fill the newest missing run from its lowest number before older gaps.
+  for (let value = highest - 1; value >= 1; value -= 1) {
+    if (used.has(value)) {
+      if (gapStart) break;
+    } else {
+      gapStart = value;
+    }
+  }
+  return `${prefix}${String(gapStart || highest + 1).padStart(4, "0")}`;
 }
 
 let orderBookCreateQueue = Promise.resolve();
@@ -1652,14 +1665,12 @@ function createOrderBook(body, user, users = []) {
         raw = await readSupabaseValue("sales-crm");
       }
       const store = normalizeSalesCrm(raw);
-      const selectedId = isStaff(user) ? user.id : cleanCell(body.salesPersonId || "");
-      const assignee = users.find(entry => entry.id === selectedId && entry.active !== false);
-      if (!assignee && !(isAdmin(user) && selectedId === "others")) return { status: 400, error: "Select a Sales Person or Others." };
+      const selectedId = cleanCell(body.salesPersonId || "");
+      const assignee = users.find(entry => entry.id === selectedId && entry.active !== false && (isAdmin(entry) || isStaff(entry)));
+      if (!assignee) return { status: 400, error: "Select an active Admin or Staff sales person." };
       const requestedNo = cleanCell(body.orderNo || "");
-      const prefix = `CZ${String(new Date().getFullYear()).slice(-2)}-`;
-      const orderNo = !requestedNo || (requestedNo.startsWith(prefix) && /^\d+$/.test(requestedNo.slice(prefix.length)))
-        ? nextAvailableOrderBookNo(store.orderBook)
-        : requestedNo;
+      if (body.manualOrderNo === true && !requestedNo) return { status: 400, error: "Enter an Order No." };
+      const orderNo = body.manualOrderNo === true ? requestedNo : nextAvailableOrderBookNo(store.orderBook);
       if (store.orderBook.some(order => cleanCell(order.orderNo).toLowerCase() === orderNo.toLowerCase())) {
         return { status: 409, error: `Order number ${orderNo} already exists.` };
       }
@@ -1667,8 +1678,8 @@ function createOrderBook(body, user, users = []) {
         return { status: 409, error: "This order has already been created." };
       }
       const item = normalizeSalesItem("orderBook", {
-        ...body, orderNo, salesPerson: assignee?.name || "Others",
-        salesPersonId: assignee?.id || "", ownerId: assignee?.id || ""
+        ...body, orderNo, salesPerson: assignee.name,
+        salesPersonId: assignee.id, ownerId: assignee.id
       }, store);
       store.orderBook.unshift(item);
       if (USE_SUPABASE) {
@@ -1762,7 +1773,9 @@ async function salesCrmView(store, user) {
       nextEnquiryNo: staffNextEnquiryNo(user, store.leads),
       nextQuotationNo: staffNextQuotationNo(user, store.quotations),
       salesTargets: (appSettings.salesTargets || []).filter(entry => entry.userId === user.id),
-      salesPeople: [{ id: user.id, name: user.name, email: user.email }]
+      salesPeople: [{ id: user.id, name: user.name, email: user.email }],
+      orderBookSalesPeople: (appSettings.users || []).filter(entry => entry.active !== false && (isAdmin(entry) || isStaff(entry)))
+        .map(({ id, name, role }) => ({ id, name, role }))
     } : { ...store.settings, salesTargets: appSettings.salesTargets || [], salesPeople: appSettings.users.map(({ id, name, email, role, active }) => ({ id, name, email, role, active })) },
     leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
@@ -2274,6 +2287,57 @@ function csvTableRows(text = "", delimiter = ",") {
     cells.push(value.trim());
     return cells;
   });
+}
+
+function salesProjectImportBoqRows(filePart) {
+  const extension = path.extname(filePart.filename || "").toLowerCase();
+  if (![".csv", ".xlsx"].includes(extension)) throw new Error("Choose a CSV or XLSX BOQ file");
+  const tables = extension === ".csv"
+    ? [csvTableRows(filePart.body.toString("utf8"), [",", ";", "\t"].sort((a, b) => filePart.body.toString("utf8").split(b).length - filePart.body.toString("utf8").split(a).length)[0])]
+    : (() => {
+      const entries = xlsxZipEntries(filePart.body);
+      return [...entries.keys()].filter(name => /^xl\/worksheets\/sheet\d+\.xml$/.test(name))
+        .map(name => xlsxTableRows(filePart.body, name, entries));
+    })();
+  const key = value => cleanCell(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const table of tables) {
+    for (let index = 0; index < Math.min(table.length, 40); index++) {
+      const header = table[index].map(key);
+      const modelColumn = header.findIndex(value => /^(model(no|number|name)?|modelcode|itemcode|productcode|materialcode|sku)$/.test(value));
+      const itemColumn = header.findIndex(value => /^(item|itemname|itemno|itemnumber|itemdescription|description|productdescription|modeldescription|particulars)$/.test(value));
+      const model = modelColumn >= 0 ? modelColumn : itemColumn;
+      const qty = header.findIndex(value => /^(boq)?(qty|quantity)$|^(boq|bill|contract)(qty|quantity)$|^boq$/.test(value));
+      const description = header.findIndex(value => /^(description|itemdescription|modeldescription|productdescription)$/.test(value));
+      if (model < 0 || qty < 0) continue;
+      const rows = table.slice(index + 1).map(cells => ({
+        model: cleanCell(cells[model] || ""),
+        description: description < 0 || description === model ? "" : cleanCell(cells[description] || ""),
+        qty: Number(cleanCell(cells[qty] || "").replace(/,/g, ""))
+      })).filter(row => row.model && Number.isFinite(row.qty) && row.qty > 0);
+      if (rows.length) return rows;
+    }
+  }
+  throw new Error("No BOQ items found. Include Model, Item, or Description and a Qty or BOQ column.");
+}
+
+async function salesProjectExtractBoqRows(filePart) {
+  if (!process.env.OPENAI_API_KEY) throw new Error("AI recognition is unavailable. Configure OPENAI_API_KEY on the server.");
+  const extension = path.extname(filePart.filename || "").toLowerCase();
+  const mime = { ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp" }[extension];
+  if (!mime) throw new Error("Choose a PDF, PNG, JPG, or WebP file");
+  const data = `data:${mime};base64,${filePart.body.toString("base64")}`;
+  const content = [{ type: "input_text", text: "Extract HVAC BOQ rows from this document. The item may be labelled Item, Description, Model, or Model No.; the required quantity may be labelled Qty, Quantity, or BOQ. Return the exact item/model/code text in model, any separate descriptive text in description, and the BOQ quantity in qty. If there is only one item/description column, put its text in model and leave description blank. Use only values visible in the document; do not infer model numbers or quantities. Exclude headers, totals, prices, and delivered quantities. For uncertain rows leave model blank or qty zero so they can be skipped. Preserve original spelling." },
+    mime === "application/pdf" ? { type: "input_file", filename: filePart.filename, file_data: data } : { type: "input_image", image_url: data }];
+  const schema = { type: "object", additionalProperties: false, properties: {
+    rows: { type: "array", items: { type: "object", additionalProperties: false, properties: {
+      model: { type: "string" }, description: { type: "string" }, qty: { type: "number" }
+    }, required: ["model", "description", "qty"] } }
+  }, required: ["rows"] };
+  const result = await callOpenAIJson("sales_project_boq_extract", schema, content);
+  const rows = (result.rows || []).map(row => ({ model: cleanCell(row.model), description: cleanCell(row.description), qty: Number(row.qty) }))
+    .filter(row => row.model && Number.isFinite(row.qty) && row.qty > 0);
+  if (!rows.length) throw new Error("No clear BOQ model and quantity rows were recognized. Try a clearer file or enter rows manually.");
+  return rows;
 }
 
 function projectManagementImportBoq(project, filePart) {
@@ -3039,9 +3103,6 @@ function normalizeSalesProjectBoqItem(item = {}) {
 }
 
 function salesProjectAutoStatusServer(project = {}) {
-  const existingStatus = cleanCell(project.status || "Ongoing");
-  const statusKey = inventoryNorm(existingStatus);
-  if (["LOST", "LOSTCLOSED", "CLOSED"].includes(statusKey)) return existingStatus;
   const rows = (project.boq || project.items || []).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
   if (!rows.length) return "Ongoing";
   return rows.some(row => (Number(row.qty || 0) - Number(row.deliveredQty || 0)) > 0) ? "Delivery Pending" : "Completed";
@@ -4051,6 +4112,20 @@ async function handleApi(req, res) {
     });
   }
 
+  if (req.method === "POST" && url.pathname === "/api/sales-crm/projects/boq/preview") {
+    if (Number(req.headers["content-length"] || 0) > 15 * 1024 * 1024) return send(res, 413, { error: "BOQ file must be 15 MB or smaller" });
+    const multipart = parseMultipart(await collect(req), req.headers["content-type"] || "");
+    const filePart = multipart.find(part => part.filename);
+    if (!filePart) return send(res, 400, { error: "Choose a CSV, XLSX, PDF, or image BOQ file" });
+    if (filePart.body.length > 15 * 1024 * 1024) return send(res, 413, { error: "BOQ file must be 15 MB or smaller" });
+    try {
+      const extension = path.extname(filePart.filename || "").toLowerCase();
+      const rows = [".csv", ".xlsx"].includes(extension) ? salesProjectImportBoqRows(filePart) : await salesProjectExtractBoqRows(filePart);
+      return send(res, 200, { rows });
+    }
+    catch (error) { return send(res, 400, { error: error.message }); }
+  }
+
   if (req.method === "POST" && url.pathname === "/api/sales-crm/projects/direct-delivery/upload") {
     const buffer = await collect(req);
     const multipart = parseMultipart(buffer, req.headers["content-type"] || "");
@@ -4224,10 +4299,17 @@ async function handleApi(req, res) {
       const duplicate = store.orderBook.some(entry => entry.id !== previous.id
         && cleanCell(entry.orderNo).toLowerCase() === cleanCell(rawItem.orderNo).toLowerCase());
       if (duplicate) return send(res, 409, { error: `Order number ${cleanCell(rawItem.orderNo)} already exists.` });
-      const selectedId = isStaff(user) ? user.id : cleanCell(rawItem.salesPersonId || "");
-      const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId && entry.active !== false);
-      if (!assignee && !(isAdmin(user) && selectedId === "others")) return send(res, 400, { error: "Select a Sales Person or Others." });
-      rawItem = { ...rawItem, salesPerson: assignee?.name || "Others", salesPersonId: assignee?.id || "", ownerId: assignee?.id || "" };
+      const selectedId = cleanCell(rawItem.salesPersonId || "");
+      const assignee = (req.authSettings?.users || []).find(entry => entry.id === selectedId
+        && entry.active !== false && (isAdmin(entry) || isStaff(entry)));
+      const keepLegacyAssignee = isAdmin(user) && !assignee
+        && (!previous.salesPersonId || previous.salesPersonId === "others")
+        && (!selectedId || selectedId === previous.salesPersonId)
+        && cleanCell(rawItem.salesPerson).toLowerCase() === cleanCell(previous.salesPerson).toLowerCase();
+      if (!assignee && !keepLegacyAssignee) return send(res, 400, { error: "Select an active Admin or Staff sales person." });
+      rawItem = assignee
+        ? { ...rawItem, salesPerson: assignee.name, salesPersonId: assignee.id, ownerId: assignee.id }
+        : { ...rawItem, salesPerson: previous.salesPerson, salesPersonId: previous.salesPersonId || "", ownerId: previous.ownerId || "" };
     }
     if (body.fromDxBoq) {
       const quoteId = `dx-${body.sourceDxWorkflowId}`;
