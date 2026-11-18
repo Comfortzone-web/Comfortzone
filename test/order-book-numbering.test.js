@@ -11,17 +11,23 @@ const context = { cleanCell: value => String(value || "").trim() };
 vm.createContext(context);
 vm.runInContext(source.slice(start, end), context);
 
-test("Order Book fills the newest missing block starting at CZ26-0122", () => {
+test("Order Book continues after the highest number without reusing old gaps", () => {
   const orders = Array.from({ length: 121 }, (_, index) => index + 1)
     .filter(number => number !== 6)
     .concat([134, 135])
     .map(number => ({ orderNo: `CZ26-${String(number).padStart(4, "0")}` }));
-  assert.equal(context.nextAvailableOrderBookNo(orders, 2026), "CZ26-0122");
-  for (let number = 122; number <= 133; number += 1) {
-    orders.push({ orderNo: `CZ26-${String(number).padStart(4, "0")}` });
-    assert.equal(context.nextAvailableOrderBookNo(orders, 2026), number < 133
-      ? `CZ26-${String(number + 1).padStart(4, "0")}` : "CZ26-0006");
-  }
-  orders.push({ orderNo: "CZ26-0006" });
   assert.equal(context.nextAvailableOrderBookNo(orders, 2026), "CZ26-0136");
+  orders.push({ orderNo: "CZ26-0136" });
+  assert.equal(context.nextAvailableOrderBookNo(orders, 2026), "CZ26-0137");
+  assert.equal(context.nextAvailableOrderBookNo(orders, 2027), "CZ27-0001");
+});
+
+test("New Order preview ignores a stale gap-filling hint", () => {
+  const app = fs.readFileSync(path.join(__dirname, "../public/app.js"), "utf8");
+  const from = app.indexOf("function nextOrderBookNo(");
+  const to = app.indexOf("function showOrderBookSaveNotice(", from);
+  const preview = { salesData: () => ({ orderBook: [{ orderNo: "CZ26-0136" }], nextOrderBookNo: "CZ26-0006" }), Date: class extends Date { getFullYear() { return 2026; } } };
+  vm.createContext(preview);
+  vm.runInContext(app.slice(from, to), preview);
+  assert.equal(preview.nextOrderBookNo(), "CZ26-0137");
 });

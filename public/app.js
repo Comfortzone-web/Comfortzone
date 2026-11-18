@@ -5144,7 +5144,16 @@ function blankOrderBookOrder() {
 }
 
 function nextOrderBookNo() {
-  return salesData().nextOrderBookNo || `CZ${String(new Date().getFullYear()).slice(-2)}-0001`;
+  const prefix = `CZ${String(new Date().getFullYear()).slice(-2)}-`;
+  const highest = (salesData().orderBook || []).reduce((max, order) => {
+    const number = order.orderNo;
+    const suffix = String(number || "").startsWith(prefix) ? String(number).slice(prefix.length) : "";
+    return /^\d+$/.test(suffix) ? Math.max(max, Number(suffix)) : max;
+  }, 0);
+  const hint = String(salesData().nextOrderBookNo || "");
+  const hintSuffix = hint.startsWith(prefix) ? hint.slice(prefix.length) : "";
+  const next = Math.max(highest + 1, /^\d+$/.test(hintSuffix) ? Number(hintSuffix) : 1);
+  return `${prefix}${String(next).padStart(4, "0")}`;
 }
 
 function showOrderBookSaveNotice(orderId, status, message, retry) {

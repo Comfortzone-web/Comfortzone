@@ -1634,25 +1634,14 @@ async function writeSalesCrm(store) {
 function nextAvailableOrderBookNo(orders = [], year = new Date().getFullYear()) {
   const prefix = `CZ${String(year).slice(-2)}-`;
   let highest = 0;
-  const used = new Set();
   for (const order of orders) {
     const number = cleanCell(order.orderNo || "");
     if (!number.startsWith(prefix) || !/^\d+$/.test(number.slice(prefix.length))) continue;
     const value = Number(number.slice(prefix.length));
     if (!Number.isSafeInteger(value) || value < 1) continue;
-    used.add(value);
     highest = Math.max(highest, value);
   }
-  let gapStart = 0;
-  // Fill the newest missing run from its lowest number before older gaps.
-  for (let value = highest - 1; value >= 1; value -= 1) {
-    if (used.has(value)) {
-      if (gapStart) break;
-    } else {
-      gapStart = value;
-    }
-  }
-  return `${prefix}${String(gapStart || highest + 1).padStart(4, "0")}`;
+  return `${prefix}${String(highest + 1).padStart(4, "0")}`;
 }
 
 let orderBookCreateQueue = Promise.resolve();
