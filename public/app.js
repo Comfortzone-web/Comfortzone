@@ -93,6 +93,7 @@ let orderSummarySearch = "";
 let orderSummarySort = "newest";
 let salesOrderBookDetailId = "";
 const pendingOrderBookSaves = new Map();
+const pendingSalesProjectSaves = new Map();
 const orderBookSaveNotices = new Map();
 const pendingSalesDeletes = new Set();
 let salesOrderBookFiltersOpen = false;
@@ -3162,16 +3163,17 @@ function salesProjectsHtml() {
 function salesProjectTableHtml(rows) {
   return `
     <table class="sales-table sales-project-table">
-      <thead><tr><th>Project & Customer</th><th>Location</th><th>Payment Status</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Project No.</th><th>Project & Customer</th><th>Location</th><th>Payment Status</th><th>Sales Person</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>${rows.map(project => {
         const projectNo = salesProjectNo(project);
         return `
         <tr class="${project.id === salesProjectDetailId ? "selected" : ""}">
+          <td class="sales-project-number">${escapeHtml(projectNo || "-")}</td>
           <td><strong>${escapeHtml(project.name || projectNo)}</strong><br><span>${escapeHtml(project.customer || "-")}</span></td>
           <td>${escapeHtml(project.location || "-")}</td>
           <td>${salesProjectPaymentHtml(project)}</td>
           <td>${escapeHtml(salesProjectPeople(project) || "-")}</td>
-          <td>${salesBadge(salesProjectCurrentStatus(project))}</td>
+          <td>${salesProjectStatusHtml(project)}</td>
           <td>
             <div class="sales-project-actions">
               ${rowMenu([
@@ -3182,7 +3184,7 @@ function salesProjectTableHtml(rows) {
             </div>
           </td>
         </tr>`;
-      }).join("") || `<tr><td colspan="6">No projects found.</td></tr>`}</tbody>
+      }).join("") || `<tr><td colspan="7">No projects found.</td></tr>`}</tbody>
     </table>
   `;
 }
@@ -3197,10 +3199,9 @@ function salesSelectedProject(rows, allRows) {
 function salesProjectMatchesTab(project, tab) {
   const status = norm(salesProjectCurrentStatus(project));
   if (!tab || tab === "all") return true;
-  if (tab === "ongoing") return !["completed", "lost", "lost / closed", "closed"].includes(status);
-  if (tab === "delivery") return status.includes("delivery");
-  if (tab === "completed") return status === "completed";
-  if (tab === "lost") return ["lost", "lost / closed", "closed"].includes(status);
+  if (tab === "ongoing") return status !== "COMPLETED";
+  if (tab === "delivery") return ["PENDINGDELIVERY", "READYFORDELIVERY", "PARTIALLYDELIVERED", "DELIVERED"].includes(status);
+  if (tab === "completed") return status === "COMPLETED";
   return true;
 }
 
@@ -3232,15 +3233,48 @@ function salesProjectPaymentHtml(project = {}) {
   return `<div class="sales-project-payment ${pending > 0.01 ? "is-pending" : ""}"><strong>${escapeHtml(salesMoney(pending))}</strong><small>${label}</small></div>`;
 }
 
+function salesProjectDeliveryState(project = {}) {
+  const rows = salesProjectBoqRows(project).filter(row => row.model || row.modelNo || row.description || Number(row.qty || row.quantity || 0));
+  const linkedOrder = (salesData().orderBook || []).find(order => norm(order.orderNo) === norm(salesProjectOrderBookNo(project)));
+  if (!rows.length) {
+    const selected = linkedOrder?.deliveryStatus || project.status;
+    return { status: orderBookDeliveryStatuses().includes(selected) ? selected : "Pending Delivery", readyRemaining: false };
+  }
+  const pendingByModel = new Map();
+  const stockByModel = new Map();
+  let delivered = false;
+  for (const row of rows) {
+    const quantity = Number(row.qty || row.quantity || 0);
+    const deliveredQty = salesProjectBoqDeliveredQty(project, row);
+    if (deliveredQty > 0) delivered = true;
+    const pending = Math.max(0, quantity - deliveredQty);
+    if (pending) {
+      const model = salesProjectModelNo(row.model || row.modelNo || row.description || "");
+      pendingByModel.set(model, (pendingByModel.get(model) || 0) + pending);
+      if (model) stockByModel.set(model, Math.max(stockByModel.get(model) || 0, Number(row.stock || 0)));
+    }
+  }
+  if (!pendingByModel.size) {
+    const payment = linkedOrder || project.linkedOrderPayment;
+    const paid = payment && Number(payment.orderValue || 0) - Number(payment.paymentReceived || 0) <= 0.01;
+    return { status: paid ? "Completed" : "Delivered", readyRemaining: false };
+  }
+  const readyRemaining = [...pendingByModel].every(([model, pending]) => model
+    && (inventoryState ? salesProjectStockQty(model) : stockByModel.get(model) || 0) >= pending);
+  return { status: delivered ? "Partially Delivered" : readyRemaining ? "Ready for Delivery" : "Pending Delivery", readyRemaining: delivered && readyRemaining };
+}
+
 function salesProjectStatus(project = {}) {
   return project.status || "Ongoing";
 }
 
 function salesProjectCurrentStatus(project = {}) {
-  const rows = salesProjectBoqRows(project).filter(row => row.model || row.modelNo || row.description || Number(row.qty || row.quantity || 0));
-  if (!rows.length) return "Ongoing";
-  return rows.some(row => Number(row.qty || row.quantity || 0) > salesProjectBoqDeliveredQty(project, row))
-    ? "Delivery Pending" : "Completed";
+  return salesProjectDeliveryState(project).status;
+}
+
+function salesProjectStatusHtml(project = {}) {
+  const state = salesProjectDeliveryState(project);
+  return `<div class="sales-project-status-cell">${salesBadge(state.status)}${state.readyRemaining ? `<small>Ready for Delivery</small>` : ""}</div>`;
 }
 
 function salesProjectPeople(project = {}) {
@@ -3251,10 +3285,7 @@ function salesProjectPeople(project = {}) {
 }
 
 function salesProjectAutoStatus(project = {}) {
-  const rows = salesProjectBoqRows(project).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
-  if (!rows.length) return "Ongoing";
-  return rows.some(row => Number(row.pendingQty ?? (Number(row.qty || 0) - Number(row.deliveredQty || 0))) > 0)
-    ? "Delivery Pending" : "Completed";
+  return salesProjectCurrentStatus(project);
 }
 
 function salesProjectProduct(project = {}) {
@@ -3269,7 +3300,7 @@ function salesProjectDetailHtml(project) {
       <div class="pipeline-detail-head">
         <div class="pipeline-detail-title">
           <h3>${escapeHtml(project.name || salesProjectNo(project) || "Project")}</h3>
-          ${salesBadge(salesProjectCurrentStatus(project))}
+          ${salesProjectStatusHtml(project)}
         </div>
         <button class="mini-button" type="button" data-sales-project-close-detail aria-label="Close project details">X</button>
       </div>
@@ -3286,7 +3317,7 @@ function salesProjectDetailHtml(project) {
       </section>
       <section class="pipeline-detail-section">
         <h4>Delivery History</h4>
-        ${salesProjectDeliveryHistoryHtml(deliveryNotes)}
+        ${salesProjectDeliveryHistoryHtml(deliveryNotes, project.directDeliveryUploads || [])}
       </section>
     </aside>
   `;
@@ -3316,11 +3347,16 @@ function salesProjectBoqTableHtml(project, boqRows) {
   `;
 }
 
-function salesProjectDeliveryHistoryHtml(notes) {
+function salesProjectDeliveryHistoryHtml(notes, directUploads = []) {
+  const noteRows = notes.flatMap(note => (note.lines || note.items || []).map(line => `<tr><td>${escapeHtml(formatSalesDateInput(note.date || ""))}</td><td>${escapeHtml(note.dnNo || note.no || "")}</td><td>${escapeHtml(line.modelNo || line.model || "")}</td><td>${escapeHtml(line.qtyGoingOut || line.qty || line.quantity || "")}</td></tr>`));
+  const directRows = directUploads.flatMap(upload => {
+    const lines = upload.lines?.length ? upload.lines : [{}];
+    return lines.map(line => `<tr><td>${escapeHtml(formatSalesDateInput(upload.date || upload.uploadedAt || ""))}</td><td>${escapeHtml(upload.deliveryNoteNo || upload.originalName || "Direct Delivery")}</td><td>${escapeHtml(line.modelNo || line.model || "-")}</td><td>${escapeHtml(line.modelNo || line.model ? String(line.quantity ?? line.qty ?? 0) : "-")}</td></tr>`);
+  });
   return `
     <table class="sales-mini-table">
       <thead><tr><th>Date</th><th>DN No</th><th>Model</th><th>Delivered Qty</th></tr></thead>
-      <tbody>${notes.flatMap(note => (note.lines || note.items || []).map(line => `<tr><td>${escapeHtml(formatSalesDateInput(note.date || ""))}</td><td>${escapeHtml(note.dnNo || note.no || "")}</td><td>${escapeHtml(line.modelNo || line.model || "")}</td><td>${escapeHtml(line.qtyGoingOut || line.qty || line.quantity || "")}</td></tr>`)).join("") || `<tr><td colspan="4">No delivery history.</td></tr>`}</tbody>
+      <tbody>${[...noteRows, ...directRows].join("") || `<tr><td colspan="4">No delivery history.</td></tr>`}</tbody>
     </table>
   `;
 }
@@ -3367,7 +3403,7 @@ function salesProjectProductTypes() {
 }
 
 function salesProjectStatusOptions() {
-  return ["Ongoing", "Delivery Pending", "Completed"];
+  return orderBookDeliveryStatuses();
 }
 
 function salesProjectCategoryOptions() {
@@ -3445,7 +3481,7 @@ function salesProjectDrawerField(label, key, value = "", options = null, type = 
   return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="${escapeHtml(key)}" ${type === "dateText" ? 'type="date"' : ""} value="${type === "dateText" ? nativeDateValue(value) : escapeHtml(value || "")}"></label>`;
 }
 
-function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}) {
+function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}, persisted = false) {
   const model = salesProjectModelNo(row.model || row.modelNo || row.description || "");
   const qty = Number(row.qty || row.quantity || 0) || 0;
   const recordedDelivered = Number(row.deliveredQty || 0) || 0;
@@ -3455,7 +3491,7 @@ function salesProjectDrawerBoqRowHtml(row = {}, index = 0, project = {}) {
   const canReserve = pending > 0;
   const reserve = canReserve && !!(row.reserve || row.reserveStock);
   return `
-    <tr data-project-boq-row data-project-boq-origin-model="${escapeHtml(model)}" ${row.imported ? "data-project-boq-imported" : ""}>
+    <tr data-project-boq-row ${persisted ? `data-project-boq-persisted-index="${index}"` : ""} data-project-boq-origin-model="${escapeHtml(model)}" ${row.imported ? "data-project-boq-imported" : ""}>
       <td>
         <input data-suggestion-list="salesProjectModelList" data-project-boq-field="model" value="${escapeHtml(model)}">
         <input type="hidden" data-project-boq-field="description" value="${escapeHtml(row.description || "")}">
@@ -3553,9 +3589,10 @@ function salesProjectDirectStatusClass(status = "") {
   return "matched";
 }
 
-function openSalesProjectDrawer(itemId = "") {
+function openSalesProjectDrawer(itemId = "", draft = null) {
+  if (itemId && pendingSalesProjectSaves.has(itemId)) return toast("This project is still saving.");
   const existing = itemId ? structuredClone((salesData().projects || []).find(item => item.id === itemId)) : null;
-  const project = existing || salesProjectBlank();
+  const project = draft ? structuredClone(draft) : existing || salesProjectBlank();
   const customerOptions = (salesData().customers || []).map(customer => customer.name).filter(Boolean);
   const modelOptions = (inventoryState?.models || inventoryState?.stock || []).map(item => item.modelNo || item.model || item.name || "").filter(Boolean);
   const salesPeople = (appSettings?.users || []).filter(user => user.active !== false && user.id && user.name);
@@ -3585,7 +3622,7 @@ function openSalesProjectDrawer(itemId = "") {
             <label>Customer<input list="salesProjectCustomerList" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}"></label>
             ${salesProjectDrawerField("Location", "location", project.location)}
             ${salesProjectDrawerField("Division", "division", salesProjectDivision(project), ["Project/Inst", "Maint/Replace", "Trading"])}
-            ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project), salesProjectStatusOptions())}
+            ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project) === "Completed" ? "Delivered" : salesProjectCurrentStatus(project), salesProjectStatusOptions())}
             ${salesPersonField}
             ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
             <label>Orderbook No.<select data-project-drawer-field="orderBookNo"><option value="">Select Orderbook No.</option>${(salesData().orderBook || []).filter(order => norm(order.customer) === norm(project.customer) && (!(salesData().projects || []).some(other => other.id !== project.id && norm(salesProjectOrderBookNo(other)) === norm(order.orderNo)))).map(order => `<option value="${escapeHtml(order.orderNo)}" ${norm(salesProjectOrderBookNo(project)) === norm(order.orderNo) ? "selected" : ""}>${escapeHtml(order.orderNo)}</option>`).join("")}</select></label>
@@ -3608,7 +3645,7 @@ function openSalesProjectDrawer(itemId = "") {
                 <col class="sales-project-boq-reserve">
               </colgroup>
               <thead><tr><th>Model</th><th>BOQ</th><th>Delivered Qty</th><th>Pending Qty</th><th>Stock</th><th>Reserve</th></tr></thead>
-              <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map((row, index) => salesProjectDrawerBoqRowHtml(row, index, project)).join("")}</tbody>
+              <tbody>${(salesProjectBoqRows(project).length ? salesProjectBoqRows(project) : [{}]).map((row, index) => salesProjectDrawerBoqRowHtml(row, index, project, !!existing && !draft && index < salesProjectBoqRows(existing).length)).join("")}</tbody>
             </table>
           </div>
           <button class="sales-secondary sales-project-add-boq" data-add-project-boq>Add BOQ Row</button>
@@ -3622,12 +3659,15 @@ function openSalesProjectDrawer(itemId = "") {
     </section>
   `;
   document.body.appendChild(modal);
+  modal._projectBase = project;
   const orderBookSelect = modal.querySelector('[data-project-drawer-field="orderBookNo"]');
   const projectCustomer = modal.querySelector('[data-project-drawer-field="customer"]');
   const projectDivision = modal.querySelector('[data-project-drawer-field="division"]');
   orderBookSelect?.addEventListener("change", () => {
     const order = (salesData().orderBook || []).find(item => norm(item.orderNo) === norm(orderBookSelect.value));
     if (order?.division && projectDivision) projectDivision.value = order.division;
+    const statusField = modal.querySelector('[data-project-drawer-field="status"]');
+    if (order?.deliveryStatus && statusField && !salesProjectBoqRows(project).length) statusField.value = order.deliveryStatus;
   });
   projectCustomer?.addEventListener("input", () => {
     const selected = orderBookSelect.value;
@@ -3770,9 +3810,9 @@ function openSalesProjectDrawer(itemId = "") {
     const deleteButton = event.target.closest("[data-delete-project-boq]");
     if (deleteButton) {
       const row = deleteButton.closest("[data-project-boq-row]");
-      if (row?.querySelector('[data-project-boq-field="reserve"]')?.checked) return;
-      row?.remove();
-      salesProjectRefreshDrawerStatus(modal);
+      if (!row || deleteButton.disabled || modal._boqDeletePending) return;
+      if (row.querySelector('[data-project-boq-field="reserve"]')?.checked) return;
+      deleteSalesProjectBoqRow(modal, row);
       return;
     }
     if (event.target.closest("[data-clear-project-direct]")) clearSalesProjectDirectDelivery(modal);
@@ -3804,25 +3844,16 @@ function openSalesProjectDrawer(itemId = "") {
     const deleteUpload = event.target.closest("[data-delete-project-direct-upload]");
     if (deleteUpload) deleteSalesProjectDirectUpload(modal, project, deleteUpload.dataset.deleteProjectDirectUpload);
   });
-  modal.querySelector("[data-save-project-drawer]").addEventListener("click", async () => {
-    const payload = collectSalesProjectDrawer(modal, project);
+  modal.querySelector("[data-save-project-drawer]").addEventListener("click", () => {
+    const payload = collectSalesProjectDrawer(modal, modal._projectBase);
     if (!modal._salesPersonIds.length) return alert("Tag at least one sales person.");
     if (!payload.name.trim()) return alert("Project name is required.");
     if (!payload.customer.trim()) return alert("Customer is required.");
     const button = modal.querySelector("[data-save-project-drawer]");
     if (button.disabled) return;
-    const label = button.textContent;
     button.disabled = true;
-    button.textContent = "Saving...";
-    try {
-      await saveSalesProject(payload);
-      modal.remove();
-    } catch (error) {
-      toast(error.message || "Could not save project");
-    } finally {
-      button.disabled = false;
-      button.textContent = label;
-    }
+    modal.remove();
+    saveSalesProjectInBackground(payload);
   });
   loadInventory({ force: true })
     .then(() => {
@@ -3872,7 +3903,11 @@ function salesProjectUpdateBoqRow(row, normalizeModel = false, project = {}) {
 
 function salesProjectRefreshDrawerStatus(modal) {
   const statusField = modal.querySelector('[data-project-drawer-field="status"]');
-  if (statusField) statusField.value = salesProjectAutoStatus({ boq: collectSalesProjectBoqRows(modal) });
+  if (!statusField) return;
+  const project = { ...modal._projectBase, boq: collectSalesProjectBoqRows(modal), status: statusField.value };
+  if (!project.boq.length) return;
+  const status = salesProjectCurrentStatus(project);
+  statusField.value = status === "Completed" ? "Delivered" : status;
 }
 
 async function uploadSalesProjectDirectDelivery(modal, project, file) {
@@ -4159,7 +4194,7 @@ function collectSalesProjectDrawer(modal, baseProject) {
   payload.requirement = payload.productType || payload.requirement || "";
   payload.boq = collectSalesProjectBoqRows(modal);
   payload.directDeliveryUploads = modal._directDeliveryUploads || [];
-  payload.status = salesProjectAutoStatus(payload);
+  if (payload.boq.length) payload.status = salesProjectAutoStatus(payload);
   return payload;
 }
 
@@ -4187,7 +4222,66 @@ function collectSalesProjectBoqRows(container) {
   }).filter(row => row.model || row.description || row.qty || row.deliveredQty);
 }
 
-async function saveSalesProject(payload) {
+async function deleteSalesProjectBoqRow(modal, row) {
+  const persistedIndex = row.dataset.projectBoqPersistedIndex;
+  const base = modal._projectBase;
+  const saveButton = modal.querySelector("[data-save-project-drawer]");
+  const parent = row.parentElement;
+  const nextRow = row.nextSibling;
+  row.remove();
+  salesProjectRefreshDrawerStatus(modal);
+  if (persistedIndex === undefined || !base?.id) return;
+
+  const index = Number(persistedIndex);
+  const payload = structuredClone(base);
+  payload.boq.splice(index, 1);
+  modal._boqDeletePending = true;
+  pendingSalesProjectSaves.set(base.id, payload);
+  saveButton.disabled = true;
+  const noticeId = `project-boq:${base.id}`;
+  showOrderBookSaveNotice(noticeId, "saving", "Deleting BOQ row...");
+  try {
+    const saved = await saveSalesProject(payload, { notify: false });
+    modal._projectBase = saved;
+    parent.querySelectorAll("[data-project-boq-persisted-index]").forEach(other => {
+      if (Number(other.dataset.projectBoqPersistedIndex) > index) other.dataset.projectBoqPersistedIndex -= 1;
+    });
+    showOrderBookSaveNotice(noticeId, "saved", "BOQ row deleted");
+  } catch (error) {
+    if (modal.isConnected) {
+      parent.insertBefore(row, nextRow?.parentElement === parent ? nextRow : null);
+      salesProjectRefreshDrawerStatus(modal);
+    }
+    showOrderBookSaveNotice(noticeId, "failed", error.message || "Could not delete BOQ row", () => {
+      if (modal.isConnected && row.isConnected) deleteSalesProjectBoqRow(modal, row);
+      else openSalesProjectDrawer(base.id);
+    });
+  } finally {
+    modal._boqDeletePending = false;
+    pendingSalesProjectSaves.delete(base.id);
+    if (modal.isConnected) saveButton.disabled = false;
+  }
+}
+
+async function saveSalesProjectInBackground(payload) {
+  if (pendingSalesProjectSaves.has(payload.id)) return;
+  const userId = currentUser?.id;
+  pendingSalesProjectSaves.set(payload.id, payload);
+  const noticeId = `project:${payload.id}`;
+  showOrderBookSaveNotice(noticeId, "saving", `Saving project ${payload.name}...`);
+  try {
+    await saveSalesProject(payload, { notify: false });
+    if (currentUser?.id === userId) showOrderBookSaveNotice(noticeId, "saved", `Project ${payload.name} saved`);
+  } catch (error) {
+    if (currentUser?.id === userId) showOrderBookSaveNotice(noticeId, "failed", error.message || "Could not save project", () => {
+      openSalesProjectDrawer(payload.id, payload);
+    });
+  } finally {
+    pendingSalesProjectSaves.delete(payload.id);
+  }
+}
+
+async function saveSalesProject(payload, options = {}) {
   const response = await api("/api/sales-crm/projects?compact=1", { method: "POST", body: JSON.stringify(payload) });
   const projects = [...(salesData().projects || [])];
   const index = projects.findIndex(project => project.id === response.savedItemId);
@@ -4200,8 +4294,9 @@ async function saveSalesProject(payload) {
   });
   salesCrmState = { ...salesData(), projects, orderBook, settings: { ...salesData().settings, nextProjectNo: response.nextProjectNo } };
   salesCrmLoadedAt = Date.now();
-  renderSalesDesk();
-  toast("Project saved");
+  if (activeView === "salesDesk" && salesDeskScreen === "projects") renderSalesDesk();
+  if (options.notify !== false) toast("Project saved");
+  return response.savedItem;
 }
 
 async function saveSalesProjectDetail(projectId) {
@@ -4784,7 +4879,7 @@ function normalizeOrderBookOrder(order = {}, index = 0) {
     brand: order.importedFromOrderBook ? order.brand || "" : order.brand || "Daikin",
     salesPerson: order.salesPerson || "",
     status,
-    deliveryStatus: !order.sourceValueMissing && Math.abs(balance) <= 0.01 ? "Delivered" : order.deliveryStatus || "Pending Delivery",
+    deliveryStatus: order.deliveryStatus || "Pending Delivery",
     remarks: order.remarks || "",
     valueWithoutVat,
     vatAmount,
@@ -5294,7 +5389,7 @@ function orderBookJobStatuses() {
 }
 
 function orderBookDeliveryStatuses() {
-  return ["Pending Delivery", "Ready for Delivery", "Partially Delivered", "Delivered"];
+  return ["Ready for Delivery", "Pending Delivery", "Partially Delivered", "Delivered"];
 }
 
 function orderBookFormSection(title, fields) {
@@ -5355,7 +5450,7 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
   if (type === "readonly") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}" readonly title="Final number is assigned when saved"></label>`;
   if (type === "readonlyMoney") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value ? String(value) : "")}" readonly title="Calculated from payment rows"></label>`;
   if (type === "textarea") return `<label class="span-two">${escapeHtml(label)}<textarea ${attrs}>${escapeHtml(value || "")}</textarea></label>`;
-  if (type === "select") return `<label>${escapeHtml(label)}<select ${attrs}>${options.map(option => `<option ${String(value) === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
+  if (type === "select") return `<label>${escapeHtml(label)}<select ${attrs}>${options.map(option => `<option value="${escapeHtml(option)}" ${String(value) === option ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}</select></label>`;
   if (type === "list") {
     const listId = `order-book-${key}-${Math.random().toString(36).slice(2)}`;
     return `<label>${escapeHtml(label)}<input ${attrs} list="${listId}" value="${escapeHtml(value || "")}"><datalist id="${listId}">${uniqueValues(options).map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist></label>`;
@@ -5412,7 +5507,6 @@ function collectOrderBookPayload(modal, base) {
     ).join("; ");
   }
   payload.status = orderBookStatusFromPayment(payload.orderValue, payload.paymentReceived);
-  if (!payload.sourceValueMissing && Math.abs(payload.orderValue - payload.paymentReceived) <= 0.01) payload.deliveryStatus = "Delivered";
   const uploadedPoJson = modal.querySelector("#orderBookUploadedPoJson")?.value || "";
   if (modal.querySelector("#orderBookUploadedPoJson")?.dataset.removed === "true") payload.po = {};
   if (uploadedPoJson) {

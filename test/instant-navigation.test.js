@@ -74,3 +74,27 @@ test("failed Order Book save keeps its draft for Retry", async () => {
   assert.equal(reopened[0][0], payload.id);
   assert.equal(reopened[0][1], payload);
 });
+
+test("project background save reports confirmation and preserves failed draft for Retry", async () => {
+  const notices = [];
+  const reopened = [];
+  const payload = { id: "project-1", name: "Project", boq: [{ model: "A", qty: 2 }] };
+  let rejectSave;
+  const context = {
+    pendingSalesProjectSaves: new Map(), currentUser: { id: "user-1" },
+    showOrderBookSaveNotice: (...args) => notices.push(args),
+    saveSalesProject: () => new Promise((_, reject) => { rejectSave = reject; }),
+    openSalesProjectDrawer: (...args) => reopened.push(args)
+  };
+  vm.createContext(context);
+  vm.runInContext(section("async function saveSalesProjectInBackground(payload)", "async function saveSalesProject(payload"), context);
+  const saving = context.saveSalesProjectInBackground(payload);
+  assert.equal(notices.at(-1)[1], "saving");
+  assert.equal(context.pendingSalesProjectSaves.get(payload.id), payload);
+  rejectSave(new Error("Save failed"));
+  await saving;
+  assert.equal(notices.at(-1)[1], "failed");
+  notices.at(-1)[3]();
+  assert.equal(reopened[0][0], payload.id);
+  assert.equal(reopened[0][1], payload);
+});

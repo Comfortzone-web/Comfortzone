@@ -1694,6 +1694,7 @@ function createOrderBook(body, user, users = []) {
           if (project.orderBookNo && cleanCell(project.orderBookNo).toLowerCase() !== item.orderNo.toLowerCase()) return { status: 409, error: `Project No. ${item.projectNo} is already linked to another order.` };
           project.orderBookNo = item.orderNo;
           project.division = item.division;
+          syncSalesProjectDeliveryStatus(store, project, item, true);
         }
       }
       store.orderBook.unshift(item);
@@ -1785,9 +1786,36 @@ function salesProjectWithPayment(store, project) {
   return order ? { ...project, linkedOrderPayment: { orderNo: order.orderNo, orderValue: order.orderValue, paymentReceived: order.paymentReceived } } : project;
 }
 
+function salesProjectStatusView(store, project, inventory) {
+  const projectName = inventoryNorm(project.name || "");
+  const customer = inventoryNorm(project.customer || "");
+  const noteQuantities = new Map();
+  for (const note of inventory.deliveryNotes || []) {
+    if (!["Issued", "Delivered"].includes(note.status) || !projectName
+      || inventoryNorm(note.projectName || note.project || "") !== projectName
+      || (customer && note.customerName && inventoryNorm(note.customerName) !== customer)) continue;
+    for (const line of note.lines || note.items || []) {
+      const model = inventoryNorm(line.modelNo || line.model || "");
+      noteQuantities.set(model, (noteQuantities.get(model) || 0) + Number(line.qtyGoingOut || line.qty || line.quantity || 0));
+    }
+  }
+  const orderNo = cleanCell(project.orderBookNo).toLowerCase();
+  const projectNo = cleanCell(project.projectNo || project.projectId).toLowerCase();
+  const order = store.orderBook.find(entry => orderNo && cleanCell(entry.orderNo).toLowerCase() === orderNo
+    || projectNo && cleanCell(entry.projectNo).toLowerCase() === projectNo && cleanCell(entry.customer).toLowerCase() === cleanCell(project.customer).toLowerCase());
+  const statusProject = { ...project, boq: (project.boq || []).map(row => ({
+    ...row,
+    deliveredQty: Math.max(Number(row.deliveredQty || 0), noteQuantities.get(inventoryNorm(row.model || row.modelNo)) || 0)
+  })) };
+  const status = salesProjectAutoStatusServer(statusProject, order);
+  return { project: { ...salesProjectWithPayment(store, project), status }, order, status };
+}
+
 async function salesCrmView(store, user) {
   const [inventory, appSettings] = await Promise.all([readInventory(), readSettings()]);
   const staff = isStaff(user);
+  const projectStatuses = store.projects.map(project => salesProjectStatusView(store, project, inventory));
+  const deliveryStatusByOrder = new Map(projectStatuses.filter(entry => entry.order).map(entry => [entry.order.id, entry.status === "Completed" ? "Delivered" : entry.status]));
   return {
     ...store,
     nextOrderBookNo: nextAvailableOrderBookNo(store.orderBook),
@@ -1802,8 +1830,9 @@ async function salesCrmView(store, user) {
     } : { ...store.settings, salesTargets: appSettings.salesTargets || [], salesPeople: appSettings.users.map(({ id, name, email, role, active }) => ({ id, name, email, role, active })) },
     leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
-    projects: (staff ? store.projects.filter(item => salesProjectAssignedTo(item, user)) : store.projects).map(project => salesProjectWithPayment(store, project)),
-    orderBook: staff ? store.orderBook.filter(item => staffOwnsOrder(item, user)) : store.orderBook,
+    projects: projectStatuses.filter(entry => !staff || salesProjectAssignedTo(entry.project, user)).map(entry => entry.project),
+    orderBook: (staff ? store.orderBook.filter(item => staffOwnsOrder(item, user)) : store.orderBook)
+      .map(order => deliveryStatusByOrder.has(order.id) ? { ...order, deliveryStatus: deliveryStatusByOrder.get(order.id) } : order),
     customers: mergedSalesCustomers(store.customers || [], inventory.customers || [])
   };
 }
@@ -2902,7 +2931,7 @@ function normalizeSalesItem(collection, input, store) {
       brand: base.importedFromOrderBook ? cleanCell(base.brand || "") : cleanCell(base.brand || "Daikin"),
       importedFromOrderBook: base.importedFromOrderBook === true,
       status: base.sourceValueMissing ? "Payment Pending" : orderBookStatusFromPayment(orderValue, paymentReceived),
-      deliveryStatus: !base.sourceValueMissing && Math.abs(orderValue - paymentReceived) <= 0.01 ? "Delivered" : cleanCell(base.deliveryStatus || "Pending Delivery"),
+      deliveryStatus: cleanCell(base.deliveryStatus || "Pending Delivery"),
       sourceValueMissing: base.sourceValueMissing === true,
       sourceDateMissing: base.sourceDateMissing === true,
       importReview: cleanCell(base.importReview || ""),
@@ -3128,10 +3157,44 @@ function normalizeSalesProjectBoqItem(item = {}) {
   };
 }
 
-function salesProjectAutoStatusServer(project = {}) {
+function salesProjectAutoStatusServer(project = {}, linkedOrder = null) {
   const rows = (project.boq || project.items || []).filter(row => row.model || row.description || Number(row.qty || 0) || Number(row.deliveredQty || 0));
-  if (!rows.length) return "Ongoing";
-  return rows.some(row => (Number(row.qty || 0) - Number(row.deliveredQty || 0)) > 0) ? "Delivery Pending" : "Completed";
+  const choices = ["Ready for Delivery", "Pending Delivery", "Partially Delivered", "Delivered"];
+  if (!rows.length) return choices.includes(linkedOrder?.deliveryStatus) ? linkedOrder.deliveryStatus
+    : choices.includes(project.status) ? project.status : "Pending Delivery";
+  const pendingByModel = new Map();
+  const stockByModel = new Map();
+  let delivered = false;
+  for (const row of rows) {
+    const model = inventoryNorm(row.model || row.modelNo || row.description || "");
+    const deliveredQty = Math.max(0, Number(row.deliveredQty || 0));
+    const pending = Math.max(0, Number(row.qty || row.quantity || 0) - deliveredQty);
+    if (deliveredQty > 0) delivered = true;
+    if (pending > 0) pendingByModel.set(model, (pendingByModel.get(model) || 0) + pending);
+    if (model) stockByModel.set(model, Math.max(stockByModel.get(model) || 0, Number(row.stock || 0)));
+  }
+  if (!pendingByModel.size) {
+    const paid = linkedOrder && Number(linkedOrder.orderValue || 0) - Number(linkedOrder.paymentReceived || 0) <= 0.01;
+    return paid ? "Completed" : "Delivered";
+  }
+  if (delivered) return "Partially Delivered";
+  return [...pendingByModel].every(([model, qty]) => model && (stockByModel.get(model) || 0) >= qty)
+    ? "Ready for Delivery" : "Pending Delivery";
+}
+
+function syncSalesProjectDeliveryStatus(store, project, order = null, preferProjectStatus = false) {
+  const orderNo = cleanCell(project.orderBookNo).toLowerCase();
+  const projectNo = cleanCell(project.projectNo || project.projectId).toLowerCase();
+  const customer = cleanCell(project.customer).toLowerCase();
+  const linkedOrder = order || (store.orderBook || []).find(entry => (
+    orderNo && cleanCell(entry.orderNo).toLowerCase() === orderNo
+  ) || (
+    projectNo && cleanCell(entry.projectNo).toLowerCase() === projectNo && cleanCell(entry.customer).toLowerCase() === customer
+  ));
+  const hasBoq = (project.boq || []).length > 0;
+  if (preferProjectStatus && !hasBoq && linkedOrder) linkedOrder.deliveryStatus = project.status;
+  project.status = salesProjectAutoStatusServer(project, linkedOrder);
+  if (linkedOrder) linkedOrder.deliveryStatus = project.status === "Completed" ? "Delivered" : project.status;
 }
 
 function normalizeSalesProjectDirectDeliveryUpload(item = {}) {
@@ -4234,7 +4297,7 @@ async function handleApi(req, res) {
     upload.deliveryNoteNo = deliveryNoteNo;
     upload.lines = lines.map(line => ({ ...line, status: (project.boq || []).some(row => inventoryNorm(row.model || row.modelNo) === inventoryNorm(line.modelNo)) ? "Matched" : "Not in BOQ" }));
     upload.totalQuantity = lines.reduce((sum, line) => sum + line.quantity, 0);
-    project.status = salesProjectAutoStatusServer(project);
+    syncSalesProjectDeliveryStatus(store, project);
     await writeSalesCrm(store);
     return send(res, 200, await salesCrmView(store, user));
   }
@@ -4261,7 +4324,7 @@ async function handleApi(req, res) {
         row.deliveredQty = Math.max(0, Number(row.deliveredQty || 0) - quantity);
         row.pendingQty = Number(row.qty || 0) - row.deliveredQty;
       }
-      project.status = salesProjectAutoStatusServer(project);
+      syncSalesProjectDeliveryStatus(store, project);
     }
     project.directDeliveryUploads = (project.directDeliveryUploads || []).filter(item => item.uploadId !== uploadId && item.id !== uploadId);
     if (upload?.storedName) await deleteUpload(`sales-project-deliveries/${projectId}`, upload.storedName);
@@ -4389,11 +4452,15 @@ async function handleApi(req, res) {
       if (linkedProject && cleanCell(linkedProject.customer).toLowerCase() !== cleanCell(item.customer).toLowerCase()) return send(res, 400, { error: "Project and order must have the same customer." });
       if (linkedProject && linkedProject.orderBookNo && cleanCell(linkedProject.orderBookNo).toLowerCase() !== cleanCell(previous?.orderNo).toLowerCase()) return send(res, 409, { error: `Project No. ${item.projectNo} is already linked to another order.` });
       for (const project of store.projects) {
-        if (project !== linkedProject && cleanCell(project.orderBookNo).toLowerCase() === cleanCell(previous?.orderNo).toLowerCase()) project.orderBookNo = "";
+        if (previous?.orderNo && project !== linkedProject && cleanCell(project.orderBookNo).toLowerCase() === cleanCell(previous.orderNo).toLowerCase()) {
+          project.orderBookNo = "";
+          syncSalesProjectDeliveryStatus(store, project);
+        }
       }
       if (linkedProject) {
         linkedProject.orderBookNo = item.orderNo;
         linkedProject.division = item.division;
+        syncSalesProjectDeliveryStatus(store, linkedProject, item, true);
       }
     }
     if (collection === "quotations" && requestedQuotationNo) {
@@ -4464,6 +4531,7 @@ async function handleApi(req, res) {
         selectedOrder.projectNo = item.projectNo;
         selectedOrder.division = item.division;
       }
+      syncSalesProjectDeliveryStatus(store, item, selectedOrder, true);
       const boqModels = new Set((item.boq || []).map(row => inventoryNorm(row.model || row.modelNo)).filter(Boolean));
       for (const upload of item.directDeliveryUploads || []) {
         upload.lines = (upload.lines || []).map(line => ({ ...line, status: boqModels.has(inventoryNorm(line.modelNo)) ? "Matched" : "Not in BOQ" }));

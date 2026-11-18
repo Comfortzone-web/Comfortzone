@@ -2754,6 +2754,7 @@ td[contenteditable="true"]:focus {
 
 .sales-badge.order-confirmed,
 .sales-badge.completed,
+.sales-badge.delivered,
 .sales-badge.closed,
 .sales-badge.fully-paid,
 .sales-badge.attached {
@@ -2773,6 +2774,19 @@ td[contenteditable="true"]:focus {
   color: #b45309;
   background: #fff1d6;
 }
+
+.sales-badge.ready-for-delivery { color: #8a6500; background: #fff4bf; }
+.sales-badge.pending-delivery { color: #b42318; background: #ffe2df; }
+.sales-badge.partially-delivered { color: #a14f00; background: #ffead1; }
+
+[data-project-drawer-field="status"]:has(option[value="Ready for Delivery"]:checked),
+[data-order-book-field="deliveryStatus"]:has(option[value="Ready for Delivery"]:checked) { color: #806000; background: #fff9df; }
+[data-project-drawer-field="status"]:has(option[value="Pending Delivery"]:checked),
+[data-order-book-field="deliveryStatus"]:has(option[value="Pending Delivery"]:checked) { color: #b42318; background: #fff0ee; }
+[data-project-drawer-field="status"]:has(option[value="Partially Delivered"]:checked),
+[data-order-book-field="deliveryStatus"]:has(option[value="Partially Delivered"]:checked) { color: #9a4d00; background: #fff2e4; }
+[data-project-drawer-field="status"]:has(option[value="Delivered"]:checked),
+[data-order-book-field="deliveryStatus"]:has(option[value="Delivered"]:checked) { color: #047857; background: #edf9f2; }
 
 .sales-badge.not-paid,
 .sales-badge.not-attached,
@@ -8006,12 +8020,17 @@ td[contenteditable="true"]:focus {
   border-left: 1px solid #e4ecf7;
 }
 
-.sales-project-table th:nth-child(1) { width: 30%; }
-.sales-project-table th:nth-child(2) { width: 17%; }
+.sales-project-table th:nth-child(1) { width: 9%; }
+.sales-project-table th:nth-child(2) { width: 27%; }
 .sales-project-table th:nth-child(3) { width: 18%; }
-.sales-project-table th:nth-child(4) { width: 12%; }
-.sales-project-table th:nth-child(5) { width: 16%; }
-.sales-project-table th:nth-child(6) { width: 7%; }
+.sales-project-table th:nth-child(4) { width: 15%; }
+.sales-project-table th:nth-child(5) { width: 10%; }
+.sales-project-table th:nth-child(6) { width: 14%; }
+.sales-project-table th:nth-child(7) { width: 7%; }
+.sales-project-table td.sales-project-number { font-weight: 600; color: #173a69; }
+.sales-project-table td.sales-project-number, .sales-project-table th:first-child { text-align: center; }
+.sales-project-status-cell { display: grid; justify-items: center; gap: 3px; }
+.sales-project-status-cell small { color: #9a4d00; font-size: 10px; line-height: 1.2; }
 
 .sales-project-table th:last-child,
 .sales-project-table td:last-child {
@@ -8036,8 +8055,8 @@ td[contenteditable="true"]:focus {
 .sales-project-payment small { color: #62748f; font-size: 10px; line-height: 1.2; }
 .sales-project-payment-empty { color: #8a99ae; }
 
-.sales-project-table th:nth-child(n+3),
-.sales-project-table td:nth-child(n+3) {
+.sales-project-table th:nth-child(n+4),
+.sales-project-table td:nth-child(n+4) {
   text-align: center;
 }
 
@@ -8779,15 +8798,15 @@ td[contenteditable="true"]:focus {
 .sales-project-row-delete {
   position: absolute;
   top: 50%;
-  right: -18px;
-  width: 14px;
-  height: 18px;
+  right: -37px;
+  width: 44px;
+  height: 28px;
   transform: translateY(-50%);
   border: 0;
   background: transparent;
   color: #d30f0f;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 18px;
   padding: 0;
@@ -8796,7 +8815,8 @@ td[contenteditable="true"]:focus {
 }
 
 .sales-project-boq-edit tr:hover .sales-project-row-delete:not(:disabled),
-.sales-project-boq-edit tr:focus-within .sales-project-row-delete:not(:disabled) {
+.sales-project-boq-edit tr:focus-within .sales-project-row-delete:not(:disabled),
+.sales-project-row-delete:hover:not(:disabled) {
   visibility: visible;
   pointer-events: auto;
 }
@@ -8965,14 +8985,13 @@ td[contenteditable="true"]:focus {
     text-align: left;
   }
 
-  .sales-screen-projects .sales-project-table tbody td:first-child,
   .sales-screen-projects .sales-project-table tbody td:nth-child(2),
-  .sales-screen-projects .sales-project-table tbody td:nth-child(6),
+  .sales-screen-projects .sales-project-table tbody td:nth-child(7),
   .sales-screen-projects .sales-project-table tbody td[colspan] {
     grid-column: 1 / -1;
   }
 
-  .sales-screen-projects .sales-project-table tbody td:nth-child(n+2):not([colspan])::before {
+  .sales-screen-projects .sales-project-table tbody td:not([colspan])::before {
     display: block;
     margin-bottom: 3px;
     color: #52647d;
@@ -8981,11 +9000,13 @@ td[contenteditable="true"]:focus {
     text-transform: uppercase;
   }
 
-  .sales-screen-projects .sales-project-table tbody td:nth-child(2)::before { content: "Location"; }
-  .sales-screen-projects .sales-project-table tbody td:nth-child(3)::before { content: "Payment Status"; }
-  .sales-screen-projects .sales-project-table tbody td:nth-child(4)::before { content: "Sales Person"; }
-  .sales-screen-projects .sales-project-table tbody td:nth-child(5)::before { content: "Status"; }
-  .sales-screen-projects .sales-project-table tbody td:nth-child(6)::before { content: "Actions"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(1)::before { content: "Project No."; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(2)::before { content: "Project & Customer"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(3)::before { content: "Location"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(4)::before { content: "Payment Status"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(5)::before { content: "Sales Person"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(6)::before { content: "Status"; }
+  .sales-screen-projects .sales-project-table tbody td:nth-child(7)::before { content: "Actions"; }
 
   .sales-screen-projects .sales-project-actions { justify-content: flex-start; }
   .sales-screen-projects .sales-project-pagination { flex-wrap: wrap; }
