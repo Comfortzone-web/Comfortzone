@@ -649,6 +649,9 @@ body:has(#canvasView:not(.hidden) .dx-workspace) #viewActions {
 .dx-boq-kpis > div:nth-child(3) { background:#f1ebff; }
 .dx-boq-kpis > div:nth-child(4) { background:#eaf8f1; }
 .dx-boq-kpis strong { font-size:20px; overflow-wrap:anywhere; }
+.dx-boq-kpis > div.dx-boq-total-error { border-color:#f0c6c4; background:#fff1f0; }
+.dx-boq-kpis .dx-boq-total-error strong { color:#a6262e; }
+.dx-boq-total-note.dx-boq-total-warning { color:#a6262e; font-weight:600; }
 .dx-boq-total-note { margin:10px 0 0; font-size:10px; color:var(--dx-muted); }
 .dx-boq-errors { padding:10px 10px 10px 26px; background:#fff3ed; color:#9c493a; border-radius:6px; font-size:11px; line-height:1.6; }
 .dx-boq-empty { height:100px; color:var(--dx-muted); }

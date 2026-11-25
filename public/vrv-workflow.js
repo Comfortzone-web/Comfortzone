@@ -9,7 +9,7 @@ const vrvSelectionColumns = ['System','Name','FCU','°C - (DBT/WBT)','Rq TC','Ma
 const vrvSelectionDisplayRows = rows => rows.map(row => ({System:row.system || row.System || '',Name:row.name || row.Name || '',FCU:row.fcu || row.FCU || '','°C - (DBT/WBT)':row.tmpC || row['°C - (DBT/WBT)'] || '','Rq TC':row.rqTC || row['Rq TC'] || '','Max TC':row.maxTC || row['Max TC'] || '','Rq SC':row.rqSC || row['Rq SC'] || '','Max SC':row.maxSC || row['Max SC'] || '','Air Flow Rate':row.airFlowRate || row['Air Flow Rate'] || ''}));
 const vrvDefaultCustomColumns = ['Unit Reference no.', 'Type', 'Location', 'Total Kw', 'Sensible Kw', 'Flow Rate L/s'];
 const vrvIcon = name => `<img class="dx-icon" src="/assets/dx-icons/${name}.svg" alt="">`;
-const vrvButton = (action, label, icon, primary = false) => `<button type="button" class="dx-button ${primary ? 'dx-primary' : ''}" data-vrv-action="${action}" ${vrvBusy ? 'disabled' : ''}>${icon ? vrvIcon(icon) : ''}${label}</button>`;
+const vrvButton = (action, label, icon, primary = false, disabled = false) => `<button type="button" class="dx-button ${primary ? 'dx-primary' : ''}" data-vrv-action="${action}" ${vrvBusy || disabled ? 'disabled' : ''}>${icon ? vrvIcon(icon) : ''}${label}</button>`;
 const vrvCard = (title, body, actions = '', extra = '') => `<section class="dx-card ${extra}"><div class="dx-card-heading"><h2>${title}</h2><div class="dx-actions">${actions}</div></div>${body}</section>`;
 function vrvToolbarMenu(step) {
   const tableId = step === 1 ? 'thermal-table' : 'vrv-schedule';
@@ -111,6 +111,9 @@ function vrvStepThree() {
 }
 function vrvMoney(value) { return `AED ${Number(value || 0).toLocaleString('en-AE',{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
 function vrvBoqRows() { return state.tables.costing?.rows || []; }
+function vrvBoqPricingError(rows = vrvBoqRows()) {
+  return !rows.length || rows.some(row => !(Number(row['Final Price (AED)']) > 0) || !(Number(row.Qty) > 0) || !(Number(row['Amount (AED)']) > 0));
+}
 function vrvUnitPriceCell(row,index) {
   const listed = workflowCostingPriceItems().find(item => norm(item.model) === norm(row.Model) && num(item.finalPrice) > 0);
   if (listed) return vrvMoney(row['Final Price (AED)']);
@@ -128,14 +131,15 @@ function vrvRenderKeepingScroll() {
 }
 function vrvStepFour() {
   const data = vrvData(), rows = vrvBoqRows();
+  const totalError = vrvBoqPricingError(rows);
   const margin = Math.min(99.99,Math.max(0,Number(data.margin) || 0));
   const cost = rows.reduce((sum,row)=>sum+Number(row['Final Price (AED)'] || 0)*Number(row.Qty || 0),0);
   const selling = rows.reduce((sum,row)=>sum+Number(row['Increased Final Price (AED)'] || 0)*Number(row.Qty || 0),0);
   const vat = selling*0.05;
   const tr = rows.map((row,index)=>`<tr><td>${index+1}</td><td><b contenteditable="true" data-vrv-price="Model" data-row="${index}">${escapeHtml(row.Model || '')}</b><small>${escapeHtml((state.tables.boq.rows[index] || {}).Description || '')}</small></td><td contenteditable="true" data-vrv-price="Qty" data-row="${index}">${escapeHtml(row.Qty ?? '')}</td><td>Nos</td><td>${vrvUnitPriceCell(row,index)}</td><td>${vrvMoney(row['Increased Final Price (AED)'])}</td><td><b>${vrvMoney(row['Amount (AED)'])}</b><button type="button" class="vrv-delete-row" data-vrv-delete="${index}" aria-label="Delete row ${index+1}">×</button></td></tr>`).join('');
-  const summary = [['Total Cost',cost],['Total Selling',selling],['Overall Margin',`${margin.toFixed(2)} %`],['VAT (5%)',vat],['Net Amount (Incl. VAT)',selling+vat]].map(([name,value])=>`<div><small>${name}</small><strong>${typeof value === 'string' ? value : vrvMoney(value)}</strong></div>`).join('');
+  const summary = [['Total Cost',cost],['Total Selling',selling],['Overall Margin',`${margin.toFixed(2)} %`],['VAT (5%)',vat],['Net Amount (Incl. VAT)',selling+vat]].map(([name,value])=>`<div class="${totalError && name !== 'Overall Margin' ? 'vrv-total-error' : ''}"><small>${name}</small><strong>${totalError && name !== 'Overall Margin' ? 'Error' : typeof value === 'string' ? value : vrvMoney(value)}</strong></div>`).join('');
   const source=data.selectionMode==='manual'?'Manual Selection':'VRV Selection Report';
-  return vrvCard(`${vrvIcon('clipboard-list')} BOQ & Quotation`,`<p class="vrv-subtitle">Material BOQ and pricing from ${source}.</p><div class="vrv-boq-tools"><span>${rows.length} items from ${source}</span><label>Overall Profit Margin <span class="vrv-percent"><input data-vrv-margin inputmode="decimal" value="${margin.toFixed(2)}">%</span></label>${vrvButton('add-row','Add Row','plus')}</div><div class="vrv-table-scroll"><table class="vrv-table"><thead><tr>${['Ref','Description / Model','Qty','Unit','Unit Price','Selling Price','Line Total'].map(col=>`<th>${col}</th>`).join('')}</tr></thead><tbody>${tr || `<tr><td colspan="7" class="vrv-empty">Complete ${source} to populate the BOQ.</td></tr>`}</tbody></table></div><div class="vrv-kpis">${summary}</div>`,'','vrv-boq-card');
+  return vrvCard(`${vrvIcon('clipboard-list')} BOQ & Quotation`,`<p class="vrv-subtitle">Material BOQ and pricing from ${source}.</p><div class="vrv-boq-tools"><span>${rows.length} items from ${source}</span><label>Overall Profit Margin <span class="vrv-percent"><input data-vrv-margin inputmode="decimal" value="${margin.toFixed(2)}">%</span></label>${vrvButton('add-row','Add Row','plus')}</div><div class="vrv-table-scroll"><table class="vrv-table"><thead><tr>${['Ref','Description / Model','Qty','Unit','Unit Price','Selling Price','Line Total'].map(col=>`<th>${col}</th>`).join('')}</tr></thead><tbody>${tr || `<tr><td colspan="7" class="vrv-empty">Complete ${source} to populate the BOQ.</td></tr>`}</tbody></table></div><div class="vrv-kpis">${summary}</div>${totalError ? '<p class="vrv-boq-total-warning" role="alert">Enter a positive Unit Price and ensure every Line Total is above AED 0.00 before creating a quotation.</p>' : ''}`,'','vrv-boq-card');
 }
 function renderVrvWorkspace() {
   const data=vrvData(), step=data.step;
@@ -147,7 +151,7 @@ function renderVrvWorkspace() {
   actions.innerHTML=`${step===2?`<details class="vrv-selection-mode-menu"><summary class="dx-button">Selection Mode ▾</summary><div class="dx-table-menu-panel"><button type="button" data-vrv-action="mode-report" class="dx-button">Report Selection ${data.selectionMode==='report'?'✓':''}</button><button type="button" data-vrv-action="mode-manual" class="dx-button">Manual Selection ${data.selectionMode==='manual'?'✓':''}</button></div></details>`:''}${dxSalesPersonBadge()}${vrvButton('new','New Workflow','plus')}${vrvToolbarMenu(step)}`;
   workflowBindSalesPerson(actions);
   const fields=[['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
-  canvas.innerHTML=`<div class="dx-project-header dx-card">${fields.map(([key,label,icon])=>`<label>${vrvIcon(icon)}<span>${label}<input ${key==='selectionNumber'?'data-vrv-number':`data-vrv-detail="${key}" data-detail-key="${key}"`} value="${escapeHtml(key==='selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div><nav class="dx-steps vrv-steps" aria-label="VRV workflow progress">${vrvSteps.map((name,index)=>`<button type="button" data-vrv-step="${index+1}" class="${step===index+1?'active':''} ${index+1<step?'complete':''}" ${step===index+1?'aria-current="step"':''}><span>${index+1<step?'✓':index+1}</span>Step 0${index+1} — ${name}</button>`).join('')}</nav>${step===1?vrvStepOne():step===2?vrvStepTwo():step===3?vrvStepThree():vrvStepFour()}<footer class="dx-footer"><span data-vrv-status>${escapeHtml(vrvStatus)}</span><div class="dx-actions">${step>1?vrvButton('back',`Back to ${vrvSteps[step-2]}`,'arrow-left'):''}${vrvButton(step<4?'next':'quotation',step<4?`Continue to ${vrvSteps[step]}`:'Create Quotation',step<4?'arrow-right':'file-text',true)}</div></footer>`;
+  canvas.innerHTML=`<div class="dx-project-header dx-card">${fields.map(([key,label,icon])=>`<label>${vrvIcon(icon)}<span>${label}<input ${key==='selectionNumber'?'data-vrv-number':`data-vrv-detail="${key}" data-detail-key="${key}"`} value="${escapeHtml(key==='selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div><nav class="dx-steps vrv-steps" aria-label="VRV workflow progress">${vrvSteps.map((name,index)=>`<button type="button" data-vrv-step="${index+1}" class="${step===index+1?'active':''} ${index+1<step?'complete':''}" ${step===index+1?'aria-current="step"':''}><span>${index+1<step?'✓':index+1}</span>Step 0${index+1} — ${name}</button>`).join('')}</nav>${step===1?vrvStepOne():step===2?vrvStepTwo():step===3?vrvStepThree():vrvStepFour()}<footer class="dx-footer"><span data-vrv-status>${escapeHtml(vrvStatus)}</span><div class="dx-actions">${step>1?vrvButton('back',`Back to ${vrvSteps[step-2]}`,'arrow-left'):''}${vrvButton(step<4?'next':'quotation',step<4?`Continue to ${vrvSteps[step]}`:'Create Quotation',step<4?'arrow-right':'file-text',true,step===4 && vrvBoqPricingError())}</div></footer>`;
   if (state.selectionNumber) canvas.querySelector('[data-vrv-number]').value = state.selectionNumber;
   canvas.querySelector('[data-vrv-number]')?.addEventListener('change',event=>{const value=event.target.value.trim();if(!value){event.target.value=state.selectionNumber||'';return;}state.selectionNumber=value;vrvDirty();});
   canvas.querySelectorAll('[data-vrv-detail]').forEach(input=>input.addEventListener('input',()=>{state.details[input.dataset.vrvDetail]=input.value;if(input.dataset.vrvDetail==='project')state.title=input.value;vrvDirty();}));
@@ -321,7 +325,7 @@ async function vrvAction(action) {
   }
   if(action==='add-row'){state.tables.costing.rows.push({Model:'',Qty:1,'Final Price (AED)':'','Increased Final Price (AED)':'','Amount (AED)':''});vrvReprice();vrvDirty();renderVrvWorkspace();return;}
   if(action==='quotation'){
-    if(data.selectionMode==='manual'&&state.tables.costing.rows.some(row=>row.Model&&Number(row.Qty)>0&&!(Number(row['Final Price (AED)'])>0)))return toast('Enter the missing Unit Prices before creating the quotation.');
+    if(vrvBoqPricingError())return toast('Enter a positive Unit Price and ensure every Line Total is above AED 0.00 before creating the quotation.');
     await saveProject({manual:true});return createSalesQuotationFromWorkflow();
   }
 }

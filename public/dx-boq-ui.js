@@ -37,6 +37,7 @@ function dxStepThree() {
   dxRecalculateBoq();
   const boq = dxBoqData(), count = boq.rows.filter(row => row.origin === 'schedule').length;
   const allowed = canAccessModule('sales'), busy = dxBusy || dxQuotationOpening;
+  const totalError = !boq.rows.length || boq.totals.incomplete || boq.rows.some(row => !(row.lineTotal > 0));
   const amount = value => value == null ? '—' : salesMoney(value);
   const percentage = boq.margin == null ? '—' : `${Number(boq.margin).toFixed(2)}%`;
   const pending = boq.rows.some(row => row.sourceRemoved || row.pendingQty != null) || boq.syncWarnings?.length;
@@ -55,8 +56,8 @@ function dxStepThree() {
       <td><div class="dx-boq-money-input"><span>AED</span><input readonly aria-readonly="true" data-boq-field="unitPrice" aria-label="Row ${index + 1} Unit Price" type="number" min="0" step="0.01" placeholder="—" value="${row.unitPrice == null ? '' : Number(row.unitPrice).toFixed(2)}" ${!allowed || busy ? 'disabled' : ''}></div>${row.unitPrice == null ? '<small class="dx-boq-warning">Price not found — update the Price List and refresh prices.</small>' : row.manualPrice ? '<small>Manual price</small>' : ''}</td>
       <td><span class="dx-boq-calculated">${amount(row.sellingPrice)}</span></td><td class="dx-boq-line-total"><strong>${amount(row.lineTotal)}</strong><button type="button" class="dx-boq-delete" data-boq-action="remove" aria-label="Delete BOQ row ${index + 1}" title="Delete row" ${!allowed || busy ? 'disabled' : ''}>×</button></td></tr>`).join('') || `<tr><td colspan="6" class="dx-boq-empty">${dxBoqLoadingId ? 'Loading Price List…' : 'Select models in DX Schedule or add a Price List item.'}</td></tr>`}
     </tbody></table></div>
-    <div class="dx-kpis dx-boq-kpis">${[['Total Cost', amount(boq.totals.cost),'clipboard-list'],['Total Selling',amount(boq.totals.selling),'files'],['Overall Margin',percentage,'snowflake'],['Total Amount',amount(boq.totals.amount),'arrow-right']].map(([label,value,icon]) => `<div>${dxIcon(icon)}<span>${label}<strong>${escapeHtml(value)}</strong></span></div>`).join('')}</div>
-    <p class="dx-boq-total-note">Amounts before VAT. ${boq.totals.incomplete ? 'Totals are partial until every quantity and price is valid.' : 'Sales Desk applies its existing 5% VAT when preparing the quotation.'}</p>
+    <div class="dx-kpis dx-boq-kpis">${[['Total Cost', amount(boq.totals.cost),'clipboard-list'],['Total Selling',amount(boq.totals.selling),'files'],['Overall Margin',percentage,'snowflake'],['Total Amount',amount(boq.totals.amount),'arrow-right']].map(([label,value,icon]) => `<div class="${totalError && label !== 'Overall Margin' ? 'dx-boq-total-error' : ''}">${dxIcon(icon)}<span>${label}<strong>${totalError && label !== 'Overall Margin' ? 'Error' : escapeHtml(value)}</strong></span></div>`).join('')}</div>
+    <p class="dx-boq-total-note ${totalError ? 'dx-boq-total-warning' : ''}" ${totalError ? 'role="alert"' : ''}>${totalError ? 'Enter a positive Unit Price and ensure every Line Total is above AED 0.00 before creating a quotation.' : 'Amounts before VAT. Sales Desk applies its existing 5% VAT when preparing the quotation.'}</p>
     ${boq.errors?.length ? `<ul class="dx-boq-errors" role="alert">${boq.errors.map(error => `<li>${escapeHtml(error)}</li>`).join('')}</ul>` : ''}
   </section>`;
 }
@@ -121,6 +122,9 @@ async function dxBoqAction(action, rowId) {
 }
 async function dxCreateQuotation(modify = false) {
   if (dxQuotationOpening || !canAccessModule('sales')) return;
+  dxRecalculateBoq();
+  const pricingErrors = DXBoq.validate(dxBoqData());
+  if (pricingErrors.length) { dxBoqData().errors = pricingErrors; renderDxWorkspace(); return; }
   dxQuotationOpening = true;
   renderDxWorkspace();
   try {

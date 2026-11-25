@@ -23,12 +23,15 @@ test('financial calculations use gross margin and round selling/line totals in i
   assert.equal(result.rows[0].sellingPrice, .13); assert.equal(result.rows[0].lineTotal, .39);
   assert.equal(result.rows[1].sellingPrice, 1250.01); assert.equal(result.rows[1].lineTotal, 3125.03);
   assert.equal(result.totals.cost, 2500.33); assert.equal(result.totals.selling, 3125.42); assert.equal(result.totals.amount, 3125.42);
-  assert.equal(boq.calculate({ margin: 0, rows: [{ qty: 1, unitPrice: 0 }] }).totals.incomplete, false);
+  assert.equal(boq.calculate({ margin: 0, rows: [{ qty: 1, unitPrice: 0 }] }).totals.incomplete, true);
 });
 test('missing prices stay visible and block quotation; zero and blanks remain distinct', () => {
   const result = boq.sync(null, [source('MISSING', 1)], prices);
   assert.equal(result.rows[0].unitPrice, null); assert.equal(result.rows[0].lineTotal, null);
   assert.equal(result.totals.incomplete, true); assert.match(boq.validate(result).join(), /Unit Price/);
+  const zeroPrice = boq.calculate({ margin: 20, rows: [{ model: 'ID-100', qty: 1, unitPrice: 0 }] });
+  assert.equal(zeroPrice.rows[0].lineTotal, null);
+  assert.match(boq.validate(zeroPrice).join(), /greater than AED 0\.00/);
   assert.ok(boq.validate(boq.sync(null, [source('ID-100 - OD-100', 0)], prices)).some(error => /positive whole-number quantity/.test(error)));
   assert.ok(boq.validate({ margin: 100, rows: [] }).some(error => /95%/.test(error)));
 });

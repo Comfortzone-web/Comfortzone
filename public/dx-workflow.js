@@ -76,8 +76,8 @@ function workflowBindSalesPerson(root) {
     } catch(error) { select.disabled=false;select.value=project.ownerId||'';toast(error.message||'Could not change Sales Person'); }
   });
 }
-function dxButton(action, label, icon, primary = false) {
-  return `<button type="button" data-dx-action="${action}" class="dx-button ${primary ? 'dx-primary' : ''}" ${dxBusy ? 'disabled' : ''}>${icon ? dxIcon(icon) : ''}${label}</button>`;
+function dxButton(action, label, icon, primary = false, disabled = false) {
+  return `<button type="button" data-dx-action="${action}" class="dx-button ${primary ? 'dx-primary' : ''}" ${dxBusy || disabled ? 'disabled' : ''}>${icon ? dxIcon(icon) : ''}${label}</button>`;
 }
 function dxSetStatus(value) {
   dxSaveStatus = value;
@@ -199,7 +199,7 @@ function renderDxWorkspace() {
   canvas.innerHTML = `<div class="dx-project-header dx-card">${fields.map(([key,label,icon]) => `<label>${dxIcon(icon)}<span>${label}<input ${key === 'selectionNumber' ? 'data-dx-number data-dx-selection' : `data-dx-detail="${key}" data-detail-key="${key}"`} ${key === 'customer' ? 'list="workflowCustomerList"' : key === 'project' ? 'list="workflowProjectList"' : ''} value="${escapeHtml(key === 'selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div>
     <nav class="dx-steps" aria-label="Workflow progress">${[['back','Thermal Sheet & Extraction'],['continue','DX Schedule'],['boq','BOQ & Quotation']].map(([action,label],index)=>{const number=index+1,complete=number<step || (number<=(data.completedThrough || 0) && number!==step);return `<button data-dx-action="${action}" class="${step===number?'active':''} ${complete?'complete':''}" ${step===number?'aria-current="step"':''} ${dxBusy?'disabled':''}><span>${complete?'✓':number}</span>Step 0${number} — ${label}</button>`;}).join('')}</nav>
     ${step === 1 ? dxStepOne() : step === 2 ? dxStepTwo() : dxStepThree()}
-    <footer class="dx-footer"><span data-dx-save-status data-dx-save-state="${escapeHtml(dxSaveStatus)}" ${dxSaveStatus === 'All changes saved' && step !== 3 ? 'hidden' : ''}>${escapeHtml(dxSaveStatus)}</span><div class="dx-actions">${step === 1 ? dxButton('continue','Continue to DX Schedule','arrow-right',true) : step === 2 ? dxButton('back','Back to Thermal Sheet','arrow-left')+dxButton('boq','Continue to BOQ & Quotation','arrow-right',true) : dxButton('back-schedule','Back to DX Schedule','arrow-left')+(data.boq?.quotationId ? dxButton('modify-quotation','Modify Quotation','refresh-cw') : '')+dxButton('quotation',data.boq?.quotationId ? 'Open Quotation' : 'Create Quotation','file-text',true)}</div></footer>`;
+    <footer class="dx-footer"><span data-dx-save-status data-dx-save-state="${escapeHtml(dxSaveStatus)}" ${dxSaveStatus === 'All changes saved' && step !== 3 ? 'hidden' : ''}>${escapeHtml(dxSaveStatus)}</span><div class="dx-actions">${step === 1 ? dxButton('continue','Continue to DX Schedule','arrow-right',true) : step === 2 ? dxButton('back','Back to Thermal Sheet','arrow-left')+dxButton('boq','Continue to BOQ & Quotation','arrow-right',true) : dxButton('back-schedule','Back to DX Schedule','arrow-left')+(data.boq?.quotationId ? dxButton('modify-quotation','Modify Quotation','refresh-cw') : '')+dxButton('quotation',data.boq?.quotationId ? 'Open Quotation' : 'Create Quotation','file-text',true,!data.boq?.quotationId && (!data.boq?.rows?.length || data.boq?.totals?.incomplete))}</div></footer>`;
   canvas.appendChild(workflowDatalist('workflowCustomerList', workflowCustomerNames()));
   canvas.appendChild(workflowDatalist('workflowProjectList', workflowProjectsForCustomer(state.details.customer)));
   canvas.querySelectorAll('[data-dx-action]').forEach(dxBindAction);

@@ -24,6 +24,7 @@ let inventoryState = null;
 let inventoryScreen = "dashboard";
 let inventoryDashboardSearchQuery = "";
 let activeSupplierDnId = "";
+let supplierVerificationDismissed = false;
 let supplierAllPage = 1;
 let deliveryDraft = null;
 let deliveryListPage = 1;
@@ -537,6 +538,7 @@ function bindShell() {
   $("#salesDeskRoot").addEventListener("change", handleSalesChange);
   $("#salesDeskRoot").addEventListener("focusin", event => {
     if (event.target.matches("[data-sales-quote-person-input]")) renderSalesQuotePersonOptions();
+    if (event.target.matches("[data-sales-quote-enquiry-input]")) renderSalesQuoteEnquiryOptions();
   });
   $("#salesDeskRoot").addEventListener("keydown", handleSalesQuotePersonKeydown);
   $("#salesDeskRoot").addEventListener("focusout", event => {
@@ -544,6 +546,12 @@ function bindShell() {
       setTimeout(() => {
         const picker = document.querySelector("[data-sales-quote-person-picker]");
         if (picker && !picker.contains(document.activeElement)) picker.querySelector("[data-sales-quote-person-options]").hidden = true;
+      }, 0);
+    }
+    if (event.target.matches("[data-sales-quote-enquiry-input]")) {
+      setTimeout(() => {
+        const picker = document.querySelector("[data-sales-quote-enquiry-picker]");
+        if (picker && !picker.contains(document.activeElement)) picker.querySelector("[data-sales-quote-enquiry-options]").hidden = true;
       }, 0);
     }
     if (event.target.dataset.costingField !== "increasedFinalPrice") return;
@@ -1184,6 +1192,7 @@ async function showInventory(screen = "dashboard") {
   hideProjectManagementView();
   setCanvasActionsVisible(false);
   inventoryScreen = screen;
+  if (screen === "supplier") supplierVerificationDismissed = false;
   renderViewActions();
   $("#canvasView").classList.add("hidden");
   $("#documentsView").classList.add("hidden");
@@ -1360,6 +1369,7 @@ function refreshWorkflowTitleSpinner() {
 
 async function showSalesDesk(screen = "dashboard") {
   if (!canAccessModule("sales")) return showPurchaseOrders("list");
+  if (screen === "costing" && costingMode === "prices" && !costingPriceListAvailable()) costingMode = "all";
   activeView = "salesDesk";
   hideProjectManagementView();
   setCanvasActionsVisible(false);
@@ -1843,6 +1853,7 @@ function nextSalesEnquiryNoDefault() {
 
 function salesDeskTopbarConfig() {
   if (activeView !== "salesDesk") return null;
+  const costingDisplayMode = costingMode === "prices" && !costingPriceListAvailable() ? "all" : costingMode;
   if (salesDeskScreen === "quotation" && salesQuotationMode === "create") {
     const canDownloadPdf = !!salesQuotationDraft?.id && String(salesQuotationDraft.status || "").toLowerCase() !== "draft";
     return {
@@ -1878,13 +1889,13 @@ function salesDeskTopbarConfig() {
       actions: `<button class="sales-secondary" data-sales-export="customers">Export CSV</button><button class="sales-primary" data-sales-action="add-customer">Add Customer</button>`
     },
     costing: {
-      title: costingMode === "prices" ? "Price List" : costingMode === "all" ? "All Costing Sheets" : "Costing Sheet",
-      subtitle: costingMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
+      title: costingDisplayMode === "prices" ? "Price List" : costingDisplayMode === "all" ? "All Costing Sheets" : "Costing Sheet",
+      subtitle: costingDisplayMode === "prices" ? "Manage model master prices, multipliers, and final unit pricing for costing." : costingDisplayMode === "all" ? "Open and continue saved model-wise costing sheets." : "Model-wise costing with auto pricing, margin, and quotation values.",
       search: "",
-      actions: costingMode === "prices"
+      actions: costingDisplayMode === "prices"
         ? `${costingState?.settings?.priceListLocked ? `<span class="costing-price-locked">Price List Locked</span>` : ""}<button class="sales-secondary" data-costing-action="back-to-costing"><img src="/assets/maintenance-icons/arrow-left.svg" alt="">Back to Costing</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More Price List actions" aria-label="More Price List actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden">${costingState?.settings?.priceListLocked ? "" : `<button data-costing-action="add-price"><img src="/assets/maintenance-icons/plus.svg" alt="">Add Model</button><label class="costing-menu-import"><img src="/assets/maintenance-icons/upload.svg" alt="">Import Price<input id="costingPriceImport" type="file" accept=".xlsx,.csv" hidden></label>`}<button data-costing-action="export-prices"><img src="/assets/maintenance-icons/download.svg" alt="">Export Excel</button></div></div>`
-        : costingMode === "all"
-          ? `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-all-sheets">Export Excel</button></div></div>`
+        : costingDisplayMode === "all"
+          ? `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="back-to-costing">Current Costing</button>${costingPriceListAvailable() ? `<button class="sales-secondary" data-costing-action="show-prices">Price List</button>` : ""}<div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-all-sheets">Export Excel</button></div></div>`
           : costingTopbarActions()
     },
     projects: {
@@ -1921,8 +1932,12 @@ function syncSalesDeskTopbar() {
   }
 }
 
+function costingPriceListAvailable() {
+  return costingState?.settings?.priceListLocked === false;
+}
+
 function costingTopbarActions() {
-  return `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets"><img src="/assets/maintenance-icons/list.svg" alt="">All Costing Sheets</button><button class="sales-secondary" data-costing-action="show-prices">Price List</button><div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-costing">Export Excel</button></div></div>`;
+  return `<button class="sales-primary costing-new-button" data-costing-action="new-sheet"><img src="/assets/maintenance-icons/plus.svg" alt="">New Costing</button><button class="sales-secondary" data-costing-action="show-all-sheets"><img src="/assets/maintenance-icons/list.svg" alt="">All Costing Sheets</button>${costingPriceListAvailable() ? `<button class="sales-secondary" data-costing-action="show-prices">Price List</button>` : ""}<div class="row-menu costing-top-menu"><button class="sales-secondary costing-top-menu-button" data-row-menu title="More costing actions" aria-label="More costing actions"><img src="/assets/maintenance-icons/ellipsis.svg" alt=""></button><div class="row-menu-list hidden"><button data-costing-action="export-costing">Export Excel</button></div></div>`;
 }
 
 function inventoryTopbarConfig() {
@@ -1976,6 +1991,7 @@ function inventoryTopbarConfig() {
 }
 
 function renderSalesDesk() {
+  if (salesDeskScreen === "costing" && costingMode === "prices" && !costingPriceListAvailable()) costingMode = "all";
   syncSalesDeskTopbar();
   renderViewActions();
   const root = $("#salesDeskRoot");
@@ -2555,11 +2571,11 @@ function salesLeadBoardViewHtml(rows) {
         return `
           <section class="lead-board-column ${escapeHtml(group.tone)}" data-lead-board-drop="${escapeHtml(group.key)}" data-lead-board-status="${escapeHtml(group.status)}">
             <div class="lead-board-column-head">
-              <h4>${escapeHtml(group.label)}</h4>
+              <h4><span class="lead-board-column-icon ${escapeHtml(group.key)}" aria-hidden="true"></span>${escapeHtml(group.label)}</h4>
               <span>${groupRows.length}</span>
             </div>
             <div class="lead-board-cards">
-              ${groupRows.map(lead => salesLeadBoardCard(lead)).join("") || `<div class="lead-board-empty">No enquiries</div>`}
+              ${groupRows.map(lead => salesLeadBoardCard(lead)).join("") || `<div class="lead-board-empty"><span class="lead-board-empty-icon ${escapeHtml(group.key)}" aria-hidden="true"></span><span>No enquiries</span></div>`}
             </div>
           </section>
         `;
@@ -2592,26 +2608,21 @@ function salesLeadBoardGroupKey(lead) {
 }
 
 function salesLeadBoardCard(lead) {
+  const amount = Number(lead.estimatedValue);
   return `
     <article class="lead-board-card" draggable="true" data-lead-board-card="${escapeHtml(lead.id)}">
       <div class="lead-board-card-head">
         <button class="pipeline-link" data-sales-action="view-lead" data-sales-id="${escapeHtml(lead.id)}">${escapeHtml(lead.enquiryNo)}</button>
-        ${rowMenu([
-          { label: "View", action: "view-lead", id: lead.id },
-          { label: "Edit", action: "edit-lead", id: lead.id },
-          { label: "Create Costing", action: "lead-costing", id: lead.id },
-          { label: "Add Follow-up", action: "lead-add-follow-up", id: lead.id },
-          { label: "Delete", action: "delete-lead", id: lead.id, danger: true }
-        ])}
+        ${salesProductBadge(lead.productType)}
       </div>
-      <strong>${escapeHtml(lead.customer || "-")}</strong>
-      <p>${escapeHtml(lead.projectDescription || "-")}</p>
-      <div class="lead-board-tags">${salesProductBadge(lead.productType)}${salesBadge(lead.status)}</div>
+      <div class="lead-board-card-content">
+        <strong>${escapeHtml(lead.customer || "-")}</strong>
+        <p>${escapeHtml(lead.projectDescription || "")}</p>
+      </div>
       <div class="lead-board-meta">
-        <span>${lead.estimatedValue ? `${Number(lead.estimatedValue).toLocaleString("en-US")} AED` : "-"}</span>
-        <span>${escapeHtml(lead.receivedDate || "-")}</span>
-        <span>${escapeHtml(lead.salesPerson || "-")}</span>
-        <span>${escapeHtml(lead.contactNumber || "-")}</span>
+        <span class="lead-board-meta-row lead-board-amount">${Number.isFinite(amount) && amount > 0 ? `<img src="/assets/dx-icons/coins.svg" alt="" aria-hidden="true"><span>${amount.toLocaleString("en-US")} AED</span>` : ""}</span>
+        <span class="lead-board-meta-row"><img src="/assets/maintenance-icons/calendar-days.svg" alt="" aria-hidden="true"><span>${escapeHtml(lead.receivedDate || "-")}</span></span>
+        <span class="lead-board-meta-row"><img src="/assets/maintenance-icons/user-round.svg" alt="" aria-hidden="true"><span>${escapeHtml(lead.salesPerson || "-")}</span></span>
       </div>
     </article>
   `;
@@ -3593,11 +3604,74 @@ function salesProjectDirectStatusClass(status = "") {
   return "matched";
 }
 
+function setupSalesProjectCustomerPicker(modal) {
+  const input = modal.querySelector('[data-project-drawer-field="customer"]');
+  const options = modal.querySelector('[data-project-customer-options]');
+  const toggle = modal.querySelector('[data-project-customer-toggle]');
+  if (!input || !options) return;
+  const names = uniqueValues(salesCustomerNames());
+  let activeIndex = -1;
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const render = () => {
+    const query = input.value.trim().toLocaleLowerCase();
+    const matches = names.filter(name => name.toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map((name, index) => `<button type="button" id="salesProjectCustomerOption${index}" role="option" data-project-customer-option="${escapeHtml(name)}" aria-selected="false">${escapeHtml(name)}</button>`).join("");
+    options.hidden = !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+    activeIndex = -1;
+    input.removeAttribute("aria-activedescendant");
+  };
+  const setActive = index => {
+    const buttons = [...options.querySelectorAll('[role="option"]')];
+    if (!buttons.length) return;
+    activeIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, position) => {
+      button.classList.toggle("is-active", position === activeIndex);
+      button.setAttribute("aria-selected", String(position === activeIndex));
+    });
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) render();
+      setActive(activeIndex < 0 ? event.key === "ArrowDown" ? 0 : options.children.length - 1 : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    }
+    if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      options.children[activeIndex < 0 ? 0 : activeIndex]?.click();
+    }
+  });
+  input.addEventListener("blur", close);
+  toggle?.addEventListener("mousedown", event => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    const wasOpen = !options.hidden;
+    input.focus();
+    if (wasOpen) close();
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-project-customer-option]');
+    if (!option) return;
+    input.value = option.dataset.projectCustomerOption;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+  });
+}
+
 function openSalesProjectDrawer(itemId = "", draft = null) {
   if (itemId && pendingSalesProjectSaves.has(itemId)) return toast("This project is still saving.");
   const existing = itemId ? structuredClone((salesData().projects || []).find(item => item.id === itemId)) : null;
   const project = draft ? structuredClone(draft) : existing || salesProjectBlank();
-  const customerOptions = (salesData().customers || []).map(customer => customer.name).filter(Boolean);
   const modelOptions = (inventoryState?.models || inventoryState?.stock || []).map(item => item.modelNo || item.model || item.name || "").filter(Boolean);
   const salesPeople = (appSettings?.users || []).filter(user => user.active !== false && user.id && user.name);
   const selectedSalesPeople = [...new Set((project.ownerIds?.length ? project.ownerIds : project.ownerId ? [project.ownerId] : []).filter(Boolean))].slice(0, 3);
@@ -3615,7 +3689,6 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
         </div>
         <button class="mini-button" data-close-project-drawer>X</button>
       </div>
-      <datalist id="salesProjectCustomerList">${customerOptions.map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
       <datalist id="salesProjectModelList">${modelOptions.map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>
       <div class="sales-project-drawer-body">
         <section class="sales-project-form-section">
@@ -3623,7 +3696,7 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
           <div class="sales-project-form-grid">
             ${salesProjectDrawerField("Project No", "projectNo", salesProjectNo(project))}
             ${salesProjectDrawerField("Project Name", "name", project.name)}
-            <label>Customer<input list="salesProjectCustomerList" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}"></label>
+            <div class="sales-project-customer-field"><label for="salesProjectCustomer">Customer</label><div class="sales-project-customer-control"><input id="salesProjectCustomer" data-project-drawer-field="customer" value="${escapeHtml(project.customer || "")}" placeholder="Search or select customer" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesProjectCustomerOptions" aria-expanded="false"><button type="button" data-project-customer-toggle aria-label="Show customers" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesProjectCustomerOptions" class="sales-project-customer-options" data-project-customer-options role="listbox" hidden></div></div>
             ${salesProjectDrawerField("Location", "location", project.location)}
             ${salesProjectDrawerField("Division", "division", salesProjectDivision(project), ["Project/Inst", "Maint/Replace", "Trading"])}
             ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project) === "Completed" ? "Delivered" : salesProjectCurrentStatus(project), salesProjectStatusOptions())}
@@ -3667,6 +3740,7 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
   const orderBookSelect = modal.querySelector('[data-project-drawer-field="orderBookNo"]');
   const projectCustomer = modal.querySelector('[data-project-drawer-field="customer"]');
   const projectDivision = modal.querySelector('[data-project-drawer-field="division"]');
+  setupSalesProjectCustomerPicker(modal);
   orderBookSelect?.addEventListener("change", () => {
     const order = (salesData().orderBook || []).find(item => norm(item.orderNo) === norm(orderBookSelect.value));
     if (order?.division && projectDivision) projectDivision.value = order.division;
@@ -4571,6 +4645,36 @@ function handleSalesQuotePersonKeydown(event) {
   renderSalesQuotePersonOptions();
 }
 
+function salesQuoteEnquiryNumbers(customer, quoteId = "", quoteNo = "") {
+  const customerKey = norm(customer);
+  if (!customerKey) return [];
+  const quotations = salesData().quotations || [];
+  const currentNo = quoteNo || quotations.find(quote => quote.id === quoteId)?.no || "";
+  return uniqueValues((salesData().leads || [])
+    .filter(lead => {
+      if (norm(lead.customer) !== customerKey) return false;
+      if (lead.quoteNo && norm(lead.quoteNo) !== norm(currentNo)) return false;
+      return !quotations.some(quote => quote.id !== quoteId && norm(quote.warranty || quote.enquiryNo) === norm(lead.enquiryNo));
+    })
+    .map(lead => lead.enquiryNo)
+    .filter(Boolean));
+}
+
+function renderSalesQuoteEnquiryOptions() {
+  const input = document.querySelector("[data-sales-quote-enquiry-input]");
+  const options = document.querySelector("[data-sales-quote-enquiry-options]");
+  if (!input || !options) return;
+  const open = document.activeElement === input;
+  input.setAttribute("aria-expanded", String(open));
+  options.hidden = !open;
+  if (!open) return;
+  const matches = salesQuoteEnquiryNumbers(salesQuotationDraft.customer, salesQuotationDraft.id, salesQuotationDraft.quotationNo)
+    .filter(number => norm(number).includes(norm(input.value)));
+  options.innerHTML = matches.length
+    ? matches.map(number => `<button type="button" role="option" data-sales-quote-enquiry-option="${escapeHtml(number)}">${escapeHtml(number)}</button>`).join("")
+    : `<span class="sales-project-person-no-match">No available enquiries</span>`;
+}
+
 function salesCreateQuotationHtml() {
   salesQuotationDraft = salesQuotationDraft || quoteDraftFromSource();
   salesQuotationDraft.quoteType = salesQuotationDraft.quoteType || "VRV";
@@ -4603,7 +4707,7 @@ function salesCreateQuotationHtml() {
           <label>Project Name<input data-sales-quote-field="project" list="salesQuoteProjectList" placeholder="Type to search project..." value="${escapeHtml(salesQuotationDraft.project || "")}"><datalist id="salesQuoteProjectList">${salesData().projects.map(p => `<option value="${escapeHtml(p.name)}"></option>`).join("")}</datalist></label>
           <label>Payment Terms<input data-sales-quote-field="paymentTerms" value="${escapeHtml(salesQuotationDraft.paymentTerms)}"></label>
           <label>Availability<input data-sales-quote-field="deliveryTime" value="${escapeHtml(salesQuotationDraft.deliveryTime || "To be discussed")}"></label>
-          <label>Enquiry no<input data-sales-quote-field="warranty" value="${escapeHtml(salesQuotationDraft.warranty === "1 Year" ? "" : salesQuotationDraft.warranty || "")}"></label>
+          <div class="sales-quote-enquiry-field"><span>Enquiry no</span><div class="sales-quote-enquiry-picker" data-sales-quote-enquiry-picker><input data-sales-quote-field="warranty" data-sales-quote-enquiry-input role="combobox" aria-label="Enquiry no" aria-autocomplete="list" aria-expanded="false" autocomplete="off" value="${escapeHtml(salesQuotationDraft.warranty === "1 Year" ? "" : salesQuotationDraft.warranty || "")}"><div class="sales-project-person-options" data-sales-quote-enquiry-options role="listbox" hidden></div></div></div>
           </div>
         </section>
         <section class="sales-card sales-quote-items-card">
@@ -4743,6 +4847,7 @@ function salesOrderBookHtml() {
   const searched = salesOrderBookSearch(orders);
   const filtered = salesOrderBookAdvancedFilter(searched);
   const rows = salesOrderBookTabFilter(filtered).sort((a, b) => String(b.orderNo || "").localeCompare(String(a.orderNo || ""), undefined, { numeric: true, sensitivity: "base" }));
+  const totalsRow = salesOrderBookHasActiveFilters() ? salesOrderBookTotalsRow(rows) : "";
   const selected = salesOrderBookDetailId ? orders.find(order => order.id === salesOrderBookDetailId) : null;
   const detailOpen = !!selected;
   const stats = salesOrderBookStats(orders);
@@ -4778,10 +4883,11 @@ function salesOrderBookHtml() {
       </div>
       <div class="order-book-body ${detailOpen ? "has-detail" : ""}">
         <section class="order-book-table-card">
-          <div class="pipeline-table-wrap">
-            <table class="sales-table order-book-table">
+          <div class="pipeline-table-wrap ${totalsRow ? "has-totals" : ""}">
+            <table class="sales-table order-book-table ${totalsRow ? "has-totals" : ""}">
               <thead><tr><th>Order No</th><th>Customer</th><th>Job Description</th><th>Order Value</th><th>Received</th><th>Balance</th><th>Order Status</th><th><span class="order-book-actions-label">Actions</span></th></tr></thead>
               <tbody>${rows.map(order => salesOrderBookRow(order)).join("") || `<tr><td colspan="8" class="pipeline-empty">No orders found.</td></tr>`}</tbody>
+              ${totalsRow ? `<tfoot>${totalsRow}</tfoot>` : ""}
             </table>
           </div>
           <div class="pipeline-footer">Showing ${rows.length} of ${orders.length} orders</div>
@@ -4790,6 +4896,16 @@ function salesOrderBookHtml() {
       </div>
     </section>
   `;
+}
+
+function salesOrderBookHasActiveFilters() {
+  return !!(salesSearchQuery.trim() || salesOrderBookTab !== "all" ||
+    ["salesPerson", "customer", "dateRange", "orderStatus", "paymentStatus", "balancePending"].some(key => String(salesOrderBookFilters[key] || "").trim()));
+}
+
+function salesOrderBookTotalsRow(orders) {
+  const totals = salesOrderBookStats(orders);
+  return `<tr class="order-book-totals-row"><td></td><td></td><td></td><td>${salesMoney(totals.orderValue)}</td><td>${salesMoney(totals.received)}</td><td>${salesMoney(totals.balance)}</td><td></td><td></td></tr>`;
 }
 
 function orderBookKpi(label, value, caption, tone = "blue") {
@@ -5259,7 +5375,7 @@ function openOrderBookForm(orderId = "", draft = null) {
         ${orderBookFormSection("Basic Details", [
           orderBookField("orderNo", "Order No", item.orderNo),
           orderBookField("date", "Date", item.date, "dateText"),
-          orderBookField("customer", "Customer", item.customer, "list", salesCustomerNames()),
+          orderBookCustomerField(item.customer),
           orderBookField("jobDescription", "Job Description", item.jobDescription, "textarea"),
           orderBookField("location", "Location", item.location),
           orderBookField("contactPerson", "Contact Person", item.contactPerson),
@@ -5298,6 +5414,7 @@ function openOrderBookForm(orderId = "", draft = null) {
   `;
   document.body.appendChild(modal);
   modal.dataset.orderBookId = item.id || "";
+  setupOrderBookCustomerPicker(modal);
   setupOrderBookProjectPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#scanOrderBookPoBtn")?.addEventListener("click", () => scanOrderBookPoIntoForm(modal));
@@ -5353,6 +5470,70 @@ function openOrderBookForm(orderId = "", draft = null) {
     button.textContent = "Saving...";
     modal.remove();
     saveOrderBookInBackground(payload);
+  });
+}
+
+function setupOrderBookCustomerPicker(modal) {
+  const input = modal.querySelector('[data-order-book-field="customer"]');
+  const options = modal.querySelector('[data-order-book-customer-options]');
+  const toggle = modal.querySelector('[data-order-book-customer-toggle]');
+  if (!input || !options) return;
+  const names = uniqueValues(salesCustomerNames()).sort((a, b) => a.localeCompare(b));
+  let activeIndex = -1;
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const render = () => {
+    const query = input.value.trim().toLocaleLowerCase();
+    const matches = names.filter(name => name.toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map((name, index) => `<button type="button" id="orderBookCustomerOption${index}" role="option" data-order-book-customer-option="${escapeHtml(name)}" aria-selected="false">${escapeHtml(name)}</button>`).join("");
+    options.hidden = !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+    activeIndex = -1;
+    input.removeAttribute("aria-activedescendant");
+  };
+  const setActive = index => {
+    const buttons = [...options.querySelectorAll('[role="option"]')];
+    if (!buttons.length) return;
+    activeIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, position) => {
+      button.classList.toggle("is-active", position === activeIndex);
+      button.setAttribute("aria-selected", String(position === activeIndex));
+    });
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) render();
+      setActive(activeIndex < 0 ? event.key === "ArrowDown" ? 0 : options.children.length - 1 : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    }
+    if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      options.children[activeIndex < 0 ? 0 : activeIndex]?.click();
+    }
+  });
+  input.addEventListener("blur", close);
+  toggle?.addEventListener("mousedown", event => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    const wasOpen = !options.hidden;
+    input.focus();
+    if (wasOpen) close();
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-order-book-customer-option]');
+    if (!option) return;
+    input.value = option.dataset.orderBookCustomerOption;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
   });
 }
 
@@ -5476,6 +5657,10 @@ function orderBookField(key, label, value = "", type = "text", options = []) {
   if (type === "dateText") return `<label>${escapeHtml(label)}<input type="date" ${attrs} value="${nativeDateValue(value)}"></label>`;
   if (type === "money") return `<label>${escapeHtml(label)}<input ${attrs} inputmode="decimal" value="${escapeHtml(value ? String(value) : "")}"></label>`;
   return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}"></label>`;
+}
+
+function orderBookCustomerField(value = "") {
+  return `<div class="order-book-customer-field"><label for="orderBookCustomer">Customer</label><div class="order-book-customer-control"><input id="orderBookCustomer" data-order-book-field="customer" value="${escapeHtml(value || "")}" placeholder="Search or select customer" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="orderBookCustomerOptions" aria-expanded="false"><button type="button" data-order-book-customer-toggle aria-label="Show customers" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="orderBookCustomerOptions" class="order-book-customer-options" data-order-book-customer-options role="listbox" hidden></div></div>`;
 }
 
 function orderBookSalesPersonField(item) {
@@ -6053,6 +6238,14 @@ async function handleSalesClick(event) {
   const inSalesRoot = !!(target && $("#salesDeskRoot").contains(target));
   const inSalesTopbar = !!(target && $("#viewActions")?.contains(target));
   if (!target || (!inSalesRoot && !inSalesTopbar)) return;
+  if (target.dataset.salesQuoteEnquiryOption !== undefined) {
+    const number = target.dataset.salesQuoteEnquiryOption;
+    salesQuotationDraft.warranty = number;
+    const input = document.querySelector("[data-sales-quote-enquiry-input]");
+    if (input) { input.value = number; input.setAttribute("aria-expanded", "false"); input.blur(); }
+    document.querySelector("[data-sales-quote-enquiry-options]").hidden = true;
+    return;
+  }
   if (target.dataset.salesQuotePersonOption) {
     const person = salesQuotePersonUsers().find(user => user.id === target.dataset.salesQuotePersonOption);
     if (!person) return;
@@ -6354,6 +6547,11 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.salesQuoteEnquiryInput !== undefined) {
+    salesQuotationDraft.warranty = event.target.value;
+    renderSalesQuoteEnquiryOptions();
+    return;
+  }
   if (event.target.dataset.salesQuotePersonInput !== undefined) {
     updateSalesQuotePersonInput(event.target);
     return;
@@ -6517,6 +6715,10 @@ function handleSalesChange(event) {
     renderSalesDesk();
     return;
   }
+  if (event.target.dataset.salesQuoteEnquiryInput !== undefined) {
+    salesQuotationDraft.warranty = event.target.value;
+    return;
+  }
   updateSalesQuotationDraft(event, true);
 }
 
@@ -6546,6 +6748,7 @@ function updateSalesQuotationDraft(event, shouldRender = false) {
   const field = event.target.dataset.salesQuoteField;
   if (field) {
     salesQuotationDraft[field] = event.target.value;
+    if (field === "customer") renderSalesQuoteEnquiryOptions();
     if (shouldRender) renderSalesDesk();
     return;
   }
@@ -6559,6 +6762,52 @@ function updateSalesQuotationDraft(event, shouldRender = false) {
       : event.target.value;
     item[lineField] = ["qty", "unitPrice"].includes(lineField) ? Number(value || 0) : value;
     if (shouldRender) renderSalesDesk();
+  }
+}
+
+function salesLeadAvailableQuotations(customer, enquiryId = "", enquiryNo = "") {
+  const customerKey = norm(customer);
+  if (!customerKey) return [];
+  const leads = salesData().leads || [];
+  return (salesData().quotations || []).filter(quote => {
+    const quoteNo = quote.no || quote.quotationNo || "";
+    if (!quoteNo || norm(quote.customer) !== customerKey) return false;
+    const claimedByAnother = leads.some(lead => lead.id !== enquiryId && norm(lead.quoteNo) === norm(quoteNo));
+    const linkedEnquiry = leads.find(lead => norm(lead.enquiryNo) === norm(quote.warranty));
+    return !claimedByAnother && (!linkedEnquiry || linkedEnquiry.id === enquiryId || norm(linkedEnquiry.enquiryNo) === norm(enquiryNo));
+  });
+}
+
+function fillSalesLeadQuotationDetails(modal, enquiryId = "") {
+  const quoteNo = modal.querySelector('[data-sales-lead-field="quoteNo"]')?.value.trim();
+  const customer = modal.querySelector('[data-sales-lead-field="customer"]')?.value || "";
+  const enquiryNo = modal.querySelector('[data-sales-lead-field="enquiryNo"]')?.value || "";
+  const quote = quoteNo && salesLeadAvailableQuotations(customer, enquiryId, enquiryNo)
+    .find(item => norm(item.no || item.quotationNo) === norm(quoteNo));
+  if (!quote) return;
+  const subtotal = String(quote.manualSubtotal ?? "").trim();
+  const itemSubtotal = (quote.items || []).reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
+  const taxable = Math.max(0, (subtotal ? salesNumber(subtotal) : itemSubtotal) - Number(quote.discount || 0));
+  const fields = {
+    quoteNo: quote.no || quote.quotationNo || "",
+    quotedDate: nativeDateValue(quote.date || quote.quotationDate),
+    preparedBy: quote.salesperson || quote.salesPerson || quote.preparedBy || "",
+    estimatedValue: Number.isFinite(Number(quote.amount)) ? Number(quote.amount) : Math.round(taxable * 1.05 * 100) / 100
+  };
+  Object.entries(fields).forEach(([key, value]) => {
+    const input = modal.querySelector(`[data-sales-lead-field="${key}"]`);
+    if (input) {
+      input.value = value;
+      if (key === "preparedBy") input.classList.toggle("is-linked", salesQuotePersonUsers().some(user => norm(user.name) === norm(value)));
+    }
+  });
+}
+
+function clearSalesLeadQuoteFields(modal) {
+  for (const key of ["quotedDate", "preparedBy", "estimatedValue"]) {
+    const input = modal.querySelector(`[data-sales-lead-field="${key}"]`);
+    if (input) input.value = "";
+    if (key === "preparedBy") input?.classList.remove("is-linked");
   }
 }
 
@@ -6746,7 +6995,12 @@ async function saveSalesQuotation(status = "Draft", triggerButton = null) {
     const index = quotations.findIndex(item => item.id === response.savedItemId);
     if (index >= 0) quotations[index] = response.savedItem;
     else quotations.unshift(response.savedItem);
-    salesCrmState = { ...salesData(), quotations, settings: { ...salesData().settings, nextQuotationNo: response.nextQuotationNo } };
+    const leads = [...(salesData().leads || [])];
+    for (const changedLead of [...(response.unlinkedLeads || []), response.linkedLead].filter(Boolean)) {
+      const leadIndex = leads.findIndex(item => item.id === changedLead.id);
+      if (leadIndex >= 0) leads[leadIndex] = changedLead;
+    }
+    salesCrmState = { ...salesData(), quotations, leads, settings: { ...salesData().settings, nextQuotationNo: response.nextQuotationNo } };
     salesCrmLoadedAt = Date.now();
     const savedQuote = response.savedItem;
     markLeadQuoteSentFromQuotation(savedQuote).catch(error => console.warn(error));
@@ -7010,7 +7264,7 @@ async function openSalesLeadDrawer(itemId = "") {
           salesLeadField("enquiryNo", "Enquiry No", item.enquiryNo, "text", { required: true }),
           salesLeadField("receivedDate", "Date Enquiry Received", item.receivedDate || todaySalesDateInput(), "dateText", { required: true }),
           salesLeadField("salesPerson", "Sales Person", item.salesPerson, "list", { required: true, list: uniqueValues((salesData().leads || []).map((lead, index) => normalizeSalesLead(lead, index).salesPerson)) }),
-          salesLeadField("customer", "Customer", item.customer, "list", { required: true, list: (salesData().customers || []).map(customer => customer.name) }),
+          salesLeadField("customer", "Customer", item.customer, "customerPicker", { required: true, list: (salesData().customers || []).map(customer => customer.name) }),
           salesLeadField("projectDescription", "Project / Description", item.projectDescription, "textarea", { required: true })
         ])}
         ${salesLeadFormSection(2, "Project Parties", [
@@ -7026,9 +7280,9 @@ async function openSalesLeadDrawer(itemId = "") {
           salesLeadField("scope", "Scope Notes", item.scope, "textarea")
         ])}
         ${salesLeadFormSection(4, "Quotation Details", [
-          salesLeadField("quoteNo", "Quote No", item.quoteNo),
+          salesLeadField("quoteNo", "Quote No", item.quoteNo, "quotePicker"),
           salesLeadField("quotedDate", "Date Enquiry Quoted", item.quotedDate, "dateText"),
-          salesLeadField("preparedBy", "Selection & Quote Prepared By", item.preparedBy),
+          salesLeadField("preparedBy", "Selection & Quote Prepared By", existing ? item.preparedBy : currentUser?.name || "", "preparedByPicker"),
           salesLeadField("estimatedValue", "Value (AED)", item.estimatedValue || "", "money"),
           salesLeadField("daikinPurchaseValue", "Daikin Purchase", item.daikinPurchaseValue || "", "money"),
           salesLeadField("finalizingMonth", "Tentative Finalizing Month", item.finalizingMonth)
@@ -7048,6 +7302,9 @@ async function openSalesLeadDrawer(itemId = "") {
     </aside>
   `;
   document.body.appendChild(modal);
+  setupSalesLeadCustomerPicker(modal, (salesData().customers || []).map(customer => customer.name));
+  setupSalesLeadQuotePicker(modal, item.id);
+  setupSalesLeadPreparedByPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#saveSalesLeadBtn").addEventListener("click", async () => {
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
@@ -7072,6 +7329,186 @@ async function openSalesLeadDrawer(itemId = "") {
       button.disabled = false;
       button.textContent = label;
     }
+  });
+}
+
+function setupSalesLeadCustomerPicker(modal, customerNames) {
+  const input = modal.querySelector('[data-sales-lead-field="customer"]');
+  const options = modal.querySelector('[data-sales-lead-customer-options]');
+  const toggle = modal.querySelector('[data-sales-lead-customer-toggle]');
+  if (!input || !options) return;
+  const names = uniqueValues(customerNames).sort((a, b) => a.localeCompare(b));
+  let activeIndex = -1;
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const render = () => {
+    const query = input.value.trim().toLocaleLowerCase();
+    const matches = names.filter(name => name.toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map((name, index) => `<button type="button" id="salesLeadCustomerOption${index}" role="option" data-sales-lead-customer-option="${escapeHtml(name)}" aria-selected="false">${escapeHtml(name)}</button>`).join("");
+    options.hidden = !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const setActive = index => {
+    const buttons = [...options.querySelectorAll('[role="option"]')];
+    if (!buttons.length) return;
+    activeIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, position) => {
+      button.classList.toggle("is-active", position === activeIndex);
+      button.setAttribute("aria-selected", String(position === activeIndex));
+    });
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) render();
+      setActive(activeIndex < 0 ? event.key === "ArrowDown" ? 0 : options.children.length - 1 : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    }
+    if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      options.children[activeIndex < 0 ? 0 : activeIndex]?.click();
+    }
+  });
+  input.addEventListener("blur", close);
+  toggle?.addEventListener("mousedown", event => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    const wasOpen = !options.hidden;
+    input.focus();
+    if (wasOpen) close();
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-sales-lead-customer-option]');
+    if (!option) return;
+    input.value = option.dataset.salesLeadCustomerOption;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    close();
+  });
+}
+
+function setupSalesLeadQuotePicker(modal, enquiryId = "") {
+  const input = modal.querySelector('[data-sales-lead-field="quoteNo"]');
+  const options = modal.querySelector('[data-sales-lead-quote-options]');
+  const toggle = modal.querySelector('[data-sales-lead-quote-toggle]');
+  if (!input || !options) return;
+  let activeIndex = -1;
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const render = () => {
+    const customer = modal.querySelector('[data-sales-lead-field="customer"]')?.value || "";
+    const enquiryNo = modal.querySelector('[data-sales-lead-field="enquiryNo"]')?.value || "";
+    const query = input.value.trim().toLocaleLowerCase();
+    const matches = salesLeadAvailableQuotations(customer, enquiryId, enquiryNo)
+      .filter(quote => (quote.no || quote.quotationNo || "").toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map((quote, index) => {
+      const number = quote.no || quote.quotationNo;
+      return `<button type="button" id="salesLeadQuoteOption${index}" role="option" data-sales-lead-quote-option="${escapeHtml(number)}" aria-selected="false">${escapeHtml(number)}</button>`;
+    }).join("");
+    options.hidden = document.activeElement !== input || !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const setActive = index => {
+    const buttons = [...options.querySelectorAll('[role="option"]')];
+    if (!buttons.length) return;
+    activeIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, position) => {
+      button.classList.toggle("is-active", position === activeIndex);
+      button.setAttribute("aria-selected", String(position === activeIndex));
+    });
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", () => {
+    if (!input.value.trim()) clearSalesLeadQuoteFields(modal);
+    render();
+  });
+  input.addEventListener("change", () => fillSalesLeadQuotationDetails(modal, enquiryId));
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) render();
+      setActive(activeIndex < 0 ? event.key === "ArrowDown" ? 0 : options.children.length - 1 : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    }
+    if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      options.children[activeIndex < 0 ? 0 : activeIndex]?.click();
+    }
+  });
+  input.addEventListener("blur", close);
+  for (const key of ["customer", "enquiryNo"]) {
+    modal.querySelector(`[data-sales-lead-field="${key}"]`)?.addEventListener("input", render);
+  }
+  toggle?.addEventListener("mousedown", event => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    const wasOpen = !options.hidden;
+    input.focus();
+    if (wasOpen) close();
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-sales-lead-quote-option]');
+    if (!option) return;
+    input.value = option.dataset.salesLeadQuoteOption;
+    fillSalesLeadQuotationDetails(modal, enquiryId);
+    close();
+  });
+}
+
+function setupSalesLeadPreparedByPicker(modal) {
+  const input = modal.querySelector('[data-sales-lead-field="preparedBy"]');
+  const options = modal.querySelector('[data-sales-lead-prepared-options]');
+  if (!input || !options || input.readOnly) return;
+  const users = salesQuotePersonUsers();
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+  };
+  const render = () => {
+    const matched = users.some(user => norm(user.name) === norm(input.value));
+    input.classList.toggle("is-linked", matched);
+    const query = matched ? "" : input.value.trim().toLocaleLowerCase();
+    const matches = users.filter(user => user.name.toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map(user => `<button type="button" role="option" data-sales-lead-prepared-option="${escapeHtml(user.name)}">${escapeHtml(user.name)}</button>`).join("");
+    options.hidden = document.activeElement !== input || !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", render);
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if ((event.key === "Backspace" || event.key === "Delete") && input.classList.contains("is-linked")) {
+      event.preventDefault();
+      input.value = "";
+      input.classList.remove("is-linked");
+      render();
+    }
+  });
+  input.addEventListener("blur", close);
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-sales-lead-prepared-option]');
+    if (!option) return;
+    input.value = option.dataset.salesLeadPreparedOption;
+    input.classList.add("is-linked");
+    close();
   });
 }
 
@@ -7110,6 +7547,16 @@ function salesLeadField(key, label, value = "", type = "text", options = {}) {
   }
   if (type === "select") {
     return `<label>${labelHtml}<select ${attrs}>${(options.options || []).map(option => `<option value="${escapeHtml(option)}" ${String(value || "") === option ? "selected" : ""}>${escapeHtml(option || "Select")}</option>`).join("")}</select></label>`;
+  }
+  if (type === "customerPicker") {
+    return `<div class="sales-lead-customer-field"><label for="salesLeadCustomer">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadCustomer" ${attrs} value="${escapeHtml(value || "")}" placeholder="Search or select customer" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadCustomerOptions" aria-expanded="false"><button type="button" data-sales-lead-customer-toggle aria-label="Show customers" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesLeadCustomerOptions" class="sales-lead-customer-options" data-sales-lead-customer-options role="listbox" hidden></div></div>`;
+  }
+  if (type === "quotePicker") {
+    return `<div class="sales-lead-customer-field sales-lead-quote-field"><label for="salesLeadQuoteNo">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadQuoteNo" ${attrs} value="${escapeHtml(value || "")}" placeholder="Search or select quotation" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadQuoteOptions" aria-expanded="false"><button type="button" data-sales-lead-quote-toggle aria-label="Show quotations" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesLeadQuoteOptions" class="sales-lead-customer-options" data-sales-lead-quote-options role="listbox" hidden></div></div>`;
+  }
+  if (type === "preparedByPicker") {
+    const linked = salesQuotePersonUsers().some(user => norm(user.name) === norm(value));
+    return `<div class="sales-lead-customer-field sales-lead-prepared-field"><label for="salesLeadPreparedBy">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadPreparedBy" ${attrs} class="${linked ? "is-linked" : ""}" value="${escapeHtml(value || "")}" placeholder="Select or type a login name" ${isStaffUser() ? "readonly" : 'autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadPreparedOptions" aria-expanded="false"'}></div>${isStaffUser() ? "" : '<div id="salesLeadPreparedOptions" class="sales-lead-customer-options" data-sales-lead-prepared-options role="listbox" hidden></div>'}</div>`;
   }
   if (type === "list") {
     const listId = `lead-list-${key}-${Math.random().toString(36).slice(2)}`;
@@ -10165,10 +10612,13 @@ function supplierDnViewHtml() {
         ${supplierDnRows(latestDns)}
       </tbody></table>
     </div>
-    <div class="inventory-card">
-      <h3 class="supplier-verification-heading"><span class="supplier-heading-icon"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>Verification Details</h3>
+    ${supplierVerificationDismissed ? "" : `<div class="inventory-card supplier-verification-card">
+      <div class="supplier-verification-bar">
+        <h3 class="supplier-verification-heading"><span class="supplier-heading-icon"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>Verification Details</h3>
+        <button class="supplier-verification-close" type="button" id="closeSupplierVerificationBtn" aria-label="Close verification details" title="Close verification details"><img src="/assets/maintenance-icons/x.svg" alt=""></button>
+      </div>
       ${active ? supplierVerificationHtml(active) : `<label class="upload-zone" id="supplierUploadZone">Upload DN<br><span class="inventory-muted">AI/OCR detects model and quantity.</span></label>`}
-    </div>
+    </div>`}
   `;
 }
 
@@ -10236,7 +10686,7 @@ function supplierDnMenuItems(dn) {
   const items = [];
   items.push({ label: "Edit", action: "edit-supplier", id: dn.id });
   items.push({ label: "Cancel", action: "cancel-supplier", id: dn.id, danger: true });
-  items.push({ label: "Delete", action: "delete-supplier", id: dn.id, danger: true });
+  if (isCurrentAdmin()) items.push({ label: "Delete", action: "delete-supplier", id: dn.id, danger: true });
   return items;
 }
 
@@ -10832,8 +11282,14 @@ function handleInventoryClick(event) {
     return refreshDeliveryNoteList();
   }
   if (target.id === "supplierUploadZone") return uploadSupplierDn();
+  if (target.id === "closeSupplierVerificationBtn") {
+    activeSupplierDnId = "";
+    supplierVerificationDismissed = true;
+    return renderInventory();
+  }
   if (target.dataset.selectSupplier) {
     activeSupplierDnId = target.dataset.selectSupplier;
+    supplierVerificationDismissed = false;
     return renderInventory();
   }
   if (target.dataset.removeSupplierLine) {
@@ -11663,6 +12119,7 @@ function handleInventoryMenuAction(action, idValue) {
   }
   if (action === "edit-supplier" || action === "select-supplier") {
     activeSupplierDnId = idValue;
+    supplierVerificationDismissed = false;
     if (inventoryScreen === "supplierAll") return showInventory("supplier");
     return renderInventory();
   }
@@ -11843,6 +12300,7 @@ async function uploadSupplierDn() {
       const result = await api("/api/inventory/supplier-dns/upload", { method: "POST", body: form });
       inventoryState = result;
       activeSupplierDnId = result.activeSupplierDnId;
+      supplierVerificationDismissed = false;
       inventoryScreen = "supplier";
       renderInventory();
     } catch (error) {
@@ -11886,6 +12344,7 @@ async function cancelActiveSupplierDn() {
 }
 
 async function deleteSupplierDn(supplierDnId) {
+  if (!isCurrentAdmin()) return toast("Only Admin can delete a Supplier DN.");
   if (!confirm("Delete this Supplier DN? This removes the record.")) return;
   inventoryState = await api(`/api/inventory/supplier-dns/${supplierDnId}`, { method: "DELETE" });
   if (activeSupplierDnId === supplierDnId) activeSupplierDnId = "";
@@ -14682,7 +15141,7 @@ function appendCostingRowForListedModel(sheet) {
 }
 
 function costingSheetHtml() {
-  if (costingMode === "prices") return costingPriceListHtml();
+  if (costingMode === "prices") return costingPriceListAvailable() ? costingPriceListHtml() : costingAllSheetsHtml();
   if (costingMode === "all") return costingAllSheetsHtml();
   const sheet = activeCostingOrDraft();
   const rows = sheet.rows || [];
@@ -15023,7 +15482,7 @@ async function handleCostingClick(action, target) {
       }
     }
   }
-  if (action === "show-prices") { costingHistoryOpen = false; costingMode = "prices"; return showSalesDesk("costing"); }
+  if (action === "show-prices") { if (!costingPriceListAvailable()) return; costingHistoryOpen = false; costingMode = "prices"; return showSalesDesk("costing"); }
   if (action === "back-to-costing") { costingHistoryOpen = false; costingMode = "sheet"; return showSalesDesk("costing"); }
   if (action === "show-all-sheets") {
     costingHistoryOpen = false;

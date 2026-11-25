@@ -110,6 +110,7 @@ function renderSalesQuotationPdf(payload, assets) {
   }
 
   function information() {
+    const borderColor = "#8FA8C8";
     const gap = 17;
     const panelW = (width - gap) / 2;
     const labelW = 95;
@@ -139,14 +140,18 @@ function renderSalesQuotationPdf(payload, assets) {
         const rowH = rowHeights[index];
         doc.rect(x, rowY, labelW, rowH).fill(COLORS.blue);
         doc.rect(x + labelW, rowY, panelW - labelW, rowH).fill("#FFFFFF");
-        line(x, rowY + rowH, x + panelW, rowY + rowH);
         line(x + labelW, rowY, x + labelW, rowY + rowH);
         print(row[0], x + 7, rowY + 5, labelW - 12, { size: 8.5, bold: true, color: COLORS.navy });
         print(row[1] || "-", x + labelW + 7, rowY + 5, panelW - labelW - 13, { size: 8.8 });
         rowY += rowH;
       });
+      let dividerY = y;
+      rowHeights.slice(0, -1).forEach(rowH => {
+        dividerY += rowH;
+        doc.strokeColor(borderColor).lineWidth(0.75).moveTo(x, dividerY).lineTo(x + panelW, dividerY).stroke();
+      });
       doc.restore();
-      doc.roundedRect(x, y, panelW, totalH, 5).stroke(COLORS.border);
+      doc.save().lineWidth(0.75).roundedRect(x, y, panelW, totalH, 5).stroke(borderColor).restore();
     }
     y += totalH + 17;
   }

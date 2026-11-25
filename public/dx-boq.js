@@ -34,11 +34,12 @@
     let cost = 0n, selling = 0n, incomplete = !validMargin;
     const rows = (boq.rows || []).map(row => {
       const unit = scaled(row.unitPrice, 2), qty = scaled(row.qty, 4);
-      const valid = validMargin && unit !== null && qty !== null && qty > 0n;
+      const valid = validMargin && unit !== null && unit > 0n && qty !== null && qty > 0n;
       if (!valid) { incomplete = true; return { ...row, sellingPrice: null, lineTotal: null }; }
       // Match the existing Costing Sheet's gross margin definition, using cents.
       const sale = divide(unit * 1000000n, 1000000n - margin);
       const line = divide(sale * qty, 10000n);
+      if (line <= 0n) { incomplete = true; return { ...row, sellingPrice: null, lineTotal: null }; }
       cost += divide(unit * qty, 10000n); selling += line;
       return { ...row, unitPrice: Number(unit) / 100, sellingPrice: Number(sale) / 100, lineTotal: Number(line) / 100 };
     });
@@ -93,6 +94,7 @@
   }
   function validate(boq) {
     const errors = [...(boq.syncWarnings || [])];
+    const priced = calculate(boq);
     if (!(boq.rows || []).length) errors.push('Add at least one BOQ item.');
     if (scaled(boq.margin, 4) === null || Number(boq.margin) > 95) errors.push('Overall Profit Margin must be between 0 and 95%.');
     (boq.rows || []).forEach((row, index) => {
@@ -100,7 +102,9 @@
       if (!String(row.model || '').trim()) errors.push(`${name}: select a model.`);
       const quantity = scaled(row.qty, 4);
       if (quantity === null || quantity <= 0n || !Number.isInteger(Number(row.qty))) errors.push(`${name}: enter a positive whole-number quantity.`);
-      if (scaled(row.unitPrice, 2) === null) errors.push(`${name}: enter a valid Unit Price; price lookup is unresolved.`);
+      const unitPrice = scaled(row.unitPrice, 2);
+      if (unitPrice === null || unitPrice <= 0n) errors.push(`${name}: enter a Unit Price greater than AED 0.00; price lookup may be unresolved.`);
+      else if (quantity !== null && quantity > 0n && !(priced.rows[index].lineTotal > 0)) errors.push(`${name}: Line Total must be greater than AED 0.00.`);
       if (row.sourceRemoved || row.pendingQty != null) errors.push(`${name}: synchronize the changed DX Schedule before creating a quotation.`);
     });
     return errors;

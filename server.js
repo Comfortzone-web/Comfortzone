@@ -1803,6 +1803,27 @@ function salesProjectStatusView(store, project, inventory) {
 async function salesCrmView(store, user) {
   const [inventory, appSettings] = await Promise.all([readInventory(), readSettings()]);
   const staff = isStaff(user);
+  const quotationsByEnquiry = new Map();
+  for (const quote of store.quotations) {
+    const enquiryKey = inventoryNorm(quote.warranty || quote.enquiryNo);
+    if (!enquiryKey) continue;
+    const matches = quotationsByEnquiry.get(enquiryKey) || [];
+    matches.push(quote);
+    quotationsByEnquiry.set(enquiryKey, matches);
+  }
+  const claimedQuoteNos = new Set(store.leads.map(lead => inventoryNorm(lead.quoteNo)).filter(Boolean));
+  const leadsWithLinkedQuotations = store.leads.map(lead => {
+    if (lead.quoteNo) return lead;
+    const matches = quotationsByEnquiry.get(inventoryNorm(lead.enquiryNo)) || [];
+    if (matches.length !== 1) return lead;
+    const quote = matches[0];
+    if (inventoryNorm(quote.customer) !== inventoryNorm(lead.customer)
+      || staff && !staffOwns(quote, user)
+      || claimedQuoteNos.has(inventoryNorm(quote.no || quote.quotationNo))) return lead;
+    const linked = { ...lead };
+    fillEnquiryFromQuotation(linked, quote);
+    return linked;
+  });
   const projectStatuses = store.projects.map(project => salesProjectStatusView(store, project, inventory));
   const deliveryStatusByOrder = new Map(projectStatuses.filter(entry => entry.order).map(entry => [entry.order.id, entry.status === "Completed" ? "Delivered" : entry.status]));
   return {
@@ -1817,7 +1838,7 @@ async function salesCrmView(store, user) {
       orderBookSalesPeople: (appSettings.users || []).filter(entry => entry.active !== false && (isAdmin(entry) || isStaff(entry)))
         .map(({ id, name, role }) => ({ id, name, role }))
     } : { ...store.settings, salesTargets: appSettings.salesTargets || [], salesPeople: appSettings.users.map(({ id, name, email, role, active }) => ({ id, name, email, role, active })) },
-    leads: staff ? store.leads.filter(item => staffOwns(item, user)) : store.leads,
+    leads: staff ? leadsWithLinkedQuotations.filter(item => staffOwns(item, user)) : leadsWithLinkedQuotations,
     quotations: staff ? store.quotations.filter(item => staffOwns(item, user)) : store.quotations,
     projects: projectStatuses.filter(entry => !staff || salesProjectAssignedTo(entry.project, user)).map(entry => entry.project),
     orderBook: (staff ? store.orderBook.filter(item => staffOwnsOrder(item, user)) : store.orderBook)
@@ -2979,6 +3000,20 @@ function salesQuotationTotal(quote) {
   return Math.round((taxable + taxable * 0.05) * 100) / 100;
 }
 
+function fillEnquiryFromQuotation(lead, quote) {
+  lead.quoteNo = cleanCell(quote.no || quote.quotationNo || "");
+  lead.quotedDate = cleanCell(quote.date || quote.quotationDate || "");
+  lead.preparedBy = cleanCell(quote.salesperson || quote.salesPerson || quote.preparedBy || "");
+  lead.estimatedValue = Number(quote.amount ?? salesQuotationTotal(quote)) || 0;
+}
+
+function clearEnquiryQuotationDetails(lead) {
+  lead.quoteNo = "";
+  lead.quotedDate = "";
+  lead.preparedBy = "";
+  lead.estimatedValue = 0;
+}
+
 function nextSalesQuotationNoFrom(current) {
   const text = cleanSalesQuotationBaseNo(current);
   const match = text.match(/^(.*?)(\d+)$/);
@@ -4133,7 +4168,7 @@ async function handleApi(req, res) {
     const preparedBy = (settings.users || []).find(entry => entry.id === user.id) || {};
     const variant = body.variant === "breakup" ? "breakup" : "bulk";
     const pdf = await salesQuotationPdfBuffer({ quote, customer, preparedBy, variant });
-    const filename = salesQuotationPdfFilename(quote).replace(/\.pdf$/i, variant === "breakup" ? "-Breakup.pdf" : "-Bulk-Pricing.pdf");
+    const filename = salesQuotationPdfFilename(quote);
     const upload = {
       id: id(),
       originalName: filename,
@@ -4570,7 +4605,39 @@ async function handleApi(req, res) {
       const duplicate = store.leads.some((lead, index) => index !== existingIndex
         && inventoryNorm(lead.enquiryNo) === inventoryNorm(item.enquiryNo));
       if (duplicate) return send(res, 409, { error: `Enquiry number ${item.enquiryNo} already exists` });
+      const linkedQuote = item.quoteNo && store.quotations.find(quote => inventoryNorm(quote.no || quote.quotationNo) === inventoryNorm(item.quoteNo));
+      if (linkedQuote) {
+        if (inventoryNorm(linkedQuote.customer) !== inventoryNorm(item.customer)) return send(res, 409, { error: "Quotation belongs to a different customer." });
+        const assignedLead = store.leads.find(lead => lead.id !== item.id && (
+          inventoryNorm(lead.quoteNo) === inventoryNorm(item.quoteNo)
+          || (linkedQuote.warranty && inventoryNorm(lead.enquiryNo) === inventoryNorm(linkedQuote.warranty))
+        ));
+        if (assignedLead) return send(res, 409, { error: `Quotation ${item.quoteNo} is already linked to another enquiry.` });
+      }
     }
+    if (collection === "quotations") {
+      const enquiryNo = cleanCell(Object.prototype.hasOwnProperty.call(rawItem, "warranty") ? rawItem.warranty : rawItem.enquiryNo);
+      const linkedLead = enquiryNo && store.leads.find(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(enquiryNo));
+      if (linkedLead) {
+        if (inventoryNorm(linkedLead.customer) !== inventoryNorm(item.customer)) return send(res, 409, { error: "Enquiry belongs to a different customer." });
+        const previousNo = existingIndex >= 0 ? store.quotations[existingIndex].no || store.quotations[existingIndex].quotationNo : "";
+        if (linkedLead.quoteNo && ![item.no, previousNo].some(no => no && inventoryNorm(no) === inventoryNorm(linkedLead.quoteNo))) {
+          return send(res, 409, { error: `Enquiry ${enquiryNo} is already linked to another quotation.` });
+        }
+        if (store.quotations.some(quote => quote.id !== item.id && inventoryNorm(quote.warranty || quote.enquiryNo) === inventoryNorm(enquiryNo))) {
+          return send(res, 409, { error: `Enquiry ${enquiryNo} is already linked to another quotation.` });
+        }
+        if (store.leads.some(lead => lead.id !== linkedLead.id && inventoryNorm(lead.quoteNo) === inventoryNorm(item.no))) {
+          return send(res, 409, { error: `Quotation ${item.no} is already linked to another enquiry.` });
+        }
+        const previous = existingIndex >= 0 ? store.quotations[existingIndex] : null;
+        const previousLead = previous?.warranty && store.leads.find(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(previous.warranty));
+        if (previousLead && previousLead.id !== linkedLead.id && inventoryNorm(previousLead.quoteNo) === inventoryNorm(previous.no)) {
+          return send(res, 409, { error: `Quotation ${item.no} is already linked to another enquiry.` });
+        }
+      }
+    }
+    const previousItem = existingIndex >= 0 ? store[collection][existingIndex] : null;
     if (collection === "leads" && existingIndex < 0) {
       item.createdAt = item.createdAt || nowIso;
       item.updatedAt = nowIso;
@@ -4594,6 +4661,44 @@ async function handleApi(req, res) {
       }
       store[collection].unshift(item);
     }
+    let linkedLead = null;
+    const unlinkedLeads = [];
+    if (collection === "quotations") {
+      const enquiryNo = cleanCell(Object.prototype.hasOwnProperty.call(rawItem, "warranty") ? rawItem.warranty : rawItem.enquiryNo);
+      item.warranty = enquiryNo;
+      if (previousItem && (inventoryNorm(previousItem.warranty) !== inventoryNorm(enquiryNo)
+        || !enquiryNo && previousItem.sourceLeadId)) {
+        const oldLead = store.leads.find(lead => lead.id === previousItem.sourceLeadId
+          || previousItem.warranty && inventoryNorm(lead.enquiryNo) === inventoryNorm(previousItem.warranty));
+        if (oldLead && (!oldLead.quoteNo || inventoryNorm(oldLead.quoteNo) === inventoryNorm(previousItem.no || previousItem.quotationNo))) {
+          clearEnquiryQuotationDetails(oldLead);
+          unlinkedLeads.push(oldLead);
+        }
+      }
+      if (!enquiryNo) item.sourceLeadId = "";
+      linkedLead = enquiryNo && store.leads.find(lead => inventoryNorm(lead.enquiryNo) === inventoryNorm(enquiryNo)
+        && (!isStaff(user) || staffOwns(lead, user)));
+      if (linkedLead) fillEnquiryFromQuotation(linkedLead, item);
+    }
+    if (collection === "leads") {
+      const oldQuote = previousItem && (store.quotations.find(quote => previousItem.quoteNo
+        && inventoryNorm(quote.no || quote.quotationNo) === inventoryNorm(previousItem.quoteNo)
+        && (!isStaff(user) || staffOwns(quote, user)))
+        || store.quotations.find(quote => quote.warranty
+          && inventoryNorm(quote.warranty) === inventoryNorm(previousItem.enquiryNo)
+          && (!isStaff(user) || staffOwns(quote, user))));
+      if (previousItem && inventoryNorm(oldQuote?.no || previousItem.quoteNo) !== inventoryNorm(item.quoteNo)) {
+        if (oldQuote && inventoryNorm(oldQuote.warranty) === inventoryNorm(previousItem.enquiryNo)) oldQuote.warranty = "";
+        if (oldQuote?.sourceLeadId === item.id) oldQuote.sourceLeadId = "";
+        if (!item.quoteNo) clearEnquiryQuotationDetails(item);
+      }
+      const linkedQuote = item.quoteNo && store.quotations.find(quote => inventoryNorm(quote.no || quote.quotationNo) === inventoryNorm(item.quoteNo)
+        && (!isStaff(user) || staffOwns(quote, user)));
+      if (linkedQuote) {
+        fillEnquiryFromQuotation(item, linkedQuote);
+        linkedQuote.warranty = item.enquiryNo;
+      }
+    }
     if (collection === "customers") store.customers = mergeDuplicateSalesCustomers(store.customers);
     if (collection === "leads") store.settings.nextEnquiryNo = nextAvailableSalesEnquiryNo(store.settings.nextEnquiryNo, store.leads);
     if (collection === "quotations") {
@@ -4611,6 +4716,7 @@ async function handleApi(req, res) {
     });
     if (collection === "quotations" && url.searchParams.get("compact") === "1") return send(res, 200, {
       savedItem: item, savedItemId: item.id,
+      linkedLead, unlinkedLeads,
       nextQuotationNo: store.settings.nextQuotationNo
     });
     if (collection === "orderBook" && url.searchParams.get("compact") === "1") return send(res, 200, {
@@ -5157,9 +5263,9 @@ async function handleApi(req, res) {
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/inventory\/supplier-dns\/[^/]+$/)) {
+    if (!isAdmin(user)) return sendForbidden(res);
     const inventory = await readInventory();
     const supplierDnId = url.pathname.split("/").pop();
-    if (!isAdmin(user) && inventory.supplierDns.some(dn => dn.id === supplierDnId && dn.isManualAdjustment)) return sendForbidden(res);
     inventory.supplierDns = (inventory.supplierDns || []).filter(dn => dn.id !== supplierDnId);
     await writeInventory(inventory);
     await oolApi.removeSources([`supplier:${supplierDnId}`],user);
@@ -9207,12 +9313,18 @@ async function deliveryNotePdfBuffer(payload) {
     const pageWidth = 595.28;
     const pageHeight = 841.89;
     const letterhead = path.join(PUBLIC, "assets", "letterhead-full.jpg");
+    const footer = path.join(PUBLIC, "assets", "quotation-footer.jpg");
     const tableX = 46;
     const tableW = pageWidth - 92;
     const tableBottomY = 700;
     const rowH = 43;
     const drawBackground = () => {
       if (fs.existsSync(letterhead)) doc.image(letterhead, 0, 0, { width: pageWidth, height: pageHeight });
+      if (fs.existsSync(footer)) {
+        doc.save().rect(0, 720, pageWidth, pageHeight - 720).clip();
+        doc.image(footer, 0, 0, { width: pageWidth, height: pageHeight });
+        doc.restore();
+      }
     };
     const drawHeaderBlock = pageIndex => {
       drawBackground();
@@ -9230,38 +9342,47 @@ async function deliveryNotePdfBuffer(payload) {
       ].join("\n"), 44, 150, { lineGap: 1.6 });
 
       const titleX = pageWidth - 39;
-      doc.fillColor("#000000").font("Helvetica").fontSize(27).text("DELIVERY CHALLAN", 160, 151, { width: titleX - 160, align: "right" });
-      doc.fillColor("#383838").font("Helvetica-Bold").fontSize(10).text(`Delivery Challan# ${deliveryChallanNo(dn.dnNo)}`, 160, 179, { width: titleX - 160, align: "right" });
+      doc.fillColor("#000000").font("Helvetica").fontSize(27).text("DELIVERY CHALLAN", 160, 136, { width: titleX - 160, align: "right" });
+      doc.fillColor("#383838").font("Helvetica-Bold").fontSize(10).text(`Delivery Challan# ${deliveryChallanNo(dn.dnNo)}`, 160, 164, { width: titleX - 160, align: "right" });
 
       const metaTop = 260;
       doc.fillColor("#404040").font("Helvetica").fontSize(10.5).text("Deliver To", 47, metaTop);
-      doc.font("Helvetica-Bold").fontSize(9.7).text(dn.customerName || "", 47, metaTop + 14);
+      doc.font("Helvetica-Bold").fontSize(9.7);
+      const customerHeight = doc.heightOfString(dn.customerName || "", { width: 230, lineGap: 1.5 });
+      doc.text(dn.customerName || "", 47, metaTop + 14, { width: 230, lineGap: 1.5 });
       const deliverLines = [
         "U.A.E",
         dn.contactPerson,
         dn.phone
       ].filter(value => String(value || "").trim());
-      doc.font("Helvetica").fontSize(9.7).text(deliverLines.join("\n"), 47, metaTop + 28, { width: 230, lineGap: 1.5 });
+      const deliverY = metaTop + 14 + customerHeight + 3;
+      doc.font("Helvetica").fontSize(9.7);
+      const deliverHeight = doc.heightOfString(deliverLines.join("\n"), { width: 230, lineGap: 1.5 });
+      doc.text(deliverLines.join("\n"), 47, deliverY, { width: 230, lineGap: 1.5 });
 
-      const labelX = 312;
-      const labelW = 108;
-      const valueX = 426;
-      const valueW = pageWidth - valueX - 45;
+      const labelX = 308;
+      const labelW = 104;
+      const colonX = 414;
+      const valueX = 422;
+      const valueW = pageWidth - valueX - 39;
       let detailY = metaTop + 1;
+      let detailBottom = detailY;
       const drawDetailRow = (label, value) => {
         const valueText = String(value || "").trim();
         if (!valueText) return;
         doc.font("Helvetica-Bold").fontSize(9.2).fillColor("#222222")
-          .text(label, labelX, detailY, { width: labelW, align: "right" });
+          .text(label, labelX, detailY, { width: labelW, align: "left" })
+          .text(":", colonX, detailY, { width: 8 });
         doc.font("Helvetica").fontSize(9.7).fillColor("#000000");
         const valueH = doc.heightOfString(valueText, { width: valueW, align: "left", lineGap: 1.4 });
         doc.text(valueText, valueX, detailY, { width: valueW, align: "left", lineGap: 1.4 });
-        detailY += Math.max(14, valueH) + 12;
+        detailBottom = detailY + Math.max(12, valueH);
+        detailY = detailBottom + 7;
       };
-      drawDetailRow("Challan Date :", formatChallanDate(dn.date || todayISO()));
-      drawDetailRow("Reference :", dn.projectName);
-      drawDetailRow("Delivery Location :", dn.deliveryLocation);
-      return Math.max(350, detailY + 18);
+      drawDetailRow("Challan Date", formatChallanDate(dn.date || todayISO()));
+      drawDetailRow("Reference", dn.projectName);
+      drawDetailRow("Delivery Location", dn.deliveryLocation);
+      return Math.max(detailBottom, deliverY + deliverHeight) + 18;
     };
     const drawTableHeader = y => {
       doc.rect(tableX, y, tableW, 24).fill("#383b39");
@@ -9294,7 +9415,13 @@ async function deliveryNotePdfBuffer(payload) {
 
     const lines = dn.lines || [];
     let pageIndex = 0;
-    let y = drawTableHeader(drawHeaderBlock(pageIndex));
+    let tableStart = drawHeaderBlock(pageIndex);
+    if (tableStart + 24 + rowH > tableBottomY) {
+      doc.addPage({ size: "A4", margin: 0 });
+      pageIndex += 1;
+      tableStart = drawHeaderBlock(pageIndex);
+    }
+    let y = drawTableHeader(tableStart);
     if (!lines.length) {
       doc.fillColor("#000000").font("Helvetica").fontSize(9.5).text("No items added.", tableX + 13, y + 10);
       drawReceiver(y + 40);
@@ -9493,8 +9620,8 @@ async function purchaseOrderPdfBuffer(order) {
     };
 
     const drawSummary = (top) => {
-      const valueW = col[5];
-      const labelW = 122;
+      const valueW = 127;
+      const labelW = 115;
       const summaryW = labelW + valueW;
       const x = left + tableW - summaryW;
       const itemSubtotal = (order.items || []).reduce((sum, item) => {
@@ -9523,12 +9650,23 @@ async function purchaseOrderPdfBuffer(order) {
         const isLast = index === rows.length - 1;
         const boldSummaryLabel = ["Subtotal", "VAT Total", "Grand Total"].includes(label);
         const rowTop = top + index * 34;
-        doc.rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? green : lightGrey, line);
+        doc.lineWidth(0.6).rect(x, rowTop, summaryW, 34).fillAndStroke(isLast ? "#006341" : "#ffffff", "#c6d2cc");
+        doc.strokeColor("#c6d2cc");
         doc.moveTo(x + labelW, rowTop).lineTo(x + labelW, rowTop + 34).stroke();
-        doc.fillColor(isLast ? "#ffffff" : charcoal).font(boldSummaryLabel ? sansBoldFont : sansFont).fontSize(isLast ? 12.5 : 10.5);
-        doc.text(label, x + 8, rowTop + 11, { width: labelW - 14 });
-        doc.font(isLast ? sansBoldFont : sansFont).fontSize(isLast ? 12.5 : 10.5);
-        doc.text(value, x + labelW + 8, rowTop + 11, { width: valueW - 16, align: "right" });
+        const labelSize = isLast ? 12.5 : 10.5;
+        doc.fillColor(isLast ? "#ffffff" : charcoal).font(boldSummaryLabel ? sansBoldFont : sansFont).fontSize(labelSize);
+        doc.text(label, x + 8, rowTop + (34 - doc.currentLineHeight()) / 2, { width: labelW - 16, lineBreak: false });
+        const valueFont = isLast ? sansBoldFont : sansFont;
+        const valueSize = isLast ? 12.5 : 10.5;
+        const amountWidth = valueW - 24;
+        doc.font(valueFont).fontSize(valueSize);
+        const fittedSize = Math.min(valueSize, valueSize * amountWidth / doc.widthOfString(value));
+        doc.fontSize(fittedSize);
+        doc.text(value, x + labelW + 12, rowTop + (34 - doc.currentLineHeight()) / 2, {
+          width: amountWidth,
+          align: "right",
+          lineBreak: false
+        });
       });
       return top + rows.length * 34;
     };

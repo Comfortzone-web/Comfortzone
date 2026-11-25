@@ -57,6 +57,31 @@ test('custom export displays only requested columns and BOQ uses saved pricing',
   assert.match(boq, /data-vrv-price="Model"/);
   assert.match(boq, /data-vrv-unit-price-open="0"/);
   assert.doesNotMatch(boq, /<input[^>]*data-vrv-unit-price=/);
+  assert.equal(run('vrvBoqPricingError()'), false);
+  project.tables.costing.rows.push({ Model: 'UNPRICED', Qty: 1, 'Final Price (AED)': '', 'Increased Final Price (AED)': '', 'Amount (AED)': '' });
+  assert.equal(run('vrvBoqPricingError()'), true);
+  assert.match(run('vrvStepFour()'), /vrv-total-error[^>]*>.*?<strong>Error<\/strong>/s);
+  project.tables.costing.rows[1] = { Model: 'ZERO', Qty: 1, 'Final Price (AED)': 0, 'Increased Final Price (AED)': 0, 'Amount (AED)': 0 };
+  assert.equal(run('vrvBoqPricingError()'), true);
+});
+
+test('VRV quotation cannot open with missing or zero prices in either selection mode', async () => {
+  const { project, context, run } = workflow();
+  let saved = 0, opened = 0;
+  context.toast = () => {};
+  context.saveProject = async () => { saved += 1; };
+  context.createSalesQuotationFromWorkflow = async () => { opened += 1; };
+  project.tables.costing.rows = [{ Model: 'FXMQ', Qty: 1, 'Final Price (AED)': '', 'Increased Final Price (AED)': '', 'Amount (AED)': '' }];
+  for (const mode of ['report', 'manual']) {
+    run(`vrvData().selectionMode='${mode}'`);
+    await run("vrvAction('quotation')");
+  }
+  assert.equal(saved, 0);
+  assert.equal(opened, 0);
+  project.tables.costing.rows[0] = { Model: 'FXMQ', Qty: 1, 'Final Price (AED)': 100, 'Increased Final Price (AED)': 120, 'Amount (AED)': 120 };
+  await run("vrvAction('quotation')");
+  assert.equal(saved, 1);
+  assert.equal(opened, 1);
 });
 
 test('thermal uploads show selectable files and DX-style preview controls', () => {

@@ -236,3 +236,6 @@
 .vrv-workspace .vrv-manual-unit-price:focus{outline:2px solid #4f8cff;outline-offset:1px}
 .vrv-workspace .vrv-unit-price-display{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;text-align:center;cursor:text}
 .vrv-workspace .vrv-unit-price-display:focus-visible{outline:2px solid #4f8cff;outline-offset:2px;border-radius:3px}
+.vrv-kpis>div.vrv-total-error{border-color:#f0c6c4;background:#fff1f0}
+.vrv-kpis .vrv-total-error strong{color:#a6262e}
+.vrv-boq-total-warning{margin:10px 0 0;color:#a6262e;font-size:12px;font-weight:600}
