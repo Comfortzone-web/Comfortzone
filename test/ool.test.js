@@ -268,3 +268,16 @@ test('Compact browser responses keep current balances but omit historical row pa
   const full=await get({}),compact=await get({'x-ool-view':'compact'});assert.deepEqual(compact.lines,full.lines);assert.deepEqual(compact.kpis,full.kpis);assert.equal(compact.deletedLines,undefined);assert.equal(compact.mergedLines,undefined);assert.equal(compact.imports.at(-1).lines,undefined);assert.ok(full.imports.at(-1).lines.length===1000);assert.ok(JSON.stringify(compact).length<JSON.stringify(full).length);
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('Serverless cold starts recover concurrent initialization and do not rewrite unchanged OOL',async()=>{
+ const fresh={revision:1,lines:[],requests:[],receipts:[],ocs:[],imports:[{source:'Existing initialization'}],audit:[],excludedPoIds:[]};let value=null,inserts=0,updates=0;
+ const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:value?{value:structuredClone(value)}:null,error:null})})}),insert:async()=>{inserts++;value=structuredClone(fresh);return {error:{code:'23505',message:'duplicate key'}};},update:()=>{updates++;throw Error('Unchanged initialization must not write');}})};
+ const context={dataDir:'.',supabase:db,table:'app_data',readPO:async()=>({orders:[]})};
+ const first=createLedger(context);await first.ready;assert.equal(inserts,1);assert.equal(updates,0);assert.equal((await first.read()).revision,1);
+ const second=createLedger(context);await second.ready;assert.equal(inserts,1);assert.equal(updates,0);assert.equal(value.audit.length,0);
+});
+
+test('Startup database errors keep their real cause rather than claiming a revision conflict',async()=>{
+ const db={from:()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null,error:null})})}),insert:async()=>({error:{code:'42501',message:'write permission denied'}})})};
+ const ledger=createLedger({dataDir:'.',supabase:db,table:'app_data',readPO:async()=>({orders:[]})});await assert.rejects(ledger.ready,/OOL database write failed: write permission denied/);
+});

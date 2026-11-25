@@ -130,8 +130,15 @@ function createOol(ctx) {
   const file=path.join(ctx.dataDir,'ool.json'); let chain=Promise.resolve();
   const fresh=()=>({revision:0,lines:[],requests:[],receipts:[],ocs:[],imports:[],audit:[],activation:new Date().toISOString()});
   async function read() {if(ctx.supabase){const {data,error}=await ctx.supabase.from(ctx.table).select('value').eq('key','ool:v1').maybeSingle();if(error)throw Error(error.message);return data?.value||fresh();}return fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):fresh();}
-  async function write(s,expected) {s.revision=expected+1;if(ctx.supabase){if(!expected){const {error}=await ctx.supabase.from(ctx.table).insert({key:'ool:v1',value:s,updated_at:new Date().toISOString()});if(error)throw Error('OOL changed; refresh and retry');}else {const {data,error}=await ctx.supabase.from(ctx.table).update({value:s,updated_at:new Date().toISOString()}).eq('key','ool:v1').eq('value->>revision',String(expected)).select('key');if(error||!data?.length)throw Error('OOL changed; refresh and retry');}}else {const tmp=file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(s,null,2));fs.renameSync(tmp,file);}}
-  function transaction(user,action,fn,revision) {const task=chain.then(async()=>{const s=await read();if(revision!==undefined && s.revision!==revision)throw Error('OOL changed; refresh before saving');const rev=s.revision;await fn(s);balances(s);s.audit.push({id:randomUUID(),action,userId:user?.id,userName:user?.name,at:new Date().toISOString()});await write(s,rev);return balances(s);});chain=task.catch(()=>{});return task;}
+  const conflict=()=>Object.assign(Error('OOL changed; refresh and retry'),{code:'OOL_CONFLICT'});
+  async function write(s,expected){
+    s.revision=expected+1;
+    if(ctx.supabase){
+      if(!expected){const {error}=await ctx.supabase.from(ctx.table).insert({key:'ool:v1',value:s,updated_at:new Date().toISOString()});if(error){if(error.code==='23505')throw conflict();throw Error('OOL database write failed: '+error.message);}}
+      else {const {data,error}=await ctx.supabase.from(ctx.table).update({value:s,updated_at:new Date().toISOString()}).eq('key','ool:v1').eq('value->>revision',String(expected)).select('key');if(error)throw Error('OOL database write failed: '+error.message);if(!data?.length)throw conflict();}
+    }else{const tmp=file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(s,null,2));fs.renameSync(tmp,file);}
+  }
+  function transaction(user,action,fn,revision,skipUnchanged=false){const task=chain.then(async()=>{const s=await read();if(revision!==undefined&&s.revision!==revision)throw conflict();const rev=s.revision,before=skipUnchanged?JSON.stringify(s):null;await fn(s);balances(s);if(skipUnchanged&&before===JSON.stringify(s))return balances(s);s.audit.push({id:randomUUID(),action,userId:user?.id,userName:user?.name,at:new Date().toISOString()});await write(s,rev);return balances(s);});chain=task.catch(()=>{});return task;}
   function syncPo(s,order){
     if(s.excludedPoIds?.includes(order.id)||order.status!=='Created')return;
     const tracked=s.lines.filter(l=>l.poId===order.id);
@@ -177,7 +184,7 @@ function createOol(ctx) {
     if([...remaining].some(l=>l.confirmedQty>0))throw Error('Cannot remove PO models with order-confirmed OOL quantities.');
     s.lines=s.lines.filter(l=>!remaining.has(l));
   }
-  async function init(){return transaction({name:'OOL synchronization'},'Initialize OOL and sync tracked purchase orders',async s=>{
+  async function initializeOnce(){return transaction({name:'OOL synchronization'},'Initialize OOL and sync tracked purchase orders',async s=>{
     const orders=(await ctx.readPO()).orders;
     if(s.imports.length||s.lines.length){
       normalizeMissingItems(s.lines);
@@ -191,7 +198,8 @@ function createOol(ctx) {
       return;
     }
     s.excludedPoIds=orders.map(p=>p.id);const seedFile=path.join(__dirname,'data','ool-opening.json');const seed=normalizeMissingItems(ctx.openingLines?structuredClone(ctx.openingLines):fs.existsSync(seedFile)?JSON.parse(fs.readFileSync(seedFile,'utf8')):[]);s.lines=seed;s.imports.push({id:randomUUID(),at:new Date().toISOString(),source:seed.length?'Local opening balance':'OOL activated without opening data',rows:seed.length});
-  });}
+  },undefined,true);}
+  async function init(){for(let attempt=0;;attempt++){try{return await initializeOnce();}catch(error){if(error.code!=='OOL_CONFLICT'||attempt>=4)throw error;}}}
   async function po(order,previous,user){
     await ready;
     if(order.status!=='Created'||(!isDaikinSupplier(order.supplierName)&&!(await read()).lines.some(l=>l.poId===order.id)))return;
