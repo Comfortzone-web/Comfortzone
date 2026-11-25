@@ -27,9 +27,11 @@ test("Costing settings control new sheets and lock every Price List mutation", {
     sheets: [{ id: "legacy-sheet", title: "Existing Costing", rows: [{ model: "LEGACY-AC", qty: 1, finalPrice: 100, increasedFinalPrice: 120, sellingPrice: 150 }] }],
     activeSheetId: "legacy-sheet"
   }));
-  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js"]) {
+  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js", "ool.js"]) {
     fs.copyFileSync(path.join(__dirname, "..", file), path.join(temp, file));
   }
+  fs.mkdirSync(path.join(temp, "data"), { recursive: true });
+  fs.writeFileSync(path.join(temp, "data", "ool-opening.json"), JSON.stringify(require("./fixtures/ool-opening")));
   const server = spawn(process.execPath, ["server.js"], {
     cwd: temp, env: { ...process.env, SUPABASE_URL: "", SUPABASE_KEY: "" }, stdio: ["ignore", "pipe", "pipe"]
   });

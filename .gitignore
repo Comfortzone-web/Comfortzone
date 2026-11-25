@@ -7,3 +7,7 @@ scripts/__pycache__/
 node_modules/
 .pnpm-store/
 server-local*.log
+
+# Local OOL business records must never be published.
+data/ool-opening.json
+data/ool.json

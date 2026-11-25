@@ -734,6 +734,7 @@ function toggleActiveSidebarGroup(group) {
 }
 
 function applySidebarSubnavVisibility() {
+  document.querySelector('[data-inventory-view="ool"]')?.classList.toggle("hidden", !["ADMIN","STAFF"].includes(norm(currentUser?.role)));
   const poOnly = isPoOnlyUser();
   const activeGroup = activeSidebarGroup();
   $("#salesDeskSubnav")?.classList.toggle("hidden", poOnly || activeGroup !== "sales" || collapsedSidebarGroups.has("sales"));
@@ -1211,7 +1212,7 @@ async function showInventory(screen = "dashboard") {
   const topbar = inventoryTopbarConfig();
   if (topbar) {
     const titleHtml = topbar.title === "Supplier DN"
-      ? `<span>Inventory</span><b>&lt;</b><strong class="inventory-section-title">${escapeHtml(topbar.title)} <span class="po-upload-spinner supplier-dn-title-spinner ${supplierDnUploadLoading ? "" : "hidden"}" aria-label="Scanning supplier DN"></span></strong>`
+      ? `<span>Inventory</span><b>›</b><strong class="inventory-section-title">${escapeHtml(topbar.title)} <span class="po-upload-spinner supplier-dn-title-spinner ${supplierDnUploadLoading ? "" : "hidden"}" aria-label="Scanning supplier DN"></span></strong>`
       : `<span>Inventory</span><b>&lt;</b><strong>${escapeHtml(topbar.title)}</strong>`;
     $("#pageTitle").innerHTML = titleHtml;
     $("#projectMeta").textContent = topbar.subtitle;
@@ -1219,6 +1220,8 @@ async function showInventory(screen = "dashboard") {
     $("#pageTitle").textContent = "Inventory";
     $("#projectMeta").textContent = "Quantity-only AC unit stock tracking.";
   }
+  // OOL has its own endpoint and cache; do not wait for the larger Inventory payload.
+  if (screen === "ool") { renderInventory(); return; }
   if (!inventoryState) {
     renderInventoryLoading();
     document.querySelectorAll("#viewActions [data-inventory-top-action], #viewActions [data-inventory-top-search]").forEach(control => { control.disabled = true; });
@@ -3525,8 +3528,8 @@ function salesProjectDirectDeliverySection(project = {}) {
       </label>
       <div class="sales-project-direct-detected">
         <h4>Detected Items</h4>
-        <table class="sales-project-direct-table">
-          <thead><tr><th>Detected Model</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead>
+        <table class="sales-project-direct-table sales-project-direct-detected-table"><colgroup><col style="width:24%"><col style="width:9%"><col style="width:17%"><col style="width:45%"><col style="width:5%"></colgroup>
+          <thead><tr><th>Detected Model</th><th>Quantity</th><th>SD Document</th><th>Status</th><th aria-label="Delete row"></th></tr></thead>
           <tbody data-project-direct-detected-body>
             ${salesProjectDirectDetectedRowsHtml([])}
           </tbody>
@@ -3555,10 +3558,11 @@ function salesProjectDirectDetectedRowsHtml(rows = []) {
     <tr data-project-direct-detected-row>
       <td><input data-project-direct-field="modelNo" data-suggestion-list="salesProjectModelList" value="${escapeHtml(row.modelNo || "")}"></td>
       <td><input class="sales-project-orange-number" inputmode="decimal" data-project-direct-field="quantity" value="${escapeHtml(row.quantity ?? "")}"></td>
-      <td><span class="sales-project-direct-status ${salesProjectDirectStatusClass(row.status)}">${escapeHtml(row.status || "Needs Review")}</span></td>
-      <td><button type="button" class="sales-project-direct-remove" data-remove-project-direct="${index}">Remove</button></td>
+      <td><input data-project-direct-field="sdDocument" value="${escapeHtml(row.sdDocument || "")}" placeholder="SD Document"></td>
+      <td><span class="sales-project-direct-status ${salesProjectDirectStatusClass(row.status)}">${escapeHtml(row.status || "Needs Review")}</span><div data-direct-ool-match>${oolMatchDetailHtml(row.modelNo,row.sdDocument)}</div></td>
+      <td><button type="button" class="sales-project-direct-remove" data-remove-project-direct="${index}" aria-label="Delete ${escapeHtml(row.modelNo||'material')}" title="Delete row"><img src="/assets/maintenance-icons/trash-2.svg" alt=""></button></td>
     </tr>
-  `).join("") || `<tr><td colspan="4" class="sales-project-direct-empty">No detected items yet.</td></tr>`;
+  `).join("") || `<tr><td colspan="5" class="sales-project-direct-empty">No detected items yet.</td></tr>`;
 }
 
 function salesProjectDirectUploadsHtml(uploads = [], projectId = "") {
@@ -3759,6 +3763,8 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
     if (event.target.dataset.suggestionList) toggleSuggestionList(event.target);
     const row = event.target.closest("[data-project-boq-row]");
     if (row) { salesProjectUpdateBoqRow(row, false, project); salesProjectRefreshDirectDetectedStatuses(modal); if (!modal.querySelector("[data-project-direct-editor]")?.hidden) refreshSalesProjectDirectEditor(modal); }
+    const directRow=event.target.closest('[data-project-direct-detected-row]');
+    if(directRow) directRow.querySelector('[data-direct-ool-match]').innerHTML=oolMatchDetailHtml(directRow.querySelector('[data-project-direct-field="modelNo"]').value,directRow.querySelector('[data-project-direct-field="sdDocument"]').value);
     if (event.target.closest("[data-project-direct-edit-line]")) refreshSalesProjectDirectEditor(modal);
   });
   modal.addEventListener("change", event => {
@@ -3857,7 +3863,7 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
   });
   loadInventory({ force: true })
     .then(() => {
-      if (modal.isConnected) modal.querySelectorAll("[data-project-boq-row]").forEach(row => salesProjectUpdateBoqRow(row, false, project));
+      if (modal.isConnected) { modal.querySelectorAll("[data-project-boq-row]").forEach(row => salesProjectUpdateBoqRow(row, false, project)); salesProjectRefreshDirectDetectedStatuses(modal); }
     })
     .catch(error => console.warn("Could not refresh project delivery quantities", error));
 }
@@ -3927,6 +3933,7 @@ async function uploadSalesProjectDirectDelivery(modal, project, file) {
     if (detectedDate) detectedDate.value = nativeDateValue(result.upload?.date || todaySalesDateInput());
     salesProjectRenderDirectUploadZone(modal, result.upload);
     const rows = (result.detected?.lines || result.upload?.lines || []).map(line => ({
+      sdDocument: line.sdDocument || "",
       modelNo: salesProjectModelNo(line.modelNo || line.model || ""),
       quantity: Number(line.quantity || line.finalQty || line.detectedQty || 0) || "",
       status: line.status || ""
@@ -3969,7 +3976,7 @@ function salesProjectCollectDirectRows(modal) {
   return Array.from(modal.querySelectorAll("[data-project-direct-detected-row]")).map(row => {
     const model = salesProjectModelNo(row.querySelector('[data-project-direct-field="modelNo"]')?.value || "");
     const quantity = Number(row.querySelector('[data-project-direct-field="quantity"]')?.value || 0) || 0;
-    return { modelNo: model, quantity };
+    return { modelNo: model, sdDocument: row.querySelector('[data-project-direct-field="sdDocument"]')?.value || "", quantity };
   }).filter(row => row.modelNo || row.quantity);
 }
 
@@ -3982,7 +3989,7 @@ function salesProjectApplyDirectStatuses(modal, rows = []) {
     if (!modelNo || !quantity) status = "Needs Review";
     else if (!boqModels.has(norm(modelNo))) status = "Not in BOQ";
     else status = "Matched";
-    return { modelNo, quantity: quantity || "", status };
+    return { modelNo, sdDocument: row.sdDocument || "", quantity: quantity || "", status };
   });
 }
 
@@ -3992,7 +3999,7 @@ function salesProjectRefreshDirectDetectedStatuses(modal) {
 }
 
 function salesProjectDirectEditLineHtml(line = {}) {
-  return `<tr data-project-direct-edit-line><td><input data-edit-direct-model data-suggestion-list="salesProjectModelList" value="${escapeHtml(line.modelNo || "")}"></td><td><input data-edit-direct-qty type="number" min="0" step="1" value="${escapeHtml(line.quantity ?? "")}"></td><td><span data-edit-direct-status class="sales-project-direct-status">Needs Review</span></td><td><button type="button" class="sales-project-direct-remove" data-remove-project-direct-line>Remove</button></td></tr>`;
+  return `<tr data-project-direct-edit-line><td><input data-edit-direct-model data-suggestion-list="salesProjectModelList" value="${escapeHtml(line.modelNo || "")}"></td><td><input data-edit-direct-sd value="${escapeHtml(line.sdDocument || "")}" placeholder="SD Document"></td><td><input data-edit-direct-qty type="number" min="0" step="1" value="${escapeHtml(line.quantity ?? "")}"></td><td><span data-edit-direct-status class="sales-project-direct-status">Needs Review</span></td><td><button type="button" class="sales-project-direct-remove" data-remove-project-direct-line>Remove</button></td></tr>`;
 }
 
 function refreshSalesProjectDirectEditor(modal) {
@@ -4014,7 +4021,7 @@ function openSalesProjectDirectEditor(modal, uploadId) {
   editor.dataset.editUploadId = uploadId;
   editor.innerHTML = `<div class="sales-project-direct-editor-head"><h4>Edit Delivery Note</h4><button type="button" class="ghost-button" data-cancel-project-direct-edit>Cancel</button></div>
     <div class="sales-project-direct-editor-fields"><label>Detected Date<input type="date" data-edit-direct-date value="${nativeDateValue(upload.date || upload.uploadedAt)}"></label><label>Delivery Note No.<input data-edit-direct-no value="${escapeHtml(upload.deliveryNoteNo || "")}"></label></div>
-    <table class="sales-project-direct-table"><thead><tr><th>Detected Model</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead><tbody data-project-direct-edit-lines>${(upload.lines || []).map(salesProjectDirectEditLineHtml).join("")}</tbody></table>
+    <table class="sales-project-direct-table"><thead><tr><th>Detected Model</th><th>SD Document</th><th>Quantity</th><th>Status</th><th>Action</th></tr></thead><tbody data-project-direct-edit-lines>${(upload.lines || []).map(salesProjectDirectEditLineHtml).join("")}</tbody></table>
     <div class="sales-project-direct-actions"><button type="button" class="ghost-button" data-add-project-direct-line>Add Row</button><button type="button" class="sales-primary" data-save-project-direct-edit>Save Changes</button></div>`;
   editor.hidden = false;
   refreshSalesProjectDirectEditor(modal);
@@ -4028,6 +4035,7 @@ async function saveSalesProjectDirectEdit(modal, project) {
   const date = editor.querySelector("[data-edit-direct-date]")?.value;
   const deliveryNoteNo = editor.querySelector("[data-edit-direct-no]")?.value.trim();
   const lines = [...editor.querySelectorAll("[data-project-direct-edit-line]")].map(row => ({
+    sdDocument: row.querySelector("[data-edit-direct-sd]")?.value || "",
     modelNo: salesProjectModelNo(row.querySelector("[data-edit-direct-model]")?.value || ""),
     quantity: Number(row.querySelector("[data-edit-direct-qty]")?.value || 0)
   })).filter(line => line.modelNo || line.quantity);
@@ -4099,6 +4107,7 @@ async function verifySalesProjectDirectDelivery(modal, project) {
   if (payload.name?.trim() && payload.customer?.trim()) {
     salesCrmState = await api("/api/sales-crm/projects", { method: "POST", body: JSON.stringify(payload) });
   }
+  if (salesCrmState.oolAutoAllocation?.reviewRequired) window.OOL.reviewReceipt(salesCrmState.oolAutoAllocation.reviewSourceIds[0]);
   toast("Delivery note verified. Delivered quantities updated successfully.");
 }
 
@@ -7750,6 +7759,8 @@ function renderViewActions() {
   document.querySelector(".topbar")?.classList.toggle("inventory-shell", !!inventoryTopbar);
   document.querySelector(".topbar")?.classList.toggle("inventory-customer-shell", activeView === "inventory" && inventoryScreen === "customers");
   document.querySelector(".topbar")?.classList.toggle("stock-shell", !!inventoryTopbar && inventoryScreen === "stock");
+  document.querySelector(".topbar")?.classList.toggle("supplier-dn-shell", activeView === "inventory" && ["supplier","supplierAll"].includes(inventoryScreen));
+  document.querySelector(".topbar")?.classList.toggle("ool-shell", activeView === "inventory" && inventoryScreen === "ool");
   document.querySelector(".topbar")?.classList.toggle("inventory-dashboard-shell", !!inventoryTopbar && inventoryScreen === "dashboard");
   actions.classList.add("hidden");
   actions.innerHTML = "";
@@ -10017,6 +10028,7 @@ function workflowBoqQuoteItems() {
 }
 
 function renderInventory() {
+  if (inventoryScreen === "ool") { document.querySelector("#pageTitle").textContent="Inventory › OOL List"; document.querySelector("#projectMeta").textContent="Daikin-held materials, delivery requests and confirmations"; document.querySelector("#viewActions").innerHTML=""; window.OOL.mount(document.querySelector("#inventoryRoot")); return; }
   const root = $("#inventoryRoot");
   if (!inventoryState) {
     root.innerHTML = "";
@@ -10030,7 +10042,7 @@ function renderInventory() {
   else if (inventoryScreen === "customers") content = customerListViewHtml();
   else if (inventoryScreen === "stock") content = stockViewHtml();
   else content = inventoryDashboardHtml();
-  root.innerHTML = inventoryTopbarConfig() ? `<div class="inventory-topbar-moved">${content}</div>` : content;
+  root.innerHTML = inventoryTopbarConfig() ? `<div class="inventory-topbar-moved ${["supplier","supplierAll"].includes(inventoryScreen)?"supplier-dn-page":""}">${content}</div>` : content;
   bindInventoryEvents();
 }
 
@@ -10148,13 +10160,13 @@ function supplierDnViewHtml() {
       <div class="inventory-search"><input id="supplierSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card inventory-list-card">
-      <div class="inventory-list-heading"><h3>Supplier DNs</h3><span>${latestDns.length} recent record${latestDns.length === 1 ? "" : "s"}</span></div>
-      <table class="inventory-table inventory-list-table supplier-dn-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+      <div class="inventory-list-heading"><h3><span class="supplier-heading-icon"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""></span>Supplier DNs</h3><span>${latestDns.length} recent record${latestDns.length === 1 ? "" : "s"}</span></div>
+      <table class="inventory-table inventory-list-table supplier-dn-table"><thead><tr><th>Date</th><th>Details</th><th>Models</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
         ${supplierDnRows(latestDns)}
       </tbody></table>
     </div>
     <div class="inventory-card">
-      <h3>Verification Details</h3>
+      <h3 class="supplier-verification-heading"><span class="supplier-heading-icon"><img src="/assets/maintenance-icons/shield-check.svg" alt=""></span>Verification Details</h3>
       ${active ? supplierVerificationHtml(active) : `<label class="upload-zone" id="supplierUploadZone">Upload DN<br><span class="inventory-muted">AI/OCR detects model and quantity.</span></label>`}
     </div>
   `;
@@ -10172,8 +10184,8 @@ function supplierDnAllViewHtml() {
       <div class="inventory-search"><input id="supplierAllSearchInput" placeholder="Search DN No, Project Name, Model No"></div>
     </div>
     <div class="inventory-card inventory-list-card">
-      <div class="inventory-list-heading"><h3>All Supplier DNs</h3><span>${dns.length} record${dns.length === 1 ? "" : "s"} in this view</span></div>
-      <table class="inventory-table inventory-list-table supplier-dn-all-table"><thead><tr><th>DATE</th><th>DETAILS</th><th>MODELS</th><th>TOTAL QTY</th><th>STATUS</th><th>ACTION</th></tr></thead><tbody>
+      <div class="inventory-list-heading"><h3><span class="supplier-heading-icon"><img src="/assets/maintenance-icons/clipboard-list.svg" alt=""></span>All Supplier DNs</h3><span>${dns.length} record${dns.length === 1 ? "" : "s"} in this view</span></div>
+      <table class="inventory-table inventory-list-table supplier-dn-all-table"><thead><tr><th>Date</th><th>Details</th><th>Models</th><th>Total Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
         ${supplierDnRows(pageRows)}
       </tbody></table>
       ${supplierDnPagination(dns.length, pageSize, supplierAllPage)}
@@ -10238,9 +10250,9 @@ function supplierVerificationHtml(dn) {
     </div>
     ${dn.duplicateWarning ? `<p class="pill orange">Duplicate Supplier DN No. warning</p>` : ""}
     <datalist id="supplierModelList">${(inventoryState.dashboard?.stock || inventoryState.models || []).map(item => `<option value="${escapeHtml(item.modelNo)}">${escapeHtml(item.description || "")}</option>`).join("")}</datalist>
-    <table class="inventory-table"><thead><tr><th>Model No.</th><th>Description</th><th>Detected Qty</th><th>Final Qty</th><th>Status</th><th>Action</th></tr></thead><tbody>
-      ${(dn.lines || []).map((line, index) => `<tr><td><input data-suggestion-list="supplierModelList" data-supplier-line="${index}" data-field="modelNo" value="${escapeHtml(line.modelNo)}"></td><td contenteditable="true" data-supplier-line="${index}" data-field="description">${escapeHtml(line.description)}</td><td>${line.detectedQty}</td><td><input type="number" min="0" data-supplier-line="${index}" data-field="finalQty" value="${line.finalQty}"></td><td data-supplier-status="${index}">${statusPill(line.status)}</td><td><button class="danger-button" data-remove-supplier-line="${index}">Remove</button></td></tr>`).join("") || `<tr><td colspan="6">No detected rows. Add manually.</td></tr>`}
-    </tbody></table>
+    <div class="supplier-verification-table-wrap"><table class="inventory-table supplier-verification-table"><colgroup><col style="width:15%"><col style="width:30%"><col style="width:7%"><col style="width:13%"><col style="width:8%"><col style="width:27%"></colgroup><thead><tr><th>Model No.</th><th>Description</th><th>Detected Qty</th><th>SD Document</th><th>Final Qty</th><th>Status</th></tr></thead><tbody>
+      ${(dn.lines || []).map((line, index) => `<tr><td><input data-suggestion-list="supplierModelList" data-supplier-line="${index}" data-field="modelNo" value="${escapeHtml(line.modelNo)}"></td><td class="supplier-description-cell" contenteditable="true" data-supplier-line="${index}" data-field="description">${escapeHtml(line.description)}</td><td>${line.detectedQty}</td><td><input data-supplier-line="${index}" data-field="sdDocument" value="${escapeHtml(line.sdDocument || "")}" placeholder="Sales Order no."></td><td><input type="number" min="0" data-supplier-line="${index}" data-field="finalQty" value="${line.finalQty}"></td><td class="supplier-verification-status-cell" data-supplier-status="${index}">${supplierLineStatusHtml(line,index)}</td></tr>`).join("") || `<tr><td colspan="6">No detected rows. Add manually.</td></tr>`}
+    </tbody></table></div>
     <div class="inventory-actions"><button class="ghost-button" id="addSupplierLineBtn">Add Row</button><button class="ghost-button" id="saveSupplierDnBtn">Save Review</button><button class="danger-button" id="cancelSupplierDnBtn">Cancel DN</button><button class="primary-button" id="confirmSupplierDnBtn">Confirm Stock In</button></div>
   `;
 }
@@ -11436,11 +11448,13 @@ function handlePurchaseMenuAction(action, idValue) {
     const supplier = (purchaseState.suppliers || []).find(item => item.id === idValue);
     if (supplier) return openPurchaseSupplierModal(supplier);
   }
+  if (action === "ool-oc") { showInventory("ool"); setTimeout(()=>window.OOL.openOC(idValue),300); return; }
   if (action === "delete-po-supplier") return deletePurchaseSupplier(idValue);
 }
 
 function purchaseOrderActionMenu(order) {
   const items = [{ label: "View", action: "view-po", id: order.id }];
+  if (String(order.supplierName||'').toUpperCase().replace(/[^A-Z0-9]/g,'') === "DAIKINAIRCONDITIONINGLLC") items.push({label:"Add OC",action:"ool-oc",id:order.id});
   if (!isStaffUser()) items.push({ label: "Edit", action: "edit-po", id: order.id }, { label: "Revision", action: "revision-po", id: order.id });
   items.push({ label: "Download", action: "download-po", id: order.id });
   if (!isStaffUser()) items.push({ label: "Delete", action: "delete-po", id: order.id, danger: true });
@@ -11725,6 +11739,7 @@ function handleInventoryInput(event) {
       refreshSupplierLineStatus(input.dataset.supplierLine, line.status);
     }
     if (input.dataset.field === "finalQty") line.status = Number(line.finalQty) === Number(line.detectedQty) ? "Ready" : "Edited";
+    refreshSupplierLineStatus(input.dataset.supplierLine,line.status);
   }
   if (input.dataset.deliveryLine) {
     const line = deliveryDraft.lines[Number(input.dataset.deliveryLine)];
@@ -11737,9 +11752,27 @@ function handleInventoryInput(event) {
   }
 }
 
+function oolMatchDetailHtml(modelNo,sdDocument) {
+  const normalize=value=>String(value||'').trim().toUpperCase();
+  const model=normalize(modelNo),sd=normalize(sdDocument),references=inventoryState?.oolRequestMatches;
+  const requests=Array.isArray(references)&&model&&sd?references.filter(x=>normalize(x.model)===model&&normalize(x.sd)===sd):[];
+  const oc=requests.length?[]:(inventoryState?.oolOrderMatches||[]).filter(x=>model&&sd&&normalize(x.model)===model&&normalize(x.sd)===sd);
+  const matches=requests.length?requests:oc,isOC=!requests.length&&oc.length>0;
+  const qtyText=x=>Number.isFinite(x.remainingQty)?` · OOL Qty: ${x.remainingQty}`:'';
+  const textFor=x=>`Match with ${isOC?'OC ':''}${x.sor||'OOL'}${x.poNo?' ('+x.poNo+')':''}${qtyText(x)}${x.sor?'':' — SOR not recorded'}`;
+  const message=!Array.isArray(references)?'OOL match unavailable':matches.length?matches.map(textFor).join('; '):'Do Not Match OOL';
+  const detail=matches.length?matches.map(x=>`<span>Match with ${isOC?'<strong class="ool-match-oc">OC</strong> ':''}<strong>${escapeHtml(x.sor||'OOL')}${isOC&&x.poNo?` (${escapeHtml(x.poNo)})`:''}</strong>${!isOC&&x.poNo?` (${escapeHtml(x.poNo)})`:''}${qtyText(x)?`<strong class="ool-match-qty">${escapeHtml(qtyText(x))}</strong>`:''}${x.sor?'':' — SOR not recorded'}</span>`).join(''):escapeHtml(message);
+  return `<small class="supplier-ool-match ${matches.length?'is-match':'is-unmatched'}" title="${escapeHtml(message)}">${detail}</small>`;
+}
+
+function supplierLineStatusHtml(line,index) {
+  return `${statusPill(line.status)}${oolMatchDetailHtml(line.modelNo,line.sdDocument)}<button type="button" class="supplier-line-delete" data-remove-supplier-line="${index}" aria-label="Remove ${escapeHtml(line.modelNo||'material')}" title="Remove row">×</button>`;
+}
+
 function refreshSupplierLineStatus(index, status) {
   const cell = document.querySelector(`[data-supplier-status="${CSS.escape(String(index))}"]`);
-  if (cell) cell.innerHTML = statusPill(status);
+  const line=activeSupplierDn()?.lines?.[Number(index)];
+  if (cell&&line) cell.innerHTML = supplierLineStatusHtml({...line,status},index);
 }
 
 function bindDeliveryResizer() {
@@ -11828,7 +11861,8 @@ async function saveActiveSupplierDn() {
   inventoryState = await api("/api/inventory/supplier-dns", { method: "POST", body: JSON.stringify(dn) });
   activeSupplierDnId = dn.id;
   renderInventory();
-  toast("Supplier DN saved");
+  toast(inventoryState.oolAutoAllocation?.allocatedQty ? "Supplier DN saved and OOL updated" : "Supplier DN saved");
+  if (inventoryState.oolAutoAllocation?.reviewRequired) window.OOL.reviewReceipt("supplier:"+dn.id);
 }
 
 async function confirmActiveSupplierDn() {
@@ -11839,7 +11873,8 @@ async function confirmActiveSupplierDn() {
   inventoryState = await api(`/api/inventory/supplier-dns/${dn.id}/confirm`, { method: "POST", body: "{}" });
   activeSupplierDnId = "";
   renderInventory();
-  toast("Stock updated");
+  toast(inventoryState.oolAutoAllocation?.allocatedQty ? "Stock and OOL updated" : "Stock updated");
+  if (inventoryState.oolAutoAllocation?.reviewRequired) window.OOL.reviewReceipt("supplier:"+dn.id);
 }
 
 async function cancelActiveSupplierDn() {

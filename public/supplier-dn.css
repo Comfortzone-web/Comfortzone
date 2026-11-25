@@ -1,0 +1,85 @@
+@font-face{font-family:"Supplier Inter";src:url("/assets/fonts/inter-latin-variable.woff2") format("woff2");font-weight:100 900;font-style:normal;font-display:swap}
+
+/* Supplier DN only. Keep other inventory screens and their controls untouched. */
+.app-shell:has(#inventoryView:not(.hidden) .supplier-dn-page){background:#fff}
+.supplier-dn-page,.topbar.supplier-dn-shell{font-family:"Supplier Inter",Inter,Arial,sans-serif;color:#172554}
+.supplier-dn-page{--supplier-border:#d7daf5;min-width:0;background:#fff}
+.topbar.supplier-dn-shell{background:#fff;border-bottom:1px solid #ececfa}
+.topbar.supplier-dn-shell #pageTitle{color:#172554;letter-spacing:-.65px}
+.topbar.supplier-dn-shell #pageTitle>span,.topbar.supplier-dn-shell #pageTitle>b{color:#73789c}
+.topbar.supplier-dn-shell #projectMeta{color:#64748b}
+.topbar.supplier-dn-shell .quotation-search{border:1px solid #d7daf5;border-radius:9px;background:#fff;box-shadow:none}
+.topbar.supplier-dn-shell .quotation-search input{background:#fff;color:#172554;font:400 12px "Supplier Inter",Arial,sans-serif}
+.topbar.supplier-dn-shell .quotation-search input::placeholder{color:#7b829d}
+.topbar.supplier-dn-shell #viewActions button{height:38px;gap:7px;border:1px solid #c8caf3;border-radius:9px;background:#fff;color:#5145cd;box-shadow:none;font:600 12px "Supplier Inter",Arial,sans-serif}
+.topbar.supplier-dn-shell #viewActions [data-inventory-top-action=upload-dn]{background:#5145cd;color:#fff;border-color:#5145cd}
+.topbar.supplier-dn-shell #viewActions button:hover{background:#f0efff}
+.topbar.supplier-dn-shell #viewActions [data-inventory-top-action=upload-dn]:hover{background:#4539b8}
+.topbar.supplier-dn-shell #viewActions button::before{content:"";display:inline-block;width:17px;height:17px;flex:0 0 17px;background:currentColor;mask:url('/assets/maintenance-icons/package.svg') center/contain no-repeat}
+.topbar.supplier-dn-shell #viewActions [data-inventory-top-action=upload-dn]::before{mask-image:url('/assets/maintenance-icons/upload.svg')}
+.topbar.supplier-dn-shell #viewActions :is([data-inventory-top-action=supplier-all],[data-inventory-top-action=upload-dn]){display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;box-sizing:border-box;vertical-align:middle;line-height:1;white-space:nowrap}
+.topbar.supplier-dn-shell #viewActions :is([data-inventory-top-action=supplier-all],[data-inventory-top-action=upload-dn])::before{display:block;flex:0 0 18px;width:18px;height:18px;margin:0;padding:0;position:static;inset:auto;transform:none}
+.topbar.supplier-dn-shell #viewActions :is([data-inventory-top-action=supplier-all],[data-inventory-top-action=upload-dn])>img,.topbar.supplier-dn-shell #viewActions :is([data-inventory-top-action=supplier-all],[data-inventory-top-action=upload-dn])>svg{display:block;flex:0 0 18px;width:18px;height:18px;margin:0;padding:0;position:static;inset:auto;transform:none}
+.supplier-dn-page>.inventory-card{min-width:0;padding:11px 14px;margin-bottom:12px;background:#fff;border:1px solid #d7daf5;border-radius:13px;box-shadow:0 3px 10px #26398b08}
+.supplier-dn-page .inventory-list-heading{display:flex;justify-content:flex-start;align-items:center;gap:9px;padding:0;min-height:28px;margin-bottom:8px}
+.supplier-dn-page h3{display:flex;align-items:center;gap:8px;font-size:16px;font-weight:700;letter-spacing:-.3px;color:#172554;margin:0}
+.supplier-dn-page .supplier-verification-heading{margin-bottom:9px}
+.supplier-heading-icon{display:inline-flex;align-items:center;justify-content:center;flex:0 0 28px;width:28px;height:28px;border-radius:8px;background:#f0efff}
+.supplier-heading-icon img{width:18px;height:18px;filter:invert(27%) sepia(53%) saturate(1956%) hue-rotate(224deg) brightness(90%) contrast(88%)}
+.supplier-dn-page .inventory-list-heading>span{padding:4px 9px;border-radius:20px;background:#f0efff;color:#5145cd;font-size:10px;font-weight:600;line-height:1.3}
+.supplier-dn-page .inventory-table{width:100%;font-size:12px;border-collapse:separate;border-spacing:0;color:#172554}
+.supplier-dn-page .inventory-table th{background:#e8e9fc;color:#172554;font-size:11px;font-weight:650;line-height:1.35;padding:7px 9px;border-top:1px solid #d7daf5;border-right:1px solid #d7daf5;border-bottom:1px solid #d7daf5;text-transform:none;letter-spacing:0}
+.supplier-dn-page .inventory-table th:first-child{border-left:1px solid #d7daf5;border-radius:8px 0 0 0}
+.supplier-dn-page .inventory-table th:last-child{border-radius:0 8px 0 0}
+.supplier-dn-page .inventory-table td{padding:6px 9px;border-right:1px solid #e1e3f5;border-bottom:1px solid #e1e3f5;vertical-align:middle;background:#fff;line-height:1.4;overflow-wrap:anywhere}
+.supplier-dn-page .inventory-table td:first-child{border-left:1px solid #e1e3f5}
+.supplier-dn-page .inventory-table tbody tr:nth-child(even) td{background:#f7f7ff}
+.supplier-dn-page .inventory-table tbody tr:hover td{background:#fafaff}
+.supplier-dn-page .supplier-dn-table,.supplier-dn-page .supplier-dn-all-table{table-layout:fixed}
+.supplier-dn-page .supplier-dn-table th:nth-child(1),.supplier-dn-page .supplier-dn-all-table th:nth-child(1){width:12%}
+.supplier-dn-page .supplier-dn-table th:nth-child(2),.supplier-dn-page .supplier-dn-all-table th:nth-child(2){width:27%}
+.supplier-dn-page .supplier-dn-table th:nth-child(3),.supplier-dn-page .supplier-dn-all-table th:nth-child(3){width:27%}
+.supplier-dn-page .supplier-dn-table th:nth-child(4),.supplier-dn-page .supplier-dn-all-table th:nth-child(4){width:10%}
+.supplier-dn-page .supplier-dn-table th:nth-child(5),.supplier-dn-page .supplier-dn-all-table th:nth-child(5){width:16%}
+.supplier-dn-page .supplier-dn-table th:nth-child(6),.supplier-dn-page .supplier-dn-all-table th:nth-child(6){width:8%}
+.supplier-dn-page .inventory-list-table tbody tr{height:40px}
+.supplier-dn-page .inventory-list-table th:nth-child(-n+3),.supplier-dn-page .inventory-list-table td:nth-child(-n+3){text-align:left}
+.supplier-dn-page .inventory-list-table th:nth-child(n+4),.supplier-dn-page .inventory-list-table td:nth-child(n+4){text-align:center}
+.supplier-dn-page .pill{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:3px 9px;border:0;border-radius:20px;font-size:11px;font-weight:600;line-height:1.4;max-width:100%}
+.supplier-dn-page .pill.green{background:#e3f8df;color:#247b33}
+.supplier-dn-page .inventory-list-table .pill.green::before{content:"✓";display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:#30983e;color:#fff;font:700 9px/1 Arial,sans-serif}
+.supplier-dn-page .inventory-menu-button{min-width:30px;height:27px;padding:2px 7px;border:1px solid #d7daf5;border-radius:7px;background:#f7f7ff;color:#5145cd;box-shadow:none}
+.supplier-dn-page .inventory-menu-button:hover{background:#eeedff}
+.supplier-dn-page .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;margin-bottom:10px}
+.supplier-dn-page .form-grid label{display:flex;flex-direction:column;gap:4px;margin:0;min-width:0;font-size:11px;font-weight:600;color:#475569}
+.supplier-dn-page input{font-family:"Supplier Inter",Arial,sans-serif;font-weight:500;color:#172554;background:#fff;border:1px solid #d7daf5;border-radius:8px;box-shadow:none;outline:none}
+.supplier-dn-page .form-grid input{width:100%;min-width:0;height:36px;padding:6px 10px;font-size:12px}
+.supplier-dn-page input:focus{border-color:#8d85e8;box-shadow:0 0 0 3px #5145cd10}
+.supplier-dn-page .supplier-verification-table-wrap{padding-right:0;margin-top:0}
+.supplier-dn-page .supplier-verification-table{min-width:850px}
+.supplier-dn-page .supplier-verification-table th{text-align:center;padding:6px 8px}
+.supplier-dn-page .supplier-verification-table td{padding:5px 8px}
+.supplier-dn-page .supplier-verification-table input{height:32px;font-size:12px;padding:6px 8px}
+.supplier-dn-page .supplier-verification-table .supplier-description-cell{white-space:pre-wrap!important;overflow-wrap:anywhere;word-break:break-word;overflow:visible;text-overflow:clip;line-height:1.45}
+.supplier-dn-page .supplier-verification-table .supplier-verification-status-cell{text-align:center;padding-right:40px}
+.supplier-dn-page .supplier-verification-table .supplier-line-delete{right:7px;width:26px;height:28px}
+.supplier-dn-page .supplier-ool-match{font-size:11px;line-height:1.4;color:#64748b;margin-top:3px;text-align:center;white-space:normal}
+.supplier-dn-page .supplier-ool-match>span{display:block}
+.supplier-dn-page .supplier-ool-match strong{font-weight:650;color:#34436b}
+.supplier-dn-page .inventory-actions{display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px}
+.supplier-dn-page .inventory-actions button{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:36px;padding:7px 12px;border:1px solid #d7daf5;border-radius:9px;font:600 12px "Supplier Inter",Arial,sans-serif;background:#fff;color:#5145cd;box-shadow:none}
+.supplier-dn-page .inventory-actions #addSupplierLineBtn{background:#f0efff}
+.supplier-dn-page .inventory-actions #cancelSupplierDnBtn{background:#fff0f2;color:#d32f42;border-color:#f4c6ce}
+.supplier-dn-page .inventory-actions #confirmSupplierDnBtn{background:#5145cd;color:#fff;border-color:#5145cd}
+.supplier-dn-page .inventory-actions button:hover{filter:brightness(.97)}
+.supplier-dn-page .inventory-actions button::before{content:"";display:block;flex:0 0 17px;width:17px;height:17px;background:currentColor;mask:url('/assets/maintenance-icons/file-text.svg') center/contain no-repeat}
+.supplier-dn-page .inventory-actions #addSupplierLineBtn::before{mask-image:url('/assets/maintenance-icons/plus.svg')}
+.supplier-dn-page .inventory-actions #cancelSupplierDnBtn::before{mask-image:url('/assets/maintenance-icons/x.svg')}
+.supplier-dn-page .inventory-actions #confirmSupplierDnBtn::before{mask-image:url('/assets/maintenance-icons/circle-check.svg')}
+.supplier-dn-page .upload-zone{border-color:#d7daf5;background:#fafaff;color:#64748b}
+.supplier-dn-page .supplier-dn-upload-link{color:inherit;text-decoration:none;transition:color .12s}
+.supplier-dn-page .supplier-dn-upload-link:hover,.supplier-dn-page .supplier-dn-upload-link:focus-visible{color:#1476ff;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:900px){.topbar.supplier-dn-shell{flex-wrap:wrap;height:auto;gap:10px;padding-bottom:14px}.topbar.supplier-dn-shell #viewActions{width:100%;min-width:0}.topbar.supplier-dn-shell .quotation-search{flex:1;min-width:0}.supplier-dn-page>.inventory-card{padding:12px}.supplier-dn-page .form-grid{gap:8px 12px}}
+@media(max-width:600px){.supplier-dn-page .form-grid{grid-template-columns:minmax(0,1fr)}.supplier-dn-page .inventory-actions{justify-content:stretch}.supplier-dn-page .inventory-actions button{flex:1 1 45%;padding:7px}.supplier-dn-page h3{font-size:15px}}
+
+.supplier-dn-page .supplier-ool-match strong.ool-match-qty{color:#166534;font-weight:700}

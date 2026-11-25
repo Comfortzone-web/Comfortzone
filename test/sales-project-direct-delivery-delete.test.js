@@ -20,9 +20,11 @@ test("deleting a verified direct delivery reverses only its BOQ quantities", { t
   const base = `http://127.0.0.1:${port}`;
   const source = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
   fs.writeFileSync(path.join(temp, "server.js"), source.replace("const PORTS = [5175, 5176, 5177, 8085];", `const PORTS = [${port}];`));
-  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js"]) {
+  for (const file of ["project-progress.js", "maintenance-api.js", "maintenance-store.js", "maintenance-billing.js", "ool.js"]) {
     fs.copyFileSync(path.join(__dirname, "..", file), path.join(temp, file));
   }
+  fs.mkdirSync(path.join(temp, "data"), { recursive: true });
+  fs.writeFileSync(path.join(temp, "data", "ool-opening.json"), JSON.stringify(require("./fixtures/ool-opening")));
   const server = spawn(process.execPath, ["server.js"], {
     cwd: temp, env: { ...process.env, SUPABASE_URL: "", SUPABASE_KEY: "" }, stdio: ["ignore", "pipe", "pipe"]
   });
