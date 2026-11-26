@@ -2774,6 +2774,13 @@ function normalizeSalesItem(collection, input, store) {
       source: cleanCell(base.source || "WhatsApp"),
       status,
       quoteNo: cleanCell(base.quoteNo || base.quotationNo || ""),
+      orderBookId: cleanCell(base.orderBookId || ""),
+      orderBookNo: cleanCell(base.orderBookNo || ""),
+      statusBeforeOrder: cleanCell(base.statusBeforeOrder || ""),
+      orderAutoDisabled: base.orderAutoDisabled === true,
+      projectName: cleanCell(base.projectName || ""),
+      projectNo: cleanCell(base.projectNo || ""),
+      selectionNo: cleanCell(base.selectionNo || ""),
       quotedDate: cleanCell(base.quotedDate || base.dateEnquiryQuoted || ""),
       receivedDate: cleanCell(base.receivedDate || base.dateEnquiryReceived || ""),
       preparedBy: cleanCell(base.preparedBy || base.selectionPreparedBy || ""),
@@ -2886,6 +2893,7 @@ function normalizeSalesItem(collection, input, store) {
       salesperson: cleanCell(base.salesperson || ""),
       customer: cleanCell(base.customer || ""),
       project: cleanCell(base.project || ""),
+      salesProjectId: cleanCell(base.salesProjectId || ""),
       location: cleanCell(base.location || ""),
       paymentTerms: cleanCell(base.paymentTerms || ""),
       deliveryTime: cleanCell(base.deliveryTime || "To be discussed"),
@@ -4477,6 +4485,29 @@ async function handleApi(req, res) {
     const item = normalizeSalesItem(collection, requestedQuotationNo
       ? { ...rawItem, no: requestedQuotationNo, quotationNo: requestedQuotationNo }
       : rawItem, store);
+    if (collection === "leads" && (item.orderBookId || item.orderBookNo)) {
+      const linkedOrder = store.orderBook.find(order => order.id === item.orderBookId);
+      if (!linkedOrder || inventoryNorm(linkedOrder.customer) !== inventoryNorm(item.customer)
+        || inventoryNorm(linkedOrder.orderNo) !== inventoryNorm(item.orderBookNo)
+        || isStaff(user) && !staffOwnsOrder(linkedOrder, user)) {
+        return send(res, 400, { error: "Select an Order Book No belonging to this customer." });
+      }
+      item.orderBookNo = linkedOrder.orderNo;
+      if (!item.statusBeforeOrder) {
+        const previousStatus = store.leads.find(lead => lead.id === item.id)?.status || cleanCell(rawItem.status || "");
+        item.statusBeforeOrder = previousStatus && previousStatus !== "Order Received"
+          ? previousStatus : item.quoteNo ? "Quote Sent" : "New Enquiry";
+      }
+      item.status = "Order Received";
+    }
+    if (collection === "quotations" && item.salesProjectId) {
+      const linkedProject = store.projects.find(project => project.id === item.salesProjectId);
+      if (!linkedProject || inventoryNorm(linkedProject.customer) !== inventoryNorm(item.customer)
+        || inventoryNorm(linkedProject.name) !== inventoryNorm(item.project)
+        || isStaff(user) && !salesProjectAssignedTo(linkedProject, user)) {
+        return send(res, 400, { error: "Select a project belonging to this customer, or enter a custom project name." });
+      }
+    }
     if (collection === "orderBook") {
       const previous = store.orderBook.find(order => order.id === item.id);
       const linkedProject = item.projectNo ? store.projects.find(project => cleanCell(project.projectNo || project.projectId).toLowerCase() === item.projectNo.toLowerCase()) : null;
@@ -5239,6 +5270,19 @@ async function handleApi(req, res) {
     const supplierDn = inventory.supplierDns.find(dn => dn.id === supplierDnId);
     if (!supplierDn) return notFound(res);
     if (!isAdmin(user) && supplierDn.isManualAdjustment) return sendForbidden(res);
+    const body = await readJson(req);
+    if (body.id && body.id !== supplierDnId) return send(res, 400, { error: "Supplier DN does not match the selected record." });
+    if (body.lines !== undefined && !Array.isArray(body.lines)) return send(res, 400, { error: "Invalid Supplier DN lines." });
+    if (body.lines && !isAdmin(user) && body.lines.some(line => Number(line.finalQty || 0) < 0)) return sendForbidden(res);
+    if (body.lines) {
+      supplierDn.uploadedDate = body.uploadedDate || supplierDn.uploadedDate;
+      supplierDn.supplierDnNo = body.supplierDnNo || "";
+      supplierDn.projectName = body.projectName || "";
+      supplierDn.supplierName = body.supplierName || "";
+      supplierDn.lines = enrichSupplierLinesFromStock(inventory, body.lines);
+      supplierDn.duplicateWarning = !!supplierDn.supplierDnNo && inventory.supplierDns.some(dn => dn.id !== supplierDnId
+        && dn.supplierDnNo && inventoryNorm(dn.supplierDnNo) === inventoryNorm(supplierDn.supplierDnNo));
+    }
     for (const line of supplierDn.lines) {
       if (!findModel(inventory, line.modelNo)) {
         inventory.models.push({ id: id(), modelNo: line.modelNo, description: line.description || "", brand: "Daikin", type: "", warehouseLocation: "", minimumStock: 0, needsReview: true });

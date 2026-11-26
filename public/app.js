@@ -27,6 +27,7 @@ let activeSupplierDnId = "";
 let supplierVerificationDismissed = false;
 let supplierAllPage = 1;
 let deliveryDraft = null;
+let deliverySavePending = false;
 let deliveryListPage = 1;
 let deliverySearchQuery = "";
 let deliveryPanelWidth = Number(localStorage.getItem("deliveryPanelWidth") || 430);
@@ -39,7 +40,9 @@ let purchaseRevisionPoNoLock = "";
 let purchaseSearchQuery = "";
 let purchaseSupplierSearchQuery = "";
 let purchaseUploadLoading = false;
+let purchaseSaveMode = "";
 let supplierDnUploadLoading = false;
+const supplierDnConfirmPending = new Set();
 let workflowUploadLoading = false;
 let purchaseLoadedAt = 0;
 let purchaseLoadPromise = null;
@@ -539,6 +542,7 @@ function bindShell() {
   $("#salesDeskRoot").addEventListener("focusin", event => {
     if (event.target.matches("[data-sales-quote-person-input]")) renderSalesQuotePersonOptions();
     if (event.target.matches("[data-sales-quote-enquiry-input]")) renderSalesQuoteEnquiryOptions();
+    if (event.target.matches("[data-sales-quote-project-input]")) renderSalesQuoteProjectOptions();
   });
   $("#salesDeskRoot").addEventListener("keydown", handleSalesQuotePersonKeydown);
   $("#salesDeskRoot").addEventListener("focusout", event => {
@@ -552,6 +556,12 @@ function bindShell() {
       setTimeout(() => {
         const picker = document.querySelector("[data-sales-quote-enquiry-picker]");
         if (picker && !picker.contains(document.activeElement)) picker.querySelector("[data-sales-quote-enquiry-options]").hidden = true;
+      }, 0);
+    }
+    if (event.target.matches("[data-sales-quote-project-input]")) {
+      setTimeout(() => {
+        const picker = document.querySelector("[data-sales-quote-project-picker]");
+        if (picker && !picker.contains(document.activeElement)) picker.querySelector("[data-sales-quote-project-options]").hidden = true;
       }, 0);
     }
     if (event.target.dataset.costingField !== "increasedFinalPrice") return;
@@ -1221,7 +1231,7 @@ async function showInventory(screen = "dashboard") {
   const topbar = inventoryTopbarConfig();
   if (topbar) {
     const titleHtml = topbar.title === "Supplier DN"
-      ? `<span>Inventory</span><b>›</b><strong class="inventory-section-title">${escapeHtml(topbar.title)} <span class="po-upload-spinner supplier-dn-title-spinner ${supplierDnUploadLoading ? "" : "hidden"}" aria-label="Scanning supplier DN"></span></strong>`
+      ? `<span>Inventory</span><b>›</b><strong class="inventory-section-title">${escapeHtml(topbar.title)} <span class="po-upload-spinner supplier-dn-title-spinner ${supplierDnUploadLoading || supplierDnConfirmPending.size ? "" : "hidden"}" role="status" aria-label="Processing supplier DN"></span></strong>`
       : `<span>Inventory</span><b>&lt;</b><strong>${escapeHtml(topbar.title)}</strong>`;
     $("#pageTitle").innerHTML = titleHtml;
     $("#projectMeta").textContent = topbar.subtitle;
@@ -1273,7 +1283,8 @@ async function showPurchaseOrders(screen = "form") {
   $("#inventorySubnav").classList.add("hidden");
   $("#salesDeskSubnav").classList.add("hidden");
   applySidebarSubnavVisibility();
-  $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span>`;
+  $("#pageTitle").innerHTML = `Purchase Orders <span class="po-upload-spinner po-title-spinner ${purchaseUploadLoading ? "" : "hidden"}" aria-label="Uploading quotation"></span><span class="po-save-indicator hidden" role="status" aria-live="polite"><span class="po-upload-spinner" aria-hidden="true"></span><span data-po-save-status></span></span>`;
+  refreshPurchaseSaveState();
   $("#projectMeta").textContent = "Upload a quotation to auto-fill the PO form, or create a purchase order manually.";
   const needsInitialPurchase = !purchaseState;
   if (!purchaseDraft) purchaseDraft = newPurchaseDraft();
@@ -1349,9 +1360,30 @@ function refreshPurchaseTitleSpinner() {
   if (spinner) spinner.classList.toggle("hidden", !purchaseUploadLoading);
 }
 
+function refreshPurchaseSaveState() {
+  const indicator = document.querySelector(".po-save-indicator");
+  if (indicator) {
+    indicator.classList.toggle("hidden", !purchaseSaveMode);
+    const label = indicator.querySelector("[data-po-save-status]");
+    if (label) label.textContent = purchaseSaveMode === "create" ? "Creating Purchase Order..." : "Saving Draft...";
+  }
+  for (const [id, mode, idleLabel, busyLabel] of [
+    ["poCreateBtn", "create", "Create Purchase Order", "Creating..."],
+    ["poSaveDraftBtn", "draft", "Save Draft", "Saving..."]
+  ]) {
+    const button = document.getElementById(id);
+    if (!button) continue;
+    button.disabled = !!purchaseSaveMode;
+    button.setAttribute("aria-busy", String(purchaseSaveMode === mode));
+    const label = button.querySelector("[data-po-save-label]");
+    if (label) label.textContent = purchaseSaveMode === mode ? busyLabel : idleLabel;
+    button.querySelector(".po-button-spinner")?.classList.toggle("hidden", purchaseSaveMode !== mode);
+  }
+}
+
 function refreshSupplierDnTitleSpinner() {
   const spinner = document.querySelector(".supplier-dn-title-spinner");
-  if (spinner) spinner.classList.toggle("hidden", !supplierDnUploadLoading);
+  if (spinner) spinner.classList.toggle("hidden", !supplierDnUploadLoading && !supplierDnConfirmPending.size);
 }
 
 function workflowTitleHtml(title) {
@@ -2409,7 +2441,7 @@ function salesLeadsHtml() {
   const searchedRows = salesLeadSearch(normalizedRows);
   const filteredRows = salesLeadAdvancedFilter(searchedRows);
   const mainRows = salesLeadViewMode === "board" || salesLeadShowsClosedRows() ? filteredRows : filteredRows.filter(lead => !salesLeadIsClosedStatus(lead));
-  const rows = salesLeadViewMode === "board" ? mainRows.filter(lead => !salesLeadIsLostStatus(lead)) : salesLeadTabFilter(mainRows);
+  const rows = salesLeadViewMode === "board" ? mainRows : salesLeadTabFilter(mainRows);
   if (salesLeadViewMode === "split" && !salesLeadDetailId && rows.length) salesLeadDetailId = rows[0].id;
   const selected = salesLeadDetailId ? normalizedRows.find(lead => lead.id === salesLeadDetailId) : null;
   const stats = salesLeadStats(normalizedRows);
@@ -2587,17 +2619,17 @@ function salesLeadBoardViewHtml(rows) {
 function salesLeadBoardGroups() {
   return [
     { key: "new", label: "1. New Enquiry", tone: "blue", status: "New Enquiry" },
-    { key: "quote", label: "2. Quote Sent", tone: "orange", status: "Quote Sent" },
+    { key: "negotiation", label: "2. Negotiation", tone: "green", status: "Negotiation" },
     { key: "follow", label: "3. Follow-up Due", tone: "purple", status: "Follow-up" },
-    { key: "negotiation", label: "4. Negotiation", tone: "green", status: "Negotiation" },
+    { key: "quote", label: "4. Quote Sent", tone: "orange", status: "Quote Sent" },
     { key: "order", label: "5. Order Received", tone: "blue", status: "Order Received" },
-    { key: "closed", label: "6. Closed", tone: "gray", status: "Completed" }
+    { key: "closed", label: "6. Lost/Closed", tone: "gray", status: "Lost/Closed" }
   ];
 }
 
 function salesLeadBoardGroupKey(lead) {
   const status = norm(normalizeLeadStatus(lead.status));
-  if (salesLeadIsLostStatus(lead)) return "hidden";
+  if (salesLeadIsLostStatus(lead)) return "closed";
   if (["COMPLETED", "CLOSED", "ONHOLD"].includes(status)) return "closed";
   if (["NEWENQUIRY", "SELECTIONPENDING", "QUOTEPENDING"].includes(status)) return "new";
   if (["QUOTESENT", "QUOTATIONSENT"].includes(status)) return "quote";
@@ -2668,6 +2700,12 @@ function salesLeadSplitDetailHtml(lead) {
         ["Daikin Purchase Value (AED)", lead.daikinPurchaseValue ? Number(lead.daikinPurchaseValue).toLocaleString("en-US") : ""],
         ["Competitors", lead.competitors]
       ])}
+      ${lead.orderBookNo || lead.projectName || lead.projectNo || lead.selectionNo ? salesLeadSplitInfoCard("Order Details", [
+        ["Order Book No", lead.orderBookNo],
+        ["Project Name", lead.projectName],
+        ["Project No", lead.projectNo],
+        ["Selection No", lead.selectionNo]
+      ]) : ""}
       <section class="lead-split-info-card lead-split-history-card">
         <h4>Follow-up History</h4>
         <table>
@@ -2761,6 +2799,12 @@ function salesLeadDetailContent(lead, options = {}) {
         ["Daikin Purchase Value (AED)", lead.daikinPurchaseValue ? Number(lead.daikinPurchaseValue).toLocaleString("en-US") : ""],
         ["Competitors", lead.competitors]
       ])}
+      ${lead.orderBookNo || lead.projectName || lead.projectNo || lead.selectionNo ? salesDetailSection("Order Details", [
+        ["Order Book No", lead.orderBookNo],
+        ["Project Name", lead.projectName],
+        ["Project No", lead.projectNo],
+        ["Selection No", lead.selectionNo]
+      ]) : ""}
       <section class="pipeline-detail-section">
         <h4>Follow-up History</h4>
         <div class="pipeline-history">
@@ -2853,6 +2897,13 @@ function normalizeSalesLead(lead = {}, index = 0) {
     estimatedValue: salesNumber(lead.estimatedValue ?? lead.value ?? lead.amount),
     daikinPurchaseValue: salesNumber(lead.daikinPurchaseValue ?? lead.daikinPurchase),
     quoteNo: cleanDisplay(lead.quoteNo || lead.quotationNo || ""),
+    orderBookId: cleanDisplay(lead.orderBookId || ""),
+    orderBookNo: cleanDisplay(lead.orderBookNo || ""),
+    statusBeforeOrder: cleanDisplay(lead.statusBeforeOrder || ""),
+    orderAutoDisabled: lead.orderAutoDisabled === true,
+    projectName: cleanDisplay(lead.projectName || ""),
+    projectNo: cleanDisplay(lead.projectNo || ""),
+    selectionNo: cleanDisplay(lead.selectionNo || ""),
     quotedDate: formatSalesDateInput(lead.quotedDate || lead.dateEnquiryQuoted || ""),
     preparedBy: cleanDisplay(lead.preparedBy || lead.selectionPreparedBy || ""),
     finalizingMonth: cleanDisplay(lead.finalizingMonth || lead.tentativeFinalizingMonth || ""),
@@ -2882,6 +2933,7 @@ function normalizeLeadStatus(status) {
   const key = norm(text);
   if (!key) return "New Enquiry";
   if (key.includes("NEW LEAD")) return "New Enquiry";
+  if (key === "LOST") return "Lost/Closed";
   if (key.includes("CONTACTED") || key.includes("SITE VISIT")) return "Selection Pending";
   if (key.includes("QUOTATION NEEDED") || key.includes("QUOTE PENDING")) return "Quote Pending";
   if (key === "SENT" || key.includes("QUOTE SENT") || key.includes("QUOTATION SENT")) return "Quote Sent";
@@ -2905,7 +2957,7 @@ function salesProductTypes() {
 }
 
 function salesLeadStatuses() {
-  return ["New Enquiry", "Selection Pending", "Quote Pending", "Quote Sent", "Follow-up", "Tender", "Revision Required", "Negotiation", "Job in Hand", "Lost", "Order Received", "Completed", "On Hold"];
+  return ["New Enquiry", "Quote Pending", "Negotiation", "Tender", "Job in Hand", "Follow-up", "Quote Sent", "Order Received", "Lost/Closed"];
 }
 
 function salesFollowUpTypes() {
@@ -2949,12 +3001,12 @@ function salesLeadShowsClosedRows() {
 
 function salesLeadIsClosedStatus(lead) {
   const status = norm(lead?.status);
-  return ["COMPLETED", "LOST", "CLOSED", "LOSTCLOSED"].includes(status);
+  return ["COMPLETED", "LOST", "CLOSED", "LOSTCLOSED", "LOST/CLOSED"].includes(status);
 }
 
 function salesLeadIsLostStatus(lead) {
   const status = norm(normalizeLeadStatus(lead?.status));
-  return ["LOST", "LOSTCLOSED"].includes(status);
+  return ["LOST", "LOSTCLOSED", "LOST/CLOSED"].includes(status);
 }
 
 function salesLeadSearch(rows) {
@@ -3309,6 +3361,7 @@ function salesProjectProduct(project = {}) {
 function salesProjectDetailHtml(project) {
   const boqRows = salesProjectBoqRows(project);
   const deliveryNotes = salesProjectDeliveryNotes(project);
+  const linkedQuotations = (salesData().quotations || []).filter(quote => quote.salesProjectId === project.id);
   return `
     <aside class="sales-project-detail-panel order-book-detail" data-project-detail-id="${escapeHtml(project.id || "")}">
       <div class="pipeline-detail-head">
@@ -3325,6 +3378,7 @@ function salesProjectDetailHtml(project) {
           { label: "Delete", action: "delete-project", id: project.id, danger: true }
         ])}
       </div>
+      ${linkedQuotations.length ? `<section class="pipeline-detail-section"><h4>Quotations</h4>${linkedQuotations.map(quote => `<button type="button" class="sales-project-linked-quote" data-sales-action="view-quote" data-sales-id="${escapeHtml(quote.id)}">${escapeHtml(quote.no || quote.quotationNo || "Quotation")}</button>`).join("")}</section>` : ""}
       <section class="pipeline-detail-section">
         <h4>BOQ / Delivery Details</h4>
         ${salesProjectBoqTableHtml(project, boqRows)}
@@ -4675,6 +4729,28 @@ function renderSalesQuoteEnquiryOptions() {
     : `<span class="sales-project-person-no-match">No available enquiries</span>`;
 }
 
+function salesQuoteCustomerProjects(customer) {
+  const customerKey = norm(customer);
+  return customerKey ? (salesData().projects || []).filter(project => project.id && project.name && norm(project.customer) === customerKey) : [];
+}
+
+function renderSalesQuoteProjectOptions() {
+  const input = document.querySelector("[data-sales-quote-project-input]");
+  const options = document.querySelector("[data-sales-quote-project-options]");
+  if (!input || !options) return;
+  const open = document.activeElement === input;
+  input.setAttribute("aria-expanded", String(open));
+  options.hidden = !open;
+  if (!open) return;
+  const selected = (salesData().projects || []).find(project => project.id === salesQuotationDraft?.salesProjectId);
+  const query = selected && input.value === selected.name ? "" : norm(input.value);
+  const matches = salesQuoteCustomerProjects(salesQuotationDraft?.customer)
+    .filter(project => !query || norm(project.name).includes(query) || norm(salesProjectNo(project)).includes(query));
+  options.innerHTML = matches.length
+    ? matches.map(project => `<button type="button" role="option" data-sales-quote-project-option="${escapeHtml(project.id)}"><strong>${escapeHtml(project.name)}</strong><small>${escapeHtml(salesProjectNo(project))}</small></button>`).join("")
+    : `<span class="sales-project-person-no-match">${salesQuotationDraft?.customer ? "No matching projects. You can enter a new name." : "Select a customer to see its projects."}</span>`;
+}
+
 function salesCreateQuotationHtml() {
   salesQuotationDraft = salesQuotationDraft || quoteDraftFromSource();
   salesQuotationDraft.quoteType = salesQuotationDraft.quoteType || "VRV";
@@ -4704,7 +4780,7 @@ function salesCreateQuotationHtml() {
           <label>Validity<select data-sales-quote-field="validity">${["7 Days", "15 Days", "30 Days"].map(v => `<option ${salesQuotationDraft.validity === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
           ${salesQuotePersonFieldHtml()}
           <label>Customer Name<input data-sales-quote-field="customer" list="salesQuoteCustomerList" placeholder="Type to search customer..." value="${escapeHtml(salesQuotationDraft.customer || "")}"><datalist id="salesQuoteCustomerList">${salesCustomerNames().map(name => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist></label>
-          <label>Project Name<input data-sales-quote-field="project" list="salesQuoteProjectList" placeholder="Type to search project..." value="${escapeHtml(salesQuotationDraft.project || "")}"><datalist id="salesQuoteProjectList">${salesData().projects.map(p => `<option value="${escapeHtml(p.name)}"></option>`).join("")}</datalist></label>
+          <div class="sales-quote-project-field"><span>Project Name</span><div class="sales-quote-project-picker" data-sales-quote-project-picker><input data-sales-quote-field="project" data-sales-quote-project-input role="combobox" aria-label="Project Name" aria-autocomplete="list" aria-expanded="false" autocomplete="off" placeholder="Select or type a project..." value="${escapeHtml(salesQuotationDraft.project || "")}"><div class="sales-project-person-options" data-sales-quote-project-options role="listbox" hidden></div></div></div>
           <label>Payment Terms<input data-sales-quote-field="paymentTerms" value="${escapeHtml(salesQuotationDraft.paymentTerms)}"></label>
           <label>Availability<input data-sales-quote-field="deliveryTime" value="${escapeHtml(salesQuotationDraft.deliveryTime || "To be discussed")}"></label>
           <div class="sales-quote-enquiry-field"><span>Enquiry no</span><div class="sales-quote-enquiry-picker" data-sales-quote-enquiry-picker><input data-sales-quote-field="warranty" data-sales-quote-enquiry-input role="combobox" aria-label="Enquiry no" aria-autocomplete="list" aria-expanded="false" autocomplete="off" value="${escapeHtml(salesQuotationDraft.warranty === "1 Year" ? "" : salesQuotationDraft.warranty || "")}"><div class="sales-project-person-options" data-sales-quote-enquiry-options role="listbox" hidden></div></div></div>
@@ -6246,6 +6322,17 @@ async function handleSalesClick(event) {
     document.querySelector("[data-sales-quote-enquiry-options]").hidden = true;
     return;
   }
+  if (target.dataset.salesQuoteProjectOption !== undefined) {
+    const project = salesQuoteCustomerProjects(salesQuotationDraft?.customer)
+      .find(item => item.id === target.dataset.salesQuoteProjectOption);
+    if (!project) return;
+    salesQuotationDraft.project = project.name;
+    salesQuotationDraft.salesProjectId = project.id;
+    const input = document.querySelector("[data-sales-quote-project-input]");
+    if (input) { input.value = project.name; input.setAttribute("aria-expanded", "false"); input.blur(); }
+    document.querySelector("[data-sales-quote-project-options]").hidden = true;
+    return;
+  }
   if (target.dataset.salesQuotePersonOption) {
     const person = salesQuotePersonUsers().find(user => user.id === target.dataset.salesQuotePersonOption);
     if (!person) return;
@@ -6515,7 +6602,7 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
   if (action === "delete-customer") return deleteSalesItem("customers", itemId);
   if (action === "project-quote") {
     const project = salesData().projects.find(item => item.id === itemId);
-    return startSalesQuotationDraft({ customer: project?.customer || "", project: project?.name || "", location: project?.location || "" });
+    return startSalesQuotationDraft({ customer: project?.customer || "", project: project?.name || "", salesProjectId: project?.id || "", location: project?.location || "" });
   }
   if (action === "view-project") {
     salesProjectDetailId = itemId;
@@ -6547,6 +6634,12 @@ async function handleSalesMenuAction(action, itemId, meta = {}) {
 }
 
 function handleSalesInput(event) {
+  if (event.target.dataset.salesQuoteProjectInput !== undefined) {
+    salesQuotationDraft.project = event.target.value;
+    salesQuotationDraft.salesProjectId = "";
+    renderSalesQuoteProjectOptions();
+    return;
+  }
   if (event.target.dataset.salesQuoteEnquiryInput !== undefined) {
     salesQuotationDraft.warranty = event.target.value;
     renderSalesQuoteEnquiryOptions();
@@ -6748,7 +6841,17 @@ function updateSalesQuotationDraft(event, shouldRender = false) {
   const field = event.target.dataset.salesQuoteField;
   if (field) {
     salesQuotationDraft[field] = event.target.value;
-    if (field === "customer") renderSalesQuoteEnquiryOptions();
+    if (field === "customer") {
+      const selected = (salesData().projects || []).find(project => project.id === salesQuotationDraft.salesProjectId);
+      if (selected && norm(selected.customer) !== norm(salesQuotationDraft.customer)) {
+        salesQuotationDraft.salesProjectId = "";
+        salesQuotationDraft.project = "";
+        const projectInput = document.querySelector("[data-sales-quote-project-input]");
+        if (projectInput) projectInput.value = "";
+      }
+      renderSalesQuoteEnquiryOptions();
+      renderSalesQuoteProjectOptions();
+    }
     if (shouldRender) renderSalesDesk();
     return;
   }
@@ -6778,13 +6881,93 @@ function salesLeadAvailableQuotations(customer, enquiryId = "", enquiryNo = "") 
   });
 }
 
+function salesLeadCustomerOrderBooks(customer) {
+  const key = norm(customer);
+  return key ? salesOrderBookRows().filter(order => order.id && order.orderNo && norm(order.customer) === key) : [];
+}
+
+function salesLeadOrderFromQuotation(quote, projects, orders) {
+  if (!quote) return null;
+  const matchingProjects = quote.salesProjectId
+    ? projects.filter(project => project.id === quote.salesProjectId)
+    : projects.filter(project => quote.project && norm(project.name) === norm(quote.project));
+  const projectNumbers = new Set(matchingProjects.map(project => norm(salesProjectNo(project))).filter(Boolean));
+  const projectOrderNumbers = new Set(matchingProjects.map(project => norm(project.orderBookNo)).filter(Boolean));
+  const linked = orders.filter(order => projectNumbers.has(norm(order.projectNo)) || projectOrderNumbers.has(norm(order.orderNo)));
+  if (linked.length === 1) return linked[0];
+  if (linked.length > 1 || !quote.project) return null;
+  const byName = orders.filter(order => norm(order.jobDescription) === norm(quote.project)
+    && (!matchingProjects.length || !order.projectNo || projectNumbers.has(norm(order.projectNo))));
+  return byName.length === 1 ? byName[0] : null;
+}
+
+function fillSalesLeadOrderDetails(modal, onlyBlank = false) {
+  const field = key => modal.querySelector(`[data-sales-lead-field="${key}"]`);
+  const customer = field("customer")?.value || "";
+  const orderInput = field("orderBookNo");
+  const orders = salesLeadCustomerOrderBooks(customer);
+  const quoteNo = field("quoteNo")?.value.trim() || "";
+  const quote = (salesData().quotations || []).find(item => norm(item.customer) === norm(customer)
+    && norm(item.no || item.quotationNo) === norm(quoteNo));
+  const projects = (salesData().projects || []).filter(item => norm(item.customer) === norm(customer));
+  const suggestedOrder = salesLeadOrderFromQuotation(quote, projects, orders);
+  const autoDisabled = field("orderAutoDisabled")?.value === "true";
+  if (!autoDisabled && suggestedOrder && (!orderInput.value.trim() || orderInput.dataset.autoLinked === "true")) {
+    orderInput.value = suggestedOrder.orderNo;
+    orderInput.dataset.autoLinked = "true";
+  } else if (orderInput.dataset.autoLinked === "true" && !suggestedOrder) {
+    orderInput.value = "";
+    orderInput.dataset.autoLinked = "false";
+  }
+  const order = orders.find(item => norm(item.orderNo) === norm(orderInput.value.trim()));
+  const orderIdField = field("orderBookId");
+  if (orderIdField) orderIdField.value = order?.id || "";
+  const statusField = field("status");
+  const previousStatusField = field("statusBeforeOrder");
+  if (order) {
+    if (!previousStatusField.value) {
+      const currentStatus = statusField.value;
+      previousStatusField.value = currentStatus === "Order Received"
+        ? quote ? "Quote Sent" : "New Enquiry"
+        : salesLeadStatuses().includes(currentStatus) ? currentStatus : "New Enquiry";
+    }
+    statusField.value = "Order Received";
+  } else if (previousStatusField.value) {
+    statusField.value = previousStatusField.value;
+    previousStatusField.value = "";
+  }
+  statusField.disabled = !!order;
+
+  const orderProject = order?.projectNo && projects.find(item => norm(salesProjectNo(item)) === norm(order.projectNo))
+    || projects.find(item => order && norm(item.orderBookNo) === norm(order.orderNo));
+  const quoteProject = quote?.salesProjectId && projects.find(item => item.id === quote.salesProjectId)
+    || projects.find(item => quote?.project && norm(item.name) === norm(quote.project));
+  const project = orderProject || quoteProject;
+  const values = {
+    projectName: project?.name || (order?.projectNo ? order.jobDescription : "") || quote?.project || "",
+    projectNo: order?.projectNo || (project && salesProjectNo(project)) || "",
+    selectionNo: quote?.dxSelectionNumber || quote?.selectionNo || order?.selectionNo || ""
+  };
+  for (const [key, value] of Object.entries(values)) {
+    const input = field(key);
+    if (input && value && (!onlyBlank || !input.value.trim())) input.value = value;
+  }
+}
+
 function fillSalesLeadQuotationDetails(modal, enquiryId = "") {
   const quoteNo = modal.querySelector('[data-sales-lead-field="quoteNo"]')?.value.trim();
   const customer = modal.querySelector('[data-sales-lead-field="customer"]')?.value || "";
   const enquiryNo = modal.querySelector('[data-sales-lead-field="enquiryNo"]')?.value || "";
   const quote = quoteNo && salesLeadAvailableQuotations(customer, enquiryId, enquiryNo)
     .find(item => norm(item.no || item.quotationNo) === norm(quoteNo));
-  if (!quote) return;
+  if (!quote) {
+    fillSalesLeadOrderDetails(modal);
+    return;
+  }
+  if (norm(modal.dataset.lastOrderQuoteNo) !== norm(quoteNo)) {
+    modal.querySelector('[data-sales-lead-field="orderAutoDisabled"]').value = "false";
+    modal.dataset.lastOrderQuoteNo = quoteNo;
+  }
   const subtotal = String(quote.manualSubtotal ?? "").trim();
   const itemSubtotal = (quote.items || []).reduce((sum, item) => sum + Number(item.qty || 0) * Number(item.unitPrice || 0), 0);
   const taxable = Math.max(0, (subtotal ? salesNumber(subtotal) : itemSubtotal) - Number(quote.discount || 0));
@@ -6801,6 +6984,7 @@ function fillSalesLeadQuotationDetails(modal, enquiryId = "") {
       if (key === "preparedBy") input.classList.toggle("is-linked", salesQuotePersonUsers().some(user => norm(user.name) === norm(value)));
     }
   });
+  fillSalesLeadOrderDetails(modal);
 }
 
 function clearSalesLeadQuoteFields(modal) {
@@ -6910,6 +7094,7 @@ function quoteDraftFromSource(source = {}) {
     ownerId: source.ownerId || source.salesPersonId || matchingPerson?.id || "",
     customer: source.customer || "",
     project: source.project || "",
+    salesProjectId: source.salesProjectId || "",
     location: source.location || "",
     paymentTerms: "CDC",
     deliveryTime: "To be discussed",
@@ -7294,6 +7479,15 @@ async function openSalesLeadDrawer(itemId = "") {
           salesLeadField("followUpType", "Follow-up Type", item.followUpType, "select", { options: ["", ...salesFollowUpTypes()] }),
           salesLeadField("competitors", "Competitors", item.competitors, "textarea")
         ])}
+        ${salesLeadFormSection(6, "Order Details", [
+          salesLeadField("orderBookNo", "Order Book No", item.orderBookNo, "orderBookPicker"),
+          salesLeadField("projectName", "Project Name", item.projectName),
+          salesLeadField("projectNo", "Project No", item.projectNo),
+          salesLeadField("selectionNo", "Selection No", item.selectionNo)
+        ])}
+        <input type="hidden" data-sales-lead-field="orderBookId" value="${escapeHtml(item.orderBookId || "")}">
+        <input type="hidden" data-sales-lead-field="statusBeforeOrder" value="${escapeHtml(item.statusBeforeOrder || "")}">
+        <input type="hidden" data-sales-lead-field="orderAutoDisabled" value="${item.orderAutoDisabled ? "true" : "false"}">
       </div>
       <div class="sales-lead-drawer-actions">
         <button class="ghost-button" data-close-sales-modal>Cancel</button>
@@ -7304,11 +7498,15 @@ async function openSalesLeadDrawer(itemId = "") {
   document.body.appendChild(modal);
   setupSalesLeadCustomerPicker(modal, (salesData().customers || []).map(customer => customer.name));
   setupSalesLeadQuotePicker(modal, item.id);
+  setupSalesLeadOrderBookPicker(modal);
   setupSalesLeadPreparedByPicker(modal);
   modal.querySelectorAll("[data-close-sales-modal]").forEach(button => button.addEventListener("click", () => modal.remove()));
   modal.querySelector("#saveSalesLeadBtn").addEventListener("click", async () => {
+    fillSalesLeadOrderDetails(modal, true);
     const payload = collectSalesLeadPayload(modal, existingRaw || item);
     if (!payload.customer || !payload.projectDescription || !payload.enquiryNo) return alert("Customer, project description and enquiry number are required.");
+    if (!salesLeadStatuses().includes(payload.status)) return alert("Select a current status from the updated list.");
+    if (payload.orderBookNo && !payload.orderBookId) return alert("Select an Order Book No belonging to this customer.");
     const button = modal.querySelector("#saveSalesLeadBtn");
     if (button.disabled) return;
     const label = button.textContent;
@@ -7436,7 +7634,11 @@ function setupSalesLeadQuotePicker(modal, enquiryId = "") {
   };
   input.addEventListener("focus", render);
   input.addEventListener("input", () => {
-    if (!input.value.trim()) clearSalesLeadQuoteFields(modal);
+    if (!input.value.trim()) {
+      clearSalesLeadQuoteFields(modal);
+      modal.dataset.lastOrderQuoteNo = "";
+      fillSalesLeadOrderDetails(modal);
+    }
     render();
   });
   input.addEventListener("change", () => fillSalesLeadQuotationDetails(modal, enquiryId));
@@ -7470,6 +7672,101 @@ function setupSalesLeadQuotePicker(modal, enquiryId = "") {
     fillSalesLeadQuotationDetails(modal, enquiryId);
     close();
   });
+}
+
+function setupSalesLeadOrderBookPicker(modal) {
+  const input = modal.querySelector('[data-sales-lead-field="orderBookNo"]');
+  const options = modal.querySelector('[data-sales-lead-order-options]');
+  const toggle = modal.querySelector('[data-sales-lead-order-toggle]');
+  const customerInput = modal.querySelector('[data-sales-lead-field="customer"]');
+  if (!input || !options) return;
+  modal.dataset.lastOrderQuoteNo = modal.querySelector('[data-sales-lead-field="quoteNo"]')?.value.trim() || "";
+  let activeIndex = -1;
+  const close = () => {
+    options.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const render = () => {
+    const orders = salesLeadCustomerOrderBooks(customerInput?.value);
+    const selected = orders.find(order => norm(order.orderNo) === norm(input.value));
+    const query = selected ? "" : input.value.trim().toLocaleLowerCase();
+    const matches = orders.filter(order => order.orderNo.toLocaleLowerCase().includes(query)
+      || String(order.jobDescription || order.projectNo || "").toLocaleLowerCase().includes(query));
+    options.innerHTML = matches.map((order, index) => `<button type="button" id="salesLeadOrderOption${index}" role="option" data-sales-lead-order-option="${escapeHtml(order.id)}" aria-selected="false"><strong>${escapeHtml(order.orderNo)}</strong><small>${escapeHtml(order.jobDescription || order.projectNo || "")}</small></button>`).join("");
+    options.hidden = document.activeElement !== input || !matches.length;
+    input.setAttribute("aria-expanded", String(!options.hidden));
+    input.removeAttribute("aria-activedescendant");
+    activeIndex = -1;
+  };
+  const setActive = index => {
+    const buttons = [...options.querySelectorAll('[role="option"]')];
+    if (!buttons.length) return;
+    activeIndex = (index + buttons.length) % buttons.length;
+    buttons.forEach((button, position) => {
+      button.classList.toggle("is-active", position === activeIndex);
+      button.setAttribute("aria-selected", String(position === activeIndex));
+    });
+    input.setAttribute("aria-activedescendant", buttons[activeIndex].id);
+    buttons[activeIndex].scrollIntoView({ block: "nearest" });
+  };
+  input.addEventListener("focus", render);
+  input.addEventListener("input", () => {
+    input.dataset.autoLinked = "false";
+    modal.querySelector('[data-sales-lead-field="orderAutoDisabled"]').value = "true";
+    fillSalesLeadOrderDetails(modal);
+    render();
+  });
+  input.addEventListener("change", () => {
+    if (salesLeadCustomerOrderBooks(customerInput?.value).some(order => norm(order.orderNo) === norm(input.value))) {
+      modal.querySelector('[data-sales-lead-field="orderAutoDisabled"]').value = "false";
+    }
+    fillSalesLeadOrderDetails(modal);
+  });
+  input.addEventListener("keydown", event => {
+    if (event.key === "Escape") { close(); return; }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (options.hidden) render();
+      setActive(activeIndex < 0 ? event.key === "ArrowDown" ? 0 : options.children.length - 1 : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    }
+    if (event.key === "Enter" && !options.hidden) {
+      event.preventDefault();
+      options.children[activeIndex < 0 ? 0 : activeIndex]?.click();
+    }
+  });
+  input.addEventListener("blur", close);
+  toggle?.addEventListener("mousedown", event => event.preventDefault());
+  toggle?.addEventListener("click", () => {
+    const wasOpen = !options.hidden;
+    input.focus();
+    if (wasOpen) close();
+  });
+  options.addEventListener("mousedown", event => event.preventDefault());
+  options.addEventListener("click", event => {
+    const option = event.target.closest('[data-sales-lead-order-option]');
+    const order = salesLeadCustomerOrderBooks(customerInput?.value).find(item => item.id === option?.dataset.salesLeadOrderOption);
+    if (!order) return;
+    input.value = order.orderNo;
+    input.dataset.autoLinked = "false";
+    modal.querySelector('[data-sales-lead-field="orderAutoDisabled"]').value = "false";
+    fillSalesLeadOrderDetails(modal);
+    close();
+  });
+  customerInput?.addEventListener("input", () => {
+    const linked = salesLeadCustomerOrderBooks(customerInput.value).some(order => norm(order.orderNo) === norm(input.value));
+    if (!linked) {
+      input.value = "";
+      modal.querySelector('[data-sales-lead-field="orderBookId"]').value = "";
+      input.dataset.autoLinked = "false";
+      modal.querySelector('[data-sales-lead-field="orderAutoDisabled"]').value = "false";
+      for (const key of ["projectName", "projectNo", "selectionNo"]) modal.querySelector(`[data-sales-lead-field="${key}"]`).value = "";
+      fillSalesLeadOrderDetails(modal);
+    }
+    render();
+  });
+  fillSalesLeadOrderDetails(modal, true);
 }
 
 function setupSalesLeadPreparedByPicker(modal) {
@@ -7531,7 +7828,7 @@ function blankSalesLead() {
 
 function salesLeadFormSection(number, title, fields) {
   return `
-    <section class="sales-lead-form-section">
+    <section class="sales-lead-form-section${number === 6 ? " sales-lead-order-section" : ""}">
       <h3><span>${number}</span>${escapeHtml(title)}</h3>
       <div class="sales-lead-form-grid">${fields.join("")}</div>
     </section>
@@ -7546,13 +7843,19 @@ function salesLeadField(key, label, value = "", type = "text", options = {}) {
     return `<label class="${["projectDescription", "scope", "competitors"].includes(key) ? "span-two" : ""}">${labelHtml}<textarea ${attrs}>${escapeHtml(value || "")}</textarea></label>`;
   }
   if (type === "select") {
-    return `<label>${labelHtml}<select ${attrs}>${(options.options || []).map(option => `<option value="${escapeHtml(option)}" ${String(value || "") === option ? "selected" : ""}>${escapeHtml(option || "Select")}</option>`).join("")}</select></label>`;
+    const values = options.options || [];
+    const selectedValue = key === "status" && norm(value) === "LOST" ? "Lost/Closed" : String(value || "");
+    const needsSelection = key === "status" && !values.includes(selectedValue);
+    return `<label>${labelHtml}<select ${attrs} ${options.required ? "required" : ""}>${needsSelection ? '<option value="" selected disabled>Select current status</option>' : ""}${values.map(option => `<option value="${escapeHtml(option)}" ${selectedValue === option ? "selected" : ""}>${escapeHtml(option || "Select")}</option>`).join("")}</select></label>`;
   }
   if (type === "customerPicker") {
     return `<div class="sales-lead-customer-field"><label for="salesLeadCustomer">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadCustomer" ${attrs} value="${escapeHtml(value || "")}" placeholder="Search or select customer" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadCustomerOptions" aria-expanded="false"><button type="button" data-sales-lead-customer-toggle aria-label="Show customers" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesLeadCustomerOptions" class="sales-lead-customer-options" data-sales-lead-customer-options role="listbox" hidden></div></div>`;
   }
   if (type === "quotePicker") {
     return `<div class="sales-lead-customer-field sales-lead-quote-field"><label for="salesLeadQuoteNo">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadQuoteNo" ${attrs} value="${escapeHtml(value || "")}" placeholder="Search or select quotation" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadQuoteOptions" aria-expanded="false"><button type="button" data-sales-lead-quote-toggle aria-label="Show quotations" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesLeadQuoteOptions" class="sales-lead-customer-options" data-sales-lead-quote-options role="listbox" hidden></div></div>`;
+  }
+  if (type === "orderBookPicker") {
+    return `<div class="sales-lead-customer-field sales-lead-order-field"><label for="salesLeadOrderBookNo">${labelHtml}</label><div class="sales-lead-customer-control"><input id="salesLeadOrderBookNo" ${attrs} value="${escapeHtml(value || "")}" placeholder="Search customer order books" autocomplete="off" role="combobox" aria-autocomplete="list" aria-controls="salesLeadOrderBookOptions" aria-expanded="false"><button type="button" data-sales-lead-order-toggle aria-label="Show order books" tabindex="-1"><img src="/assets/maintenance-icons/chevron-down.svg" alt=""></button></div><div id="salesLeadOrderBookOptions" class="sales-lead-customer-options" data-sales-lead-order-options role="listbox" hidden></div></div>`;
   }
   if (type === "preparedByPicker") {
     const linked = salesQuotePersonUsers().some(user => norm(user.name) === norm(value));
@@ -7581,6 +7884,7 @@ function collectSalesLeadPayload(modal, base = {}) {
     else if (["estimatedValue", "daikinPurchaseValue"].includes(key)) payload[key] = salesNumber(value);
     else payload[key] = value;
   });
+  payload.orderAutoDisabled = payload.orderAutoDisabled === "true";
   payload.requirement = payload.projectDescription || payload.requirement || "";
   payload.projectType = payload.scope || payload.productType || "";
   payload.phone = payload.contactNumber || payload.phone || "";
@@ -8030,7 +8334,7 @@ async function createProjectFromQuotation(quoteId) {
   if (!quote) return toast("Quotation not found");
   const quoteNo = String(quote.no || quote.quotationNo || quote.quoteNo || "").trim();
   const existing = (salesData().projects || []).find(project => {
-    return project.sourceQuotationId === quote.id || (quoteNo && norm(project.quotationNo || project.quoteNo || "") === norm(quoteNo));
+    return project.id === quote.salesProjectId || project.sourceQuotationId === quote.id || (quoteNo && norm(project.quotationNo || project.quoteNo || "") === norm(quoteNo));
   });
   if (existing) {
     salesProjectDetailId = existing.id;
@@ -8200,6 +8504,7 @@ function renderViewActions() {
   const actions = $("#viewActions");
   if (!actions) return;
   document.querySelector(".topbar")?.classList.toggle("purchase-shell", activeView === "purchaseOrders");
+  document.querySelector(".topbar")?.classList.toggle("purchase-form-shell", activeView === "purchaseOrders" && purchaseScreen === "form");
   const salesTopbar = salesDeskTopbarConfig();
   const inventoryTopbar = inventoryTopbarConfig();
   document.querySelector(".topbar")?.classList.toggle("quotation-shell", !!salesTopbar || !!inventoryTopbar || activeView === "areaCalculation");
@@ -8243,10 +8548,10 @@ function renderViewActions() {
   if (activeView === "purchaseOrders") {
     actions.classList.remove("hidden");
     actions.innerHTML = `
-      <button class="ghost-button" id="headerPoListBtn">Purchase Orders</button>
-      <button class="ghost-button" id="headerPoSuppliersBtn">Suppliers</button>
-      ${isStaffUser() ? "" : `<button class="primary-button" id="headerPoManualBtn">Create PO</button>
-      <button class="ghost-button" id="headerPoUploadBtn">Upload</button>`}
+      <button class="ghost-button" id="headerPoListBtn">${purchaseScreen === "form" ? poIcon("document") : ""}<span>Purchase Orders</span></button>
+      <button class="ghost-button" id="headerPoSuppliersBtn">${purchaseScreen === "form" ? poIcon("people") : ""}<span>Suppliers</span></button>
+      ${isStaffUser() ? "" : `<button class="primary-button" id="headerPoManualBtn">${purchaseScreen === "form" ? poIcon("plus") : ""}<span>Create PO</span></button>
+      <button class="ghost-button" id="headerPoUploadBtn">${purchaseScreen === "form" ? poIcon("upload") : ""}<span>Upload</span></button>`}
     `;
     $("#headerPoListBtn").addEventListener("click", () => showPurchaseOrders("list"));
     $("#headerPoSuppliersBtn").addEventListener("click", () => showPurchaseOrders("suppliers"));
@@ -8670,6 +8975,7 @@ function renderPurchaseOrders() {
     });
   }
   bindPurchaseEvents();
+  refreshPurchaseSaveState();
 }
 
 function renderPurchaseOrdersKeepingInputFocus(inputId, value) {
@@ -8702,7 +9008,7 @@ function purchaseOrderFormPageHtml() {
     <div class="po-layout">
       <section class="inventory-card po-form-card">
         <div class="po-form-title-row">
-          <h3>${isStaffUser() ? "Purchase Order" : "New Purchase Order"}</h3>
+          <h3><span class="po-form-title-icon" aria-hidden="true">${poIcon("document")}</span>${isStaffUser() ? "Purchase Order" : "New Purchase Order"}</h3>
           <label>LPO No.<input data-po-field="poNo" ${poInputAttrs("lpo-no")} value="${escapeHtml(purchaseDraft.poNo || "")}"></label>
         </div>
         ${purchaseOrderFormHtml(purchaseDraft)}
@@ -8929,7 +9235,6 @@ function purchaseOrderFormHtml(po) {
           </div>
           <div id="poProjectSuggestions" class="po-project-suggestions hidden" role="listbox"></div>
         </div>
-        <span class="po-project-hint">Add up to 3 projects. Press comma or Enter to add a custom name.</span>
       </div>
       <label>TRN<input data-po-field="trn" ${poInputAttrs("trn")} value="${escapeHtml(po.trn)}"></label>
       <label>Payment Terms${paymentTermFieldHtml(po.paymentTerms, "po")}</label>
@@ -8950,12 +9255,12 @@ function purchaseOrderFormHtml(po) {
         ${(po.items || []).map((item, index) => `
           <tr>
             <td>${index + 1}</td>
-            <td><textarea data-po-line="${index}" data-field="description" ${poInputAttrs(`item-description-${index}`)} placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
+            <td><textarea rows="1" data-po-line="${index}" data-field="description" ${poInputAttrs(`item-description-${index}`)} placeholder="Enter item description...">${escapeHtml(item.description)}</textarea></td>
             <td><input type="number" min="0" data-po-line="${index}" data-field="qty" ${poInputAttrs(`qty-${index}`)} value="${Number(item.qty || 0)}"></td>
             <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="unitPrice" ${poInputAttrs(`unit-price-${index}`)} value="${Number(item.unitPrice || 0)}"></td>
             <td><input type="number" min="0" step="0.01" data-po-line="${index}" data-field="vatPercent" ${poInputAttrs(`vat-percent-${index}`)} value="${purchaseVatPercent(item.vatPercent)}"></td>
             <td data-po-amount="${index}">${money(item.amount)}</td>
-            <td><button class="danger-button po-delete-line" data-delete-po-line="${index}">${poIcon("trash")}<span>Delete</span></button></td>
+            <td><button type="button" class="danger-button po-delete-line" data-delete-po-line="${index}" aria-label="Delete item ${index + 1}" title="Delete item">${poIcon("trash")}</button></td>
           </tr>
         `).join("") || `<tr><td colspan="7">No items added.</td></tr>`}
       </tbody>
@@ -8977,8 +9282,8 @@ function purchaseSummaryHtml(po) {
     <div class="po-status-box"><span class="po-status-icon" aria-hidden="true">${poIcon("tag")}</span><span>Status</span>${statusPill(po.status || "Draft")}</div>
     <div class="inventory-actions po-summary-actions">
       ${isStaffUser() ? "" : `
-        <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span>Save Draft</span></button>
-        <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span>Create Purchase Order</span></button>
+        <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span class="po-upload-spinner po-button-spinner hidden" aria-hidden="true"></span><span data-po-save-label>Save Draft</span></button>
+        <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span class="po-upload-spinner po-button-spinner hidden" aria-hidden="true"></span><span data-po-save-label>Create Purchase Order</span></button>
       `}
       <button class="ghost-button" id="poDownloadBtn">${poIcon("download")}<span>Download PDF</span></button>
     </div>
@@ -9011,6 +9316,7 @@ function purchaseAttachmentHtml(po) {
 
 function poIcon(name) {
   const icons = {
+    people: `<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M19 20h2v-2a6 6 0 0 0-4-5.5"/></svg>`,
     document: `<svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5"/><path d="M10 12h6M10 16h4"/><path d="M16 18h4v4h-4z"/></svg>`,
     tag: `<svg viewBox="0 0 24 24"><path d="M4 12V5h7l9 9-7 7z"/><path d="M8.5 8.5h.01"/></svg>`,
     save: `<svg viewBox="0 0 24 24"><path d="M5 3h12l2 2v16H5z"/><path d="M8 3v7h8V3"/><path d="M8 21v-7h8v7"/></svg>`,
@@ -10655,8 +10961,11 @@ function supplierDnRows(dns) {
     const detailsHtml = dn.uploadId
       ? `<a class="supplier-dn-upload-link" href="/api/inventory/uploads/${encodeURIComponent(dn.uploadId)}" download><strong>${escapeHtml(details)}</strong></a>`
       : `<strong>${escapeHtml(details)}</strong>`;
-    const actions = supplierDnMenuItems(dn);
-    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td>${detailsHtml}</td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusPill(dn.status)}</td><td>${actions.length ? rowMenu(actions) : "-"}</td></tr>`;
+    const actions = supplierDnConfirmPending.has(dn.id) ? [] : supplierDnMenuItems(dn);
+    const statusHtml = supplierDnConfirmPending.has(dn.id)
+      ? `<span class="supplier-dn-confirming-pill" role="status"><span class="po-upload-spinner" aria-hidden="true"></span>Confirming...</span>`
+      : statusPill(dn.status);
+    return `<tr><td>${formatInventoryDate(dn.uploadedDate)}</td><td>${detailsHtml}</td><td class="supplier-dn-models-cell${modelsClass}">${escapeHtml(models)}</td><td>${sumSupplierQty(dn)}</td><td>${statusHtml}</td><td>${actions.length ? rowMenu(actions) : "-"}</td></tr>`;
   }).join("") || `<tr><td colspan="6">No Supplier DN uploaded.</td></tr>`;
 }
 
@@ -10742,13 +11051,13 @@ function deliveryNoteRows(notes) {
     const menuItems = [
       { label: "View", action: "view-delivery", id: note.id },
       { label: "Edit", action: "edit-delivery", id: note.id },
-      { label: "Download", action: "download-delivery", id: note.id },
+      ...(deliveryNotePdfAvailable(note) ? [{ label: "Download", action: "download-delivery", id: note.id }] : []),
       { label: "Cancel", action: "cancel-delivery", id: note.id, danger: true }
     ];
     if (norm(note.status) === "DRAFT") {
       menuItems.push({ label: "Delete", action: "delete-delivery", id: note.id, danger: true });
     }
-    return `<tr><td><strong class="delivery-list-primary">${escapeHtml(note.dnNo || "—")}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(formatInventoryDate(note.date))}</span></td><td><strong class="delivery-list-primary">${escapeHtml(customerName)}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(projectName)}</span></td><td><span class="delivery-list-primary">${escapeHtml(deliveryLocation)}</span><span class="inventory-muted delivery-list-secondary">Contact: ${escapeHtml(contactPerson)}</span></td><td>${sumDeliveryQty(note)}</td><td>${statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${rowMenu(menuItems)}</td></tr>`;
+    return `<tr class="${note.__pending ? "delivery-list-pending" : ""}"><td><strong class="delivery-list-primary">${escapeHtml(note.dnNo || "—")}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(formatInventoryDate(note.date))}</span></td><td><strong class="delivery-list-primary">${escapeHtml(customerName)}</strong><span class="inventory-muted delivery-list-secondary">${escapeHtml(projectName)}</span></td><td><span class="delivery-list-primary">${escapeHtml(deliveryLocation)}</span><span class="inventory-muted delivery-list-secondary">Contact: ${escapeHtml(contactPerson)}</span></td><td>${sumDeliveryQty(note)}</td><td>${note.__pending ? `<span class="delivery-pending-pill" role="status"><span class="po-upload-spinner" aria-hidden="true"></span>${escapeHtml(note.__pendingLabel)}</span>` : statusPill(deliveryNoteStatusLabel(note.status))}</td><td>${note.__pending ? "—" : rowMenu(menuItems)}</td></tr>`;
   }).join("") || `<tr><td colspan="6">No delivery notes yet.</td></tr>`;
 }
 
@@ -10895,11 +11204,16 @@ function deliveryFormHtml(dn) {
     </tbody></table></div>
     <div class="inventory-actions delivery-add-row"><button class="ghost-button" id="addDeliveryLineBtn"><img src="/assets/maintenance-icons/plus.svg" alt="">Add Row</button></div>
     </section>
-    <div class="inventory-actions delivery-modal-footer"><button class="ghost-button" id="saveDraftBtn"><img src="/assets/maintenance-icons/save.svg" alt="">Save Draft</button><button class="primary-button" id="issueDeliveryBtn"><img src="/assets/maintenance-icons/check.svg" alt="">Create</button><button class="ghost-button" id="downloadDraftPdfBtn"><img src="/assets/maintenance-icons/download.svg" alt="">Download PDF</button></div>
+    <div class="inventory-actions delivery-modal-footer">${deliveryNotePdfAvailable(dn) ? `<button class="ghost-button" id="downloadDraftPdfBtn"><img src="/assets/maintenance-icons/download.svg" alt="">Download PDF</button>` : ""}<button class="ghost-button" id="saveDraftBtn"><img src="/assets/maintenance-icons/save.svg" alt="">Save Draft</button><button class="primary-button" id="issueDeliveryBtn"><img src="/assets/maintenance-icons/check.svg" alt="">Create Delivery Note</button></div>
   `;
 }
 
+function deliveryNotePdfAvailable(note) {
+  return !!note?.id && ["ISSUED", "DELIVERED"].includes(norm(note.status));
+}
+
 function openDeliveryModal(note = null) {
+  if (deliverySavePending) return toast("Delivery Note is still being saved.");
   document.querySelector("[data-delivery-modal]")?.remove();
   deliveryDraft = note ? structuredClone(note) : newDeliveryDraft();
   const modal = document.createElement("div");
@@ -10953,10 +11267,11 @@ function openDeliveryNoteViewModal(noteId) {
         <dl class="pm-lpo-details">${detail("Customer", note.customerName)}${detail("Project", note.projectName)}${note.projectNo ? detail("Project No.", note.projectNo) : ""}${detail("Contact Person", note.contactPerson)}${detail("Phone", note.phone)}${detail("Delivery Location", note.deliveryLocation)}</dl>
         <section class="pm-lpo-section"><div class="delivery-view-section-head"><h3>Item Details</h3><span>${(note.lines || []).length} item${(note.lines || []).length === 1 ? "" : "s"}</span></div><div class="pm-table-wrap"><table class="pm-table delivery-view-items"><thead><tr><th>#</th><th>Model No.</th><th>Description</th><th>Qty</th></tr></thead><tbody>${lines || `<tr><td colspan="4" class="pm-table-empty">No items.</td></tr>`}</tbody></table></div><div class="delivery-view-total"><span>Total Quantity</span><strong>${escapeHtml(String(sumDeliveryQty(note)))}</strong></div></section>
       </div>
-      <div class="pm-modal-actions"><button type="button" class="pm-secondary" data-close-delivery-view>Close</button></div>
+      <div class="pm-modal-actions">${deliveryNotePdfAvailable(note) ? `<button type="button" class="pm-secondary delivery-view-download" data-download-delivery-view><img src="/assets/maintenance-icons/download.svg" alt="">Download PDF</button>` : ""}<button type="button" class="pm-secondary" data-close-delivery-view>Close</button></div>
     </section>`;
   document.body.appendChild(modal);
   modal.addEventListener("click", event => {
+    if (event.target.closest("[data-download-delivery-view]")) return downloadDeliveryPdf(note);
     if (event.target === modal || event.target.closest("[data-close-delivery-view]")) modal.remove();
   });
   modal.addEventListener("keydown", event => {
@@ -11048,7 +11363,7 @@ function handleDeliveryModalClick(event) {
   }
   if (target.id === "saveDraftBtn") return saveDelivery("Draft");
   if (target.id === "issueDeliveryBtn") return saveDelivery("Delivered");
-  if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf(collectDeliveryDraft("Draft"));
+  if (target.id === "downloadDraftPdfBtn") return downloadDeliveryPdf((inventoryState.deliveryNotes || []).find(note => note.id === deliveryDraft.id) || deliveryDraft);
 }
 
 function handleDeliveryModalInput(event) {
@@ -12039,6 +12354,7 @@ async function uploadPurchaseQuotation() {
 }
 
 async function savePurchaseDraft(createOfficial) {
+  if (purchaseSaveMode) return;
   if (!purchaseDraft.supplierName.trim()) return alert("Supplier Name is required.");
   const projects = purchaseProjectNamesFromValue(purchaseDraft.projectName);
   const pendingProject = String(document.querySelector('#poProjectInput')?.value || '').trim();
@@ -12062,6 +12378,8 @@ async function savePurchaseDraft(createOfficial) {
   purchaseDraft.status = createOfficial ? "Created" : "Draft";
   syncPurchaseRevisionFields(purchaseDraft);
   recalcPurchaseOrder(purchaseDraft);
+  purchaseSaveMode = createOfficial ? "create" : "draft";
+  refreshPurchaseSaveState();
   try {
     const requestedPoNo = String(purchaseDraft.poNo || "").trim();
     const result = await api("/api/purchase-orders", {
@@ -12088,6 +12406,9 @@ async function savePurchaseDraft(createOfficial) {
     purchaseDraft.status = previousStatus;
     renderPurchaseOrders();
     toast(error.message || "Purchase Order save failed.");
+  } finally {
+    purchaseSaveMode = "";
+    refreshPurchaseSaveState();
   }
 }
 
@@ -12325,14 +12646,35 @@ async function saveActiveSupplierDn() {
 
 async function confirmActiveSupplierDn() {
   const dn = activeSupplierDn();
-  await saveActiveSupplierDn();
+  if (!dn || supplierDnConfirmPending.has(dn.id)) return;
   const missing = dn.lines.filter(line => !inventoryState.models.some(model => norm(model.modelNo) === norm(line.modelNo)));
   if (missing.length && !confirm(`${missing.length} model(s) are not in Model Master. Add them and confirm stock?`)) return;
-  inventoryState = await api(`/api/inventory/supplier-dns/${dn.id}/confirm`, { method: "POST", body: "{}" });
+  const submittedDn = structuredClone(dn);
+  supplierDnConfirmPending.add(dn.id);
   activeSupplierDnId = "";
+  supplierVerificationDismissed = true;
   renderInventory();
-  toast(inventoryState.oolAutoAllocation?.allocatedQty ? "Stock and OOL updated" : "Stock updated");
-  if (inventoryState.oolAutoAllocation?.reviewRequired) window.OOL.reviewReceipt("supplier:"+dn.id);
+  refreshSupplierDnTitleSpinner();
+  try {
+    const result = await api(`/api/inventory/supplier-dns/${encodeURIComponent(dn.id)}/confirm`, {
+      method: "POST", body: JSON.stringify(submittedDn)
+    });
+    inventoryState = result;
+    supplierDnConfirmPending.delete(dn.id);
+    if (activeView === "inventory") renderInventory();
+    toast(result.oolAutoAllocation?.allocatedQty ? "Stock and OOL updated" : "Stock updated");
+    if (result.oolAutoAllocation?.reviewRequired) window.OOL.reviewReceipt("supplier:" + dn.id);
+  } catch (error) {
+    supplierDnConfirmPending.delete(dn.id);
+    if (activeView === "inventory" && ["supplier", "supplierAll"].includes(inventoryScreen) && !activeSupplierDnId) {
+      activeSupplierDnId = dn.id;
+      supplierVerificationDismissed = false;
+      renderInventory();
+    }
+    throw error;
+  } finally {
+    refreshSupplierDnTitleSpinner();
+  }
 }
 
 async function cancelActiveSupplierDn() {
@@ -12603,6 +12945,7 @@ function updateDeliveryLineModel(index, value) {
 }
 
 async function saveDelivery(status) {
+  if (deliverySavePending) return;
   const note = collectDeliveryDraft(status);
   note.lines = note.lines.filter(line => line.modelNo && Number(line.qtyGoingOut || 0) > 0);
   if (!note.customerName) return alert("Customer name is required.");
@@ -12618,18 +12961,37 @@ async function saveDelivery(status) {
       if (requestedByModel.get(key) > allowedQty) return alert(`Only ${allowedQty} unit(s) of ${line.modelNo} are available for ${note.customerName}; remaining stock is reserved for other customers.`);
     }
   }
+  const previousNotes = inventoryState.deliveryNotes || [];
+  const previousNote = previousNotes.find(item => item.id && item.id === note.id);
+  const pendingId = note.id || `pending-delivery-${Date.now()}`;
+  deliverySavePending = true;
+  inventoryWritePending = true;
+  inventoryState.deliveryNotes = [
+    { ...note, id: pendingId, __pending: true, __pendingLabel: status === "Delivered" ? "Creating..." : "Saving..." },
+    ...previousNotes.filter(item => item.id !== pendingId)
+  ];
   deliveryDraft = newDeliveryDraft();
   deliverySearchQuery = "";
   deliveryListPage = 1;
   closeDeliveryModal();
-  toast(status === "Delivered" ? "Creating delivery note..." : "Saving draft...");
+  renderInventory();
   try {
     inventoryState = await api("/api/inventory/delivery-notes", { method: "POST", body: JSON.stringify(note) });
+    inventoryLoadedAt = Date.now();
+    deliveryDraft = newDeliveryDraft();
     renderInventory();
     toast(status === "Delivered" ? "Delivery Note delivered and stock reduced" : "Draft saved");
   } catch (error) {
+    inventoryState.deliveryNotes = previousNotes;
+    deliveryDraft = { ...note, status: previousNote?.status || "Draft" };
+    deliverySavePending = false;
+    inventoryWritePending = false;
+    renderInventory();
+    openDeliveryModal(deliveryDraft);
     toast(error.message || "Delivery Note could not be saved. Please retry.");
-    throw error;
+  } finally {
+    deliverySavePending = false;
+    inventoryWritePending = false;
   }
 }
 
