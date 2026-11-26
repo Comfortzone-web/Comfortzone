@@ -26,6 +26,58 @@ function workflow() {
   return { project, context, run: source => vm.runInContext(source, context) };
 }
 
+test('VRV custom columns commit with Enter, comma, and composed input', () => {
+  const { context, run } = workflow();
+  const listeners = new Map();
+  const input = {
+    value: '',
+    addEventListener(name, handler) { listeners.set(name, handler); },
+    focus() {}
+  };
+  const columns = [];
+  const messages = [];
+  let renders = 0;
+  context.testInput = input;
+  context.testColumns = columns;
+  context.canvas = { querySelector: () => input };
+  context.vrvDirty = () => {};
+  context.renderVrvWorkspace = () => { renders += 1; };
+  context.toast = message => messages.push(message);
+  run('vrvBindCustomColumnInput(testInput,{customColumns:testColumns})');
+  const key = (name, event) => listeners.get(name)({ preventDefault() {}, stopPropagation() {}, ...event });
+
+  input.value = 'Unit Reference';
+  key('keydown', { key: 'Enter' });
+  assert.deepEqual(columns, ['Unit Reference']);
+  input.value = 'Location';
+  key('keydown', { key: 'Unidentified', code: 'Comma' });
+  assert.deepEqual(columns, ['Unit Reference', 'Location']);
+  input.value = 'Total Kw，Sensible Kw';
+  listeners.get('input')();
+  assert.deepEqual(columns, ['Unit Reference', 'Location', 'Total Kw']);
+  assert.equal(input.value, 'Sensible Kw');
+  key('keyup', { key: 'Unidentified', code: 'NumpadEnter' });
+  assert.deepEqual(columns, ['Unit Reference', 'Location', 'Total Kw', 'Sensible Kw']);
+  input.value = 'Flow Rate,';
+  listeners.get('input')();
+  assert.deepEqual(columns, ['Unit Reference', 'Location', 'Total Kw', 'Sensible Kw', 'Flow Rate']);
+  assert.equal(run('vrvTokenDraft'), '');
+  input.value = 'Location';
+  key('keydown', { key: 'Enter' });
+  assert.deepEqual(columns, ['Unit Reference', 'Location', 'Total Kw', 'Sensible Kw', 'Flow Rate']);
+  assert.deepEqual(messages, ['Column already selected.']);
+  assert.equal(renders, 5);
+});
+
+test('VRV custom-column tags wrap above a separate full-width input', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../public/styles.css'), 'utf8');
+  const tokenLayout = css.match(/\.vrv-workspace \.vrv-tokens\{([^}]*)\}/)?.[1] || '';
+  const tagLayout = css.match(/\.vrv-workspace \.vrv-token-list\{([^}]*)\}/)?.[1] || '';
+  assert.match(tokenLayout, /grid-template-rows:auto 38px/);
+  assert.match(tagLayout, /flex-wrap:wrap/);
+  assert.doesNotMatch(tagLayout, /overflow-x:auto|white-space:nowrap/);
+});
+
 test('VRV steps render the live project tables and report tabs', () => {
   const { project, run } = workflow();
   assert.match(run('vrvStepOne()'), /Thermal Sheet Upload/);
@@ -49,6 +101,7 @@ test('custom export displays only requested columns and BOQ uses saved pricing',
   run("vrvData().mode='custom'; vrvData().customColumns=['Indoor','Room']");
   const custom = run('vrvStepOne()');
   assert.match(custom, /Extract Columns/);
+  assert.match(custom, /class="vrv-token-list"[^>]*>.*?<\/div><input data-vrv-token-input/s);
   assert.doesNotMatch(custom, /<th>Mode<\/th>/);
   project.tables.costing.rows = [{ Model: 'FXMQ', Qty: 2, 'Final Price (AED)': 100, 'Increased Final Price (AED)': 120, 'Amount (AED)': 240 }];
   const boq = run('vrvStepFour()');

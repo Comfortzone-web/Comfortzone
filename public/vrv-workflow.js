@@ -4,6 +4,8 @@ let vrvUploading = false;
 let vrvBusyAction = '';
 let vrvStatus = 'Draft — enter Project Name, Client Name, or extract thermal data';
 let vrvThermalSearch = '';
+let vrvTokenDraft = '';
+let vrvTokenDraftProjectId = '';
 const vrvSteps = ['Thermal Sheet & Extraction', 'VRV Selection Report', 'VRV Schedule', 'BOQ & Quotation'];
 const vrvSelectionColumns = ['System','Name','FCU','°C - (DBT/WBT)','Rq TC','Max TC','Rq SC','Max SC','Air Flow Rate'];
 const vrvSelectionDisplayRows = rows => rows.map(row => ({System:row.system || row.System || '',Name:row.name || row.Name || '',FCU:row.fcu || row.FCU || '','°C - (DBT/WBT)':row.tmpC || row['°C - (DBT/WBT)'] || '','Rq TC':row.rqTC || row['Rq TC'] || '','Max TC':row.maxTC || row['Max TC'] || '','Rq SC':row.rqSC || row['Rq SC'] || '','Max SC':row.maxSC || row['Max SC'] || '','Air Flow Rate':row.airFlowRate || row['Air Flow Rate'] || ''}));
@@ -39,6 +41,30 @@ function vrvData() {
   for (const id of uploads) if (!known.includes(id) && !state.vrv.selectedUploadIds.includes(id)) state.vrv.selectedUploadIds.push(id);
   state.vrv.knownUploadIds = [...uploads];
   return state.vrv;
+}
+function vrvBindCustomColumnInput(input,data) {
+  if(!input)return;
+  const addTokens=flush=>{
+    const parts=input.value.split(/[,，،]/);
+    const pending=flush?'':parts.pop();
+    const values=parts.map(value=>value.trim()).filter(Boolean);
+    vrvTokenDraft=pending;
+    input.value=pending;
+    if(!values.length)return;
+    let added=false;
+    for(const value of values)if(!data.customColumns.some(col=>col.toLowerCase()===value.toLowerCase())){data.customColumns.push(value);added=true;}
+    if(!added)return toast('Column already selected.');
+    vrvDirty();renderVrvWorkspace();canvas.querySelector('[data-vrv-token-input]')?.focus();
+  };
+  input.addEventListener('keydown',event=>{
+    const enter=event.key==='Enter'||event.code==='Enter'||event.code==='NumpadEnter'||event.keyCode===13;
+    const comma=event.key===','||event.key==='，'||event.key==='،'||event.code==='Comma'||event.keyCode===188;
+    if((!enter&&!comma)||event.isComposing||event.keyCode===229)return;
+    event.preventDefault();event.stopPropagation();addTokens(true);
+  });
+  input.addEventListener('input',()=>{vrvTokenDraft=input.value;if(/[,，،]/.test(input.value))addTokens(false);});
+  input.addEventListener('keyup',event=>{if((event.key==='Enter'||event.code==='Enter'||event.code==='NumpadEnter'||event.keyCode===13)&&input.value.trim())addTokens(true);});
+  input.addEventListener('compositionend',()=>{vrvTokenDraft=input.value;if(/[,，،]/.test(input.value))addTokens(false);});
 }
 function vrvFiles(nodeId) {
   const ids = nodeId === 'thermal-upload' ? thermalUploadIds() : [state.nodes.find(node => node.id === nodeId)?.data?.uploadId];
@@ -77,7 +103,7 @@ function vrvStepOne() {
   const columns = data.mode === 'custom' ? (data.extractedMode === 'custom' ? table.columns : data.customColumns) : defaultThermalColumns;
   const mode = `<div class="vrv-switch">${vrvButton('standard','Standard VRV Export','table-2',data.mode !== 'custom')}${vrvButton('custom','Custom Columns','table-2',data.mode === 'custom')}</div>`;
   const family = `<label class="vrv-control">Family / Model <span class="required">*</span><select data-vrv-family>${['FXMQ','FXAQ','FXFQ','FXSQ','Others'].map(value => `<option ${data.familyModel === value ? 'selected' : ''}>${value}</option>`).join('')}</select></label>${data.familyModel === 'Others' ? `<input data-vrv-other placeholder="Enter family or model" value="${escapeHtml(data.otherFamily || '')}">` : ''}`;
-  const tags = `<label class="vrv-control">Extract Columns<div class="vrv-tokens">${data.customColumns.map((column,index)=>`<span>${escapeHtml(column)}<button type="button" data-vrv-tag="${index}" aria-label="Remove ${escapeHtml(column)}">×</button></span>`).join('')}<input data-vrv-token-input placeholder="Type a column, then press comma"></div></label>`;
+  const tags = `<label class="vrv-control">Extract Columns<div class="vrv-tokens"><div class="vrv-token-list" aria-label="Selected extract columns">${data.customColumns.map((column,index)=>`<span title="${escapeHtml(column)}">${escapeHtml(column)}<button type="button" data-vrv-tag="${index}" aria-label="Remove ${escapeHtml(column)}">×</button></span>`).join('')}</div><input data-vrv-token-input placeholder="Type a column, then press comma"></div></label>`;
   const controls = vrvCard(`${vrvIcon('layers-3')} Extraction Type`, `${mode}${data.mode === 'custom' ? tags : family}<div class="vrv-control-actions">${vrvButton('extract',vrvBusyAction==='extract'?'Extracting...':'Extract Data','play',true)}${vrvButton('append',vrvBusyAction==='append'?'Extracting...':'Append Pages','file-plus-2')}</div>`);
   const flags = table.rows.reduce((sum,row)=>sum+Object.keys(row.__reviewCells || {}).length,0);
   const exportCard = vrvCard(`${vrvIcon('table-2')} Export File`, `<div class="vrv-data-toolbar"><div class="vrv-badges"><span>${vrvIcon('table-2')}${table.rows.length} rows extracted</span><span>${flags} cells flagged</span><span>${table.rows.length ? 'Extraction ready' : 'Awaiting extraction'}</span></div><input class="dx-search" data-vrv-search aria-label="Search extracted rows" placeholder="Search extracted rows…" value="${escapeHtml(vrvThermalSearch)}"></div>${vrvTable('thermal',table.rows,columns)}`,vrvButton('thermal-excel','Download Excel','download'),'vrv-main-table vrv-thermal-card');
@@ -143,6 +169,8 @@ function vrvStepFour() {
 }
 function renderVrvWorkspace() {
   const data=vrvData(), step=data.step;
+  if(vrvTokenDraftProjectId!==state.id){vrvTokenDraft='';vrvTokenDraftProjectId=state.id;}
+  const tokenWasFocused=canvas.contains(document.activeElement) && document.activeElement?.matches?.('[data-vrv-token-input]');
   vrvSteps[1] = data.selectionMode === 'manual' ? 'Manual Selection' : 'VRV Selection Report';
   canvas.classList.add('dx-workspace','vrv-workspace'); canvas.style.cssText='';
   setWorkflowTitle('VRV Workflow'); $('#projectMeta').textContent=`Created by: ${state.createdByName || state.details?.preparedBy || 'Unknown'}`;
@@ -152,6 +180,8 @@ function renderVrvWorkspace() {
   workflowBindSalesPerson(actions);
   const fields=[['selectionNumber','Selection No.','clipboard-list'],['project','Project Name','briefcase-business'],['customer','Client','users-round'],['consultant','Consultant','hard-hat'],['contractor','Contractor','building-2']];
   canvas.innerHTML=`<div class="dx-project-header dx-card">${fields.map(([key,label,icon])=>`<label>${vrvIcon(icon)}<span>${label}<input ${key==='selectionNumber'?'data-vrv-number':`data-vrv-detail="${key}" data-detail-key="${key}"`} value="${escapeHtml(key==='selectionNumber' ? state.selectionNumber || 'Assigning…' : state.details[key] || '')}"></span></label>`).join('')}</div><nav class="dx-steps vrv-steps" aria-label="VRV workflow progress">${vrvSteps.map((name,index)=>`<button type="button" data-vrv-step="${index+1}" class="${step===index+1?'active':''} ${index+1<step?'complete':''}" ${step===index+1?'aria-current="step"':''}><span>${index+1<step?'✓':index+1}</span>Step 0${index+1} — ${name}</button>`).join('')}</nav>${step===1?vrvStepOne():step===2?vrvStepTwo():step===3?vrvStepThree():vrvStepFour()}<footer class="dx-footer"><span data-vrv-status>${escapeHtml(vrvStatus)}</span><div class="dx-actions">${step>1?vrvButton('back',`Back to ${vrvSteps[step-2]}`,'arrow-left'):''}${vrvButton(step<4?'next':'quotation',step<4?`Continue to ${vrvSteps[step]}`:'Create Quotation',step<4?'arrow-right':'file-text',true,step===4 && vrvBoqPricingError())}</div></footer>`;
+  const restoredTokenInput=canvas.querySelector('[data-vrv-token-input]');
+  if(restoredTokenInput){restoredTokenInput.value=vrvTokenDraft;if(tokenWasFocused)restoredTokenInput.focus();}
   if (state.selectionNumber) canvas.querySelector('[data-vrv-number]').value = state.selectionNumber;
   canvas.querySelector('[data-vrv-number]')?.addEventListener('change',event=>{const value=event.target.value.trim();if(!value){event.target.value=state.selectionNumber||'';return;}state.selectionNumber=value;vrvDirty();});
   canvas.querySelectorAll('[data-vrv-detail]').forEach(input=>input.addEventListener('input',()=>{state.details[input.dataset.vrvDetail]=input.value;if(input.dataset.vrvDetail==='project')state.title=input.value;vrvDirty();}));
@@ -187,10 +217,7 @@ function renderVrvWorkspace() {
   if(search){const filter=()=>canvas.querySelectorAll('.vrv-thermal-table tbody tr[data-vrv-row]').forEach(row=>{row.hidden=!row.textContent.toLowerCase().includes(vrvThermalSearch.toLowerCase());});search.addEventListener('input',()=>{vrvThermalSearch=search.value;filter();});filter();}
   canvas.querySelector('[data-vrv-family]')?.addEventListener('change',event=>{const selected=event.currentTarget.value;state.vrv.familyModel=selected;vrvDirty();if(selected==='Others'||data.otherFamily)renderVrvWorkspace();});
   canvas.querySelector('[data-vrv-other]')?.addEventListener('input',event=>{data.otherFamily=event.target.value;vrvDirty();});
-  const tokenInput=canvas.querySelector('[data-vrv-token-input]');
-  const addTokens=()=>{const values=tokenInput.value.split(',').map(value=>value.trim()).filter(Boolean);if(!values.length)return;for(const value of values)if(!data.customColumns.some(col=>col.toLowerCase()===value.toLowerCase()))data.customColumns.push(value);vrvDirty();renderVrvWorkspace();canvas.querySelector('[data-vrv-token-input]')?.focus();};
-  tokenInput?.addEventListener('keydown',event=>{if(event.key!==',' && event.key!=='Enter')return;event.preventDefault();event.stopPropagation();addTokens();});
-  tokenInput?.addEventListener('input',()=>{if(tokenInput.value.includes(','))addTokens();});
+  vrvBindCustomColumnInput(canvas.querySelector('[data-vrv-token-input]'),data);
   canvas.querySelectorAll('[data-vrv-tag]').forEach(button=>button.addEventListener('click',()=>{data.customColumns.splice(Number(button.dataset.vrvTag),1);vrvDirty();renderVrvWorkspace();}));
   canvas.querySelectorAll('[data-vrv-cell][contenteditable="true"]').forEach(cell=>cell.addEventListener('blur',()=>{const table=state.tables[cell.dataset.vrvCell],row=table.rows[Number(cell.dataset.row)];row[cell.dataset.col]=cell.textContent.trim();clearTableCellReview(row,cell.dataset.col);if(cell.dataset.vrvCell==='thermal'){if(data.selectionMode==='manual')vrvManualPrefill();else buildWorkflowScheduleFromThermal();}else {if(data.selectionMode!=='manual')fillVrvScheduleLookups();rebuildVrvScheduleTotals();}vrvDirty();renderVrvWorkspace();}));
   canvas.querySelector('[data-vrv-margin]')?.addEventListener('change',event=>{data.margin=Math.min(99.99,Math.max(0,Number(event.target.value)||0));vrvReprice();vrvDirty();renderVrvWorkspace();});
