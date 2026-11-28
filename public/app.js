@@ -3568,6 +3568,7 @@ function salesProjectBlank() {
 }
 
 function salesProjectDrawerField(label, key, value = "", options = null, type = "text", className = "") {
+  if(key==='projectNo'&&!isCurrentAdmin())return `<label class="${className}">${escapeHtml(label)}<input data-project-drawer-field="projectNo" value="${escapeHtml(value||'')}" readonly aria-readonly="true" title="Only Admin can change Project No."></label>`;
   if (options) {
     return `<label class="${className}">${escapeHtml(label)}<select data-project-drawer-field="${escapeHtml(key)}">${options.map(option => `<option value="${escapeHtml(option)}" ${String(value || "") === option ? "selected" : ""}>${escapeHtml(option || "Select")}</option>`).join("")}</select></label>`;
   }
@@ -3787,7 +3788,7 @@ function openSalesProjectDrawer(itemId = "", draft = null) {
             ${salesProjectDrawerField("Status", "status", salesProjectCurrentStatus(project) === "Completed" ? "Delivered" : salesProjectCurrentStatus(project), salesProjectStatusOptions())}
             ${salesPersonField}
             ${salesProjectDrawerField("Created Date", "createdDate", formatSalesDateInput(project.createdDate || project.date || todaySalesDateInput()), null, "dateText")}
-            <label>Orderbook No.<select data-project-drawer-field="orderBookNo"><option value="">Select Orderbook No.</option>${(salesData().orderBook || []).filter(order => norm(order.customer) === norm(project.customer) && (!(salesData().projects || []).some(other => other.id !== project.id && norm(salesProjectOrderBookNo(other)) === norm(order.orderNo)))).map(order => `<option value="${escapeHtml(order.orderNo)}" ${norm(salesProjectOrderBookNo(project)) === norm(order.orderNo) ? "selected" : ""}>${escapeHtml(order.orderNo)}</option>`).join("")}</select></label>
+            <label>Orderbook No.<select data-project-drawer-field="orderBookNo" ${isCurrentAdmin()?'':'disabled aria-disabled="true" title="Only Admin can change Orderbook No."'}><option value="">Select Orderbook No.</option>${(salesData().orderBook || []).filter(order => norm(order.customer) === norm(project.customer) && (!(salesData().projects || []).some(other => other.id !== project.id && norm(salesProjectOrderBookNo(other)) === norm(order.orderNo)))).map(order => `<option value="${escapeHtml(order.orderNo)}" ${norm(salesProjectOrderBookNo(project)) === norm(order.orderNo) ? "selected" : ""}>${escapeHtml(order.orderNo)}</option>`).join("")}</select></label>
           </div>
         </section>
         <section class="sales-project-form-section">
@@ -5491,7 +5492,7 @@ function openOrderBookForm(orderId = "", draft = null) {
           orderBookField("division", "Division", item.division, "select", ["Project/Inst", "Maint/Replace", "Trading"]),
           orderBookField("typeOfUnit", "Type of Unit", item.typeOfUnit === "VRV+DX" ? "VRV + DX" : item.typeOfUnit || "OTHERS", "select", ORDER_BOOK_UNIT_TYPES),
           orderBookField("brand", "Brand", item.brand),
-          `<div class="order-book-project-field"><label for="orderBookProjectNo">Project No.</label><input id="orderBookProjectNo" data-order-book-field="projectNo" value="${escapeHtml(item.projectNo || "")}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search project no. or name"><div class="order-book-project-options" data-order-book-project-options role="listbox" hidden></div></div>`,
+          `<div class="order-book-project-field"><label for="orderBookProjectNo">Project No.</label><input id="orderBookProjectNo" ${isCurrentAdmin()?'':'readonly aria-readonly="true" title="Only Admin can change Project No."'} data-order-book-field="projectNo" value="${escapeHtml(item.projectNo || "")}" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" placeholder="Search project no. or name"><div class="order-book-project-options" data-order-book-project-options role="listbox" hidden></div></div>`,
           `<div class="order-book-grid-spacer"></div>`,
           `<div class="order-book-po-upload"><button type="button" class="sales-secondary order-book-inline-upload" id="scanOrderBookPoBtn">Upload PO</button><div class="order-book-po-file"><small id="orderBookPoScanStatus">${escapeHtml(item.po?.fileName || "Upload PO to auto-fill order details")}</small><button type="button" class="order-book-po-remove" id="removeOrderBookPoBtn" title="Remove uploaded PO" aria-label="Remove uploaded PO" ${item.po?.fileName ? "" : "hidden"}>×</button></div></div>`,
           `<textarea id="orderBookUploadedPoJson" hidden>${escapeHtml(item.po ? JSON.stringify(item.po) : "")}</textarea>`
@@ -5645,6 +5646,7 @@ function setupOrderBookCustomerPicker(modal) {
 }
 
 function setupOrderBookProjectPicker(modal) {
+  if(!isCurrentAdmin())return;
   const input = modal.querySelector('[data-order-book-field="projectNo"]');
   const customer = modal.querySelector('[data-order-book-field="customer"]');
   const options = modal.querySelector("[data-order-book-project-options]");
@@ -5752,6 +5754,7 @@ function orderBookInvoiceRowHtml(invoice = {}) {
 }
 
 function orderBookField(key, label, value = "", type = "text", options = []) {
+  if(key==='orderNo'&&!isCurrentAdmin())return `<label>${escapeHtml(label)}<input data-order-book-field="orderNo" value="${escapeHtml(value||'')}" readonly aria-readonly="true" title="Only Admin can change Orderbook No."></label>`;
   const attrs = `data-order-book-field="${escapeHtml(key)}"`;
   if (type === "readonly") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value || "")}" readonly title="Final number is assigned when saved"></label>`;
   if (type === "readonlyMoney") return `<label>${escapeHtml(label)}<input ${attrs} value="${escapeHtml(value ? String(value) : "")}" readonly title="Calculated from payment rows"></label>`;

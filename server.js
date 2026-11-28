@@ -1666,6 +1666,7 @@ function createOrderBook(body, user, users = []) {
       const selectedId = cleanCell(body.salesPersonId || "");
       const assignee = users.find(entry => entry.id === selectedId && entry.active !== false && (isAdmin(entry) || isStaff(entry)));
       if (!assignee) return { status: 400, error: "Select an active Admin or Staff sales person." };
+      if(!isAdmin(user)&&body.manualOrderNo===true)return {status:403,error:'Only Admin can change Orderbook No.'};
       const requestedNo = cleanCell(body.orderNo || "");
       if (body.manualOrderNo === true && !requestedNo) return { status: 400, error: "Enter an Order No." };
       const orderNo = body.manualOrderNo === true ? requestedNo : nextAvailableOrderBookNo(store.orderBook);
@@ -4479,6 +4480,11 @@ async function handleApi(req, res) {
       const previous = store.orderBook.find(entry => entry.id === rawItem.id);
       if (isStaff(user) && previous && !staffOwnsOrder(previous, user)) return sendForbidden(res);
       if (!previous) return send(res, 404, { error: "Order not found. Refresh the Order Book and try again." });
+      if(!isAdmin(user)){
+        if(Object.prototype.hasOwnProperty.call(rawItem,'orderNo')&&cleanCell(rawItem.orderNo)!==cleanCell(previous.orderNo))return send(res,403,{error:'Only Admin can change Orderbook No.'});
+        if(Object.prototype.hasOwnProperty.call(rawItem,'projectNo')&&cleanCell(rawItem.projectNo)!==cleanCell(previous.projectNo))return send(res,403,{error:'Only Admin can change Project No.'});
+        rawItem={...rawItem,orderNo:previous.orderNo};
+      }
       const duplicate = store.orderBook.some(entry => entry.id !== previous.id
         && cleanCell(entry.orderNo).toLowerCase() === cleanCell(rawItem.orderNo).toLowerCase());
       if (duplicate) return send(res, 409, { error: `Order number ${cleanCell(rawItem.orderNo)} already exists.` });
@@ -4533,6 +4539,13 @@ async function handleApi(req, res) {
         consultant: rawItem.consultant, contractor: rawItem.contractor, dxSelectionNumber: rawItem.dxSelectionNumber,
         dxPricing: rawItem.dxPricing, items: rawItem.items, manualSubtotal: ''
       };
+    }
+    if(collection==='projects'&&!isAdmin(user)){
+      const previous=store.projects.find(x=>x.id===rawItem.id);
+      const number=previous?cleanCell(previous.projectNo||previous.projectId):store.settings.nextProjectNo;
+      if(previous&&Object.prototype.hasOwnProperty.call(rawItem,'orderBookNo')&&cleanCell(rawItem.orderBookNo)!==cleanCell(previous.orderBookNo))return send(res,403,{error:'Only Admin can change Orderbook No.'});
+      if(previous&&['projectNo','projectId','no'].some(key=>Object.prototype.hasOwnProperty.call(rawItem,key)&&cleanCell(rawItem[key])!==number))return send(res,403,{error:'Only Admin can change Project No.'});
+      rawItem={...rawItem,projectNo:number,projectId:number,no:number};
     }
     const requestedQuotationNo = collection === "quotations"
       ? cleanCell(body.requestedQuotationNo || rawItem.requestedQuotationNo || rawItem.quotationNo || rawItem.no)
