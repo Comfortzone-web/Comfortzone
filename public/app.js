@@ -432,6 +432,10 @@ function bindShell() {
     if (toggleActiveSidebarGroup("inventory")) return;
     showInventory("dashboard");
   });
+  $("#chequeManagementBtn").addEventListener("click", () => {
+    if (!canAccessModule("cheques")) return showLockedModuleToast();
+    showChequeManagement();
+  });
   $("#projectsBtn").addEventListener("click", () => {
     if (!canAccessModule("projects")) return showLockedModuleToast();
     showProjects();
@@ -710,9 +714,13 @@ function isStaffUser() {
   return norm(currentUser?.role) === "STAFF";
 }
 
+function staffPurchasePermissions(){return appSettings?.purchaseSupplierAccess||[];}
+function canEditPurchaseSupplier(name=''){return !isStaffUser()||staffPurchasePermissions().some(x=>x.edit&&(!name||String(x.supplierName).toUpperCase().replace(/[^A-Z0-9]/g,'')===String(name).toUpperCase().replace(/[^A-Z0-9]/g,'')));}
 function canAccessModule(moduleName) {
+  if (moduleName === "cheques") return ["ADMIN", "STAFF", "MTS"].includes(norm(currentUser?.role));
   if (moduleName === "maintenance") return ["ADMIN", "MTS"].includes(norm(currentUser?.role));
-  if (isStaffUser() && ["projects", "area", "settings", "purchase"].includes(moduleName)) return false;
+  if(isStaffUser()&&moduleName==="purchase")return staffPurchasePermissions().some(x=>x.view||x.edit);
+  if (isStaffUser() && ["projects", "area", "settings"].includes(moduleName)) return false;
   if (!isPoOnlyUser()) return true;
   if (moduleName === "projects") return true;
   return moduleName === "purchase" || moduleName === "area";
@@ -764,13 +772,14 @@ function applySidebarSubnavVisibility() {
 
 function applyRoleAccess() {
   const poOnly = isPoOnlyUser();
-  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "purchaseOrdersBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn", "maintenanceBtn"];
+  const lockIds = ["salesDeskBtn", "newProjectBtn", "workflowCanvasBtn", "dxWorkflowBtn", "documentsBtn", "inventoryBtn", "chequeManagementBtn", "purchaseOrdersBtn", "settingsBtn", "projectsBtn", "areaCalculationBtn", "maintenanceBtn"];
   lockIds.forEach(id => {
     const button = document.getElementById(id);
     if (!button) return;
     const locked = !canAccessModule(id === "maintenanceBtn" ? "maintenance" : id === "settingsBtn" ? "settings"
       : id === "projectsBtn" ? "projects" : id === "areaCalculationBtn" ? "area"
       : id === "purchaseOrdersBtn" ? "purchase"
+      : id === "chequeManagementBtn" ? "cheques"
       : id === "inventoryBtn" ? "inventory" : id === "salesDeskBtn" ? "sales" : "workflow");
     button.disabled = locked;
     button.classList.toggle("locked-nav", locked);
@@ -782,6 +791,7 @@ function applyRoleAccess() {
   $("#areaCalculationBtn")?.classList.toggle("active", activeView === "areaCalculation");
   $("#projectsBtn")?.classList.toggle("active", activeView === "projects");
   $("#maintenanceBtn")?.classList.toggle("active", activeView === "maintenance");
+  $("#chequeManagementBtn")?.classList.toggle("active", activeView === "cheques");
 }
 
 function applyAppSettings() {
@@ -1258,6 +1268,8 @@ async function showInventory(screen = "dashboard") {
 
 async function showPurchaseOrders(screen = "form") {
   if (!canAccessModule("purchase")) return showLockedModuleToast();
+  if(isStaffUser()&&screen==="suppliers")return showLockedModuleToast();
+  if(isStaffUser()&&screen==="form"&&!canEditPurchaseSupplier())screen="list";
   activeView = "purchaseOrders";
   hideProjectManagementView();
   setCanvasActionsVisible(false);
@@ -1500,6 +1512,20 @@ async function showSettings() {
     });
 }
 
+function showChequeManagement() {
+  activeView = 'cheques';
+  hideProjectManagementView();
+  setCanvasActionsVisible(false);
+  for (const id of ['canvasView', 'documentsView', 'inventoryView', 'purchaseOrdersView', 'areaCalculationView', 'salesDeskView', 'settingsView']) document.getElementById(id)?.classList.add('hidden');
+  $('#chequeManagementView').classList.remove('hidden');
+  document.querySelectorAll('.sidebar .nav-button, .sidebar .subnav button').forEach(button => button.classList.remove('active'));
+  $('#chequeManagementBtn').classList.add('active');
+  $('#pageTitle').innerHTML = '<span class="chq-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M6 10h12M7 15h5m4 0h2"/></svg></span>Cheque Tracker';
+  $('#projectMeta').textContent = 'Track incoming and issued cheques across all companies.';
+  renderViewActions();
+  window.chequeManagement?.open(currentUser);
+}
+
 async function loadSettings() {
   const response = await api("/api/settings");
   currentUser = response.user;
@@ -1522,10 +1548,14 @@ function renderSettings() {
         ${settingsAttachmentsCard()}
       </div>
       ${settingsUsersCard()}
+      <section class="inventory-card settings-card staff-po-settings" id="staffPOAccessSettings"></section>
+      ${window.chequeManagement?.settingsCard?.() || ''}
       ${settingsCostingCard()}
       ${settingsSalesTargetsCard()}
     </div>
   `;
+  window.chequeManagement?.loadSettings?.();
+  window.staffPOSettings?.mount(root.querySelector("#staffPOAccessSettings"));
 }
 
 function settingsCostingCard() {
@@ -1663,6 +1693,7 @@ function settingsUsersCard() {
 async function handleSettingsClick(event) {
   const target = event.target.closest("button");
   if (!target || !$("#settingsRoot").contains(target)) return;
+  if (target.dataset.chequeSettingsSave !== undefined) return window.chequeManagement?.saveSettings();
   if (target.dataset.rowMenu !== undefined) {
     const menu = target.closest(".row-menu").querySelector(".row-menu-list");
     document.querySelectorAll(".row-menu-list").forEach(list => {
@@ -8501,6 +8532,7 @@ function setCanvasActionsVisible(visible) {
 }
 
 function renderViewActions() {
+  if (activeView !== 'cheques') $('#chequeManagementView')?.classList.add('hidden');
   const actions = $("#viewActions");
   if (!actions) return;
   document.querySelector(".topbar")?.classList.toggle("purchase-shell", activeView === "purchaseOrders");
@@ -8516,6 +8548,13 @@ function renderViewActions() {
   document.querySelector(".topbar")?.classList.toggle("inventory-dashboard-shell", !!inventoryTopbar && inventoryScreen === "dashboard");
   actions.classList.add("hidden");
   actions.innerHTML = "";
+  if (activeView === 'cheques') {
+    actions.classList.remove('hidden');
+    actions.innerHTML = `${window.chequeManagement?.headerControls?.() || ''}<button class="primary-button" id="chequeNewTop">＋ New Cheque</button>`;
+    window.chequeManagement?.bindHeader?.();
+    $('#chequeNewTop').addEventListener('click', () => window.chequeManagement?.newCheque());
+    return;
+  }
   if (salesTopbar) {
     if (salesTopbar.search || salesTopbar.actions) {
       actions.classList.remove("hidden");
@@ -8549,12 +8588,12 @@ function renderViewActions() {
     actions.classList.remove("hidden");
     actions.innerHTML = `
       <button class="ghost-button" id="headerPoListBtn">${purchaseScreen === "form" ? poIcon("document") : ""}<span>Purchase Orders</span></button>
-      <button class="ghost-button" id="headerPoSuppliersBtn">${purchaseScreen === "form" ? poIcon("people") : ""}<span>Suppliers</span></button>
-      ${isStaffUser() ? "" : `<button class="primary-button" id="headerPoManualBtn">${purchaseScreen === "form" ? poIcon("plus") : ""}<span>Create PO</span></button>
+      ${isStaffUser()?'':`<button class="ghost-button" id="headerPoSuppliersBtn">${purchaseScreen === "form" ? poIcon("people") : ""}<span>Suppliers</span></button>`}
+      ${!canEditPurchaseSupplier() ? "" : `<button class="primary-button" id="headerPoManualBtn">${purchaseScreen === "form" ? poIcon("plus") : ""}<span>Create PO</span></button>
       <button class="ghost-button" id="headerPoUploadBtn">${purchaseScreen === "form" ? poIcon("upload") : ""}<span>Upload</span></button>`}
     `;
     $("#headerPoListBtn").addEventListener("click", () => showPurchaseOrders("list"));
-    $("#headerPoSuppliersBtn").addEventListener("click", () => showPurchaseOrders("suppliers"));
+    $("#headerPoSuppliersBtn")?.addEventListener("click", () => showPurchaseOrders("suppliers"));
     $("#headerPoUploadBtn")?.addEventListener("click", () => uploadPurchaseQuotation());
     $("#headerPoManualBtn")?.addEventListener("click", () => {
       purchaseRevisionPoNoLock = "";
@@ -8969,7 +9008,7 @@ function renderPurchaseOrders() {
   if (purchaseScreen === "list") root.innerHTML = purchaseOrderListHtml();
   else if (purchaseScreen === "suppliers") root.innerHTML = purchaseSupplierListHtml();
   else root.innerHTML = purchaseOrderFormPageHtml();
-  if (isStaffUser() && purchaseScreen === "form") {
+  if (isStaffUser() && purchaseScreen === "form"&&!canEditPurchaseSupplier(purchaseDraft?.supplierName)) {
     root.querySelectorAll("input, select, textarea, button").forEach(control => {
       if (control.id !== "poDownloadBtn") control.disabled = true;
     });
@@ -9216,7 +9255,7 @@ function createPurchaseOrderRevision(orderId) {
 }
 
 function purchaseOrderFormHtml(po) {
-  const suppliers = purchaseState?.suppliers || [];
+  const suppliers = (purchaseState?.suppliers || []).filter(x=>canEditPurchaseSupplier(x.supplierName));
   return `
     <datalist id="poSupplierList">${suppliers.map(supplier => `<option value="${escapeHtml(supplier.supplierName)}"></option>`).join("")}</datalist>
     <datalist id="poPaymentTermOptions">${paymentTermOptions.map(option => `<option value="${escapeHtml(option)}"></option>`).join("")}</datalist>
@@ -9281,7 +9320,7 @@ function purchaseSummaryHtml(po) {
     <div class="po-summary-row po-summary-total"><strong>Grand Total (AED)</strong><strong id="poGrandTotal">${money(po.grandTotal)}</strong></div>
     <div class="po-status-box"><span class="po-status-icon" aria-hidden="true">${poIcon("tag")}</span><span>Status</span>${statusPill(po.status || "Draft")}</div>
     <div class="inventory-actions po-summary-actions">
-      ${isStaffUser() ? "" : `
+      ${!canEditPurchaseSupplier(po.supplierName) ? "" : `
         <button class="ghost-button" id="poSaveDraftBtn">${poIcon("save")}<span class="po-upload-spinner po-button-spinner hidden" aria-hidden="true"></span><span data-po-save-label>Save Draft</span></button>
         <button class="primary-button" id="poCreateBtn">${poIcon("clipboard")}<span class="po-upload-spinner po-button-spinner hidden" aria-hidden="true"></span><span data-po-save-label>Create Purchase Order</span></button>
       `}
@@ -12202,7 +12241,7 @@ function handlePurchaseMenuAction(action, idValue) {
   document.querySelectorAll(".row-menu-list").forEach(list => list.classList.add("hidden"));
   if (action === "view-po") return openPurchaseOrderViewModal(idValue);
   if (action === "edit-po") {
-    if (isStaffUser()) return;
+    if (!canEditPurchaseSupplier((purchaseState.orders||[]).find(x=>x.id===idValue)?.supplierName)) return;
     const order = (purchaseState.orders || []).find(item => item.id === idValue);
     if (!order) return;
     purchaseRevisionPoNoLock = "";
@@ -12226,7 +12265,7 @@ function handlePurchaseMenuAction(action, idValue) {
 function purchaseOrderActionMenu(order) {
   const items = [{ label: "View", action: "view-po", id: order.id }];
   if (String(order.supplierName||'').toUpperCase().replace(/[^A-Z0-9]/g,'') === "DAIKINAIRCONDITIONINGLLC") items.push({label:"Add OC",action:"ool-oc",id:order.id});
-  if (!isStaffUser()) items.push({ label: "Edit", action: "edit-po", id: order.id }, { label: "Revision", action: "revision-po", id: order.id });
+  if (canEditPurchaseSupplier(order.supplierName)) items.push({ label: "Edit", action: "edit-po", id: order.id }, { label: "Revision", action: "revision-po", id: order.id });
   items.push({ label: "Download", action: "download-po", id: order.id });
   if (!isStaffUser()) items.push({ label: "Delete", action: "delete-po", id: order.id, danger: true });
   return rowMenu(items);

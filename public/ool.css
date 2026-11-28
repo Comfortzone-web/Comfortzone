@@ -275,3 +275,7 @@
 .ool-loading-kpis .ool-skeleton{height:110px;padding:0}
 .ool-loading-table{min-height:280px;display:flex;justify-content:center;align-items:center}
 @media(prefers-reduced-motion:reduce){.ool-sync-status::before,.ool-busy::before{animation:none}}
+
+.ool-access-table th:first-child{width:64%}.ool-access-table th:not(:first-child),.ool-access-table td:not(:first-child){width:18%;text-align:center}.ool-access-table td{padding:8px}.ool-access-table input{margin:0}
+
+.ool-dialog .ool-access-table>thead>tr>th{width:auto!important}.ool-dialog .ool-access-table{table-layout:fixed}

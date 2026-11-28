@@ -6,6 +6,7 @@ const zlib = require("zlib");
 const { spawnSync } = require("child_process");
 const { calculateProjectProgress } = require("./project-progress");
 const { createMaintenanceApi } = require("./maintenance-api");
+const { createChequeManagement } = require("./cheque-management");
 const dxQuotationLocks = new Map();
 async function lockDxQuotation(workflowId) {
   const previous = dxQuotationLocks.get(workflowId) || Promise.resolve();
@@ -53,6 +54,8 @@ const PURCHASE_ORDER_PDF_SCRIPT = path.join(ROOT, "scripts", "purchase_order_pdf
 const SALES_CRM_FILE = path.join(DATA, "sales-crm.json");
 const SALES_QUOTATION_PDF_SCRIPT = path.join(ROOT, "scripts", "sales_quotation_pdf.py");
 const SETTINGS_FILE = path.join(DATA, "settings.json");
+const CHEQUES_FILE = path.join(DATA, "cheques.json");
+const CHEQUE_BUCKET = 'cheque-images';
 const SETTINGS_UPLOADS = path.join(DATA, "settings-uploads");
 const PROJECT_MANAGEMENT_FILE = path.join(DATA, "project-management.json");
 const PROJECT_DOCUMENT_CATEGORIES = ["Shop Drawings", "Submittals", "Correspondence", "Payment", "Testing & Commissioning", "Handover"];
@@ -781,6 +784,7 @@ function publicSettings(settings, user) {
     company: settings.company,
     company2: settings.company2,
     attachments: settings.attachments,
+    purchaseSupplierAccess: (settings.users||[]).find(x=>x.id===user?.id)?.purchaseSupplierAccess||[],
     salesTargets: settings.salesTargets || [],
     workflowSalesPeople: isAdmin(user) ? (settings.users || []).filter(item => isStaff(item) && item.active !== false).map(item => ({ id: item.id, name: item.name })) : [],
     users: isStaff(user) ? [] : (settings.users || []).map(({ passwordHash: _passwordHash, ...entry }) => entry)
@@ -843,7 +847,7 @@ async function sessionUser(req) {
     return null;
   }
   req.authSettings = settings;
-  return { id: user.id, name: user.name, role: user.role, email: user.email };
+  return { id: user.id, name: user.name, role: user.role, email: user.email, purchaseSupplierAccess:user.purchaseSupplierAccess||[] };
 }
 
 function isAdmin(user) {
@@ -3782,6 +3786,39 @@ async function handleProjectManagementApi(req, res, parts, url, user) {
   return notFound(res);
 }
 
+async function ensurePrivateChequeBucket() {
+  if (!USE_SUPABASE) return;
+  const { data, error } = await supabase.storage.getBucket(CHEQUE_BUCKET);
+  if (!error) {
+    if (data.public) throw new Error('Cheque image bucket must be private');
+    return;
+  }
+  const { error: creationError } = await supabase.storage.createBucket(CHEQUE_BUCKET, { public: false });
+  if (creationError && !/already exists/i.test(creationError.message)) throw creationError;
+}
+async function savePrivateChequeUpload(scope, name, bytes, mimeType) {
+  if (!USE_SUPABASE) return saveUpload(scope, name, bytes, mimeType);
+  await ensurePrivateChequeBucket();
+  const { error } = await supabase.storage.from(CHEQUE_BUCKET).upload(storagePath(scope, name), bytes, { contentType: mimeType, upsert: false });
+  if (error) throw error;
+}
+async function readPrivateChequeUpload(scope, name) {
+  if (!USE_SUPABASE) return readUpload(scope, name);
+  const { data, error } = await supabase.storage.from(CHEQUE_BUCKET).download(storagePath(scope, name));
+  if (error) throw error;
+  return Buffer.from(await data.arrayBuffer());
+}
+async function deletePrivateChequeUpload(scope, name) {
+  if (!USE_SUPABASE) return deleteUpload(scope, name);
+  const { error } = await supabase.storage.from(CHEQUE_BUCKET).remove([storagePath(scope, name)]);
+  if (error) throw new Error(`Cheque image deletion failed: ${error.message}`);
+}
+const chequeManagementApi = createChequeManagement({
+  read: async () => USE_SUPABASE ? (await readSupabaseValue('cheques') || { records: [] }) : readStore('cheques', CHEQUES_FILE, () => ({ records: [] })),
+  write: store => USE_SUPABASE ? writeSupabaseValue('cheques', store) : writeStore('cheques', CHEQUES_FILE, store),
+  readSettings, writeSettings, saveUpload: savePrivateChequeUpload, readUpload: readPrivateChequeUpload, deleteUpload: deletePrivateChequeUpload, send, readJson, collect, parseMultipart, callOpenAIJson
+});
+
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const parts = url.pathname.split("/").filter(Boolean);
@@ -3819,8 +3856,23 @@ async function handleApi(req, res) {
 
   if (!user) return sendAuthRequired(res);
 
+  if (url.pathname.startsWith('/api/cheques')) return chequeManagementApi.route(req, res, url, user);
+
   if (parts[0] === "api" && parts[1] === "maintenance") return maintenanceApi.routeOffice(req, res, url, user);
 
+  if(['/api/settings/staff-po-access','/api/ool/staff-access'].includes(url.pathname)){
+    if(!isAdmin(user))return sendForbidden(res);
+    const settings=await readSettings(),poStore=await readPurchaseOrders();
+    const suppliers=[...new Map([...poStore.suppliers.map(x=>x.supplierName),...poStore.orders.map(x=>x.supplierName)].filter(Boolean).map(name=>[poSupplierKey(name),name])).values()].sort();
+    if(req.method==='PUT'){
+      const body=await readJson(req),staff=settings.users.find(x=>x.id===body.userId&&isStaff(x));
+      if(!staff||!Array.isArray(body.permissions))return send(res,400,{error:'Select a staff login and supplier permissions'});
+      const known=new Map(suppliers.map(name=>[poSupplierKey(name),name])),seen=new Set();
+      const permissions=[];for(const entry of body.permissions){const key=poSupplierKey(entry.supplierName);if(!known.has(key)||seen.has(key))return send(res,400,{error:'Select distinct existing suppliers'});seen.add(key);if(entry.view||entry.edit)permissions.push({supplierName:known.get(key),view:true,edit:entry.edit===true});}
+      staff.purchaseSupplierAccess=permissions;await writeSettings(settings);
+    }else if(req.method!=='GET')return send(res,405,{error:'Method not allowed'});
+    return send(res,200,{suppliers,staff:settings.users.filter(isStaff).map(x=>({id:x.id,name:x.name,email:x.email,active:x.active!==false,permissions:x.purchaseSupplierAccess||[]}))});
+  }
   if (url.pathname.startsWith("/api/ool")) return oolApi.route(req, res, url, user);
 
   if (isPoOnly(user) && !canPoOnlyAccessPath(req, url.pathname)) {
@@ -3830,8 +3882,10 @@ async function handleApi(req, res) {
     if (url.pathname.startsWith("/api/project-management") || url.pathname.startsWith("/api/area-calculations")) {
       return send(res, 403, { error: "Staff cannot access Projects or Area Calculation" });
     }
-    if (url.pathname.startsWith("/api/purchase-orders")) {
-      return send(res, 403, { error: "Staff cannot access Purchase Orders" });
+    if(url.pathname.startsWith('/api/purchase-orders')){
+      const permissions=user.purchaseSupplierAccess||[];
+      if(!permissions.some(x=>x.view||x.edit)||url.pathname.startsWith('/api/purchase-orders/suppliers')||req.method==='DELETE')return sendForbidden(res);
+      if(req.method!=='GET'&&url.pathname!=='/api/purchase-orders/pdf'&&!permissions.some(x=>x.edit))return sendForbidden(res);
     }
   }
 
@@ -4022,12 +4076,13 @@ async function handleApi(req, res) {
 
   if (req.method === "GET" && url.pathname === "/api/purchase-orders/project-names") {
     const store = await readProjectManagement();
+    if(isStaff(user))return send(res,200,[...new Set((await readPurchaseOrders()).orders.filter(x=>poSupplierAllowed(user,x.supplierName)).map(x=>x.projectName).filter(Boolean))]);
     const names = [...new Set(store.projects.map(project => cleanCell(project.name)).filter(Boolean))];
     return send(res, 200, names.sort((a, b) => a.localeCompare(b)));
   }
 
   if (req.method === "GET" && url.pathname === "/api/purchase-orders") {
-    return send(res, 200, purchaseOrderView(await readPurchaseOrders()));
+    return send(res, 200, purchaseOrderView(await readPurchaseOrders(),user));
   }
 
   if (req.method === "GET" && url.pathname === "/api/sales-crm") {
@@ -4822,7 +4877,7 @@ async function handleApi(req, res) {
     const uploadId = id();
     const storedName = `${uploadId}-${safeName(filePart.filename)}`;
     await saveUpload("purchase-orders", storedName, filePart.body, filePart.mimeType);
-    store.uploads.unshift({ id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: new Date().toISOString() });
+    store.uploads.unshift({ createdById:user.id,id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: new Date().toISOString() });
     await writePurchaseOrders(store);
     const extracted = await extractPurchaseQuotationWithOpenAI(filePart).catch(error => ({ message: error.message, items: [] }));
     const extractedSubtotal = Number(String(extracted.manualSubtotal ?? extracted.subtotal ?? "").replace(/,/g, "")) || 0;
@@ -4843,6 +4898,7 @@ async function handleApi(req, res) {
     }, store, false);
     order.id = "";
     order.poNo = "";
+    if(isStaff(user)&&order.supplierName&&!poSupplierAllowed(user,order.supplierName,true))return sendForbidden(res);
     return send(res, 200, { order, message: extracted.message || "Quotation scanned. Review and edit before creating the PO." });
   }
 
@@ -4864,6 +4920,8 @@ async function handleApi(req, res) {
       order.revision = order.revisionNo ? `Revision R${order.revisionNo}` : "";
     }
     const existingIndex = store.orders.findIndex(item => item.id === order.id);
+    if(isStaff(user)&&(!poSupplierAllowed(user,order.supplierName,true)||(existingIndex>=0&&!poSupplierAllowed(user,store.orders[existingIndex].supplierName,true))))return sendForbidden(res);
+    if(isStaff(user)&&order.sourceUploadId&&!store.orders.some(x=>x.sourceUploadId===order.sourceUploadId&&poSupplierAllowed(user,x.supplierName))&&!store.uploads.some(x=>x.id===order.sourceUploadId&&x.createdById===user.id))return sendForbidden(res);
     if (body.createOfficial) {
       if (!order.poNo) order.poNo = nextPurchaseNoFromOrders(store.orders, store.settings.nextPoNo);
       const duplicatePo = store.orders.find(item =>
@@ -4890,10 +4948,12 @@ async function handleApi(req, res) {
     const uploadId = decodeURIComponent(url.pathname.split("/").pop());
     const upload = (store.uploads || []).find(item => item.id === uploadId);
     if (!upload) return notFound(res);
+    if(isStaff(user)&&!store.orders.some(x=>x.sourceUploadId===uploadId&&poSupplierAllowed(user,x.supplierName))&&!(upload.createdById===user.id&&(user.purchaseSupplierAccess||[]).some(x=>x.edit)))return sendForbidden(res);
     return sendStoredUpload(res, upload, "purchase-orders");
   }
 
   if (req.method === "DELETE" && url.pathname.match(/^\/api\/purchase-orders\/[^/]+$/)) {
+    if(!isAdmin(user))return sendForbidden(res);
     const store = await readPurchaseOrders();
     const orderId = decodeURIComponent(url.pathname.split("/").pop());
     store.orders = store.orders.filter(order => order.id !== orderId);
@@ -4904,7 +4964,11 @@ async function handleApi(req, res) {
 
   if (req.method === "POST" && url.pathname === "/api/purchase-orders/pdf") {
     const payload = await readJson(req);
-    const order = normalizePurchaseOrder(payload.order || payload, await readPurchaseOrders(), false);
+    const poStore=await readPurchaseOrders();
+    const submitted=payload.order||payload;
+    const saved=isStaff(user)?poStore.orders.find(x=>x.id===submitted.id):null;
+    if(isStaff(user)&&(!saved||!poSupplierAllowed(user,saved.supplierName)))return sendForbidden(res);
+    const order = normalizePurchaseOrder(isStaff(user)?saved:submitted,poStore,false);
     if (order.status !== "Created" || !order.poNo) return send(res, 400, { error: "Create the Purchase Order before downloading PDF." });
     const pdf = await purchaseOrderPdfBuffer(order);
     res.writeHead(200, {
@@ -4935,7 +4999,7 @@ async function handleApi(req, res) {
       const uploadId = id();
       const storedName = `${uploadId}-${safeName(filePart.filename)}`;
       await saveUpload("area-calculations", storedName, filePart.body, filePart.mimeType);
-      store.uploads.unshift({ id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: now });
+      store.uploads.unshift({ createdById:user.id,id: uploadId, originalName: filePart.filename, storedName, mimeType: filePart.mimeType, size: filePart.body.length, createdAt: now });
       uploadIds.push(uploadId);
     }
     const existingIndex = calculationId ? store.calculations.findIndex(item => item.id === calculationId) : -1;
@@ -7782,7 +7846,11 @@ function nextPurchaseNoFromOrders(orders = [], current = "") {
   return `${purchasePoYearPrefix()}${String(max + 1).padStart(width, "0")}`;
 }
 
-function purchaseOrderView(store) {
+function poSupplierKey(name){return String(name||'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function poSupplierAllowed(user,name,edit=false){return !isStaff(user)||(user.purchaseSupplierAccess||[]).some(x=>poSupplierKey(x.supplierName)===poSupplierKey(name)&&(edit?x.edit:x.view||x.edit));}
+function purchaseOrderView(store,user) {
+  if(isStaff(user)){const orders=store.orders.filter(x=>poSupplierAllowed(user,x.supplierName)),ids=new Set(orders.map(x=>x.sourceUploadId));store={...store,orders,suppliers:store.suppliers.filter(x=>poSupplierAllowed(user,x.supplierName)),uploads:store.uploads.filter(x=>ids.has(x.id)||x.createdById===user.id)};}
+
   return {
     settings: store.settings || defaultPurchaseOrders().settings,
     orders: (store.orders || []).map(order => normalizePurchaseOrder(order, store, false)).sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""))),
